@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent">
+
+    <!-- Outer glow/shadow effect -->
+    <View
+        android:id="@+id/button_shadow"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:background="@drawable/floating_button_shadow" />
+
+    <!-- Main button -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/floating_button_container"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center"
+        android:elevation="8dp"
+        app:cardBackgroundColor="@color/floating_button_background"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="8dp">
+
+        <!-- Button content -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <!-- Microphone icon -->
+            <ImageView
+                android:id="@+id/floating_button_icon"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_centerInParent="true"
+                android:contentDescription="@string/floating_button_description"
+                android:src="@drawable/ic_microphone"
+                android:tint="@android:color/white" />
+
+            <!-- Pulse indicator (shown when listening) -->
+            <View
+                android:id="@+id/pulse_indicator"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_alignParentEnd="true"
+                android:layout_alignParentTop="true"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/pulse_indicator"
+                android:visibility="gone" />
+        </RelativeLayout>
+    </androidx.cardview.widget.CardView>
+</FrameLayout>
+
+<!--
+Floating Button Layout for Alicia Voice Assistant
+
+Features:
+- Circular button with elevation/shadow
+- Microphone icon centered
+- Pulse indicator for active state (top-right)
+- Draggable and clickable
+- Optimized for one-handed use
+
+Design Specifications:
+- Button Size: 56dp (Material Design FAB standard)
+- Shadow Size: 64dp (8dp margin around button)
+- Corner Radius: 28dp (perfectly circular)
+- Elevation: 8dp (raised above content)
+- Icon Size: 28dp (50% of button size)
+- Pulse Indicator: 12dp (small status dot)
+
+Color Scheme:
+- Background: Primary color with transparency
+- Icon: White for contrast
+- Pulse: Accent color (green when listening)
+
+Accessibility:
+- Content description for screen readers
+- Large enough touch target (56dp min)
+- High contrast icon
+
+Performance:
+- Minimal view hierarchy (3 levels)
+- Hardware-accelerated rendering
+- Smooth animations via property animators
+-->

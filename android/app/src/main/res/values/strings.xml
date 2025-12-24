@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alicia</string>
+    <string name="tile_label">Alicia</string>
+
+    <!-- Accessibility -->
+    <string name="accessibility_service_description">Allows Alicia to detect hardware button presses (like volume buttons) to activate the voice assistant hands-free.</string>
+</resources>

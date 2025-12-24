@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Backend tests using Nix
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b # v8
+
+      - name: Run go vet
+        run: nix develop .#go --command go vet ./...
+
+      - name: Run staticcheck
+        run: nix develop .#go --command staticcheck ./...
+
+      - name: Run tests
+        run: |
+          nix develop .#go --command bash -c '
+            # Test packages that do not require external services (PostgreSQL, LiveKit, etc.)
+            go test -v -race \
+              ./internal/domain/... \
+              ./internal/adapters/embedding \
+              ./internal/adapters/http/middleware \
+              ./internal/adapters/mcp \
+              ./internal/adapters/retry \
+              ./internal/application/tools/builtin \
+              ./pkg/...
+          '
+
+      - name: Build
+        run: nix develop .#go --command go build -v ./...
+
+  # Frontend tests using Nix
+  frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b # v8
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: nix develop .#frontend --command npm ci --include=dev
+
+      - name: Type check
+        working-directory: frontend
+        run: nix develop .#frontend --command npx tsc --noEmit
+
+      - name: Run unit tests
+        working-directory: frontend
+        run: nix develop .#frontend --command npm test -- --run --reporter=verbose
+
+      - name: Build
+        working-directory: frontend
+        run: nix develop .#frontend --command npm run build
+
+  # Android build and tests using Nix
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b # v8
+
+      - name: Enable unprivileged user namespaces for bwrap
+        run: |
+          # buildFHSEnv uses bubblewrap which requires user namespaces
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Run lint
+        working-directory: android
+        run: |
+          nix develop ..#android --command android-fhs-env -c '
+            ./gradlew lint --no-daemon --stacktrace
+          '
+
+      - name: Run unit tests
+        working-directory: android
+        run: |
+          nix develop ..#android --command android-fhs-env -c '
+            ./gradlew testDebugUnitTest --no-daemon --stacktrace
+          '
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          nix develop ..#android --command android-fhs-env -c '
+            ./gradlew assembleDebug \
+              -Pandroid.injected.abi=arm64-v8a \
+              --no-daemon \
+              --stacktrace
+          '
+
+      - name: Upload lint results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: android-lint-results
+          path: android/app/build/reports/lint-results*.html
+          retention-days: 14
+
+      - name: Upload test results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: android-test-results
+          path: android/app/build/reports/tests/
+          retention-days: 14
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  # E2E tests only on main branch
+  android-e2e:
+    name: Android E2E Tests
+    needs: android
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/android-e2e-test.yml
+    with:
+      artifact_prefix: 'ci-e2e'

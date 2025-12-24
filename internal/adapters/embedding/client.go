@@ -1,0 +1,201 @@
+package embedding
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/longregen/alicia/internal/adapters/circuitbreaker"
+	"github.com/longregen/alicia/internal/adapters/retry"
+	"github.com/longregen/alicia/internal/ports"
+)
+
+const (
+	// EmbeddingTimeout is the maximum time to wait for embedding generation
+	EmbeddingTimeout = 30 * time.Second
+)
+
+// Client is an OpenAI-compatible embedding client
+type Client struct {
+	baseURL     string
+	apiKey      string
+	model       string
+	dimensions  int
+	httpClient  *http.Client
+	retryConfig retry.BackoffConfig
+	breaker     *circuitbreaker.CircuitBreaker
+}
+
+// NewClient creates a new embedding client
+func NewClient(baseURL, apiKey, model string, dimensions int) *Client {
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	baseURL = strings.TrimSuffix(baseURL, "/v1")
+
+	return &Client{
+		baseURL:    baseURL,
+		apiKey:     apiKey,
+		model:      model,
+		dimensions: dimensions,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second, // Default request timeout
+		},
+		retryConfig: retry.HTTPConfig(),
+		breaker:     circuitbreaker.New(5, 30*time.Second), // 5 failures, 30s timeout
+	}
+}
+
+// EmbeddingRequest represents the request to the embeddings API
+type EmbeddingRequest struct {
+	Input      interface{} `json:"input"` // Can be string or []string
+	Model      string      `json:"model"`
+	Dimensions int         `json:"dimensions,omitempty"`
+}
+
+// EmbeddingResponse represents the response from the embeddings API
+type EmbeddingResponse struct {
+	Object string `json:"object"`
+	Data   []struct {
+		Object    string    `json:"object"`
+		Embedding []float32 `json:"embedding"`
+		Index     int       `json:"index"`
+	} `json:"data"`
+	Model string `json:"model"`
+	Usage struct {
+		PromptTokens int `json:"prompt_tokens"`
+		TotalTokens  int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+// Embed generates an embedding for a single text
+func (c *Client) Embed(ctx context.Context, text string) (*ports.EmbeddingResult, error) {
+	var result *ports.EmbeddingResult
+	err := c.breaker.Execute(func() error {
+		// Add timeout to prevent hanging on slow/failed embedding requests
+		ctx, cancel := context.WithTimeout(ctx, EmbeddingTimeout)
+		defer cancel()
+
+		results, err := c.embedBatchInternal(ctx, []string{text})
+		if err != nil {
+			return err
+		}
+		if len(results) == 0 {
+			return fmt.Errorf("no embedding returned")
+		}
+		result = results[0]
+		return nil
+	})
+	return result, err
+}
+
+// EmbedBatch generates embeddings for multiple texts
+func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([]*ports.EmbeddingResult, error) {
+	if len(texts) == 0 {
+		return []*ports.EmbeddingResult{}, nil
+	}
+
+	var results []*ports.EmbeddingResult
+	err := c.breaker.Execute(func() error {
+		// Add timeout to prevent hanging on slow/failed embedding requests
+		ctx, cancel := context.WithTimeout(ctx, EmbeddingTimeout)
+		defer cancel()
+
+		var err error
+		results, err = c.embedBatchInternal(ctx, texts)
+		return err
+	})
+	return results, err
+}
+
+// GetDimensions returns the dimensionality of the embeddings
+func (c *Client) GetDimensions() int {
+	return c.dimensions
+}
+
+// embedBatchInternal is the internal implementation for batch embedding
+func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*ports.EmbeddingResult, error) {
+	// Prepare request
+	req := EmbeddingRequest{
+		Model: c.model,
+	}
+
+	// Handle single vs multiple texts
+	if len(texts) == 1 {
+		req.Input = texts[0]
+	} else {
+		req.Input = texts
+	}
+
+	// Set dimensions if specified
+	if c.dimensions > 0 {
+		req.Dimensions = c.dimensions
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	var respBody []byte
+	var statusCode int
+
+	err = retry.WithBackoffHTTP(ctx, c.retryConfig, func() (int, error) {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/embeddings", bytes.NewReader(body))
+		if err != nil {
+			return 0, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		if c.apiKey != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		}
+
+		resp, err := c.httpClient.Do(httpReq)
+		if err != nil {
+			return 0, fmt.Errorf("failed to send request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		statusCode = resp.StatusCode
+		respBody, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return statusCode, fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return statusCode, fmt.Errorf("API error: %s - %s", resp.Status, string(respBody))
+		}
+
+		return statusCode, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var embeddingResp EmbeddingResponse
+	if err := json.Unmarshal(respBody, &embeddingResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Convert to EmbeddingResult
+	results := make([]*ports.EmbeddingResult, len(embeddingResp.Data))
+	for _, data := range embeddingResp.Data {
+		dimensions := len(data.Embedding)
+		if c.dimensions > 0 && dimensions != c.dimensions {
+			return nil, fmt.Errorf("expected %d dimensions but got %d", c.dimensions, dimensions)
+		}
+
+		results[data.Index] = &ports.EmbeddingResult{
+			Embedding:  data.Embedding,
+			Model:      embeddingResp.Model,
+			Dimensions: dimensions,
+		}
+	}
+
+	return results, nil
+}

@@ -1,0 +1,152 @@
+## Reconnection Semantics
+
+One of the critical features of the Alicia protocol is the ability to resume a conversation seamlessly after a dropped connection. This section describes how reconnection is handled using LiveKit's built-in reconnection capabilities combined with the protocol-level `lastSequenceSeen` field in the Configuration message. The goals of reconnection support are:
+
+* Avoid duplicating messages the client already received
+* Continue an in-progress answer or operation when possible
+* Maintain ordering and conversation integrity
+
+## Initial Connection and Resume
+
+**First-Time Connection:**
+
+When a client first connects to Alicia (no prior conversation or starting fresh), it follows this flow:
+
+1. The client obtains a LiveKit access token from the Alicia authentication service
+2. The client joins the LiveKit room using the SDK with the provided token
+3. Once the LiveKit room connection is established, the client sends a Configuration message over the LiveKit data channel with no `conversationId` (or with an explicit flag indicating it's new). The `lastSequenceSeen` in this case is `0` (meaning nothing seen yet)
+4. The server creates a new conversation and responds, providing the assigned `conversationId`. Typically, the server sends an Acknowledgement or a Configuration response containing the new `conversationId`
+5. After this handshake, the conversation proceeds normally
+
+**Reconnection to Existing Conversation:**
+
+When a client reconnects (after a network disruption, app reload, or LiveKit connection drop) and wants to continue an existing conversation:
+
+1. The client rejoins the same LiveKit room using the original conversationId as the room identifier
+2. LiveKit automatically restores the room connection and any active audio/video tracks
+3. The client sends a Configuration message with `conversationId` set to the known ID of that conversation, and `lastSequenceSeen` set to the last stanza sequence number it has processed
+4. The server verifies the conversation and the client's authorization, then compares `lastSequenceSeen` to the latest message sequence in that conversation
+5. The server replays any messages the client missed
+
+## Example Reconnection Scenario
+
+Suppose conversation ID `abc123` has progressed to 30 messages (stanzaId absolute value 30) when the connection drops. The client only received up to stanzaId 25.
+
+**Reconnection flow:**
+
+1. Client rejoins LiveKit room with room name derived from `abc123`
+2. Client sends: `Configuration { conversationId: "abc123", lastSequenceSeen: 25 }`
+3. Server responds: `Acknowledgement { acknowledgedStanzaId: 25, conversationId: "abc123" }` — confirming "you're up to 25"
+4. Server detects messages 26–30 are missing on the client
+5. Server retransmits messages 26 through 30 in order over the data channel
+6. These retransmissions use the original content and IDs (they are not "new" messages, just delivered again)
+7. The server ensures order is preserved
+8. After resending, the client is caught up, and new messages can flow
+
+The server may send an Acknowledgement or special response after the Configuration handshake indicating the resume was successful and possibly listing how many messages will be resent or the new lastSequence. However, it can also directly start resending messages.
+
+## LiveKit-Specific Reconnection Benefits
+
+LiveKit provides several automatic reconnection features that complement the protocol-level reconnection:
+
+**Automatic Track Recovery:**
+* Audio and video tracks are automatically restored when the connection is re-established
+* The client doesn't need to manually resubscribe to tracks
+* This ensures voice conversations continue seamlessly
+
+**Built-in Buffering:**
+* LiveKit buffers data channel messages during brief disconnections
+* Short network hiccups may not require protocol-level replay if LiveKit's buffer covers the gap
+
+**Room State Synchronization:**
+* LiveKit automatically synchronizes room state (participants, tracks) on reconnection
+* The protocol focuses on message-level synchronization via `lastSequenceSeen`
+
+## Use of `lastStanzaMap`
+
+In typical linear conversation flow, `lastSequenceSeen` suffices to indicate the point up to which the client is synced. The `lastStanzaMap` is optional and can be used for advanced cases:
+
+* **Multiple independent sequences:** If the protocol or a future extension allows multiple independent sequences (like separate channels for audio and text), a map might hold entries like `{"text": 25, "audio": 10}` if those progressed differently. In the current specification, audio and text are intertwined in one sequence
+* **Partial message delivery:** If an AssistantMessage was extremely large and split at a lower level than sentences, `lastStanzaMap` could theoretically map message IDs to markers of how much was seen. However, since chunking uses full messages (each AssistantSentence has a stanza id), the sequence number covers this
+
+A conservative usage is: the client may omit `lastStanzaMap` in normal cases. If provided, the server should use it to refine what needs sending. For example, if the client got all of message 26 and 27, but missed message 28 which was an AssistantMessage with 5 sentence chunks, and the client got 3 of them, `lastStanzaMap` might indicate messageId 28 → last sentence seq 3. The server then knows to resend sentence 4 and 5 of that answer if possible.
+
+Implementation of such fine detail is complex and might not be fully supported; a simpler approach is to resend from message 28 entirely or from sentence 4 if the server can detect that internally. Since MessagePack messages don't inherently allow starting mid-message, the server would likely re-send all of message 28's chunks anyway.
+
+In summary, `lastStanzaMap` is an advanced hint mechanism. For the initial version of the protocol, it can be left as an empty map or omitted unless both sides explicitly implement partial message resume.
+
+## Handling Message Replay
+
+**Duplicate Prevention:**
+
+The server takes care not to duplicate IDs. It resends old messages, not generating new ones. The envelope of a resent message carries the original stanzaId and original message NanoID. The client, which might still have these in its log, should recognize duplicates if it actually received them before. Ideally, if properly using lastSequenceSeen, it won't get duplicates (except perhaps the next one if lastSequenceSeen was off by one).
+
+**Large Gaps:**
+
+If the gap is large (client missed many messages), the server might throttle how fast it resends to avoid overwhelming the client. It may send them as a burst though, since the client likely will just append them quickly.
+
+**Expired Conversations:**
+
+If the conversation has ended or expired on the server side (some systems archive or clean up old conversations), and a client tries to resume, the server responds with an ErrorMessage indicating conversation not found or not resumable. Alternatively, it might silently start a new conversation (though that could confuse the user, so it's better to inform).
+
+**Security:**
+
+The server ensures the user reconnecting is indeed authorized for that conversation. LiveKit access tokens tie the user to conversation rights, preventing impostors from guessing a conversationId and replaying lastSequence.
+
+## Resuming In-Progress Activities
+
+If the connection drops while the server is in the middle of generating an answer (i.e., has sent StartAnswer and some AssistantSentence chunks but not all):
+
+**Server-Side Behavior:**
+
+* The server likely pauses or stops generation when it detects the LiveKit connection dropped (or it keeps generating in background)
+* If it keeps generating, it has the full answer ready or partially buffered
+* On reconnection, the client's lastSequenceSeen indicates it only got, say, 2 out of 5 sentences of that answer
+* The server detects from lastSequenceSeen that some of the sequence for that answer (with certain previousId) didn't finish
+* If it has the sentences buffered, it sends the rest with their original stanza IDs
+* If it didn't buffer, it might regenerate or decide to abort that answer and send an Error or simply not continue
+
+**Best Practices:**
+
+One possibility is that the server aborts the incomplete answer entirely upon reconnection, and lets the user re-ask if needed. However, this creates a suboptimal user experience. A better implementation caches the generation context so it can continue sending. If using a stateless model, it may be hard to resume mid-answer. Some advanced systems might re-prompt the model to finish or simply had the model's output already buffered (some models can produce output faster than it's sent).
+
+For the specification, the server should attempt to continue the answer if feasible. If not, it should send a final piece marking the answer truncated or handle it gracefully (maybe sending an ErrorMessage explaining that the answer could not complete due to disconnect).
+
+**Audio Track Continuity:**
+
+LiveKit automatically restores audio tracks on reconnection. If the server was streaming audio response (TTS) when the connection dropped:
+
+* The audio track is automatically resubscribed
+* The server should resume audio streaming from where it left off
+* Protocol-level synchronization via `lastSequenceSeen` helps identify which audio chunks were delivered
+
+## Acknowledgements in Resume
+
+After sending Configuration, the client might wait for an explicit acknowledgement. The server can send an Acknowledgement that includes `acknowledgedStanzaId = lastSequenceSeen` to confirm "I know where you were". Then it proceeds with any resends. This is optional, but some handshake confirmation is good practice.
+
+## Complete Reconnection Flow Example
+
+**Scenario:**
+
+1. Client was in conversation ID `abc123`, last received message had stanzaId -30
+2. LiveKit connection drops (network issue)
+3. Client detects disconnection and attempts reconnect
+4. Client rejoins LiveKit room for conversation `abc123`
+5. LiveKit establishes connection, restores audio/video tracks
+6. Client sends over data channel: `Configuration { conversationId: "abc123", lastSequenceSeen: 30 }`
+7. Server responds: `Acknowledgement { acknowledgedStanzaId: 30, conversationId: "abc123" }`
+8. Server checks and sees last message in that conversation was -35 (so 31..35 were missed by client)
+9. Server resends messages 31, 32, 33, 34, 35 in order over the data channel. These could include the remaining AssistantSentence chunks of the answer that was cut off
+10. After resending, the server continues normally. If message 35 was final of an answer, it waits for next user message
+11. Client receives the missed messages, updates UI accordingly (maybe completing an answer that was half-shown)
+12. Conversation proceeds seamlessly
+
+## Multiple Conversations
+
+The Alicia protocol assumes one conversation per LiveKit room. If a client needs to handle multiple chats, it opens separate LiveKit room connections or handles them sequentially. The protocol does not multiplex conversations on one room connection in this specification. Therefore, the conversationId in the envelope is the same for all messages after handshake.
+
+If a future extension allows multiplexing, then conversationId would be used actively to route messages; lastStanzaMap could then map each conversationId to a last seen stanza. This is out of scope for now.
+
+## Implementation Requirements
+
+**Clients and servers must implement the reconnection handshake using Configuration.** Clients should always provide lastSequenceSeen (even if 0), and servers should honor it by not re-sending earlier messages except to fill gaps. Both sides should be robust to duplicates (e.g., if lastSequenceSeen was slightly behind and the client gets one or two messages it actually had, it should deduplicate or ignore gracefully by comparing IDs).

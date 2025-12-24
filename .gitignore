@@ -1,0 +1,37 @@
+bin
+book
+dist
+docs/assets/bin
+docs/assets
+docs/bin
+**/node_modules
+**/dist
+
+# Nix
+.direnv
+.envrc
+result
+result-*
+.nix-*
+.pre-commit-config.yaml
+.aider*
+.env
+
+# Docker
+.env.local
+docker-compose.override.yml.local
+backups/
+
+# Go
+/alicia
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+frontend/coverage/
+.postgres/

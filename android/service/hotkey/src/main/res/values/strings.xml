@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">Alicia</string>
+
+    <!-- Accessibility Service -->
+    <string name="accessibility_service_description">
+        Enables hardware button shortcuts to activate the Alicia voice assistant.\n\n
+        Supported shortcuts:\n
+        • Triple-tap volume up button\n
+        • Double-tap volume down button\n
+        • Long-press power button\n\n
+        This service only listens for hardware button combinations and does not read or access any screen content or personal data.
+    </string>
+
+    <!-- Floating Button -->
+    <string name="floating_button_description">Alicia voice assistant activation button</string>
+
+    <!-- Quick Settings Tile -->
+    <string name="tile_label">Alicia</string>
+</resources>

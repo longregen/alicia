@@ -1,0 +1,72 @@
+<!--
+  Add these elements to your app's AndroidManifest.xml
+  This is a reference snippet - not a complete manifest file.
+-->
+
+<!-- Permissions -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.VIBRATE" />
+
+<!-- Optional: For auto-start on boot -->
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+<!-- Feature requirements -->
+<uses-feature
+    android:name="android.hardware.microphone"
+    android:required="true" />
+
+<!-- Inside <application> tag -->
+
+<!-- Voice Service -->
+<service
+    android:name="org.localforge.alicia.service.voice.VoiceService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="microphone">
+    <!-- Service can be started with these actions -->
+    <intent-filter>
+        <action android:name="org.localforge.alicia.service.voice.ACTION_START" />
+        <action android:name="org.localforge.alicia.service.voice.ACTION_STOP" />
+        <action android:name="org.localforge.alicia.service.voice.ACTION_ACTIVATE" />
+    </intent-filter>
+</service>
+
+<!-- Broadcast Receiver for notification actions -->
+<receiver
+    android:name="org.localforge.alicia.service.voice.VoiceServiceReceiver"
+    android:enabled="true"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="org.localforge.alicia.service.voice.ACTION_STOP" />
+        <action android:name="org.localforge.alicia.service.voice.ACTION_MUTE" />
+        <action android:name="org.localforge.alicia.service.voice.ACTION_ACTIVATE" />
+    </intent-filter>
+</receiver>
+
+<!-- Optional: Boot receiver to auto-start service on device boot -->
+<receiver
+    android:name="org.localforge.alicia.receiver.BootReceiver"
+    android:enabled="true"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+    </intent-filter>
+</receiver>
+
+<!--
+  Runtime Permissions Required:
+  - RECORD_AUDIO: Must be requested at runtime (dangerous permission)
+
+  Battery Optimization:
+  - Consider requesting to disable battery optimization for reliable background operation
+  - Use Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+
+  Example:
+  val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+  intent.data = Uri.parse("package:$packageName")
+  startActivity(intent)
+-->

@@ -1,0 +1,116 @@
+name: Android E2E Tests
+
+on:
+  workflow_call:
+    inputs:
+      artifact_prefix:
+        description: 'Prefix for artifact names'
+        required: false
+        type: string
+        default: 'e2e'
+
+jobs:
+  e2e-test:
+    name: E2E Tests on Emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b # v8
+
+      - name: Enable unprivileged user namespaces for bwrap
+        run: |
+          # buildFHSEnv uses bubblewrap which requires user namespaces
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Cache AVD
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api-34-${{ runner.os }}
+
+      - name: Build debug APK and test APK
+        working-directory: android
+        run: |
+          nix develop ..#android --command android-fhs-env -c '
+            ./gradlew assembleDebug assembleAndroidTest \
+              --parallel \
+              --no-daemon \
+              --stacktrace
+          '
+
+      - name: Download system images
+        run: |
+          nix develop .#android --command android-fhs-env -c '
+            yes | sdkmanager "system-images;android-34;google_apis;x86_64"
+          '
+
+      - name: Create emulator
+        run: |
+          nix develop .#android --command android-fhs-env -c '
+            echo "no" | avdmanager create avd -n test -k "system-images;android-34;google_apis;x86_64" --force || true
+          '
+
+      - name: Run E2E tests
+        working-directory: android
+        run: |
+          nix develop ..#android --command android-fhs-env -c '
+            # Start emulator in background
+            emulator -avd test -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim &
+            EMULATOR_PID=$!
+
+            # Wait for emulator to boot
+            adb wait-for-device
+            adb shell "while [ -z \$(getprop sys.boot_completed) ]; do sleep 1; done"
+
+            # Run tests and capture exit code
+            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            TEST_EXIT_CODE=$?
+
+            # Capture screenshot (always run for debugging)
+            mkdir -p screenshots
+            adb exec-out screencap -p > screenshots/test-result.png || true
+
+            # Stop emulator (always run cleanup)
+            kill $EMULATOR_PID 2>/dev/null || true
+
+            # Exit with test result code
+            exit $TEST_EXIT_CODE
+          '
+
+      - name: Upload test results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: ${{ inputs.artifact_prefix }}-test-results
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          retention-days: 30
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: ${{ inputs.artifact_prefix }}-screenshots
+          path: android/screenshots/
+          retention-days: 30

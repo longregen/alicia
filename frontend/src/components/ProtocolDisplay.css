@@ -1,0 +1,169 @@
+.protocol-display {
+  padding: 8px;
+  margin: 8px;
+  max-width: 800px;
+}
+
+.protocol-section {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #424242;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.protocol-item {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-left: 4px solid #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 13px;
+}
+
+.protocol-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.protocol-content {
+  color: #424242;
+  line-height: 1.5;
+}
+
+.protocol-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #757575;
+}
+
+/* Error Messages */
+.error-message {
+  background: #ffebee;
+}
+
+.severity-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: white;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.protocol-type {
+  color: #757575;
+  font-weight: 500;
+}
+
+/* Reasoning Steps */
+.reasoning-step {
+  border-left-color: #9c27b0;
+  background: #f3e5f5;
+}
+
+.step-number {
+  font-weight: 600;
+  color: #9c27b0;
+}
+
+/* Tool Usage */
+.tool-usage {
+  border-left-color: #2196f3;
+  background: #e3f2fd;
+}
+
+.tool-name {
+  font-weight: 600;
+  color: #1976d2;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.tool-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tool-status.pending {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.tool-status.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.tool-status.failed {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.tool-usage details {
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.tool-usage summary {
+  font-weight: 600;
+  color: #1976d2;
+  user-select: none;
+}
+
+.tool-usage pre {
+  margin-top: 6px;
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 11px;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.error-result {
+  margin-top: 6px;
+  padding: 8px;
+  background: #ffebee;
+  border-radius: 4px;
+  color: #c62828;
+  font-size: 11px;
+}
+
+/* Memory Traces */
+.memory-trace {
+  border-left-color: #4caf50;
+  background: #e8f5e9;
+}
+
+.memory-id {
+  font-weight: 600;
+  color: #2e7d32;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.relevance-score {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #c8e6c9;
+  color: #1b5e20;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Commentary */
+.commentary {
+  border-left-color: #ff9800;
+  background: #fff3e0;
+}

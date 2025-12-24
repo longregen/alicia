@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFlags="flagDefault|flagRequestFilterKeyEvents"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRequestFilterKeyEvents="true"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="100"
+    android:settingsActivity="org.localforge.alicia.SettingsActivity" />
+
+<!--
+Accessibility Service Configuration for Alicia Hotkey Detection
+
+This configuration enables the HotkeyAccessibilityService to:
+- Intercept hardware button key events (volume, power)
+- Detect triple-tap volume up
+- Detect long-press power button
+- Provide haptic feedback
+
+Permission Requirements:
+- BIND_ACCESSIBILITY_SERVICE in AndroidManifest.xml
+- User must manually enable in Settings > Accessibility
+
+Key Configuration Parameters:
+- accessibilityEventTypes: typeAllMask - Listen to all events
+- accessibilityFlags:
+  * flagDefault - Standard behavior
+  * flagRequestFilterKeyEvents - Request to filter key events
+- canRequestFilterKeyEvents: true - Essential for hardware button detection
+- canRetrieveWindowContent: false - We don't need window content
+- notificationTimeout: 100ms - Minimal timeout for responsiveness
+
+Note: This service does NOT read screen content or user data.
+It only listens for hardware button combinations.
+-->

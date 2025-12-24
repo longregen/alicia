@@ -1,0 +1,49 @@
+{
+  "llm": {
+    "url": "http://localhost:8000/v1",
+    "model": "Qwen/Qwen3-8B-AWQ",
+    "max_tokens": 4096,
+    "temperature": 0.7
+  },
+  "database": {
+    "path": "/home/user/.alicia/alicia.db"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "mcp": {
+    "servers": [
+      {
+        "name": "filesystem",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        "auto_reconnect": true,
+        "reconnect_delay": 5
+      },
+      {
+        "name": "github",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": [
+          "GITHUB_TOKEN=your_github_token_here"
+        ],
+        "auto_reconnect": true,
+        "reconnect_delay": 5
+      },
+      {
+        "name": "brave_search",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "env": [
+          "BRAVE_API_KEY=your_brave_api_key_here"
+        ],
+        "auto_reconnect": true,
+        "reconnect_delay": 5
+      }
+    ]
+  }
+}

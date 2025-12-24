@@ -1,0 +1,162 @@
+diff --git a/packages/pglite/package.json b/packages/pglite/package.json
+index 0ea87a3..6a5c51a 100644
+--- a/packages/pglite/package.json
++++ b/packages/pglite/package.json
+@@ -44,11 +44,6 @@
+       "import": "./dist/vector/index.js",
+       "require": "./dist/vector/index.cjs"
+     },
+-    "./nodefs": {
+-      "types": "./dist/fs/nodefs.d.ts",
+-      "import": "./dist/fs/nodefs.js",
+-      "require": "./dist/fs/nodefs.cjs"
+-    },
+     "./opfs-ahp": {
+       "types": "./dist/fs/opfs-ahp.d.ts",
+       "import": "./dist/fs/opfs-ahp.js",
+diff --git a/packages/pglite/src/fs/base.ts b/packages/pglite/src/fs/base.ts
+index d8afdb0..412cc31 100644
+--- a/packages/pglite/src/fs/base.ts
++++ b/packages/pglite/src/fs/base.ts
+@@ -5,7 +5,7 @@ import { dumpTar, type DumpTarCompressionOptions } from './tarUtils.js'
+ export const WASM_PREFIX = '/tmp/pglite'
+ export const PGDATA = WASM_PREFIX + '/' + 'base'
+ 
+-export type FsType = 'nodefs' | 'idbfs' | 'memoryfs' | 'opfs-ahp'
++export type FsType = 'idbfs' | 'memoryfs' | 'opfs-ahp'
+ 
+ /**
+  * Filesystem interface.
+diff --git a/packages/pglite/src/fs/index.ts b/packages/pglite/src/fs/index.ts
+index dee2633..d84b1d6 100644
+--- a/packages/pglite/src/fs/index.ts
++++ b/packages/pglite/src/fs/index.ts
+@@ -14,14 +14,7 @@ export {
+ 
+ export function parseDataDir(dataDir?: string) {
+   let fsType: FsType
+-  if (dataDir?.startsWith('file://')) {
+-    // Remove the file:// prefix, and use node filesystem
+-    dataDir = dataDir.slice(7)
+-    if (!dataDir) {
+-      throw new Error('Invalid dataDir, must be a valid path')
+-    }
+-    fsType = 'nodefs'
+-  } else if (dataDir?.startsWith('idb://')) {
++  if (dataDir?.startsWith('idb://')) {
+     // Remove the idb:// prefix, and use indexeddb filesystem
+     dataDir = dataDir.slice(6)
+     fsType = 'idbfs'
+@@ -29,30 +22,15 @@ export function parseDataDir(dataDir?: string) {
+     // Remove the opfsahp:// prefix, and use opfs access handle pool filesystem
+     dataDir = dataDir.slice(11)
+     fsType = 'opfs-ahp'
+-  } else if (!dataDir || dataDir?.startsWith('memory://')) {
++  } else {
+     // Use in-memory filesystem
+     fsType = 'memoryfs'
+-  } else {
+-    // No prefix, use node filesystem
+-    fsType = 'nodefs'
+   }
+   return { dataDir, fsType }
+ }
+ 
+ export async function loadFs(dataDir?: string, fsType?: FsType) {
+   let fs: Filesystem
+-  if (dataDir && fsType === 'nodefs') {
+-    // Lazy load the nodefs to avoid bundling it in the browser
+-    const { NodeFS } = await import('./nodefs.js')
+-    fs = new NodeFS(dataDir)
+-  } else if (dataDir && fsType === 'idbfs') {
+-    fs = new IdbFs(dataDir)
+-  } else if (dataDir && fsType === 'opfs-ahp') {
+-    // Lazy load the opfs-ahp to so that it's optional in the bundle
+-    const { OpfsAhpFS } = await import('./opfs-ahp.js')
+-    fs = new OpfsAhpFS(dataDir)
+-  } else {
+-    fs = new MemoryFS()
+-  }
++  fs = new MemoryFS()
+   return fs
+ }
+diff --git a/packages/pglite/src/fs/nodefs.ts b/packages/pglite/src/fs/nodefs.ts
+deleted file mode 100644
+index fb411aa..0000000
+--- a/packages/pglite/src/fs/nodefs.ts
++++ /dev/null
+@@ -1,37 +0,0 @@
+-import * as fs from 'fs'
+-import * as path from 'path'
+-import { EmscriptenBuiltinFilesystem, PGDATA } from './base.js'
+-import type { PostgresMod } from '../postgresMod.js'
+-import { PGlite } from '../pglite.js'
+-
+-export class NodeFS extends EmscriptenBuiltinFilesystem {
+-  protected rootDir: string
+-
+-  constructor(dataDir: string) {
+-    super(dataDir)
+-    this.rootDir = path.resolve(dataDir)
+-    if (!fs.existsSync(path.join(this.rootDir))) {
+-      fs.mkdirSync(this.rootDir)
+-    }
+-  }
+-
+-  async init(pg: PGlite, opts: Partial<PostgresMod>) {
+-    this.pg = pg
+-    const options: Partial<PostgresMod> = {
+-      ...opts,
+-      preRun: [
+-        ...(opts.preRun || []),
+-        (mod: any) => {
+-          const nodefs = mod.FS.filesystems.NODEFS
+-          mod.FS.mkdir(PGDATA)
+-          mod.FS.mount(nodefs, { root: this.rootDir }, PGDATA)
+-        },
+-      ],
+-    }
+-    return { emscriptenOpts: options }
+-  }
+-
+-  async closeFs(): Promise<void> {
+-    this.pg!.Module.FS.quit()
+-  }
+-}
+diff --git a/packages/pglite/src/interface.ts b/packages/pglite/src/interface.ts
+index 0ca50c0..637cb8c 100644
+--- a/packages/pglite/src/interface.ts
++++ b/packages/pglite/src/interface.ts
+@@ -6,7 +6,7 @@ import type { Filesystem } from './fs/base.js'
+ import type { DumpTarCompressionOptions } from './fs/tarUtils.js'
+ import type { Parser, Serializer } from './types.js'
+ 
+-export type FilesystemType = 'nodefs' | 'idbfs' | 'memoryfs'
++export type FilesystemType = 'idbfs' | 'memoryfs'
+ 
+ export type DebugLevel = 0 | 1 | 2 | 3 | 4 | 5
+ 
+diff --git a/packages/pglite/src/postgresMod.ts b/packages/pglite/src/postgresMod.ts
+index 387d6a7..1587621 100644
+--- a/packages/pglite/src/postgresMod.ts
++++ b/packages/pglite/src/postgresMod.ts
+@@ -8,7 +8,6 @@ type IDBFS = Emscripten.FileSystemType & {
+ export type FS = typeof FS & {
+   filesystems: {
+     MEMFS: Emscripten.FileSystemType
+-    NODEFS: Emscripten.FileSystemType
+     IDBFS: IDBFS
+   }
+   quit: () => void
+diff --git a/packages/pglite/tsup.config.ts b/packages/pglite/tsup.config.ts
+index 2fdbe61..e2be3a0 100644
+--- a/packages/pglite/tsup.config.ts
++++ b/packages/pglite/tsup.config.ts
+@@ -18,7 +18,6 @@ const replaceAssertPlugin = {
+ 
+ const entryPoints = [
+   'src/index.ts',
+-  'src/fs/nodefs.ts',
+   'src/fs/opfs-ahp.ts',
+   'src/fs/base.ts',
+   'src/templating.ts',
