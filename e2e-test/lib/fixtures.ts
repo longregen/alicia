@@ -70,13 +70,38 @@ export const test = base.extend<TestFixtures>({
   sidebar: async ({ page }, use) => {
     const actions: SidebarActions = {
       async createConversation() {
-        await page.click('button:has-text("New Chat")');
-        await page.waitForSelector('.chat-window', { state: 'visible' });
+        // Get current conversation count before creating new one
+        const existingItems = page.locator('.conversation-item[data-conversation-id]');
+        const existingCount = await existingItems.count();
 
-        const selected = page.locator('.conversation-item.selected').first();
-        const id = await selected.getAttribute('data-conversation-id');
+        // Wait for the New Chat button to be visible and click it
+        const newChatBtn = page.locator('[data-testid="new-chat-btn"]');
+        await newChatBtn.waitFor({ state: 'visible', timeout: 10000 });
+        await newChatBtn.click();
 
-        if (!id) throw new Error('Failed to get conversation ID');
+        // Wait for chat window to appear
+        await page.waitForSelector('.chat-window', { state: 'visible', timeout: 15000 });
+
+        // Wait for the conversation count to increase
+        const maxAttempts = 30; // 30 * 500ms = 15 seconds
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          const currentItems = page.locator('.conversation-item[data-conversation-id]');
+          const currentCount = await currentItems.count();
+          if (currentCount > existingCount) {
+            break;
+          }
+          await page.waitForTimeout(500);
+        }
+
+        // Give the UI time to update selection state
+        await page.waitForTimeout(500);
+
+        // The newly created conversation should be selected (first one)
+        // Get the first conversation's ID - this should be the newest one
+        const conversationItem = page.locator('.conversation-item[data-conversation-id]').first();
+        const id = await conversationItem.getAttribute('data-conversation-id');
+
+        if (!id) throw new Error('Failed to get conversation ID after creation');
         return id;
       },
 
@@ -86,12 +111,42 @@ export const test = base.extend<TestFixtures>({
       },
 
       async deleteConversation(id: string) {
-        await page.click(`[data-conversation-id="${id}"] .delete-btn`);
-        await page.click('button:has-text("Delete")');
-        await page.waitForSelector(`[data-conversation-id="${id}"]`, {
-          state: 'hidden',
-          timeout: 5000,
-        });
+        // Wait for the conversation item to be visible before clicking
+        const item = page.locator(`[data-conversation-id="${id}"]`);
+
+        // Scroll the conversation item into view and wait for it to be visible
+        await item.scrollIntoViewIfNeeded();
+        await item.waitFor({ state: 'visible', timeout: 15000 });
+
+        // Click the delete button with retry logic for VM environment
+        const deleteBtn = item.locator('.delete-btn');
+        await deleteBtn.waitFor({ state: 'visible', timeout: 5000 });
+
+        // Retry deletion up to 2 times with shorter timeouts for VM environment
+        for (let attempt = 0; attempt < 2; attempt++) {
+          await deleteBtn.click();
+
+          // Wait for the API call to complete
+          await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
+            // Network idle timeout is ok - the delete might have already completed
+          });
+
+          // Wait for the item to be removed from the DOM
+          try {
+            await page.waitForSelector(`[data-conversation-id="${id}"]`, {
+              state: 'hidden',
+              timeout: 10000,
+            });
+            return; // Success, exit the function
+          } catch {
+            if (attempt === 1) {
+              // Last attempt failed, throw the error
+              throw new Error(`Failed to delete conversation ${id} after 2 attempts`);
+            }
+            // Wait before retrying
+            await page.waitForTimeout(1000);
+          }
+        }
       },
 
       async getConversationList() {
@@ -124,7 +179,7 @@ export const test = base.extend<TestFixtures>({
 
       async waitForUserMessage(text: string) {
         const msg = page.locator(`.message-bubble.user:has-text("${text}")`);
-        await expect(msg).toBeVisible({ timeout: 5000 });
+        await expect(msg).toBeVisible({ timeout: 30000 });
         return msg;
       },
 
@@ -230,12 +285,22 @@ export const test = base.extend<TestFixtures>({
     const actions: SettingsActions = {
       async open() {
         await page.click('button[title="Settings"]');
-        await page.waitForSelector('.mcp-settings', { state: 'visible' });
+        // Wait for the settings modal overlay to be visible (appears immediately)
+        await page.waitForSelector('.settings-modal-overlay', { state: 'visible', timeout: 10000 });
+        // Then wait for the MCP settings content to load
+        await page.waitForSelector('.mcp-settings', { state: 'visible', timeout: 15000 });
       },
 
       async close() {
-        await page.keyboard.press('Escape');
-        await page.waitForSelector('.mcp-settings', { state: 'hidden' });
+        // Click the close button instead of relying on Escape key
+        const closeButton = page.locator('.settings-close-btn');
+        if (await closeButton.isVisible()) {
+          await closeButton.click();
+        } else {
+          // Fallback to clicking the overlay
+          await page.click('.settings-modal-overlay');
+        }
+        await page.waitForSelector('.settings-modal-overlay', { state: 'hidden', timeout: 10000 });
       },
 
       async addMcpServer(name: string, command: string, args?: string) {

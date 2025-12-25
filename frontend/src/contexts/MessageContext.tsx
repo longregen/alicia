@@ -40,9 +40,9 @@ interface MessageContextType {
   acknowledgements: Acknowledgement[];
 
   // Message actions
-  setMessages: (messages: Message[]) => void;
+  setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   addMessage: (message: Message) => void;
-  updateMessage: (id: string, content: string) => void;
+  updateMessage: (id: string, updates: Partial<Message>) => void;
   clearMessages: () => void;
   mergeMessages: (newMessages: Message[]) => void;
 
@@ -86,8 +86,12 @@ export function MessageProvider({ children }: { children: ReactNode }) {
   const [commentaries, setCommentaries] = useState<Commentary[]>([]);
   const [acknowledgements, setAcknowledgements] = useState<Acknowledgement[]>([]);
 
-  const setMessages = useCallback((newMessages: Message[]) => {
-    setMessagesState(newMessages);
+  const setMessages = useCallback((newMessages: Message[] | ((prev: Message[]) => Message[])) => {
+    if (typeof newMessages === 'function') {
+      setMessagesState(newMessages);
+    } else {
+      setMessagesState(newMessages);
+    }
   }, []);
 
   const addMessage = useCallback((message: Message) => {
@@ -100,9 +104,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const updateMessage = useCallback((id: string, content: string) => {
+  const updateMessage = useCallback((id: string, updates: Partial<Message>) => {
     setMessagesState(prev =>
-      prev.map(msg => msg.id === id ? { ...msg, contents: content } : msg)
+      prev.map(msg => msg.id === id ? { ...msg, ...updates } : msg)
     );
   }, []);
 

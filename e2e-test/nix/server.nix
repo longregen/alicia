@@ -43,16 +43,27 @@ in
     # nixosTest provides virtual network automatically
     # Server will be reachable at hostname "server" from client VM
 
-    firewall = {
-      enable = true;
-      allowedTCPPorts = [
-        80    # nginx (frontend + API proxy)
-        8888  # backend direct (for debugging)
-      ];
-    };
+    # Disable firewall in test environment to avoid nf_conntrack table exhaustion
+    # This is safe because the test runs in an isolated VM network
+    firewall.enable = false;
 
     # Ensure external DNS resolution works
     nameservers = [ "8.8.8.8" "1.1.1.1" ];
+  };
+
+  # ============================================================================
+  # Kernel Parameters
+  # ============================================================================
+
+  # Increase connection tracking table size to prevent packet drops during tests
+  # Also increase hash table size and timeout settings
+  boot.kernel.sysctl = {
+    "net.netfilter.nf_conntrack_max" = 524288;
+    "net.nf_conntrack_max" = 524288;
+    # Reduce timeouts to free up entries faster
+    "net.netfilter.nf_conntrack_tcp_timeout_established" = 3600;
+    "net.netfilter.nf_conntrack_tcp_timeout_time_wait" = 30;
+    "net.netfilter.nf_conntrack_tcp_timeout_close_wait" = 30;
   };
 
   # ============================================================================
@@ -174,7 +185,7 @@ in
     environment = {
       # Server configuration
       ALICIA_SERVER_HOST = "127.0.0.1";
-      ALICIA_SERVER_PORT = "8888";
+      ALICIA_SERVER_PORT = "9999";
 
       # Database
       ALICIA_POSTGRES_URL = postgresUrl;
@@ -220,7 +231,7 @@ in
       # Health check: wait for /health to respond
       ExecStartPost = pkgs.writeShellScript "alicia-healthcheck" ''
         for i in $(seq 1 30); do
-          if ${pkgs.curl}/bin/curl -sf http://127.0.0.1:8888/health >/dev/null 2>&1; then
+          if ${pkgs.curl}/bin/curl -sf http://127.0.0.1:9999/health >/dev/null 2>&1; then
             echo "Backend is healthy"
             exit 0
           fi
@@ -266,30 +277,24 @@ in
       locations = {
         # API proxy to backend
         "/api/" = {
-          proxyPass = "http://127.0.0.1:8888/api/";
+          proxyPass = "http://127.0.0.1:9999";
           proxyWebsockets = true;
           extraConfig = ''
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header Host $host;
-
             proxy_connect_timeout 300s;
             proxy_send_timeout 300s;
             proxy_read_timeout 300s;
-
             client_max_body_size 10m;
           '';
         };
 
         # Health endpoint proxy
         "/health" = {
-          proxyPass = "http://127.0.0.1:8888/health";
+          proxyPass = "http://127.0.0.1:9999/health";
         };
 
         # WebSocket proxy for real-time features
         "/ws" = {
-          proxyPass = "http://127.0.0.1:8888/ws";
+          proxyPass = "http://127.0.0.1:9999/ws";
           proxyWebsockets = true;
           extraConfig = ''
             proxy_set_header Upgrade $http_upgrade;
@@ -299,15 +304,15 @@ in
         };
 
         # Frontend configuration endpoint (LiveKit URL for client)
-        "/config.json" = {
+        # Use = exact match to avoid alias traversal issues
+        "= /config.json" = {
+          alias = pkgs.writeText "config.json" ''{"livekitUrl": "${livekitUrl}"}'';
           extraConfig = ''
             default_type application/json;
-            # Include parent security headers to avoid gixy warning
             add_header X-Frame-Options "SAMEORIGIN" always;
             add_header X-Content-Type-Options "nosniff" always;
             add_header X-XSS-Protection "1; mode=block" always;
             add_header Cache-Control "no-store, no-cache, must-revalidate" always;
-            return 200 '{"livekitUrl": "${livekitUrl}"}';
           '';
         };
 

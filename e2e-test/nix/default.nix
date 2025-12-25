@@ -52,17 +52,41 @@ pkgs.testers.nixosTest {
 
     def run_playwright_tests():
         """Execute Playwright tests on client VM"""
-        # Ensure log directory exists before tee
-        client.succeed("mkdir -p /artifacts/logs")
+        # Ensure log directory exists and is writable by test user
+        client.succeed("mkdir -p /artifacts/logs && chown -R test:users /artifacts")
+
+        # Dynamically discover the Chromium path from Playwright browsers directory
+        chromium_path = client.succeed(
+            "CHROMIUM_DIR=$(ls -d $PLAYWRIGHT_BROWSERS_PATH/chromium-* 2>/dev/null | head -1) && "
+            "echo $CHROMIUM_DIR/chrome-linux/chrome"
+        ).strip()
+
+        if not chromium_path or chromium_path == "/chrome-linux/chrome":
+            raise Exception("Could not discover Chromium path from PLAYWRIGHT_BROWSERS_PATH")
+
+        # Verify the chromium executable exists
+        client.succeed(f"test -f {chromium_path}")
+        print(f"Using Chromium at: {chromium_path}")
+
+        # Run Playwright as the test user with proper environment
+        # This is critical: npx and Playwright need to run with the same user
+        # that owns the node_modules directory
+        # Note: We pass the environment variables explicitly since su creates a new shell
+        # Run Playwright with full output visible in build logs
         client.succeed(
-            "cd /home/test/e2e-test && "
-            "NIXOS_TEST=1 "
-            "BASE_URL=http://server "
-            "ARTIFACT_DIR=/artifacts "
-            "npx playwright test tests/smoke.spec.ts "
-            "--reporter=html,json "
-            "--timeout=60000 "
-            "2>&1 | tee /artifacts/logs/playwright-output.log"
+            f"su - test -c '"
+            f"cd /home/test/e2e-test && "
+            f"DISPLAY=:0 "
+            f"NIXOS_TEST=1 "
+            f"BASE_URL=http://server "
+            f"ARTIFACT_DIR=/artifacts "
+            f"PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH "
+            f"PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH={chromium_path} "
+            f"PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 "
+            f"npx playwright test tests/smoke.spec.ts "
+            f"--timeout=60000 "
+            f"--reporter=list"
+            f"'"
         )
 
     # Start all VMs
@@ -107,10 +131,20 @@ pkgs.testers.nixosTest {
         client.succeed("curl -sf http://server/health | grep -q ok")
         print("Client can reach server")
 
+        # Test API endpoints are accessible (verbose to see HTTP codes)
+        print("Testing API endpoints...")
+        api_response = client.succeed("curl -v http://server/api/v1/conversations 2>&1 || true")
+        print(f"GET /api/v1/conversations response:\n{api_response}")
+
+        # Also test direct backend access (bypass nginx)
+        print("Testing direct backend access...")
+        direct_response = server.succeed("curl -v http://127.0.0.1:9999/api/v1/conversations 2>&1 || true")
+        print(f"Direct backend GET response:\n{direct_response}")
+
     # Verify Playwright is ready (npm deps are pre-installed via Nix)
     with subtest("Verify Playwright"):
         print("Verifying Playwright installation...")
-        client.succeed("cd /home/test/e2e-test && npx playwright --version")
+        client.succeed("su - test -c 'cd /home/test/e2e-test && npx playwright --version'")
         print("Playwright is ready")
 
     vnc_screenshot("vnc-playwright-ready")

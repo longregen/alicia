@@ -52,7 +52,9 @@ function AppContent({
   }, [selectedConversationId]);
 
   const handleNewConversation = async () => {
-    const newConv = await createConversation();
+    // Generate a default title - backend requires a non-empty title
+    const defaultTitle = `New Chat`;
+    const newConv = await createConversation(defaultTitle);
     if (newConv) {
       setSelectedConversationId(newConv.id);
     }

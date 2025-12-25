@@ -26,10 +26,14 @@ export default defineConfig({
     timeout: isNixosTest ? 10000 : 5000,
   },
 
+  // Global timeout for entire test run (10 minutes for NixOS VM tests)
+  globalTimeout: isNixosTest ? 600000 : 0,
+
   use: {
     baseURL: SERVER_URL,
 
-    headless: false,
+    // Use headless mode in NixOS VM tests (no GPU, more reliable)
+    headless: isNixosTest ? true : false,
 
     viewport: { width: 1920, height: 1080 },
 
@@ -51,11 +55,14 @@ export default defineConfig({
     contextOptions: {
       reducedMotion: 'no-preference',
       colorScheme: 'light',
-      recordHar: {
-        path: path.join(outputDir, 'traces/har'),
-        mode: 'full',
-        content: 'embed',
-      },
+      // Disable HAR recording in NixOS tests (can cause hangs)
+      ...(isNixosTest ? {} : {
+        recordHar: {
+          path: path.join(outputDir, 'traces/har'),
+          mode: 'full',
+          content: 'embed',
+        },
+      }),
     },
 
     locale: 'en-US',
@@ -67,8 +74,11 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        channel: 'chromium',
+        // Don't use 'channel' in NixOS tests - it overrides PLAYWRIGHT_BROWSERS_PATH
+        ...(isNixosTest ? {} : { channel: 'chromium' }),
         launchOptions: {
+          // In NixOS tests, use explicit path from environment variable
+          executablePath: isNixosTest ? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH : undefined,
           args: [
             '--disable-gpu',
             '--no-sandbox',
@@ -76,6 +86,17 @@ export default defineConfig({
             '--disable-setuid-sandbox',
             '--use-fake-ui-for-media-stream',
             '--use-fake-device-for-media-stream',
+            // Additional flags for NixOS VM environment
+            ...(isNixosTest ? [
+              '--headless=new',
+              '--disable-software-rasterizer',
+              '--disable-extensions',
+              '--disable-background-networking',
+              '--disable-sync',
+              '--disable-translate',
+              '--no-first-run',
+              '--disable-features=VizDisplayCompositor',
+            ] : []),
           ],
         },
       },

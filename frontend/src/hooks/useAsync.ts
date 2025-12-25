@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 export interface UseAsyncOptions<T> {
   /**
@@ -67,20 +67,27 @@ export function useAsync<T, Args extends any[] = any[]>(
   asyncFunction: (...args: Args) => Promise<T>,
   options: UseAsyncOptions<T> = {}
 ): UseAsyncReturn<T, Args> {
-  const { onSuccess, errorMessage, clearErrorOnExecute = true } = options;
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Use refs to avoid recreating execute when function/options change
+  const asyncFunctionRef = useRef(asyncFunction);
+  const optionsRef = useRef(options);
+
+  // Update refs on each render
+  asyncFunctionRef.current = asyncFunction;
+  optionsRef.current = options;
+
   const execute = useCallback(
     async (...args: Args): Promise<T | null> => {
+      const { onSuccess, errorMessage, clearErrorOnExecute = true } = optionsRef.current;
       try {
         setLoading(true);
         if (clearErrorOnExecute) {
           setError(null);
         }
 
-        const result = await asyncFunction(...args);
+        const result = await asyncFunctionRef.current(...args);
 
         if (onSuccess) {
           onSuccess(result);
@@ -97,7 +104,7 @@ export function useAsync<T, Args extends any[] = any[]>(
         setLoading(false);
       }
     },
-    [asyncFunction, onSuccess, errorMessage, clearErrorOnExecute]
+    []
   );
 
   const clearError = useCallback(() => {

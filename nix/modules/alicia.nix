@@ -275,7 +275,7 @@ in
       description = "Alicia Voice Assistant Server";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ]
-        ++ optional (cfg.database.url != null && hasInfix "localhost" cfg.database.url) "postgresql.service";
+        ++ optional (cfg.database.url != null && (hasInfix "localhost" cfg.database.url || hasInfix "/run/postgresql" cfg.database.url)) "postgresql.service";
       wants = [ "network-online.target" ];
 
       serviceConfig = {
@@ -284,8 +284,7 @@ in
         Group = cfg.group;
         WorkingDirectory = cfg.dataDir;
 
-        # Main service command
-        ExecStart = "${cfg.package}/bin/alicia server";
+        # Note: ExecStart is generated from the script block below
 
         # Health check - verify service is responding after startup
         ExecStartPost = "${pkgs.bash}/bin/bash -c 'for i in {1..30}; do ${pkgs.curl}/bin/curl -sf http://localhost:${toString cfg.port}/health && exit 0; sleep 1; done; exit 1'";
@@ -324,6 +323,14 @@ in
         LimitNOFILE = "65536";
 
         # Load secrets via LoadCredential
+        LoadCredential =
+          (optional (cfg.database.urlFile != null) "db-url:${cfg.database.urlFile}")
+          ++ (optional (cfg.llm.apiKeyFile != null) "llm-api-key:${cfg.llm.apiKeyFile}")
+          ++ (optional (cfg.livekit.apiKeyFile != null) "livekit-api-key:${cfg.livekit.apiKeyFile}")
+          ++ (optional (cfg.livekit.apiSecretFile != null) "livekit-api-secret:${cfg.livekit.apiSecretFile}")
+          ++ (optional (cfg.asr.apiKeyFile != null) "asr-api-key:${cfg.asr.apiKeyFile}")
+          ++ (optional (cfg.tts.apiKeyFile != null) "tts-api-key:${cfg.tts.apiKeyFile}")
+          ++ (optional (cfg.embedding.apiKeyFile != null) "embedding-api-key:${cfg.embedding.apiKeyFile}");
       } // (optionalAttrs (cfg.database.autoMigrate && (cfg.database.url != null || cfg.database.urlFile != null)) {
         # Run database migrations before starting the service
         ExecStartPre = pkgs.writeShellScript "alicia-migrate" ''
@@ -368,18 +375,6 @@ in
             echo "Database migrations completed with errors"
           fi
         '';
-      }) // (optionalAttrs (cfg.database.urlFile != null) {
-        LoadCredential = [ "db-url:${cfg.database.urlFile}" ];
-      }) // (optionalAttrs (cfg.llm.apiKeyFile != null) {
-        LoadCredential = mkForce (
-          (optional (cfg.database.urlFile != null) "db-url:${cfg.database.urlFile}")
-          ++ [ "llm-api-key:${cfg.llm.apiKeyFile}" ]
-          ++ (optional (cfg.livekit.apiKeyFile != null) "livekit-api-key:${cfg.livekit.apiKeyFile}")
-          ++ (optional (cfg.livekit.apiSecretFile != null) "livekit-api-secret:${cfg.livekit.apiSecretFile}")
-          ++ (optional (cfg.asr.apiKeyFile != null) "asr-api-key:${cfg.asr.apiKeyFile}")
-          ++ (optional (cfg.tts.apiKeyFile != null) "tts-api-key:${cfg.tts.apiKeyFile}")
-          ++ (optional (cfg.embedding.apiKeyFile != null) "embedding-api-key:${cfg.embedding.apiKeyFile}")
-        );
       });
 
       environment = {
@@ -442,7 +437,7 @@ in
           export ALICIA_EMBEDDING_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/embedding-api-key")
         ''}
 
-        exec ${cfg.package}/bin/alicia server
+        exec ${cfg.package}/bin/alicia serve
       '';
     };
 
@@ -451,7 +446,7 @@ in
       description = "Alicia Voice Assistant Agent (LiveKit)";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ]
-        ++ optional (cfg.database.url != null && hasInfix "localhost" cfg.database.url) "postgresql.service"
+        ++ optional (cfg.database.url != null && (hasInfix "localhost" cfg.database.url || hasInfix "/run/postgresql" cfg.database.url)) "postgresql.service"
         ++ optional (cfg.mode == "both") "alicia.service";
       wants = [ "network-online.target" ];
 
@@ -461,8 +456,7 @@ in
         Group = cfg.group;
         WorkingDirectory = cfg.dataDir;
 
-        # Main agent command
-        ExecStart = "${cfg.package}/bin/alicia agent";
+        # Note: ExecStart is generated from the script block below
 
         # Restart policy
         Restart = "on-failure";
@@ -497,20 +491,16 @@ in
         # Resource limits
         LimitNOFILE = "65536";
 
-        # Load credentials (same as main service)
-      } // (optionalAttrs (cfg.database.urlFile != null) {
-        LoadCredential = [ "db-url:${cfg.database.urlFile}" ];
-      }) // (optionalAttrs (cfg.llm.apiKeyFile != null) {
-        LoadCredential = mkForce (
+        # Load secrets via LoadCredential
+        LoadCredential =
           (optional (cfg.database.urlFile != null) "db-url:${cfg.database.urlFile}")
-          ++ [ "llm-api-key:${cfg.llm.apiKeyFile}" ]
+          ++ (optional (cfg.llm.apiKeyFile != null) "llm-api-key:${cfg.llm.apiKeyFile}")
           ++ (optional (cfg.livekit.apiKeyFile != null) "livekit-api-key:${cfg.livekit.apiKeyFile}")
           ++ (optional (cfg.livekit.apiSecretFile != null) "livekit-api-secret:${cfg.livekit.apiSecretFile}")
           ++ (optional (cfg.asr.apiKeyFile != null) "asr-api-key:${cfg.asr.apiKeyFile}")
           ++ (optional (cfg.tts.apiKeyFile != null) "tts-api-key:${cfg.tts.apiKeyFile}")
-          ++ (optional (cfg.embedding.apiKeyFile != null) "embedding-api-key:${cfg.embedding.apiKeyFile}")
-        );
-      });
+          ++ (optional (cfg.embedding.apiKeyFile != null) "embedding-api-key:${cfg.embedding.apiKeyFile}");
+      };
 
       environment = {
         # Database configuration

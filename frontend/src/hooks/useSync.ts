@@ -132,8 +132,8 @@ export function useSync(conversationId: string | null): UseSyncResult {
             if (syncedMsg.local_id !== syncedMsg.server_id && syncedMsg.message) {
               const localMsg = messages.find(m => (m.local_id || m.id) === syncedMsg.local_id);
               if (localMsg && localMsg.local_id) {
-                // Update to use server ID
-                updateMessage(localMsg.id, syncedMsg.message.contents);
+                // Update to use server ID and content
+                updateMessage(localMsg.id, { contents: syncedMsg.message.contents });
               }
             }
           } else if (syncedMsg.status === 'conflict' && syncedMsg.conflict) {

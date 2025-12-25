@@ -6,6 +6,9 @@ let
   # Get the e2e-test directory from the parent of the nix directory
   e2eTestDir = ../.;
 
+  # Playwright browser derivation - use a consistent reference throughout
+  playwrightBrowsers = pkgs.playwright-driver.browsers;
+
   # Pre-built e2e-test package with all npm dependencies
   e2eTestPackage = pkgs.buildNpmPackage {
     pname = "alicia-e2e-tests";
@@ -39,6 +42,21 @@ in
   networking = {
     hostName = "client";
     firewall.enable = false;  # Within test network
+  };
+
+  # ============================================================================
+  # Kernel Parameters
+  # ============================================================================
+
+  # Increase connection tracking table size to prevent packet drops during tests
+  # Also increase hash table size and timeout settings
+  boot.kernel.sysctl = {
+    "net.netfilter.nf_conntrack_max" = 524288;
+    "net.nf_conntrack_max" = 524288;
+    # Reduce timeouts to free up entries faster
+    "net.netfilter.nf_conntrack_tcp_timeout_established" = 3600;
+    "net.netfilter.nf_conntrack_tcp_timeout_time_wait" = 30;
+    "net.netfilter.nf_conntrack_tcp_timeout_close_wait" = 30;
   };
 
   # ============================================================================
@@ -113,6 +131,24 @@ in
     # Create artifacts directory with proper permissions
     mkdir -p /artifacts
     chown -R ${testUser}:users /artifacts
+
+    # Verify Playwright browsers are available (this also ensures the path is in the closure)
+    # Dynamically find the chromium directory at runtime
+    CHROMIUM_DIR=$(ls -d ${playwrightBrowsers}/chromium-* 2>/dev/null | head -1)
+    if [ -z "$CHROMIUM_DIR" ]; then
+      echo "ERROR: No chromium directory found in ${playwrightBrowsers}"
+      echo "Contents of ${playwrightBrowsers}:"
+      ls -la ${playwrightBrowsers}/ || true
+      exit 1
+    fi
+    CHROMIUM_PATH="$CHROMIUM_DIR/chrome-linux/chrome"
+    if [ ! -f "$CHROMIUM_PATH" ]; then
+      echo "ERROR: Chromium not found at $CHROMIUM_PATH"
+      echo "Contents of $CHROMIUM_DIR:"
+      ls -la "$CHROMIUM_DIR"/ || true
+      exit 1
+    fi
+    echo "Playwright Chromium verified at: $CHROMIUM_PATH"
   '';
 
   # ============================================================================
@@ -141,6 +177,7 @@ in
     expat
     glib
     gtk3
+    gsettings-desktop-schemas
 
     # Utilities
     xdotool
@@ -152,6 +189,9 @@ in
     curl
     jq
   ];
+
+  # Enable D-Bus for Chromium
+  services.dbus.enable = true;
 
   # ============================================================================
   # Audio Configuration
@@ -183,8 +223,14 @@ in
   environment.variables = {
     DISPLAY = ":0";
     # Playwright settings - use Nix-provided browsers
-    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+    PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
+    # Note: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is dynamically discovered by Playwright
+    # from PLAYWRIGHT_BROWSERS_PATH, so we don't hardcode the version-specific path
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+
+    # Disable Chrome's SUID sandbox - it's not needed in our test environment
+    # and conflicts with NixOS's sandboxing model
+    CHROME_DEVEL_SANDBOX = "";
   };
 
   # ============================================================================
