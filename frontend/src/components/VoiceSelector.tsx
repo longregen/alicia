@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useConfig } from '../contexts/ConfigContext';
 import type { TTSRequest } from '../types/models';
+import type { Voice } from '../services/api';
 
 interface VoiceSelectorProps {
   currentVoice?: string;
@@ -9,58 +11,42 @@ interface VoiceSelectorProps {
   disabled?: boolean;
 }
 
-interface VoiceOption {
-  id: string;
-  name: string;
-  category: string;
-}
-
-// Kokoro TTS voice list organized by category
-const VOICES: VoiceOption[] = [
-  // American Female
-  { id: 'af_sarah', name: 'Sarah', category: 'American Female' },
-  { id: 'af_nicole', name: 'Nicole', category: 'American Female' },
-  { id: 'af_sky', name: 'Sky', category: 'American Female' },
-  { id: 'af_bella', name: 'Bella', category: 'American Female' },
-
-  // American Male
-  { id: 'am_adam', name: 'Adam', category: 'American Male' },
-  { id: 'am_michael', name: 'Michael', category: 'American Male' },
-  { id: 'am_jack', name: 'Jack', category: 'American Male' },
-  { id: 'am_ryan', name: 'Ryan', category: 'American Male' },
-
-  // British Female
-  { id: 'bf_emma', name: 'Emma', category: 'British Female' },
-  { id: 'bf_isabella', name: 'Isabella', category: 'British Female' },
-  { id: 'bf_lily', name: 'Lily', category: 'British Female' },
-  { id: 'bf_alice', name: 'Alice', category: 'British Female' },
-
-  // British Male
-  { id: 'bm_george', name: 'George', category: 'British Male' },
-  { id: 'bm_lewis', name: 'Lewis', category: 'British Male' },
-  { id: 'bm_charlie', name: 'Charlie', category: 'British Male' },
-  { id: 'bm_oliver', name: 'Oliver', category: 'British Male' },
-];
-
 export function VoiceSelector({
-  currentVoice = 'af_sarah',
-  currentSpeed = 1.0,
+  currentVoice,
+  currentSpeed,
   onVoiceChange,
   onSpeedChange,
   disabled = false,
 }: VoiceSelectorProps) {
+  const { config, loading: configLoading } = useConfig();
   const [isExpanded, setIsExpanded] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState(currentVoice);
-  const [speed, setSpeed] = useState(currentSpeed);
+  const [selectedVoice, setSelectedVoice] = useState(currentVoice || config?.tts?.default_voice || 'af_sarah');
+  const [speed, setSpeed] = useState(currentSpeed || config?.tts?.default_speed || 1.0);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // Sync with config defaults when config loads
   useEffect(() => {
-    setSelectedVoice(currentVoice);
+    if (config?.tts) {
+      if (!currentVoice) {
+        setSelectedVoice(config.tts.default_voice);
+      }
+      if (!currentSpeed) {
+        setSpeed(config.tts.default_speed);
+      }
+    }
+  }, [config, currentVoice, currentSpeed]);
+
+  useEffect(() => {
+    if (currentVoice) {
+      setSelectedVoice(currentVoice);
+    }
   }, [currentVoice]);
 
   useEffect(() => {
-    setSpeed(currentSpeed);
+    if (currentSpeed !== undefined) {
+      setSpeed(currentSpeed);
+    }
   }, [currentSpeed]);
 
   const handleVoiceChange = (voiceId: string) => {
@@ -74,19 +60,24 @@ export function VoiceSelector({
   };
 
   const handlePreview = async () => {
+    if (!config?.tts) {
+      setPreviewError('TTS is not configured');
+      return;
+    }
+
     setIsPreviewLoading(true);
     setPreviewError(null);
 
     try {
       const ttsRequest: TTSRequest = {
-        model: 'kokoro',
+        model: config.tts.model,
         input: "Hello, I'm Alicia. This is a preview of my voice.",
         voice: selectedVoice,
         response_format: 'mp3',
         speed: speed,
       };
 
-      const response = await fetch('/v1/audio/speech', {
+      const response = await fetch(config.tts.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,14 +112,43 @@ export function VoiceSelector({
     }
   };
 
-  const selectedVoiceObj = VOICES.find(v => v.id === selectedVoice);
-  const voicesByCategory = VOICES.reduce((acc, voice) => {
+  // Get voices from config, fallback to empty array
+  const voices = config?.tts?.voices || [];
+
+  const selectedVoiceObj = voices.find(v => v.id === selectedVoice);
+  const voicesByCategory = voices.reduce((acc, voice) => {
     if (!acc[voice.category]) {
       acc[voice.category] = [];
     }
     acc[voice.category].push(voice);
     return acc;
-  }, {} as Record<string, VoiceOption[]>);
+  }, {} as Record<string, Voice[]>);
+
+  // Show loading state while config is loading
+  if (configLoading) {
+    return (
+      <div className="voice-selector">
+        <button className="voice-selector-toggle" disabled title="Loading...">
+          🎙️ Voice
+        </button>
+      </div>
+    );
+  }
+
+  // Show disabled state if TTS is not enabled
+  if (!config?.tts_enabled || !config?.tts) {
+    return (
+      <div className="voice-selector">
+        <button className="voice-selector-toggle" disabled title="TTS not available">
+          🎙️ Voice (Unavailable)
+        </button>
+      </div>
+    );
+  }
+
+  const speedMin = config.tts.speed_min;
+  const speedMax = config.tts.speed_max;
+  const speedStep = config.tts.speed_step;
 
   return (
     <div className="voice-selector">
@@ -182,18 +202,18 @@ export function VoiceSelector({
               </label>
               <input
                 type="range"
-                min="0.5"
-                max="2.0"
-                step="0.1"
+                min={speedMin}
+                max={speedMax}
+                step={speedStep}
                 value={speed}
                 onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
                 disabled={disabled}
                 className="speed-slider"
               />
               <div className="speed-markers">
-                <span>0.5x</span>
-                <span>1.0x</span>
-                <span>2.0x</span>
+                <span>{speedMin}x</span>
+                <span>{((speedMin + speedMax) / 2).toFixed(1)}x</span>
+                <span>{speedMax}x</span>
               </div>
             </div>
 

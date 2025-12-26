@@ -120,7 +120,7 @@ func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msg
 
 	// Check if message with this local ID already exists
 	existingMsg, err := h.messageRepo.GetByLocalID(ctx, msgReq.LocalID)
-	if err != nil {
+	if err != nil && err != pgx.ErrNoRows {
 		return dto.SyncedMessage{}, err
 	}
 
@@ -163,17 +163,18 @@ func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msg
 
 	// Create message with sync tracking
 	message := &models.Message{
-		ID:             serverID,
-		ConversationID: conversationID,
-		SequenceNumber: msgReq.SequenceNumber,
-		PreviousID:     msgReq.PreviousID,
-		Role:           models.MessageRole(msgReq.Role),
-		Contents:       msgReq.Contents,
-		LocalID:        msgReq.LocalID,
-		ServerID:       serverID,
-		SyncStatus:     models.SyncStatusSynced,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
+		ID:               serverID,
+		ConversationID:   conversationID,
+		SequenceNumber:   msgReq.SequenceNumber,
+		PreviousID:       msgReq.PreviousID,
+		Role:             models.MessageRole(msgReq.Role),
+		Contents:         msgReq.Contents,
+		LocalID:          msgReq.LocalID,
+		ServerID:         serverID,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted, // Synced messages are always completed
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
 	}
 
 	// Mark as synced

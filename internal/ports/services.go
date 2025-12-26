@@ -78,7 +78,6 @@ type TTSResult struct {
 type TTSService interface {
 	Synthesize(ctx context.Context, text string, options *TTSOptions) (*TTSResult, error)
 	SynthesizeStream(ctx context.Context, text string, options *TTSOptions) (<-chan *TTSResult, error)
-	GetVoices(ctx context.Context) ([]string, error)
 }
 
 // EmbeddingResult represents the result of embedding generation

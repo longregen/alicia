@@ -91,9 +91,14 @@ export function useSync(conversationId: string | null): UseSyncResult {
   }, [isSSEConnected]);
 
   // Convert local messages to SyncMessageRequest format
+  // Only include messages that need syncing (pending status and have a local_id)
   const buildSyncRequest = useCallback((localMessages: Message[]): SyncRequest => {
-    const syncMessages: SyncMessageRequest[] = localMessages.map(msg => ({
-      local_id: msg.local_id || msg.id,
+    const pendingMessages = localMessages.filter(msg =>
+      msg.sync_status === 'pending' && msg.local_id
+    );
+
+    const syncMessages: SyncMessageRequest[] = pendingMessages.map(msg => ({
+      local_id: msg.local_id!,
       sequence_number: msg.sequence_number,
       previous_id: msg.previous_id,
       role: msg.role,
@@ -131,21 +136,32 @@ export function useSync(conversationId: string | null): UseSyncResult {
 
         for (const syncedMsg of syncResponse.synced_messages) {
           if (syncedMsg.status === 'synced' && syncedMsg.message) {
-            // Message was synced successfully
-            serverMessages.push(syncedMsg.message);
-
             // Update local message if it had a temporary local_id
-            if (syncedMsg.local_id !== syncedMsg.server_id && syncedMsg.message) {
+            if (syncedMsg.local_id !== syncedMsg.server_id) {
               const localMsg = messages.find(m => (m.local_id || m.id) === syncedMsg.local_id);
-              if (localMsg && localMsg.local_id) {
-                // Update to use server ID and content
-                updateMessage(localMsg.id, { contents: syncedMsg.message.contents });
+              if (localMsg) {
+                // Update local message with server data and mark as synced
+                updateMessage(localMsg.id, {
+                  ...syncedMsg.message,
+                  local_id: syncedMsg.local_id,
+                  sync_status: 'synced' as const,
+                });
+                // Don't add to serverMessages - we updated in place
+                continue;
               }
             }
+            // Message from server (not a local sync) - mark as synced
+            serverMessages.push({
+              ...syncedMsg.message,
+              sync_status: 'synced' as const,
+            });
           } else if (syncedMsg.status === 'conflict' && syncedMsg.conflict) {
             // Conflict detected - use server version as authoritative
             if (syncedMsg.conflict.server_message) {
-              serverMessages.push(syncedMsg.conflict.server_message);
+              serverMessages.push({
+                ...syncedMsg.conflict.server_message,
+                sync_status: 'synced' as const,
+              });
               console.warn(`Sync conflict for message ${syncedMsg.local_id}: ${syncedMsg.conflict.reason}`);
             }
           }

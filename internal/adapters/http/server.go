@@ -95,6 +95,16 @@ func (s *Server) setupRouter() {
 	r.Get("/health/detailed", detailedHealthHandler.HandleDetailed)
 	r.Handle("/metrics", promhttp.Handler())
 
+	// OpenAI-compatible TTS endpoint (no auth required for voice preview)
+	if s.ttsAdapter != nil {
+		ttsHandler := handlers.NewTTSHandler(s.ttsAdapter)
+		r.Post("/v1/audio/speech", ttsHandler.Speech)
+	}
+
+	// Public config endpoint (no auth required - frontend needs this before auth)
+	configHandler := handlers.NewConfigHandler(s.config, s.ttsAdapter)
+	r.Get("/api/v1/config", configHandler.GetPublicConfig)
+
 	// API routes with authentication
 	r.Route("/api/v1", func(r chi.Router) {
 		// Apply authentication middleware to all API routes
@@ -104,6 +114,7 @@ func (s *Server) setupRouter() {
 		r.Post("/conversations", conversationsHandler.Create)
 		r.Get("/conversations", conversationsHandler.List)
 		r.Get("/conversations/{id}", conversationsHandler.Get)
+		r.Patch("/conversations/{id}", conversationsHandler.Patch)
 		r.Delete("/conversations/{id}", conversationsHandler.Delete)
 
 		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.broadcaster)
