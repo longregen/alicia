@@ -157,6 +157,20 @@ func envString(key string, target *string) {
 	}
 }
 
+// envStringFromFile loads a secret from a file path specified by KEY_FILE env var,
+// falling back to the direct KEY env var. This supports systemd credentials and
+// Docker secrets patterns.
+func envStringFromFile(key string, target *string) {
+	fileKey := key + "_FILE"
+	if path := os.Getenv(fileKey); path != "" {
+		if data, err := os.ReadFile(path); err == nil {
+			*target = strings.TrimSpace(string(data))
+			return
+		}
+	}
+	envString(key, target)
+}
+
 // envInt loads an integer environment variable into the target pointer if set and valid
 func envInt(key string, target *int) {
 	if v := os.Getenv(key); v != "" {
@@ -204,38 +218,38 @@ func Load() (*Config, error) {
 
 	// Load LLM configuration from environment
 	envString("ALICIA_LLM_URL", &cfg.LLM.URL)
-	envString("ALICIA_LLM_API_KEY", &cfg.LLM.APIKey)
+	envStringFromFile("ALICIA_LLM_API_KEY", &cfg.LLM.APIKey)
 	envString("ALICIA_LLM_MODEL", &cfg.LLM.Model)
 	envInt("ALICIA_LLM_MAX_TOKENS", &cfg.LLM.MaxTokens)
 	envFloat("ALICIA_LLM_TEMPERATURE", &cfg.LLM.Temperature)
 
 	// Load LiveKit configuration from environment
 	envString("ALICIA_LIVEKIT_URL", &cfg.LiveKit.URL)
-	envString("ALICIA_LIVEKIT_API_KEY", &cfg.LiveKit.APIKey)
-	envString("ALICIA_LIVEKIT_API_SECRET", &cfg.LiveKit.APISecret)
+	envStringFromFile("ALICIA_LIVEKIT_API_KEY", &cfg.LiveKit.APIKey)
+	envStringFromFile("ALICIA_LIVEKIT_API_SECRET", &cfg.LiveKit.APISecret)
 	envInt("ALICIA_LIVEKIT_WORKER_COUNT", &cfg.LiveKit.WorkerCount)
 	envInt("ALICIA_LIVEKIT_WORK_QUEUE_SIZE", &cfg.LiveKit.WorkQueueSize)
 
 	// Load ASR configuration from environment
 	envString("ALICIA_ASR_URL", &cfg.ASR.URL)
-	envString("ALICIA_ASR_API_KEY", &cfg.ASR.APIKey)
+	envStringFromFile("ALICIA_ASR_API_KEY", &cfg.ASR.APIKey)
 	envString("ALICIA_ASR_MODEL", &cfg.ASR.Model)
 
 	// Load TTS configuration from environment
 	envString("ALICIA_TTS_URL", &cfg.TTS.URL)
-	envString("ALICIA_TTS_API_KEY", &cfg.TTS.APIKey)
+	envStringFromFile("ALICIA_TTS_API_KEY", &cfg.TTS.APIKey)
 	envString("ALICIA_TTS_MODEL", &cfg.TTS.Model)
 	envString("ALICIA_TTS_VOICE", &cfg.TTS.Voice)
 
 	// Load Embedding configuration from environment
 	envString("ALICIA_EMBEDDING_URL", &cfg.Embedding.URL)
-	envString("ALICIA_EMBEDDING_API_KEY", &cfg.Embedding.APIKey)
+	envStringFromFile("ALICIA_EMBEDDING_API_KEY", &cfg.Embedding.APIKey)
 	envString("ALICIA_EMBEDDING_MODEL", &cfg.Embedding.Model)
 	envInt("ALICIA_EMBEDDING_DIMENSIONS", &cfg.Embedding.Dimensions)
 
 	// Load Database configuration from environment
 	envString("ALICIA_DB_PATH", &cfg.Database.Path)
-	envString("ALICIA_POSTGRES_URL", &cfg.Database.PostgresURL)
+	envStringFromFile("ALICIA_POSTGRES_URL", &cfg.Database.PostgresURL)
 
 	// Load Server configuration from environment
 	envString("ALICIA_STATIC_DIR", &cfg.Server.StaticDir)

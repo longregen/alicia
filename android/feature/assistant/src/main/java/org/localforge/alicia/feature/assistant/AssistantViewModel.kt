@@ -79,6 +79,7 @@ class AssistantViewModel @Inject constructor(
         loadCurrentConversation()
     }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun loadCurrentConversation() {
         viewModelScope.launch {
             conversationRepository.getAllConversations()

@@ -43,10 +43,22 @@ export function useSSE(
   const isMountedRef = useRef(true);
   const conversationIdRef = useRef<string | null>(null);
 
+  // Store callbacks in refs to avoid reconnection on callback identity changes
+  const onMessageRef = useRef(onMessage);
+  const onSyncRef = useRef(onSync);
+  const onErrorRef = useRef(onError);
+
   // Update refs when values change
   useEffect(() => {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
+
+  // Keep callback refs updated (no deps - runs every render)
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onSyncRef.current = onSync;
+    onErrorRef.current = onError;
+  });
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -96,14 +108,14 @@ export function useSSE(
               break;
 
             case 'message':
-              if (data.message && onMessage) {
-                onMessage(data.message);
+              if (data.message && onMessageRef.current) {
+                onMessageRef.current(data.message);
               }
               break;
 
             case 'sync':
-              if (onSync) {
-                onSync();
+              if (onSyncRef.current) {
+                onSyncRef.current();
               }
               break;
 
@@ -124,8 +136,8 @@ export function useSSE(
         const errorObj = new Error('SSE connection failed');
         setError(errorObj);
 
-        if (onError) {
-          onError(errorObj);
+        if (onErrorRef.current) {
+          onErrorRef.current(errorObj);
         }
 
         // Close and attempt reconnect with exponential backoff
@@ -151,11 +163,11 @@ export function useSSE(
       console.error('SSE: Failed to create EventSource:', err);
       const errorObj = err instanceof Error ? err : new Error('Failed to create SSE connection');
       setError(errorObj);
-      if (onError) {
-        onError(errorObj);
+      if (onErrorRef.current) {
+        onErrorRef.current(errorObj);
       }
     }
-  }, [enabled, cleanup, onMessage, onSync, onError]);
+  }, [enabled, cleanup]);
 
   // Manual reconnect function
   const reconnect = useCallback(() => {

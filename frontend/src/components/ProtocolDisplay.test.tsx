@@ -27,6 +27,7 @@ function TestWrapper({ children, contextValue }: any) {
     if (contextValue.commentaries) {
       contextValue.commentaries.forEach((commentary: any) => context.addCommentary(commentary));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <>{children}</>;

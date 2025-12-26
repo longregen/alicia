@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client';
+import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, RemoteTrackPublication } from 'livekit-client';
 import { api } from '../services/api';
 import { ProtocolService } from '../services/protocol';
 import {
@@ -57,9 +57,15 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
   const [lastSeenStanzaId, setLastSeenStanzaId] = useState<number>(0);
 
   const messageContext = useMessageContext();
+  const messageContextRef = useRef(messageContext);
   const protocolRef = useRef(new ProtocolService());
   const audioTrackRef = useRef<MediaStreamTrack | null>(null);
   const roomRef = useRef<Room | null>(null);
+
+  // Keep messageContext ref updated (no deps - runs every render)
+  useEffect(() => {
+    messageContextRef.current = messageContext;
+  });
 
   // Handle incoming data messages
   const handleDataReceived = useCallback((payload: Uint8Array) => {
@@ -79,11 +85,11 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       switch (envelope.type) {
         case MessageType.AssistantSentence: {
           const sentence = envelope.body as AssistantSentence;
-          messageContext.updateStreamingSentence(sentence.sequence, sentence.text);
+          messageContextRef.current.updateStreamingSentence(sentence.sequence, sentence.text);
 
           if (sentence.isFinal) {
             // When streaming is complete, create a final message
-            const fullContent = Array.from(messageContext.streamingMessages.values()).join(' ');
+            const fullContent = Array.from(messageContextRef.current.streamingMessages.values()).join(' ');
             if (fullContent.trim()) {
               const finalMessage: Message = {
                 id: sentence.id || `assistant-${timestamp}`,
@@ -94,7 +100,7 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
                 created_at: new Date(timestamp).toISOString(),
                 updated_at: new Date(timestamp).toISOString(),
               };
-              messageContext.finalizeStreamingMessage(finalMessage);
+              messageContextRef.current.finalizeStreamingMessage(finalMessage);
             }
           }
           break;
@@ -102,12 +108,12 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
 
         case MessageType.Transcription: {
           const transcription = envelope.body as Transcription;
-          messageContext.setTranscription(transcription.text);
+          messageContextRef.current.setTranscription(transcription.text);
 
           if (transcription.final) {
             // Clear transcription after a delay
             setTimeout(() => {
-              messageContext.clearTranscription();
+              messageContextRef.current.clearTranscription();
             }, 1000);
 
             // Add user message when transcription is finalized
@@ -121,7 +127,7 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
                 created_at: new Date(timestamp).toISOString(),
                 updated_at: new Date(timestamp).toISOString(),
               };
-              messageContext.addMessage(userMessage);
+              messageContextRef.current.addMessage(userMessage);
             }
           }
           break;
@@ -130,8 +136,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
         case MessageType.StartAnswer: {
           // Clear streaming sentences when new answer starts
           const startAnswer = envelope.body as StartAnswer;
-          messageContext.clearStreamingSentences();
-          messageContext.setIsGenerating(true, startAnswer.id);
+          messageContextRef.current.clearStreamingSentences();
+          messageContextRef.current.setIsGenerating(true, startAnswer.id);
           break;
         }
 
@@ -146,7 +152,7 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
             created_at: new Date(userMsg.timestamp || timestamp).toISOString(),
             updated_at: new Date(userMsg.timestamp || timestamp).toISOString(),
           };
-          messageContext.addMessage(message);
+          messageContextRef.current.addMessage(message);
           break;
         }
 
@@ -161,49 +167,49 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
             created_at: new Date(assistantMsg.timestamp || timestamp).toISOString(),
             updated_at: new Date(assistantMsg.timestamp || timestamp).toISOString(),
           };
-          messageContext.addMessage(message);
+          messageContextRef.current.addMessage(message);
           break;
         }
 
         case MessageType.ErrorMessage: {
           const error = envelope.body as ErrorMessage;
-          messageContext.addError(error);
+          messageContextRef.current.addError(error);
           break;
         }
 
         case MessageType.ReasoningStep: {
           const step = envelope.body as ReasoningStep;
-          messageContext.addReasoningStep(step);
+          messageContextRef.current.addReasoningStep(step);
           break;
         }
 
         case MessageType.ToolUseRequest: {
           const request = envelope.body as ToolUseRequest;
-          messageContext.addToolUsage({ request, result: null });
+          messageContextRef.current.addToolUsage({ request, result: null });
           break;
         }
 
         case MessageType.ToolUseResult: {
           const result = envelope.body as ToolUseResult;
-          messageContext.updateToolUsageResult(result);
+          messageContextRef.current.updateToolUsageResult(result);
           break;
         }
 
         case MessageType.Acknowledgement: {
           const ack = envelope.body as Acknowledgement;
-          messageContext.handleAcknowledgement(ack);
+          messageContextRef.current.handleAcknowledgement(ack);
           break;
         }
 
         case MessageType.MemoryTrace: {
           const trace = envelope.body as MemoryTrace;
-          messageContext.addMemoryTrace(trace);
+          messageContextRef.current.addMemoryTrace(trace);
           break;
         }
 
         case MessageType.Commentary: {
           const commentary = envelope.body as Commentary;
-          messageContext.addCommentary(commentary);
+          messageContextRef.current.addCommentary(commentary);
           break;
         }
 
@@ -233,12 +239,12 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
     } catch (err) {
       console.error('Failed to decode message:', err);
     }
-  }, [messageContext]);
+  }, []);
 
   // Handle audio track subscribed
   const handleTrackSubscribed = useCallback((
     _track: RemoteTrack,
-    _publication: any,
+    _publication: RemoteTrackPublication,
     _participant: RemoteParticipant
   ) => {
     // Audio will be automatically played by LiveKit
@@ -341,10 +347,10 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       setConnectionState('disconnected');
       setMessages([]);
       setLastSeenStanzaId(0);
-      messageContext.clearStreamingSentences();
-      messageContext.clearTranscription();
+      messageContextRef.current.clearStreamingSentences();
+      messageContextRef.current.clearTranscription();
     }
-  }, [room, messageContext]);
+  }, [room]);
 
   // Send a text message
   const sendMessage = useCallback(async (content: string) => {
@@ -372,14 +378,14 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       await room.localParticipant.publishData(data, { reliable: true });
 
       // Update local state to reflect stopping
-      messageContext.setIsGenerating(false);
+      messageContextRef.current.setIsGenerating(false);
     } catch (err) {
       console.error('Failed to send stop:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to send stop';
       setError(`Stop command failed: ${errorMessage}`);
       throw err;
     }
-  }, [room, conversationId, messageContext]);
+  }, [room, conversationId]);
 
   // Send a regenerate (variation) control message
   const sendRegenerate = useCallback(async (targetId: string, variationType: VariationType = 'regenerate') => {
@@ -391,14 +397,14 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       await room.localParticipant.publishData(data, { reliable: true });
 
       // Set generating state as we expect a new response
-      messageContext.setIsGenerating(true);
+      messageContextRef.current.setIsGenerating(true);
     } catch (err) {
       console.error('Failed to send regenerate:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to send regenerate';
       setError(`Regenerate command failed: ${errorMessage}`);
       throw err;
     }
-  }, [room, conversationId, messageContext]);
+  }, [room, conversationId]);
 
   // Publish audio track
   const publishAudioTrack = useCallback(async (track: MediaStreamTrack) => {

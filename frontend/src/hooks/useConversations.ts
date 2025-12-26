@@ -1,10 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Conversation } from '../types/models';
 import { api } from '../services/api';
 import { useAsync } from './useAsync';
 
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  // Stable callbacks to prevent infinite re-renders
+  const handleFetchSuccess = useCallback((data: Conversation[]) => {
+    setConversations(data);
+  }, []);
+
+  const handleCreateSuccess = useCallback((newConversation: Conversation) => {
+    setConversations(prev => [newConversation, ...prev]);
+  }, []);
 
   // Fetch conversations with loading and error handling
   const {
@@ -14,7 +23,7 @@ export function useConversations() {
   } = useAsync(
     async () => api.getConversations(),
     {
-      onSuccess: (data) => setConversations(data),
+      onSuccess: handleFetchSuccess,
       errorMessage: 'Failed to fetch conversations',
     }
   );
@@ -25,7 +34,7 @@ export function useConversations() {
   } = useAsync(
     async (title?: string) => api.createConversation({ title }),
     {
-      onSuccess: (newConversation) => setConversations(prev => [newConversation, ...prev]),
+      onSuccess: handleCreateSuccess,
       errorMessage: 'Failed to create conversation',
     }
   );

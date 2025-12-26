@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ProtocolService } from './protocol';
-import { MessageType } from '../types/protocol';
+import { MessageType, Envelope } from '../types/protocol';
+
+// Helper to access body properties in tests
+const body = (envelope: Envelope) => envelope.body as Record<string, unknown>;
 
 describe('ProtocolService', () => {
   let service: ProtocolService;
@@ -87,7 +90,7 @@ describe('ProtocolService', () => {
 
       // msgpackr may return Buffer instead of Uint8Array
       // Compare the actual byte values
-      expect(Array.from(decoded.body.data)).toEqual(Array.from(binaryData));
+      expect(Array.from((body(decoded) as { data: Uint8Array }).data)).toEqual(Array.from(binaryData));
     });
   });
 
@@ -102,25 +105,25 @@ describe('ProtocolService', () => {
       expect(envelope.stanzaId).toBe(1);
       expect(envelope.conversationId).toBe('conv-123');
       expect(envelope.type).toBe(MessageType.UserMessage);
-      expect(envelope.body.id).toMatch(/^msg_/);
-      expect(envelope.body.conversationId).toBe('conv-123');
-      expect(envelope.body.content).toBe('Hello, assistant!');
-      expect(envelope.body.previousId).toBe('prev-msg-1');
-      expect(envelope.body.timestamp).toBeTypeOf('number');
+      expect(body(envelope).id).toMatch(/^msg_/);
+      expect(body(envelope).conversationId).toBe('conv-123');
+      expect(body(envelope).content).toBe('Hello, assistant!');
+      expect(body(envelope).previousId).toBe('prev-msg-1');
+      expect(body(envelope).timestamp).toBeTypeOf('number');
     });
 
     it('should create UserMessage without previousId', () => {
       const envelope = service.createUserMessage('conv-123', 'First message');
 
-      expect(envelope.body.previousId).toBeUndefined();
-      expect(envelope.body.content).toBe('First message');
+      expect(body(envelope).previousId).toBeUndefined();
+      expect(body(envelope).content).toBe('First message');
     });
 
     it('should generate unique message IDs', () => {
       const envelope1 = service.createUserMessage('conv-123', 'Message 1');
       const envelope2 = service.createUserMessage('conv-123', 'Message 2');
 
-      expect(envelope1.body.id).not.toBe(envelope2.body.id);
+      expect(body(envelope1).id).not.toBe(body(envelope2).id);
     });
 
     it('should increment stanzaId for each message', () => {
@@ -140,18 +143,18 @@ describe('ProtocolService', () => {
       expect(envelope.stanzaId).toBe(1);
       expect(envelope.conversationId).toBe('conv-123');
       expect(envelope.type).toBe(MessageType.Configuration);
-      expect(envelope.body.conversationId).toBe('conv-123');
-      expect(envelope.body.clientVersion).toBe('0.1.0');
-      expect(envelope.body.features).toEqual(features);
-      expect(envelope.body.device).toBe('web');
-      expect(envelope.body.lastSequenceSeen).toBe(42);
+      expect(body(envelope).conversationId).toBe('conv-123');
+      expect(body(envelope).clientVersion).toBe('0.1.0');
+      expect(body(envelope).features).toEqual(features);
+      expect(body(envelope).device).toBe('web');
+      expect(body(envelope).lastSequenceSeen).toBe(42);
     });
 
     it('should create Configuration without lastSequenceSeen', () => {
       const features = ['streaming'];
       const envelope = service.createConfiguration('conv-123', features);
 
-      expect(envelope.body.lastSequenceSeen).toBeUndefined();
+      expect(body(envelope).lastSequenceSeen).toBeUndefined();
     });
   });
 
@@ -162,17 +165,17 @@ describe('ProtocolService', () => {
       expect(envelope.stanzaId).toBe(1);
       expect(envelope.conversationId).toBe('conv-123');
       expect(envelope.type).toBe(MessageType.ControlStop);
-      expect(envelope.body.conversationId).toBe('conv-123');
-      expect(envelope.body.stopType).toBe('all');
-      expect(envelope.body.targetId).toBe('msg-456');
-      expect(envelope.body.reason).toBe('user_requested');
+      expect(body(envelope).conversationId).toBe('conv-123');
+      expect(body(envelope).stopType).toBe('all');
+      expect(body(envelope).targetId).toBe('msg-456');
+      expect(body(envelope).reason).toBe('user_requested');
     });
 
     it('should create ControlStop without targetId', () => {
       const envelope = service.createControlStop('conv-123');
 
-      expect(envelope.body.targetId).toBeUndefined();
-      expect(envelope.body.stopType).toBe('all');
+      expect(body(envelope).targetId).toBeUndefined();
+      expect(body(envelope).stopType).toBe('all');
     });
   });
 
@@ -187,10 +190,10 @@ describe('ProtocolService', () => {
       expect(envelope.stanzaId).toBe(1);
       expect(envelope.conversationId).toBe('conv-123');
       expect(envelope.type).toBe(MessageType.ControlVariation);
-      expect(envelope.body.conversationId).toBe('conv-123');
-      expect(envelope.body.targetId).toBe('msg-456');
-      expect(envelope.body.mode).toBe('regenerate');
-      expect(envelope.body.newContent).toBeUndefined();
+      expect(body(envelope).conversationId).toBe('conv-123');
+      expect(body(envelope).targetId).toBe('msg-456');
+      expect(body(envelope).mode).toBe('regenerate');
+      expect(body(envelope).newContent).toBeUndefined();
     });
 
     it('should create ControlVariation with edit and new content', () => {
@@ -201,14 +204,14 @@ describe('ProtocolService', () => {
         'New edited content'
       );
 
-      expect(envelope.body.mode).toBe('edit');
-      expect(envelope.body.newContent).toBe('New edited content');
+      expect(body(envelope).mode).toBe('edit');
+      expect(body(envelope).newContent).toBe('New edited content');
     });
 
     it('should default to regenerate variation type', () => {
       const envelope = service.createControlVariation('conv-123', 'msg-456');
 
-      expect(envelope.body.mode).toBe('regenerate');
+      expect(body(envelope).mode).toBe('regenerate');
     });
 
     it('should support continue variation type', () => {
@@ -218,7 +221,7 @@ describe('ProtocolService', () => {
         'continue'
       );
 
-      expect(envelope.body.mode).toBe('continue');
+      expect(body(envelope).mode).toBe('continue');
     });
   });
 

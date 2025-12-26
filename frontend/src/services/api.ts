@@ -42,7 +42,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
   try {
     return await response.json();
-  } catch (err) {
+  } catch {
     throw new Error('Failed to parse response: invalid JSON');
   }
 }

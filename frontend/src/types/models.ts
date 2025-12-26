@@ -1,3 +1,5 @@
+import type { AssistantSentence, AudioChunk, ReasoningStep, ToolUseRequest } from './protocol';
+
 export type ConversationStatus = 'active' | 'archived' | 'deleted';
 
 export interface ConversationPreferences {
@@ -44,10 +46,10 @@ export interface Message {
   synced_at?: string;
 
   // Related entities (loaded separately)
-  sentences?: any[];
-  audio?: any;
-  tool_uses?: any[];
-  reasoning_steps?: any[];
+  sentences?: AssistantSentence[];
+  audio?: AudioChunk;
+  tool_uses?: ToolUseRequest[];
+  reasoning_steps?: ReasoningStep[];
 }
 
 export interface CreateConversationRequest {

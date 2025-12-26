@@ -12,7 +12,7 @@ export interface MCPServerConfig {
 export interface MCPTool {
   name: string;
   description?: string;
-  inputSchema?: any;
+  inputSchema?: Record<string, unknown>;
 }
 
 export interface MCPServer extends MCPServerConfig {

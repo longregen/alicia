@@ -165,6 +165,25 @@ npm --prefix frontend test
 npm --prefix frontend run test:e2e
 ```
 
+### NixOS Android Development
+
+On NixOS, the Android Gradle build requires an FHS environment to work around AAPT2 binary compatibility issues. Use the provided wrapper script:
+
+```bash
+# Enter the Android development shell
+cd android
+
+# Use gradlew-nix instead of gradlew for all Gradle commands
+./gradlew-nix lint
+./gradlew-nix build
+./gradlew-nix assembleDebug
+
+# Or use nix develop directly
+nix develop .#android -c android-fhs-env -c './gradlew assembleDebug'
+```
+
+The FHS environment provides `/lib64/ld-linux-x86-64.so.2` and standard library paths needed by unpatched ELF binaries like AAPT2.
+
 ## CGO Requirement
 
 The backend requires CGO for Opus audio codec (LiveKit audio processing):

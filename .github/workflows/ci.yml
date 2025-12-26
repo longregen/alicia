@@ -71,6 +71,10 @@ jobs:
         working-directory: frontend
         run: nix develop .#frontend --command npm ci --include=dev
 
+      - name: Lint
+        working-directory: frontend
+        run: nix develop .#frontend --command npm run lint
+
       - name: Type check
         working-directory: frontend
         run: nix develop .#frontend --command npx tsc --noEmit

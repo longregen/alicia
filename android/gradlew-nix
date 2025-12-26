@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Wrapper script to run Gradle in NixOS FHS environment
+# This solves the AAPT2 daemon startup failure on NixOS by providing
+# a proper FHS environment where unpatched ELF binaries work.
+
+set -e
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Run Gradle inside the FHS environment
+cd "$PROJECT_DIR"
+exec nix develop .#android -c android-fhs-env -c "cd android && ./gradlew $*"

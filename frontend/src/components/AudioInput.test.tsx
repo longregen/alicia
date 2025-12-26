@@ -281,14 +281,11 @@ describe('AudioInput', () => {
       const onTrackReady = vi.fn();
       const onTrackStop = vi.fn();
 
-      // Track the audio context instance
-      let audioContextInstance: any;
+      // Spy on close method
+      const closeSpy = vi.fn();
       const OriginalAudioContext = (global as any).AudioContext;
       class TrackedAudioContext extends OriginalAudioContext {
-        constructor() {
-          super();
-          audioContextInstance = this;
-        }
+        close = closeSpy;
       }
       (global as any).AudioContext = TrackedAudioContext as any;
 
@@ -307,7 +304,7 @@ describe('AudioInput', () => {
       await user.click(button);
 
       await waitFor(() => {
-        expect(audioContextInstance.close).toHaveBeenCalled();
+        expect(closeSpy).toHaveBeenCalled();
       });
     });
   });

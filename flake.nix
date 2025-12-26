@@ -293,7 +293,7 @@ EOF
           frontend-tests = pkgs.buildNpmPackage {
             name = "alicia-frontend-tests";
             src = ./frontend;
-            npmDepsHash = "sha256-P5dbS0W6dNd4idoffN6N2CuHvSkkOGywVtvZm6r3i0g=";
+            npmDepsHash = "sha256-fVhS0tAnWk/kW21nc9ItKh2OEfaPeLzBffdMTAkdi1E=";
 
             buildPhase = ''
               export HOME=$TMPDIR
@@ -357,7 +357,7 @@ EOF
           frontend-tests = pkgs.buildNpmPackage {
             name = "alicia-frontend-tests";
             src = ./frontend;
-            npmDepsHash = "sha256-P5dbS0W6dNd4idoffN6N2CuHvSkkOGywVtvZm6r3i0g=";
+            npmDepsHash = "sha256-fVhS0tAnWk/kW21nc9ItKh2OEfaPeLzBffdMTAkdi1E=";
 
             buildPhase = ''
               export HOME=$TMPDIR

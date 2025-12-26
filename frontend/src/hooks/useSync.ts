@@ -32,20 +32,26 @@ export function useSync(conversationId: string | null): UseSyncResult {
   const isMountedRef = useRef(true);
   const isSyncingRef = useRef(false);
   const conversationIdRef = useRef<string | null>(null);
+  const performSyncRef = useRef<() => Promise<void>>(undefined);
+
+  // Memoized SSE callbacks to avoid unnecessary reconnections
+  const handleSSEMessage = useCallback((message: Message) => {
+    // Real-time message received via SSE
+    console.log('SSE: Received message', message.id);
+    mergeMessages([message]);
+    lastActivityTimeRef.current = Date.now();
+  }, [mergeMessages]);
+
+  const handleSSESync = useCallback(() => {
+    // Sync event received, trigger a sync
+    console.log('SSE: Sync event received');
+    performSyncRef.current?.();
+  }, []);
 
   // SSE integration for real-time updates
   const { isConnected: isSSEConnected, error: sseError } = useSSE(conversationId, {
-    onMessage: (message: Message) => {
-      // Real-time message received via SSE
-      console.log('SSE: Received message', message.id);
-      mergeMessages([message]);
-      lastActivityTimeRef.current = Date.now();
-    },
-    onSync: () => {
-      // Sync event received, trigger a sync
-      console.log('SSE: Sync event received');
-      performSync();
-    },
+    onMessage: handleSSEMessage,
+    onSync: handleSSESync,
     enabled: !!conversationId,
   });
 
@@ -168,6 +174,11 @@ export function useSync(conversationId: string | null): UseSyncResult {
       }
     }
   }, [messages, buildSyncRequest, mergeMessages, updateMessage]);
+
+  // Keep performSyncRef updated for SSE callback
+  useEffect(() => {
+    performSyncRef.current = performSync;
+  }, [performSync]);
 
   // Expose syncNow as a stable callback
   const syncNow = useCallback(async () => {

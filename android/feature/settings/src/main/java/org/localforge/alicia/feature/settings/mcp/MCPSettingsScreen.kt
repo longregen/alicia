@@ -10,7 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.localforge.alicia.feature.settings.mcp.components.AddServerDialog
 import org.localforge.alicia.feature.settings.mcp.components.EmptyServersState
 import org.localforge.alicia.feature.settings.mcp.components.MCPServerCard

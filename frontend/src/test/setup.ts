@@ -3,7 +3,10 @@ import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 // Make React.act available globally for @testing-library/react
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+declare global {
+  var IS_REACT_ACT_ENVIRONMENT: boolean;
+}
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 // Cleanup after each test
 afterEach(() => {

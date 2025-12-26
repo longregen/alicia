@@ -17,6 +17,34 @@ export function useMessages(conversationId: string | null) {
   // Use sync hook for multi-device sync
   const { isSyncing, lastSyncTime, syncError, syncNow } = useSync(conversationId);
 
+  // Wrap onSuccess callback to ensure stable reference
+  const handleFetchSuccess = useCallback((data: Message[]) => {
+    // Use setMessages when we have no local/pending messages (e.g., initial load)
+    // This ensures we don't lose optimistic messages that were added during the fetch
+    setMessages((prevMessages: Message[]) => {
+      // Keep any pending/local messages that aren't yet on the server
+      const pendingMessages = prevMessages.filter(
+        (m) => m.sync_status === 'pending' || m.sync_status === 'conflict'
+      );
+
+      // If no pending messages, just use server data
+      if (pendingMessages.length === 0) {
+        return data;
+      }
+
+      // Merge: server messages + pending messages (avoiding duplicates)
+      const serverIds = new Set(data.map((m) => m.id));
+      const uniquePending = pendingMessages.filter((m) => !serverIds.has(m.id));
+
+      // Sort by sequence_number, with pending messages at the end
+      return [...data, ...uniquePending].sort((a, b) => {
+        if (a.sequence_number === -1) return 1;
+        if (b.sequence_number === -1) return -1;
+        return a.sequence_number - b.sequence_number;
+      });
+    });
+  }, [setMessages]);
+
   // Fetch messages with loading and error handling
   const {
     loading,
@@ -25,32 +53,7 @@ export function useMessages(conversationId: string | null) {
   } = useAsync(
     async (id: string) => api.getMessages(id),
     {
-      onSuccess: (data) => {
-        // Use setMessages when we have no local/pending messages (e.g., initial load)
-        // This ensures we don't lose optimistic messages that were added during the fetch
-        setMessages((prevMessages: Message[]) => {
-          // Keep any pending/local messages that aren't yet on the server
-          const pendingMessages = prevMessages.filter(
-            (m) => m.sync_status === 'pending' || m.sync_status === 'conflict'
-          );
-
-          // If no pending messages, just use server data
-          if (pendingMessages.length === 0) {
-            return data;
-          }
-
-          // Merge: server messages + pending messages (avoiding duplicates)
-          const serverIds = new Set(data.map((m) => m.id));
-          const uniquePending = pendingMessages.filter((m) => !serverIds.has(m.id));
-
-          // Sort by sequence_number, with pending messages at the end
-          return [...data, ...uniquePending].sort((a, b) => {
-            if (a.sequence_number === -1) return 1;
-            if (b.sequence_number === -1) return -1;
-            return a.sequence_number - b.sequence_number;
-          });
-        });
-      },
+      onSuccess: handleFetchSuccess,
       errorMessage: 'Failed to fetch messages',
     }
   );
@@ -102,7 +105,7 @@ export function useMessages(conversationId: string | null) {
       });
 
       return true;
-    } catch (err) {
+    } catch {
       // Mark message as failed but keep it visible
       updateMessage(localId, {
         sync_status: 'conflict',

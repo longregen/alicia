@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Room, Track, RemoteTrack, RemoteParticipant, RoomEvent } from 'livekit-client';
+import { Room, Track, RemoteTrack, RemoteParticipant, RoomEvent, RemoteTrackPublication } from 'livekit-client';
 
 interface AudioOutputProps {
   room: Room | null;
@@ -17,18 +17,21 @@ export function AudioOutput({ room }: AudioOutputProps) {
       return;
     }
 
+    // Capture ref value at the beginning of the effect
+    const audioElement = audioElementRef.current;
+
     const handleTrackSubscribed = (
       track: RemoteTrack,
-      _publication: any,
+      _publication: RemoteTrackPublication,
       _participant: RemoteParticipant
     ) => {
       if (track.kind === Track.Kind.Audio) {
         currentTrackRef.current = track;
 
         // Attach audio track to audio element
-        if (audioElementRef.current) {
-          track.attach(audioElementRef.current);
-          audioElementRef.current.muted = isMuted;
+        if (audioElement) {
+          track.attach(audioElement);
+          audioElement.muted = isMuted;
           setIsPlaying(true);
         }
       }
@@ -36,13 +39,13 @@ export function AudioOutput({ room }: AudioOutputProps) {
 
     const handleTrackUnsubscribed = (
       track: RemoteTrack,
-      _publication: any,
+      _publication: RemoteTrackPublication,
       _participant: RemoteParticipant
     ) => {
       if (track.kind === Track.Kind.Audio) {
         // Detach audio track
-        if (audioElementRef.current) {
-          track.detach(audioElementRef.current);
+        if (audioElement) {
+          track.detach(audioElement);
         }
 
         if (currentTrackRef.current === track) {
@@ -70,8 +73,8 @@ export function AudioOutput({ room }: AudioOutputProps) {
       room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
 
       // Detach current track
-      if (currentTrackRef.current && audioElementRef.current) {
-        currentTrackRef.current.detach(audioElementRef.current);
+      if (currentTrackRef.current && audioElement) {
+        currentTrackRef.current.detach(audioElement);
       }
     };
   }, [room, isMuted]);

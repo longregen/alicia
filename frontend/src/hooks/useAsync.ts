@@ -18,7 +18,7 @@ export interface UseAsyncOptions<T> {
   clearErrorOnExecute?: boolean;
 }
 
-export interface UseAsyncReturn<T, Args extends any[] = any[]> {
+export interface UseAsyncReturn<T, Args extends unknown[] = unknown[]> {
   /**
    * Whether the async operation is currently in progress
    */
@@ -63,7 +63,7 @@ export interface UseAsyncReturn<T, Args extends any[] = any[]> {
  * await execute('conversation-id');
  * ```
  */
-export function useAsync<T, Args extends any[] = any[]>(
+export function useAsync<T, Args extends unknown[] = unknown[]>(
   asyncFunction: (...args: Args) => Promise<T>,
   options: UseAsyncOptions<T> = {}
 ): UseAsyncReturn<T, Args> {

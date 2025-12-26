@@ -37,8 +37,8 @@ export interface Envelope {
   stanzaId: number;
   conversationId: string;
   type: MessageType;
-  meta?: Record<string, any>;
-  body: any;
+  meta?: Record<string, unknown>;
+  body: unknown;
 }
 
 // Message type definitions
@@ -93,7 +93,7 @@ export interface ToolUseRequest {
   messageId: string;
   conversationId: string;
   toolName: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   execution: ToolExecution;
   timeoutMs?: number;
 }
@@ -103,7 +103,7 @@ export interface ToolUseResult {
   requestId: string;
   conversationId: string;
   success: boolean;
-  result?: any;
+  result?: unknown;
   errorCode?: string;
   errorMessage?: string;
 }

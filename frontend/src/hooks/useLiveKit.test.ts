@@ -47,7 +47,7 @@ vi.mock('../services/api', () => ({
 }));
 
 describe('useLiveKit', () => {
-  let eventHandlers: Map<string, Function>;
+  let eventHandlers: Map<string, (...args: any[]) => void>;
   let mockRoomInstance: any;
 
   beforeEach(() => {
@@ -58,7 +58,7 @@ describe('useLiveKit', () => {
       mockRoomInstance = {
         connect: vi.fn().mockResolvedValue(undefined),
         disconnect: vi.fn(),
-        on: vi.fn((event: string, handler: Function) => {
+        on: vi.fn((event: string, handler: (...args: any[]) => void) => {
           eventHandlers.set(event, handler);
         }),
         localParticipant: {
@@ -399,7 +399,7 @@ describe('useLiveKit', () => {
       await act(async () => {
         try {
           await result.current.sendMessage('Hello');
-        } catch (e) {
+        } catch {
           // Expected to throw
         }
       });

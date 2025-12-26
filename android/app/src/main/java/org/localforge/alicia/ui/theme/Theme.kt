@@ -73,7 +73,7 @@ fun AliciaTheme(
         SideEffect {
             val activity = view.context as? Activity
             activity?.window?.let { window ->
-                window.statusBarColor = colorScheme.primary.toArgb()
+                WindowCompat.setDecorFitsSystemWindows(window, false)
                 WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
             }
         }

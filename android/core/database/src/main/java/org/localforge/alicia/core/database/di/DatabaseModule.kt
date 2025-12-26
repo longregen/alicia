@@ -37,7 +37,7 @@ object DatabaseModule {
             // This prevents data loss during app upgrades while supporting version rollbacks.
             // For production, implement proper Room migrations for schema changes.
             // See: https://developer.android.com/training/data-storage/room/migrating-db-versions
-            .fallbackToDestructiveMigrationOnDowngrade()
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .build()
     }
 
