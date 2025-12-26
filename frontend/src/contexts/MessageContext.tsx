@@ -96,8 +96,21 @@ export function MessageProvider({ children }: { children: ReactNode }) {
 
   const addMessage = useCallback((message: Message) => {
     setMessagesState(prev => {
-      // Avoid duplicates
+      // Avoid duplicates - check by id
       if (prev.some(m => m.id === message.id)) {
+        return prev;
+      }
+      // Also check by local_id if the incoming message has one
+      if (message.local_id && prev.some(m => m.local_id === message.local_id)) {
+        return prev;
+      }
+      // Check for content match on very recent messages (within 5 seconds)
+      // to catch duplicates from different sources with different IDs
+      const hasRecentDuplicate = prev.some(m => {
+        if (m.role !== message.role || m.contents !== message.contents) return false;
+        return Date.now() - new Date(m.created_at).getTime() < 5000;
+      });
+      if (hasRecentDuplicate) {
         return prev;
       }
       return [...prev, message];
@@ -126,11 +139,29 @@ export function MessageProvider({ children }: { children: ReactNode }) {
 
   const mergeMessages = useCallback((newMessages: Message[]) => {
     setMessagesState(prev => {
-      // Create a map of existing messages by ID for quick lookup
+      // Create sets for deduplication - check by id and local_id
       const existingIds = new Set(prev.map(m => m.id));
+      const existingLocalIds = new Set(prev.filter(m => m.local_id).map(m => m.local_id));
 
-      // Filter out messages that already exist
-      const uniqueNewMessages = newMessages.filter(m => !existingIds.has(m.id));
+      // Also create a content+role fingerprint for messages within last 5 seconds
+      // to catch duplicates from different sources with different IDs
+      const recentFingerprints = new Set(
+        prev
+          .filter(m => Date.now() - new Date(m.created_at).getTime() < 5000)
+          .map(m => `${m.role}:${m.contents}`)
+      );
+
+      // Filter out messages that already exist (by id, local_id, or recent content match)
+      const uniqueNewMessages = newMessages.filter(m => {
+        // Check by server id
+        if (existingIds.has(m.id)) return false;
+        // Check by local_id if present
+        if (m.local_id && existingLocalIds.has(m.local_id)) return false;
+        // Check by content fingerprint for very recent messages
+        const fingerprint = `${m.role}:${m.contents}`;
+        if (recentFingerprints.has(fingerprint)) return false;
+        return true;
+      });
 
       // If no new messages, return previous state
       if (uniqueNewMessages.length === 0) {

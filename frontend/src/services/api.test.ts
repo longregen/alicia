@@ -320,6 +320,93 @@ describe('api service', () => {
     });
   });
 
+  describe('getConfig', () => {
+    it('should fetch public configuration successfully', async () => {
+      const mockConfig = {
+        livekit_url: 'ws://localhost:7880',
+        tts_enabled: true,
+        asr_enabled: true,
+        tts: {
+          endpoint: '/v1/audio/speech',
+          model: 'kokoro',
+          default_voice: 'af_sarah',
+          default_speed: 1.0,
+          speed_min: 0.5,
+          speed_max: 2.0,
+          speed_step: 0.1,
+          voices: [
+            { id: 'af_sarah', name: 'Sarah', category: 'American Female' },
+            { id: 'am_adam', name: 'Adam', category: 'American Male' },
+          ],
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockConfig,
+      });
+
+      const result = await api.getConfig();
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/v1/config', undefined);
+      expect(result).toEqual(mockConfig);
+    });
+
+    it('should handle config fetch errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal server error',
+      });
+
+      await expect(api.getConfig()).rejects.toThrow('Internal server error');
+    });
+
+    it('should handle config with TTS disabled', async () => {
+      const mockConfig = {
+        livekit_url: 'ws://localhost:7880',
+        tts_enabled: false,
+        asr_enabled: true,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockConfig,
+      });
+
+      const result = await api.getConfig();
+
+      expect(result.tts_enabled).toBe(false);
+      expect(result.tts).toBeUndefined();
+    });
+
+    it('should handle config without LiveKit URL', async () => {
+      const mockConfig = {
+        tts_enabled: true,
+        asr_enabled: true,
+        tts: {
+          endpoint: '/v1/audio/speech',
+          model: 'kokoro',
+          default_voice: 'af_sarah',
+          default_speed: 1.0,
+          speed_min: 0.5,
+          speed_max: 2.0,
+          speed_step: 0.1,
+          voices: [],
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockConfig,
+      });
+
+      const result = await api.getConfig();
+
+      expect(result.livekit_url).toBeUndefined();
+    });
+  });
+
   describe('error handling', () => {
     it('should throw error with status when response text is empty', async () => {
       mockFetch.mockResolvedValueOnce({

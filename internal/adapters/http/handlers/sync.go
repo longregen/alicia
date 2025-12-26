@@ -91,7 +91,7 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 	// Return sync response
 	response := &dto.SyncResponse{
 		SyncedMessages: syncedMessages,
-		SyncedAt:       time.Now(),
+		SyncedAt:       time.Now().UTC(),
 	}
 
 	respondJSON(w, response, http.StatusOK)
@@ -120,7 +120,7 @@ func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msg
 
 	// Check if message with this local ID already exists
 	existingMsg, err := h.messageRepo.GetByLocalID(ctx, msgReq.LocalID)
-	if err != nil {
+	if err != nil && err != pgx.ErrNoRows {
 		return dto.SyncedMessage{}, err
 	}
 
@@ -151,7 +151,7 @@ func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msg
 	// Parse timestamps
 	createdAt, err := time.Parse(time.RFC3339, msgReq.CreatedAt)
 	if err != nil {
-		createdAt = time.Now()
+		createdAt = time.Now().UTC()
 	}
 
 	updatedAt := createdAt
@@ -163,21 +163,22 @@ func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msg
 
 	// Create message with sync tracking
 	message := &models.Message{
-		ID:             serverID,
-		ConversationID: conversationID,
-		SequenceNumber: msgReq.SequenceNumber,
-		PreviousID:     msgReq.PreviousID,
-		Role:           models.MessageRole(msgReq.Role),
-		Contents:       msgReq.Contents,
-		LocalID:        msgReq.LocalID,
-		ServerID:       serverID,
-		SyncStatus:     models.SyncStatusSynced,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
+		ID:               serverID,
+		ConversationID:   conversationID,
+		SequenceNumber:   msgReq.SequenceNumber,
+		PreviousID:       msgReq.PreviousID,
+		Role:             models.MessageRole(msgReq.Role),
+		Contents:         msgReq.Contents,
+		LocalID:          msgReq.LocalID,
+		ServerID:         serverID,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted, // Synced messages are always completed
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
 	}
 
 	// Mark as synced
-	now := time.Now()
+	now := time.Now().UTC()
 	message.SyncedAt = &now
 
 	// Save to database

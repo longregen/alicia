@@ -19,6 +19,7 @@ export function useMessages(conversationId: string | null) {
 
   // Wrap onSuccess callback to ensure stable reference
   const handleFetchSuccess = useCallback((data: Message[]) => {
+    console.log('handleFetchSuccess called with', data.length, 'messages');
     // Use setMessages when we have no local/pending messages (e.g., initial load)
     // This ensures we don't lose optimistic messages that were added during the fetch
     setMessages((prevMessages: Message[]) => {
@@ -29,6 +30,7 @@ export function useMessages(conversationId: string | null) {
 
       // If no pending messages, just use server data
       if (pendingMessages.length === 0) {
+        console.log('Setting', data.length, 'messages from server');
         return data;
       }
 

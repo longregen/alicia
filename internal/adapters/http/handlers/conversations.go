@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
@@ -159,4 +160,65 @@ func (h *ConversationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ConversationsHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from context
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	// Limit request body size to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024) // 1MB limit
+	defer r.Body.Close()
+
+	id, ok := validateURLParam(r, w, "id", "Conversation ID")
+	if !ok {
+		return
+	}
+
+	// Get existing conversation
+	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), id, userID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			respondError(w, "not_found", "Conversation not found or access denied", http.StatusNotFound)
+		} else {
+			respondError(w, "internal_error", "Failed to retrieve conversation", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	req, ok := decodeJSON[dto.UpdateConversationRequest](r, w)
+	if !ok {
+		return
+	}
+
+	// Apply updates
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			respondError(w, "validation_error", "Title cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if len(title) > MaxConversationTitleLength {
+			respondError(w, "validation_error", "Title exceeds maximum length of 500 characters", http.StatusBadRequest)
+			return
+		}
+		conversation.Title = title
+	}
+	if req.Preferences != nil {
+		conversation.Preferences = req.Preferences
+	}
+
+	conversation.UpdatedAt = time.Now()
+
+	if err := h.conversationRepo.Update(r.Context(), conversation); err != nil {
+		respondError(w, "internal_error", "Failed to update conversation", http.StatusInternalServerError)
+		return
+	}
+
+	response := (&dto.ConversationResponse{}).FromModel(conversation)
+	respondJSON(w, response, http.StatusOK)
 }

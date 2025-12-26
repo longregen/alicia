@@ -5,6 +5,7 @@ import { Settings } from './components/Settings';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { MessageProvider } from './contexts/MessageContext';
+import { ConfigProvider } from './contexts/ConfigContext';
 import { Conversation } from './types/models';
 import { storage } from './utils/storage';
 
@@ -123,14 +124,16 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <MessageProvider>
-      <AppContent
-        selectedConversationId={selectedConversationId}
-        setSelectedConversationId={setSelectedConversationId}
-        settingsOpen={settingsOpen}
-        setSettingsOpen={setSettingsOpen}
-      />
-    </MessageProvider>
+    <ConfigProvider>
+      <MessageProvider>
+        <AppContent
+          selectedConversationId={selectedConversationId}
+          setSelectedConversationId={setSelectedConversationId}
+          settingsOpen={settingsOpen}
+          setSettingsOpen={setSettingsOpen}
+        />
+      </MessageProvider>
+    </ConfigProvider>
   );
 }
 

@@ -268,15 +268,3 @@ func (uc *SynthesizeSpeech) SynthesizeForMessage(ctx context.Context, messageID,
 	return audioRecords, nil
 }
 
-func (uc *SynthesizeSpeech) GetAvailableVoices(ctx context.Context) ([]string, error) {
-	if uc.ttsService == nil {
-		return nil, fmt.Errorf("TTS service is not available")
-	}
-
-	voices, err := uc.ttsService.GetVoices(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get available voices: %w", err)
-	}
-
-	return voices, nil
-}

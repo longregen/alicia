@@ -40,7 +40,7 @@ type Conversation struct {
 }
 
 func NewConversation(id, userID, title string) *Conversation {
-	now := time.Now()
+	now := time.Now().UTC() // Always use UTC for consistent timezone handling
 	return &Conversation{
 		ID:     id,
 		UserID: userID,
@@ -65,7 +65,7 @@ func (c *Conversation) Archive() error {
 		return err
 	}
 	c.Status = ConversationStatusArchived
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().UTC()
 	return nil
 }
 
@@ -75,7 +75,7 @@ func (c *Conversation) Unarchive() error {
 		return err
 	}
 	c.Status = ConversationStatusActive
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().UTC()
 	return nil
 }
 
@@ -85,7 +85,7 @@ func (c *Conversation) MarkAsDeleted() error {
 		return err
 	}
 	c.Status = ConversationStatusDeleted
-	now := time.Now()
+	now := time.Now().UTC()
 	c.DeletedAt = &now
 	c.UpdatedAt = now
 	return nil
@@ -98,11 +98,11 @@ func (c *Conversation) ChangeStatus(newStatus ConversationStatus) error {
 		return err
 	}
 	c.Status = newStatus
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().UTC()
 
 	// Set DeletedAt if transitioning to deleted
 	if newStatus == ConversationStatusDeleted && c.DeletedAt == nil {
-		now := time.Now()
+		now := time.Now().UTC()
 		c.DeletedAt = &now
 	}
 
@@ -117,14 +117,14 @@ func (c *Conversation) CanTransitionTo(newStatus ConversationStatus) bool {
 // SetLiveKitRoom associates a LiveKit room with the conversation
 func (c *Conversation) SetLiveKitRoom(roomName string) {
 	c.LiveKitRoomName = roomName
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().UTC()
 }
 
 // UpdateLastClientStanzaID updates the last stanzaId received from the client
 func (c *Conversation) UpdateLastClientStanzaID(stanzaID int32) {
 	if stanzaID > c.LastClientStanzaID {
 		c.LastClientStanzaID = stanzaID
-		c.UpdatedAt = time.Now()
+		c.UpdatedAt = time.Now().UTC()
 	}
 }
 
@@ -133,6 +133,6 @@ func (c *Conversation) UpdateLastServerStanzaID(stanzaID int32) {
 	// Server stanzaIDs are negative, so we compare absolute values
 	if -stanzaID > -c.LastServerStanzaID {
 		c.LastServerStanzaID = stanzaID
-		c.UpdatedAt = time.Now()
+		c.UpdatedAt = time.Now().UTC()
 	}
 }

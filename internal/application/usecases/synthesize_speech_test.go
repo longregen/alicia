@@ -12,7 +12,6 @@ import (
 type mockTTSService struct {
 	synthesizeFunc       func(ctx context.Context, text string, options *ports.TTSOptions) (*ports.TTSResult, error)
 	synthesizeStreamFunc func(ctx context.Context, text string, options *ports.TTSOptions) (<-chan *ports.TTSResult, error)
-	getVoicesFunc        func(ctx context.Context) ([]string, error)
 }
 
 func newMockTTSService() *mockTTSService {
@@ -51,12 +50,6 @@ func (m *mockTTSService) SynthesizeStream(ctx context.Context, text string, opti
 	return ch, nil
 }
 
-func (m *mockTTSService) GetVoices(ctx context.Context) ([]string, error) {
-	if m.getVoicesFunc != nil {
-		return m.getVoicesFunc(ctx)
-	}
-	return []string{"voice1", "voice2", "voice3"}, nil
-}
 
 func TestSynthesizeSpeech_NonStreaming(t *testing.T) {
 	audioRepo := newMockAudioRepo()
@@ -338,51 +331,3 @@ func TestSynthesizeSpeech_SynthesizeForMessageWithoutSentenceRepo(t *testing.T) 
 	}
 }
 
-func TestSynthesizeSpeech_GetAvailableVoices(t *testing.T) {
-	audioRepo := newMockAudioRepo()
-	sentenceRepo := newMockSentenceRepo()
-	ttsService := newMockTTSService()
-	idGen := newMockIDGenerator()
-
-	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
-
-	voices, err := uc.GetAvailableVoices(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(voices) != 3 {
-		t.Errorf("expected 3 voices, got %d", len(voices))
-	}
-}
-
-func TestSynthesizeSpeech_GetAvailableVoicesServiceUnavailable(t *testing.T) {
-	audioRepo := newMockAudioRepo()
-	sentenceRepo := newMockSentenceRepo()
-	idGen := newMockIDGenerator()
-
-	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, nil, idGen)
-
-	_, err := uc.GetAvailableVoices(context.Background())
-	if err == nil {
-		t.Fatal("expected error when TTS service unavailable, got nil")
-	}
-}
-
-func TestSynthesizeSpeech_GetAvailableVoicesFailure(t *testing.T) {
-	audioRepo := newMockAudioRepo()
-	sentenceRepo := newMockSentenceRepo()
-	ttsService := newMockTTSService()
-	idGen := newMockIDGenerator()
-
-	ttsService.getVoicesFunc = func(ctx context.Context) ([]string, error) {
-		return nil, errors.New("failed to get voices")
-	}
-
-	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
-
-	_, err := uc.GetAvailableVoices(context.Background())
-	if err == nil {
-		t.Fatal("expected error when getting voices fails, got nil")
-	}
-}

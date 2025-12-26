@@ -302,7 +302,7 @@ in
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
-        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" "AF_NETLINK" ]; # AF_NETLINK required for WebRTC/ICE
         RestrictNamespaces = true;
         LockPersonality = true;
         RestrictRealtime = true;
@@ -471,7 +471,7 @@ in
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
-        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" "AF_NETLINK" ]; # AF_NETLINK required for WebRTC/ICE
         RestrictNamespaces = true;
         LockPersonality = true;
         RestrictRealtime = true;

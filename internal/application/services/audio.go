@@ -381,15 +381,3 @@ func (s *AudioService) SetTranscription(ctx context.Context, audioID, transcript
 	return audio, nil
 }
 
-func (s *AudioService) GetAvailableVoices(ctx context.Context) ([]string, error) {
-	if s.ttsService == nil {
-		return nil, domain.NewDomainError(domain.ErrTTSUnavailable, "TTS service not available")
-	}
-
-	voices, err := s.ttsService.GetVoices(ctx)
-	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrTTSFailed, "failed to get available voices")
-	}
-
-	return voices, nil
-}

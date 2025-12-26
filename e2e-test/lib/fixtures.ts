@@ -2,6 +2,30 @@ import { test as base, expect, Page, Locator } from '@playwright/test';
 import { ArtifactCollector } from './artifact-collector';
 import { FailureHandler } from './failure-handler';
 
+// Mock config response for e2e tests
+const mockConfigResponse = {
+  livekit_url: 'ws://localhost:7880',
+  tts_enabled: true,
+  asr_enabled: true,
+  tts: {
+    endpoint: '/v1/audio/speech',
+    model: 'kokoro',
+    default_voice: 'af_sarah',
+    default_speed: 1.0,
+    speed_min: 0.5,
+    speed_max: 2.0,
+    speed_step: 0.1,
+    voices: [
+      { id: 'af_sarah', name: 'Sarah', category: 'American Female' },
+      { id: 'am_adam', name: 'Adam', category: 'American Male' },
+      { id: 'af_nicole', name: 'Nicole', category: 'American Female' },
+      { id: 'am_michael', name: 'Michael', category: 'American Male' },
+      { id: 'bf_emma', name: 'Emma', category: 'British Female' },
+      { id: 'bm_george', name: 'George', category: 'British Male' },
+    ],
+  },
+};
+
 export interface SidebarActions {
   createConversation(): Promise<string>;
   selectConversation(id: string): Promise<void>;
@@ -45,6 +69,19 @@ type TestFixtures = {
 };
 
 export const test = base.extend<TestFixtures>({
+  page: async ({ page }, use) => {
+    // Intercept /api/v1/config requests before each test
+    await page.route('**/api/v1/config', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockConfigResponse),
+      });
+    });
+
+    await use(page);
+  },
+
   artifacts: async ({ page }, use, testInfo) => {
     const artifactDir = process.env.ARTIFACT_DIR || './test-results';
     const collector = new ArtifactCollector(page, testInfo, artifactDir);

@@ -47,6 +47,9 @@ func initDB(ctx context.Context) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to parse database URL: %w", err)
 	}
 
+	// Force UTC timezone to prevent timezone-related issues with TIMESTAMP columns
+	poolConfig.ConnConfig.RuntimeParams["timezone"] = "UTC"
+
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database pool: %w", err)

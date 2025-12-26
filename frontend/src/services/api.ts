@@ -168,4 +168,34 @@ export const api = {
     const response = await fetchWithErrorHandling(`${API_BASE}/conversations/${conversationId}/sync/status`);
     return handleResponse<SyncStatusResponse>(response);
   },
+
+  // Config
+  async getConfig(): Promise<PublicConfig> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/config`);
+    return handleResponse<PublicConfig>(response);
+  },
 };
+
+export interface Voice {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export interface TTSConfig {
+  endpoint: string;
+  model: string;
+  default_voice: string;
+  default_speed: number;
+  speed_min: number;
+  speed_max: number;
+  speed_step: number;
+  voices: Voice[];
+}
+
+export interface PublicConfig {
+  livekit_url?: string;
+  tts_enabled: boolean;
+  asr_enabled: boolean;
+  tts?: TTSConfig;
+}

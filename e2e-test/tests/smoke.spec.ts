@@ -241,13 +241,15 @@ test.describe('Alicia Smoke Test', () => {
     await sidebar.selectConversation(conv1);
 
     // Wait for the message from conversation 1 to load (may take time to fetch from backend)
+    // Use .first() to avoid strict mode violation when multiple matching elements exist
     await expect(
-      page.locator('.message-bubble:has-text("Message in conversation 1")')
+      page.locator('.message-bubble:has-text("Message in conversation 1")').first()
     ).toBeVisible({ timeout: 30000 });
 
     // Verify that message from conversation 2 is not visible
+    // Use .first() for consistency, though this should return 0 elements anyway
     await expect(
-      page.locator('.message-bubble:has-text("Message in conversation 2")')
+      page.locator('.message-bubble:has-text("Message in conversation 2")').first()
     ).not.toBeVisible();
 
     await artifacts.screenshot('08c-switched-to-first');
@@ -349,8 +351,9 @@ test.describe('Alicia Smoke Test', () => {
     // Wait for messages to load after selecting conversation
     await page.waitForTimeout(1000);
 
+    // Use .first() to avoid strict mode violation when multiple matching elements exist
     await expect(
-      page.locator(`.message-bubble:has-text("${persistMsg}")`)
+      page.locator(`.message-bubble:has-text("${persistMsg}")`).first()
     ).toBeVisible({ timeout: 30000 });
 
     await artifacts.screenshot('11b-after-reload');

@@ -66,7 +66,7 @@ type Message struct {
 }
 
 func NewMessage(id, conversationID string, sequence int, role MessageRole, contents string) *Message {
-	now := time.Now()
+	now := time.Now().UTC() // Always use UTC for consistent timezone handling
 	return &Message{
 		ID:               id,
 		ConversationID:   conversationID,
@@ -82,7 +82,7 @@ func NewMessage(id, conversationID string, sequence int, role MessageRole, conte
 
 // NewLocalMessage creates a new message with offline sync tracking
 func NewLocalMessage(localID, conversationID string, sequence int, role MessageRole, contents string) *Message {
-	now := time.Now()
+	now := time.Now().UTC() // Always use UTC for consistent timezone handling
 	return &Message{
 		ID:             localID, // Use local ID initially
 		LocalID:        localID,
@@ -110,13 +110,13 @@ func NewSystemMessage(id, conversationID string, sequence int, contents string) 
 
 func (m *Message) SetPreviousMessage(previousID string) {
 	m.PreviousID = previousID
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = time.Now().UTC()
 }
 
 // AppendContent appends content to the message (for streaming)
 func (m *Message) AppendContent(content string) {
 	m.Contents += content
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = time.Now().UTC()
 }
 
 func (m *Message) IsFromUser() bool {
@@ -129,7 +129,7 @@ func (m *Message) IsFromAssistant() bool {
 
 // MarkAsSynced marks the message as synced with the given server ID
 func (m *Message) MarkAsSynced(serverID string) {
-	now := time.Now()
+	now := time.Now().UTC()
 	m.ServerID = serverID
 	m.SyncStatus = SyncStatusSynced
 	m.SyncedAt = &now
@@ -139,7 +139,7 @@ func (m *Message) MarkAsSynced(serverID string) {
 // MarkAsConflict marks the message as having a sync conflict
 func (m *Message) MarkAsConflict() {
 	m.SyncStatus = SyncStatusConflict
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = time.Now().UTC()
 }
 
 // IsPendingSync returns true if the message is pending synchronization
@@ -160,19 +160,19 @@ func (m *Message) HasConflict() bool {
 // MarkAsStreaming marks the message as currently being streamed
 func (m *Message) MarkAsStreaming() {
 	m.CompletionStatus = CompletionStatusStreaming
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = time.Now().UTC()
 }
 
 // MarkAsCompleted marks the message as completed
 func (m *Message) MarkAsCompleted() {
 	m.CompletionStatus = CompletionStatusCompleted
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = time.Now().UTC()
 }
 
 // MarkAsFailed marks the message as failed
 func (m *Message) MarkAsFailed() {
 	m.CompletionStatus = CompletionStatusFailed
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = time.Now().UTC()
 }
 
 // IsCompleted returns true if the message generation is completed

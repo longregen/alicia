@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, RemoteTrackPublication } from 'livekit-client';
-import { api } from '../services/api';
+import { api, PublicConfig } from '../services/api';
 import { ProtocolService } from '../services/protocol';
 import {
   Envelope,
@@ -46,7 +46,36 @@ export interface UseLiveKitReturn {
   disconnect: () => void;
 }
 
-const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880';
+// Cache the config to avoid repeated fetches
+let cachedConfig: PublicConfig | null = null;
+let configFetchPromise: Promise<PublicConfig> | null = null;
+
+async function getLiveKitURL(): Promise<string> {
+  // Use environment variable override if set
+  const envUrl = import.meta.env.VITE_LIVEKIT_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+
+  // Fetch from server (with caching)
+  if (cachedConfig?.livekit_url) {
+    return cachedConfig.livekit_url;
+  }
+
+  if (!configFetchPromise) {
+    configFetchPromise = api.getConfig().then(config => {
+      cachedConfig = config;
+      return config;
+    }).catch(err => {
+      console.error('Failed to fetch config:', err);
+      configFetchPromise = null;
+      throw err;
+    });
+  }
+
+  const config = await configFetchPromise;
+  return config.livekit_url || 'ws://localhost:7880';
+}
 
 export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
   const [room, setRoom] = useState<Room | null>(null);
@@ -258,7 +287,10 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       setError(null);
       setConnectionState('connecting');
 
-      const token = await api.getLiveKitToken(conversationId);
+      const [token, liveKitUrl] = await Promise.all([
+        api.getLiveKitToken(conversationId),
+        getLiveKitURL(),
+      ]);
 
       const newRoom = new Room({
         adaptiveStream: true,
@@ -313,7 +345,7 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       newRoom.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
 
       // Connect to the room
-      await newRoom.connect(LIVEKIT_URL, token);
+      await newRoom.connect(liveKitUrl, token);
       roomRef.current = newRoom;
       setRoom(newRoom);
     } catch (err) {

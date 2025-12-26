@@ -26,6 +26,8 @@ describe('useSync', () => {
       contents: 'Hello',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
+      local_id: 'msg1',
+      sync_status: 'pending',
     },
   ];
 
@@ -86,7 +88,12 @@ describe('useSync', () => {
     renderHook(() => useSync('conv1'));
 
     await waitFor(() => {
-      expect(mockMergeMessages).toHaveBeenCalledWith([mockMessages[0]]);
+      expect(mockMergeMessages).toHaveBeenCalledWith([
+        expect.objectContaining({
+          ...mockMessages[0],
+          sync_status: 'synced',
+        }),
+      ]);
     });
   });
 
@@ -119,6 +126,7 @@ describe('useSync', () => {
       expect(mockMergeMessages).toHaveBeenCalledWith([
         expect.objectContaining({
           contents: 'Server version',
+          sync_status: 'synced',
         }),
       ]);
     });

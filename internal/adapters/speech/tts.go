@@ -12,7 +12,6 @@ import (
 const (
 	defaultTTSEndpoint = "http://localhost:8000"
 	speechPath         = "/v1/audio/speech"
-	voicesPath         = "/v1/audio/voices"
 	// TTSTimeout is the maximum time to wait for TTS synthesis
 	TTSTimeout = 30 * time.Second
 )
@@ -53,15 +52,6 @@ type ttsRequest struct {
 	Speed          float32 `json:"speed,omitempty"`
 }
 
-type voicesResponse struct {
-	Voices []voiceInfo `json:"voices"`
-}
-
-type voiceInfo struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Language string `json:"language,omitempty"`
-}
 
 func (t *TTSAdapter) Synthesize(ctx context.Context, text string, options *ports.TTSOptions) (*ports.TTSResult, error) {
 	var result *ports.TTSResult
@@ -147,46 +137,6 @@ func (t *TTSAdapter) SynthesizeStream(ctx context.Context, text string, options 
 	return resultChan, nil
 }
 
-// kokoroVoices contains all 54 built-in Kokoro TTS voices
-var kokoroVoices = []string{
-	// American English (20 voices)
-	"af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
-	"am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
-	// British English (8 voices)
-	"bf_alice", "bf_emma", "bf_isabella", "bf_lily",
-	"bm_daniel", "bm_fable", "bm_george", "bm_lewis",
-	// Japanese (5 voices)
-	"jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
-	// Mandarin Chinese (8 voices)
-	"zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
-	"zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
-	// Spanish (3 voices)
-	"ef_dora", "em_alex", "em_santa",
-	// French (1 voice)
-	"ff_siwis",
-	// Hindi (4 voices)
-	"hf_alpha", "hf_beta", "hm_omega", "hm_psi",
-	// Italian (2 voices)
-	"if_sara", "im_nicola",
-	// Brazilian Portuguese (3 voices)
-	"pf_dora", "pm_alex", "pm_santa",
-}
-
-func (t *TTSAdapter) GetVoices(ctx context.Context) ([]string, error) {
-	var response voicesResponse
-	err := t.client.Get(ctx, voicesPath, &response)
-	if err != nil {
-		// Return all built-in Kokoro voices as fallback
-		return kokoroVoices, nil
-	}
-
-	voices := make([]string, len(response.Voices))
-	for i, voice := range response.Voices {
-		voices[i] = voice.ID
-	}
-
-	return voices, nil
-}
 
 func (t *TTSAdapter) SetModel(model string) {
 	t.model = model
