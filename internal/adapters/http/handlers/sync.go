@@ -68,7 +68,6 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 	// Parse sync request based on Content-Type
 	contentType := r.Header.Get("Content-Type")
 	var req *dto.SyncRequest
-	var ok bool
 
 	if contentType == encoding.ContentTypeMsgpack {
 		req, ok = decodeMsgpack[dto.SyncRequest](r, w)
