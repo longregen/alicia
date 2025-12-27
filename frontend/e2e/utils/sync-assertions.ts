@@ -239,11 +239,10 @@ export function createSyncAssertions(page: Page): SyncAssertions {
  * Assert that WebSocket is connected
  */
 export async function assertWebSocketConnected(
-  page: Page,
-  timeoutMs = 10000
+  page: Page
 ): Promise<void> {
   const connected = await page.evaluate(
-    () => (window as any).__wsConnected === true
+    () => (window as Record<string, unknown>).__wsConnected === true
   );
 
   if (!connected) {
@@ -256,17 +255,17 @@ export async function assertWebSocketConnected(
  */
 export async function assertWebSocketMessageSent(
   page: Page,
-  predicate: (msg: any) => boolean,
+  predicate: (msg: Record<string, unknown>) => boolean,
   timeoutMs = 5000
 ): Promise<void> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
     const messages = await page.evaluate(
-      () => (window as any).__wsMessages || []
+      () => (window as Record<string, unknown>).__wsMessages || []
     );
 
-    const sentMessages = messages.filter((msg: any) => msg.type === 'sent');
+    const sentMessages = (messages as Record<string, unknown>[]).filter((msg: Record<string, unknown>) => msg.type === 'sent');
     const found = sentMessages.some(predicate);
 
     if (found) {
@@ -284,18 +283,18 @@ export async function assertWebSocketMessageSent(
  */
 export async function assertWebSocketMessageReceived(
   page: Page,
-  predicate: (msg: any) => boolean,
+  predicate: (msg: Record<string, unknown>) => boolean,
   timeoutMs = 5000
 ): Promise<void> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
     const messages = await page.evaluate(
-      () => (window as any).__wsMessages || []
+      () => (window as Record<string, unknown>).__wsMessages || []
     );
 
-    const receivedMessages = messages.filter(
-      (msg: any) => msg.type === 'received'
+    const receivedMessages = (messages as Record<string, unknown>[]).filter(
+      (msg: Record<string, unknown>) => msg.type === 'received'
     );
     const found = receivedMessages.some(predicate);
 
@@ -320,7 +319,7 @@ export async function assertDatabaseSyncState(
   const pendingCount = await page.evaluate(
     (convId) => {
       // Access the in-memory SQLite database
-      const db = (window as any).getDatabase?.();
+      const db = (window as Record<string, unknown>).getDatabase?.();
       if (!db) return -1;
 
       const results = db.exec(

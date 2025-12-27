@@ -3,25 +3,10 @@ import type { Page } from '@playwright/test';
 
 test.describe('WebSocket Sync Protocol', () => {
   /**
-   * Helper to wait for WebSocket connection
-   */
-  async function waitForWebSocketConnection(page: Page, conversationId: string, timeout = 10000) {
-    return page.waitForFunction(
-      (convId) => {
-        const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/v1/conversations/${convId}/sync/ws`;
-        // Check if WebSocket is open by looking at window object or connection state
-        return true; // WebSocket will be established internally
-      },
-      conversationId,
-      { timeout }
-    );
-  }
-
-  /**
    * Helper to check IndexedDB for messages
    */
   async function getMessagesFromIndexedDB(page: Page, conversationId: string): Promise<string[]> {
-    return page.evaluate(async (convId) => {
+    return page.evaluate(async () => {
       return new Promise<string[]>((resolve, reject) => {
         const request = indexedDB.open('alicia_messages', 1);
 
@@ -85,7 +70,7 @@ test.describe('WebSocket Sync Protocol', () => {
     }
   });
 
-  test('should sync messages via WebSocket in real-time', async ({ browser, conversationHelpers }) => {
+  test('should sync messages via WebSocket in real-time', async ({ browser }) => {
     // Create two separate contexts to simulate two devices
     const context1 = await browser.newContext();
     const context2 = await browser.newContext();
@@ -181,7 +166,7 @@ test.describe('WebSocket Sync Protocol', () => {
 
   test('should sync pending messages when connection restored', async ({ page, conversationHelpers }) => {
     await page.goto('/');
-    const conversationId = await conversationHelpers.createConversation();
+    await conversationHelpers.createConversation();
 
     // Go offline
     await page.context().setOffline(true);
@@ -215,7 +200,7 @@ test.describe('WebSocket Sync Protocol', () => {
 
   test('should handle WebSocket reconnection on connection loss', async ({ page, conversationHelpers }) => {
     await page.goto('/');
-    const conversationId = await conversationHelpers.createConversation();
+    await conversationHelpers.createConversation();
 
     // Send a message while online
     const onlineMsg = 'Message before disconnect';
@@ -497,7 +482,7 @@ test.describe('WebSocket Sync Protocol', () => {
     await page.goto('/');
 
     // Intercept WebSocket to verify binary MessagePack encoding
-    const wsMessages: any[] = [];
+    const wsMessages: Array<{ type: string; binary: boolean }> = [];
 
     page.on('websocket', ws => {
       ws.on('framesent', event => {
