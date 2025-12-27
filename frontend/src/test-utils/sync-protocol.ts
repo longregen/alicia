@@ -1,6 +1,6 @@
 import { pack } from 'msgpackr';
 import { Message } from '../types/models';
-import { SyncRequest, SyncResponse, SyncedMessage } from '../types/sync';
+import { SyncResponse, SyncedMessage } from '../types/sync';
 
 /**
  * Builder for creating sync protocol messages
@@ -35,8 +35,7 @@ export class SyncProtocolBuilder {
    * Create a sync response envelope
    */
   static createSyncResponse(
-    syncedMessages: SyncedMessage[],
-    syncedAt?: string
+    syncedMessages: SyncedMessage[]
   ): unknown {
     return {
       type: 'sync_response',
@@ -50,10 +49,9 @@ export class SyncProtocolBuilder {
    * Create a sync response as MessagePack binary
    */
   static createSyncResponseBinary(
-    syncedMessages: SyncedMessage[],
-    syncedAt?: string
+    syncedMessages: SyncedMessage[]
   ): Uint8Array {
-    return pack(this.createSyncResponse(syncedMessages, syncedAt));
+    return pack(this.createSyncResponse(syncedMessages));
   }
 
   /**

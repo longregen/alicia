@@ -143,7 +143,7 @@ describe('useLiveQuery', () => {
     );
 
     expect(result.current.data).toHaveLength(1);
-    expect(result.current.data[0].status).toBe('active');
+    expect((result.current.data[0] as { status: string }).status).toBe('active');
 
     // Change filter
     filter = 'inactive';
@@ -158,7 +158,7 @@ describe('useLiveQuery', () => {
 
     await waitFor(() => {
       expect(result.current.data).toHaveLength(1);
-      expect(result.current.data[0].status).toBe('inactive');
+      expect((result.current.data[0] as { status: string }).status).toBe('inactive');
     });
   });
 

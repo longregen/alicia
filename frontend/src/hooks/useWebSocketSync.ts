@@ -33,6 +33,43 @@ export function useWebSocketSync(
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
 
+  const handleEnvelope = useCallback((envelope: SyncEnvelope) => {
+    switch (envelope.type) {
+      case 'sync_response': {
+        const response = envelope.payload as SyncResponse;
+        // Update local database with synced messages
+        response.messages.forEach(msg => {
+          messageRepository.upsert({
+            ...msg,
+            sync_status: 'synced',
+          });
+        });
+        if (onSync) onSync();
+        break;
+      }
+
+      case 'message': {
+        const { message } = envelope.payload as MessagePayload;
+        // Save incoming message to database
+        messageRepository.upsert({
+          ...message,
+          sync_status: 'synced',
+        });
+        if (onMessage) onMessage(message);
+        break;
+      }
+
+      case 'ack': {
+        // Message acknowledged by server
+        console.log('Message acknowledged:', envelope.payload);
+        break;
+      }
+
+      default:
+        console.warn('Unknown envelope type:', envelope.type);
+    }
+  }, [onMessage, onSync]);
+
   const connect = useCallback(() => {
     if (!conversationId || !enabled) return;
 
@@ -94,44 +131,7 @@ export function useWebSocketSync(
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to create WebSocket'));
     }
-  }, [conversationId, enabled]);
-
-  const handleEnvelope = useCallback((envelope: SyncEnvelope) => {
-    switch (envelope.type) {
-      case 'sync_response': {
-        const response = envelope.payload as SyncResponse;
-        // Update local database with synced messages
-        response.messages.forEach(msg => {
-          messageRepository.upsert({
-            ...msg,
-            sync_status: 'synced',
-          });
-        });
-        onSync?.();
-        break;
-      }
-
-      case 'message': {
-        const { message } = envelope.payload as MessagePayload;
-        // Save incoming message to database
-        messageRepository.upsert({
-          ...message,
-          sync_status: 'synced',
-        });
-        onMessage?.(message);
-        break;
-      }
-
-      case 'ack': {
-        // Message acknowledged by server
-        console.log('Message acknowledged:', envelope.payload);
-        break;
-      }
-
-      default:
-        console.warn('Unknown envelope type:', envelope.type);
-    }
-  }, [onMessage, onSync]);
+  }, [conversationId, enabled, handleEnvelope]);
 
   const send = useCallback((envelope: SyncEnvelope) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

@@ -1,5 +1,25 @@
 import initSqlJs, { Database } from 'sql.js';
 
+interface ConversationRow {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MessageRow {
+  id: string;
+  conversation_id: string;
+  sequence_number: number;
+  role: string;
+  contents: string;
+  local_id: string | null;
+  sync_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
  * In-memory SQLite database for testing
  */
@@ -117,7 +137,7 @@ export class TestDatabase {
   /**
    * Get all conversations
    */
-  getAllConversations(): any[] {
+  getAllConversations(): ConversationRow[] {
     if (!this.db) return [];
 
     const result = this.db.exec(
@@ -127,18 +147,18 @@ export class TestDatabase {
     if (result.length === 0) return [];
 
     return result[0].values.map((row) => ({
-      id: row[0],
-      title: row[1],
-      status: row[2],
-      created_at: row[3],
-      updated_at: row[4],
+      id: row[0] as string,
+      title: row[1] as string,
+      status: row[2] as string,
+      created_at: row[3] as string,
+      updated_at: row[4] as string,
     }));
   }
 
   /**
    * Get all messages
    */
-  getAllMessages(): any[] {
+  getAllMessages(): MessageRow[] {
     if (!this.db) return [];
 
     const result = this.db.exec(
@@ -148,22 +168,22 @@ export class TestDatabase {
     if (result.length === 0) return [];
 
     return result[0].values.map((row) => ({
-      id: row[0],
-      conversation_id: row[1],
-      sequence_number: row[2],
-      role: row[3],
-      contents: row[4],
-      local_id: row[5],
-      sync_status: row[6],
-      created_at: row[7],
-      updated_at: row[8],
+      id: row[0] as string,
+      conversation_id: row[1] as string,
+      sequence_number: row[2] as number,
+      role: row[3] as string,
+      contents: row[4] as string,
+      local_id: row[5] as string | null,
+      sync_status: row[6] as string,
+      created_at: row[7] as string,
+      updated_at: row[8] as string,
     }));
   }
 
   /**
    * Get messages by conversation
    */
-  getMessagesByConversation(conversationId: string): any[] {
+  getMessagesByConversation(conversationId: string): MessageRow[] {
     if (!this.db) return [];
 
     const result = this.db.exec(
@@ -174,22 +194,22 @@ export class TestDatabase {
     if (result.length === 0) return [];
 
     return result[0].values.map((row) => ({
-      id: row[0],
-      conversation_id: row[1],
-      sequence_number: row[2],
-      role: row[3],
-      contents: row[4],
-      local_id: row[5],
-      sync_status: row[6],
-      created_at: row[7],
-      updated_at: row[8],
+      id: row[0] as string,
+      conversation_id: row[1] as string,
+      sequence_number: row[2] as number,
+      role: row[3] as string,
+      contents: row[4] as string,
+      local_id: row[5] as string | null,
+      sync_status: row[6] as string,
+      created_at: row[7] as string,
+      updated_at: row[8] as string,
     }));
   }
 
   /**
    * Get pending messages
    */
-  getPendingMessages(): any[] {
+  getPendingMessages(): MessageRow[] {
     if (!this.db) return [];
 
     const result = this.db.exec(
@@ -200,15 +220,15 @@ export class TestDatabase {
     if (result.length === 0) return [];
 
     return result[0].values.map((row) => ({
-      id: row[0],
-      conversation_id: row[1],
-      sequence_number: row[2],
-      role: row[3],
-      contents: row[4],
-      local_id: row[5],
-      sync_status: row[6],
-      created_at: row[7],
-      updated_at: row[8],
+      id: row[0] as string,
+      conversation_id: row[1] as string,
+      sequence_number: row[2] as number,
+      role: row[3] as string,
+      contents: row[4] as string,
+      local_id: row[5] as string | null,
+      sync_status: row[6] as string,
+      created_at: row[7] as string,
+      updated_at: row[8] as string,
     }));
   }
 }
@@ -226,14 +246,21 @@ export async function createTestDatabase(): Promise<TestDatabase> {
  * Mock the global database functions for testing
  */
 export function mockDatabaseFunctions(testDb: TestDatabase) {
-  const originalDb = { ...(globalThis as any).db };
+  interface GlobalWithDb {
+    db?: Database;
+    getDatabase?: () => Database;
+    initDatabase?: () => Promise<Database>;
+  }
 
-  (globalThis as any).getDatabase = () => testDb.getDb();
-  (globalThis as any).initDatabase = () => Promise.resolve(testDb.getDb());
+  const globalWithDb = globalThis as unknown as GlobalWithDb;
+  const originalDb = globalWithDb.db;
+
+  globalWithDb.getDatabase = () => testDb.getDb();
+  globalWithDb.initDatabase = () => Promise.resolve(testDb.getDb());
 
   return {
     restore: () => {
-      (globalThis as any).db = originalDb;
+      globalWithDb.db = originalDb;
     },
   };
 }

@@ -117,6 +117,7 @@ export const protocolFixtures = {
     conversationId: 'conv-test-1',
     type: MessageType.AssistantMessage,
     body: {
+      id: 'msg-assistant-protocol-1',
       conversationId: 'conv-test-1',
       messageId: 'msg-assistant-protocol-1',
       content: 'Assistant response',

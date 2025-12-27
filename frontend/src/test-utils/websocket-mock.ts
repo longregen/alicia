@@ -1,4 +1,4 @@
-import { pack, unpack } from 'msgpackr';
+import { unpack } from 'msgpackr';
 
 export interface WebSocketMessage {
   data: ArrayBuffer;
@@ -149,8 +149,8 @@ export class MockWebSocket {
    */
   error(message?: string): void {
     if (this.onerror) {
-      const event = new Event('error');
-      (event as any).message = message;
+      const event = new Event('error') as Event & { message?: string };
+      event.message = message;
       this.onerror(event);
     }
   }
@@ -198,7 +198,7 @@ export class MockWebSocket {
   /**
    * Check if a specific message was sent
    */
-  hasSentMessage(predicate: (msg: any) => boolean): boolean {
+  hasSentMessage(predicate: (msg: unknown) => boolean): boolean {
     return this.sentMessages.some((msg) => {
       const decoded = unpack(new Uint8Array(msg.data));
       return predicate(decoded);
@@ -209,9 +209,9 @@ export class MockWebSocket {
    * Wait for a specific message to be sent
    */
   async waitForSentMessage(
-    predicate: (msg: any) => boolean,
+    predicate: (msg: unknown) => boolean,
     timeoutMs = 5000
-  ): Promise<any> {
+  ): Promise<unknown> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
@@ -245,7 +245,10 @@ export function createMockWebSocket(
  * Replace global WebSocket with mock
  */
 export function installWebSocketMock(): typeof MockWebSocket {
-  (globalThis as any).WebSocket = MockWebSocket;
+  interface GlobalWithWebSocket {
+    WebSocket: typeof WebSocket;
+  }
+  (globalThis as unknown as GlobalWithWebSocket).WebSocket = MockWebSocket as unknown as typeof WebSocket;
   return MockWebSocket;
 }
 
@@ -253,5 +256,8 @@ export function installWebSocketMock(): typeof MockWebSocket {
  * Restore original WebSocket
  */
 export function uninstallWebSocketMock(originalWebSocket: typeof WebSocket): void {
-  (globalThis as any).WebSocket = originalWebSocket;
+  interface GlobalWithWebSocket {
+    WebSocket: typeof WebSocket;
+  }
+  (globalThis as unknown as GlobalWithWebSocket).WebSocket = originalWebSocket;
 }
