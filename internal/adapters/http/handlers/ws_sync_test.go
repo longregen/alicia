@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/vmihailenco/msgpack/v5"

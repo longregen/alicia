@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/vmihailenco/msgpack/v5"
@@ -24,14 +22,6 @@ func TestNewWebSocketBroadcaster(t *testing.T) {
 func TestWebSocketBroadcaster_Subscribe(t *testing.T) {
 	broadcaster := NewWebSocketBroadcaster()
 
-	// Create test server and WebSocket connection
-	server := httptest.NewServer(nil)
-	defer server.Close()
-
-	// Create mock WebSocket connection
-	dialer := websocket.Dialer{}
-	wsURL := "ws" + server.URL[4:] + "/ws"
-
 	// We'll use a simple approach: create the broadcaster and verify the internal state
 	// Since we can't easily create real WebSocket connections in tests, we'll test the logic
 	conversationID := "conv_123"
@@ -45,8 +35,6 @@ func TestWebSocketBroadcaster_Subscribe(t *testing.T) {
 	// Note: We can't easily test Subscribe/Unsubscribe without real WebSocket connections
 	// But we can verify the broadcaster initializes correctly
 	t.Log("WebSocket broadcaster created successfully")
-	_ = dialer // suppress unused warning
-	_ = wsURL // suppress unused warning
 }
 
 func TestWebSocketBroadcaster_GetSubscriberCount(t *testing.T) {
@@ -132,12 +120,6 @@ func TestWebSocketBroadcaster_Integration(t *testing.T) {
 	broadcaster := NewWebSocketBroadcaster()
 	conversationID := "conv_test"
 
-	upgrader := websocket.Upgrader{}
-
-	// Create test server
-	server := httptest.NewServer(nil)
-	defer server.Close()
-
 	// Since we need real WebSocket connections for full integration testing,
 	// we'll create a test that verifies the broadcaster can handle the lifecycle
 
@@ -154,7 +136,6 @@ func TestWebSocketBroadcaster_Integration(t *testing.T) {
 
 	// Should not panic
 	t.Log("Integration test completed successfully")
-	_ = upgrader // suppress unused warning
 }
 
 func TestWebSocketBroadcaster_ConcurrentAccess(t *testing.T) {
