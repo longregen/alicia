@@ -63,15 +63,29 @@ export const syncRequestEnvelope = {
 };
 
 /**
- * Test fixture for a sync response envelope
+ * Test fixture for a sync response envelope (wire format uses camelCase)
  */
 export const syncResponseEnvelope = {
   type: 'sync_response',
   payload: {
-    messages: [
-      { ...userMessageFixture, sync_status: 'synced' },
-      assistantMessageFixture,
+    syncedMessages: [
+      {
+        localId: userMessageFixture.local_id,
+        serverId: userMessageFixture.id,
+        status: 'synced',
+        message: {
+          id: userMessageFixture.id,
+          conversationId: userMessageFixture.conversation_id,
+          sequenceNumber: userMessageFixture.sequence_number,
+          role: userMessageFixture.role,
+          contents: userMessageFixture.contents,
+          createdAt: userMessageFixture.created_at,
+          updatedAt: userMessageFixture.updated_at,
+          syncStatus: 'synced',
+        },
+      },
     ],
+    syncedAt: new Date().toISOString(),
   },
 };
 
@@ -248,7 +262,7 @@ export function createMessageBatch(
 }
 
 /**
- * Create a conflict scenario fixture
+ * Create a conflict scenario fixture (wire format uses camelCase)
  */
 export function createConflictFixture() {
   const localMessage = createUserMessage({
@@ -265,23 +279,34 @@ export function createConflictFixture() {
     sync_status: 'synced',
   });
 
+  // Wire format syncResponse uses camelCase
   return {
     local: localMessage,
     server: serverMessage,
     syncResponse: {
-      synced_messages: [
+      syncedMessages: [
         {
-          local_id: 'local-conflict',
-          server_id: 'msg-conflict-server',
+          localId: 'local-conflict',
+          serverId: 'msg-conflict-server',
           status: 'conflict',
           conflict: {
             reason: 'Content mismatch',
-            server_message: serverMessage,
+            serverMessage: {
+              id: serverMessage.id,
+              conversationId: serverMessage.conversation_id,
+              sequenceNumber: serverMessage.sequence_number,
+              role: serverMessage.role,
+              contents: serverMessage.contents,
+              createdAt: serverMessage.created_at,
+              updatedAt: serverMessage.updated_at,
+              localId: serverMessage.local_id,
+              syncStatus: serverMessage.sync_status,
+            },
             resolution: 'server_wins',
           },
         },
       ],
-      synced_at: new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
     },
   };
 }

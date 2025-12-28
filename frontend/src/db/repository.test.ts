@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { messageRepository, conversationRepository } from './repository';
 import { Message, Conversation } from '../types/models';
 import * as sqlite from './sqlite';
@@ -43,10 +43,10 @@ describe('repository', () => {
       it('should return messages for a conversation', () => {
         mockDb.exec.mockReturnValue([
           {
-            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'sync_status', 'created_at', 'updated_at'],
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
             values: [
-              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', 'synced', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
-              ['msg-2', 'conv-1', 2, 'assistant', 'Hi there!', null, 'synced', '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
+              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', null, 'synced', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+              ['msg-2', 'conv-1', 2, 'assistant', 'Hi there!', null, 'msg-2-server', 'synced', 0, '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
             ],
           },
         ]);
@@ -76,10 +76,10 @@ describe('repository', () => {
       it('should order messages by sequence_number', () => {
         mockDb.exec.mockReturnValue([
           {
-            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'sync_status', 'created_at', 'updated_at'],
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
             values: [
-              ['msg-1', 'conv-1', 1, 'user', 'First', null, 'synced', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
-              ['msg-2', 'conv-1', 2, 'assistant', 'Second', null, 'synced', '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
+              ['msg-1', 'conv-1', 1, 'user', 'First', null, null, 'synced', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+              ['msg-2', 'conv-1', 2, 'assistant', 'Second', null, null, 'synced', 0, '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
             ],
           },
         ]);
@@ -97,9 +97,9 @@ describe('repository', () => {
       it('should return a message by id', () => {
         mockDb.exec.mockReturnValue([
           {
-            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'sync_status', 'created_at', 'updated_at'],
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
             values: [
-              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', 'synced', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', null, 'synced', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
             ],
           },
         ]);
@@ -125,6 +125,38 @@ describe('repository', () => {
       });
     });
 
+    describe('findByLocalId', () => {
+      it('should return a message by local_id', () => {
+        mockDb.exec.mockReturnValue([
+          {
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
+            values: [
+              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', 'server-1', 'synced', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+            ],
+          },
+        ]);
+
+        const message = messageRepository.findByLocalId('local-1');
+
+        expect(mockDb.exec).toHaveBeenCalledWith(
+          expect.stringContaining('WHERE local_id = ?'),
+          ['local-1']
+        );
+
+        expect(message).not.toBeNull();
+        expect(message?.local_id).toBe('local-1');
+        expect(message?.server_id).toBe('server-1');
+      });
+
+      it('should return null when message not found', () => {
+        mockDb.exec.mockReturnValue([]);
+
+        const message = messageRepository.findByLocalId('local-999');
+
+        expect(message).toBeNull();
+      });
+    });
+
     describe('insert', () => {
       it('should insert a new message', () => {
         messageRepository.insert(mockMessage);
@@ -138,7 +170,9 @@ describe('repository', () => {
             'user',
             'Hello, world!',
             'local-1',
+            null, // server_id
             'pending',
+            0, // retry_count
             '2024-01-01T00:00:00Z',
             '2024-01-01T00:00:00Z',
           ]
@@ -249,22 +283,22 @@ describe('repository', () => {
     });
 
     describe('getPending', () => {
-      it('should return pending messages', () => {
+      it('should return pending messages for a conversation', () => {
         mockDb.exec.mockReturnValue([
           {
-            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'sync_status', 'created_at', 'updated_at'],
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
             values: [
-              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', 'pending', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
-              ['msg-2', 'conv-1', 2, 'user', 'World', 'local-2', 'pending', '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
+              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', null, 'pending', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+              ['msg-2', 'conv-1', 2, 'user', 'World', 'local-2', null, 'pending', 0, '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
             ],
           },
         ]);
 
-        const pending = messageRepository.getPending();
+        const pending = messageRepository.getPending('conv-1');
 
         expect(mockDb.exec).toHaveBeenCalledWith(
-          expect.stringContaining("WHERE sync_status = ?"),
-          ['pending']
+          expect.stringContaining("WHERE sync_status = ? AND conversation_id = ?"),
+          ['pending', 'conv-1']
         );
 
         expect(pending).toHaveLength(2);
@@ -275,7 +309,7 @@ describe('repository', () => {
       it('should return empty array when no pending messages', () => {
         mockDb.exec.mockReturnValue([]);
 
-        const pending = messageRepository.getPending();
+        const pending = messageRepository.getPending('conv-1');
 
         expect(pending).toEqual([]);
       });
@@ -297,9 +331,9 @@ describe('repository', () => {
       it('should update when message exists', () => {
         mockDb.exec.mockReturnValue([
           {
-            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'sync_status', 'created_at', 'updated_at'],
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
             values: [
-              ['msg-1', 'conv-1', 1, 'user', 'Old content', 'local-1', 'pending', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+              ['msg-1', 'conv-1', 1, 'user', 'Old content', 'local-1', null, 'pending', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
             ],
           },
         ]);

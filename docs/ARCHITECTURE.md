@@ -12,8 +12,8 @@ Alicia is a multi-platform voice assistant that provides real-time, streaming co
 graph TD
     subgraph "Client Layer"
         WebClient[Web Client<br/>React/TypeScript]
-        MobileClient[Mobile Client<br/>Android - PLANNED]
-        CLIClient[CLI Client<br/>Go - PLANNED]
+        MobileClient[Mobile Client<br/>Android/Kotlin]
+        CLIClient[CLI Client<br/>Go/Cobra]
     end
 
     subgraph "LiveKit Server"
@@ -108,8 +108,8 @@ graph TD
 graph TB
     subgraph "Client Applications"
         Web[Web Interface<br/>React - Full Voice]
-        Mobile[Android App<br/>PLANNED]
-        CLI[CLI Tool<br/>PLANNED]
+        Mobile[Android App<br/>Kotlin/Compose]
+        CLI[CLI Tool<br/>Go/Cobra]
     end
 
     subgraph "API Services Layer"

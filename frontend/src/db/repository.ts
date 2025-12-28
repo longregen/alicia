@@ -10,9 +10,11 @@ function rowToMessage(row: unknown[]): Message {
     role: row[3] as 'user' | 'assistant' | 'system',
     contents: row[4] as string,
     local_id: row[5] as string | undefined,
-    sync_status: row[6] as 'pending' | 'synced' | 'conflict' | undefined,
-    created_at: row[7] as string,
-    updated_at: row[8] as string,
+    server_id: row[6] as string | undefined,
+    sync_status: row[7] as 'pending' | 'synced' | 'conflict' | undefined,
+    retry_count: row[8] as number | undefined,
+    created_at: row[9] as string,
+    updated_at: row[10] as string,
   };
 }
 
@@ -32,7 +34,7 @@ export const messageRepository = {
   findByConversation(conversationId: string): Message[] {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, sync_status, created_at, updated_at FROM messages WHERE conversation_id = ? ORDER BY sequence_number ASC',
+      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE conversation_id = ? ORDER BY sequence_number ASC',
       [conversationId]
     );
 
@@ -44,8 +46,20 @@ export const messageRepository = {
   findById(id: string): Message | null {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, sync_status, created_at, updated_at FROM messages WHERE id = ?',
+      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE id = ?',
       [id]
+    );
+
+    if (results.length === 0 || results[0].values.length === 0) return null;
+
+    return rowToMessage(results[0].values[0]);
+  },
+
+  findByLocalId(localId: string): Message | null {
+    const db = getDatabase();
+    const results = db.exec(
+      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE local_id = ?',
+      [localId]
     );
 
     if (results.length === 0 || results[0].values.length === 0) return null;
@@ -56,7 +70,7 @@ export const messageRepository = {
   insert(message: Message): void {
     const db = getDatabase();
     db.run(
-      'INSERT INTO messages (id, conversation_id, sequence_number, role, contents, local_id, sync_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO messages (id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         message.id,
         message.conversation_id,
@@ -64,7 +78,9 @@ export const messageRepository = {
         message.role,
         message.contents,
         message.local_id || null,
+        message.server_id || null,
         message.sync_status || 'synced',
+        message.retry_count || 0,
         message.created_at,
         message.updated_at,
       ]
@@ -93,6 +109,14 @@ export const messageRepository = {
       setClauses.push('local_id = ?');
       values.push(updates.local_id);
     }
+    if (updates.server_id !== undefined) {
+      setClauses.push('server_id = ?');
+      values.push(updates.server_id);
+    }
+    if (updates.retry_count !== undefined) {
+      setClauses.push('retry_count = ?');
+      values.push(updates.retry_count);
+    }
 
     // Always update updated_at
     setClauses.push('updated_at = ?');
@@ -115,11 +139,11 @@ export const messageRepository = {
     scheduleSave();
   },
 
-  getPending(): Message[] {
+  getPending(conversationId: string): Message[] {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, sync_status, created_at, updated_at FROM messages WHERE sync_status = ?',
-      ['pending']
+      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE sync_status = ? AND conversation_id = ?',
+      ['pending', conversationId]
     );
 
     if (results.length === 0) return [];
@@ -134,6 +158,36 @@ export const messageRepository = {
     } else {
       this.insert(message);
     }
+  },
+
+  incrementRetryCount(id: string): void {
+    const db = getDatabase();
+    db.run(
+      'UPDATE messages SET retry_count = retry_count + 1 WHERE id = ?',
+      [id]
+    );
+    scheduleSave();
+  },
+
+  getRetryable(conversationId: string, maxRetries: number = 3): Message[] {
+    const db = getDatabase();
+    const results = db.exec(
+      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE sync_status = ? AND conversation_id = ? AND (retry_count IS NULL OR retry_count < ?) ORDER BY created_at ASC',
+      ['pending', conversationId, maxRetries]
+    );
+
+    if (results.length === 0) return [];
+
+    return results[0].values.map(rowToMessage);
+  },
+
+  deleteFailedOperations(maxRetries: number = 5): void {
+    const db = getDatabase();
+    db.run(
+      'DELETE FROM messages WHERE sync_status = ? AND retry_count >= ?',
+      ['pending', maxRetries]
+    );
+    scheduleSave();
   },
 };
 

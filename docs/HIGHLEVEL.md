@@ -1,8 +1,6 @@
-# Audio Alicia
+# Alicia
 
 Alicia is a self-hosted personal AI voice assistant that enables natural, real-time conversations through audio. Running entirely on consumer hardware, it combines speech recognition, language understanding, and voice synthesis to create a seamless conversational experience with complete privacy.
-
-> **Current Status**: The backend voice assistant is fully implemented with LiveKit integration. The web frontend currently supports text-only conversations via REST API. Voice features in the web interface are planned for future releases. See [Multi-Platform Support](#multi-platform-support) for details.
 
 ## What Alicia Does
 
@@ -10,93 +8,103 @@ Alicia transforms how you interact with AI through voice, providing a fluid, hum
 
 ### Implemented Features ✅
 
-- **Backend Voice Pipeline**: Fully implemented real-time voice processing (Whisper STT → Qwen3 LLM → Kokoro TTS)
-- **LiveKit Integration**: Backend agent supports real-time audio streaming through LiveKit
-- **Text Conversations**: Web interface supports text-based conversations via REST API
-- **Conversation Management**: Create, list, and manage multiple conversations
-- **Message History**: Persistent storage of conversation history
+- **Real-time Voice Conversations**: Full voice pipeline with Whisper STT → Qwen3 LLM → Kokoro TTS
+- **LiveKit Integration**: Real-time audio streaming through LiveKit for all clients
+- **Web Frontend**: React-based interface with voice and text conversations, conversation management
+- **Android App**: Native Kotlin/Compose app with LiveKit integration and Porcupine wake word detection
+- **CLI Tool**: Interactive command-line chat with streaming responses and conversation management
+- **Semantic Memory**: Context retrieval from previous conversations using pgvector embeddings
+- **Tool Integration**: Calculator, DuckDuckGo web search, memory query, and MCP protocol support
+- **Streaming Responses**: Real-time streaming of assistant responses as they're generated
+- **Conversation Management**: Create, list, archive, and manage multiple conversations
+- **Message History**: Persistent storage of conversation history with offline sync support
 - **Privacy-First**: All processing happens locally on your hardware
 - **Extensible Architecture**: Hexagonal architecture with clean separation of concerns
 
 ### Planned Features 🚧
 
-- **Web Voice Interface**: LiveKit integration in web frontend for voice conversations
-- **Real-time Streaming**: Streaming responses as they're being generated
-- **Multilingual Translation**: Speak in one language and receive responses in another
-- **Mobile Apps**: Native Android app
-- **CLI Tool**: Command-line interface for terminal-based interactions
-- **Voice & Text Flexibility**: Switch seamlessly between voice and text input/output
-- **Conversation Memory**: Context retrieval from previous conversations
-- **Tool Integration**: Web search and other external tools (currently stubbed)
+- **Multi-user Conversations**: Support for multiple participants in a single conversation
+- **Video/Screen Sharing**: Visual context through screen sharing
+- **Enhanced Memory Consolidation**: Automatic summarization and consolidation of memories
 
 ## Architecture
 
 ### Real-Time Communication
 
-Alicia uses **LiveKit** as its real-time communication layer for audio/video streaming. Each conversation runs in a dedicated LiveKit room, providing:
+Alicia uses **LiveKit** as its real-time communication layer for audio streaming. Each conversation runs in a dedicated LiveKit room (`conv_{conversation_id}`), providing:
 
 - Low-latency bidirectional audio streaming
-- Real-time video support (when needed)
-- Reliable transport for voice data
-- Secure peer-to-peer connections
+- Reliable data channels for protocol messages
+- Secure token-based access control
+- Automatic reconnection with state preservation
 
 ### Conversation Protocol
 
-Alicia implements a **MessagePack-based protocol** over LiveKit data channels to handle conversation semantics:
+Alicia implements a **MessagePack-based protocol** over LiveKit data channels with 16 message types:
 
-- Message exchange for conversation state
-- Transcription events
-- Assistant responses
-- Control signals (pause, resume, regenerate)
-- Translation settings and multilingual support
+- User and assistant messages
+- Audio chunks and transcriptions
+- Tool use requests and results
+- Reasoning steps and memory traces
+- Control signals (stop, variation)
+- Configuration and acknowledgements
 
-This separation keeps audio/video transport (LiveKit) independent from conversation logic (MessagePack protocol), enabling clean architecture and flexibility.
+This separation keeps audio transport (LiveKit tracks) independent from conversation logic (MessagePack protocol), enabling clean architecture and flexibility.
 
 ### Local AI Processing
 
 All AI processing happens locally on your machine, with no cloud dependencies:
 
-- **Speech Recognition**: Whisper (distil-large-v3) for fast real-time transcription across multiple languages
-- **Language Understanding**: Qwen3-8B-AWQ for intelligent, contextual responses
+- **Speech Recognition**: Whisper for real-time transcription across multiple languages
+- **Language Understanding**: Qwen3 via vLLM for intelligent, contextual responses
 - **Voice Synthesis**: Kokoro for natural-sounding speech output
-
-These models work together to create a cohesive, responsive conversation experience that feels natural and engaging.
+- **Embeddings**: pgvector for semantic memory search
 
 ## The Alicia Experience
 
-### Current Experience (Backend Agent) ✅
+### Voice Conversation Flow
 
-When using the backend LiveKit agent directly:
+1. **Connect**: Join a conversation via web, mobile, or CLI
+2. **Speak Naturally**: Your speech is transcribed in real-time using Whisper
+3. **Context Retrieval**: Relevant memories are retrieved to augment context
+4. **Immediate Response**: Alicia processes your message and begins responding
+5. **Streaming Audio**: Hear Alicia's voice response as it's generated
+6. **Memory Storage**: Important information is stored for future context
 
-1. **Connect via LiveKit**: Join a LiveKit room with the Alicia agent
-2. **Speak Naturally**: The agent listens and transcribes your speech in real-time using Whisper
-3. **Immediate Response**: Alicia processes your message and begins responding
-4. **Listen to Voice**: Hear Alicia's voice response synthesized with Kokoro TTS
-5. **Real-time Audio**: Audio streams in real-time over LiveKit tracks
+### Text Mode
 
-### Current Experience (Web Frontend) ✅
+All platforms support text-only mode where you can type messages and receive text responses, with optional TTS playback.
 
-The web interface currently provides:
+## Multi-Platform Support
 
-1. **Text-Based Chat**: Type your messages in the input field
-2. **View Responses**: Read Alicia's text responses
-3. **Manage Conversations**: Create, switch between, and delete conversations
-4. **Message History**: Browse previous messages in each conversation
+### Web Frontend ✅
 
-### Planned Experience (Web Frontend with Voice) 🚧
+A React-based web interface with full feature support:
 
-The enhanced web experience will include:
+- Voice conversations via LiveKit SDK
+- Text input with streaming responses
+- Conversation management and history
+- MCP server configuration
+- Audio input/output controls
 
-1. **Speak Naturally**: Click to activate microphone and start talking
-2. **Watch Your Words Appear**: See your speech transcribed on screen as you speak
-3. **Immediate Response**: Alicia begins responding immediately after you finish speaking
-4. **Listen & Read Along**: Hear Alicia's voice response while following along with the text
+### Android App ✅
 
-### Planned Features 🚧
+A native Kotlin/Jetpack Compose application:
 
-- **Translation Mode**: Speak in one language and receive responses in another
-- **Voice Options**: Choose from multiple voice options for TTS
-- **Control the Conversation**: Stop responses mid-stream, regenerate answers, or continue from any point
+- LiveKit SDK for real-time audio
+- Porcupine wake word detection ("Hey Alicia")
+- Room database for local storage
+- Background voice service
+- Hilt dependency injection
+
+### CLI Tool ✅
+
+A Go-based command-line interface:
+
+- Interactive chat with streaming responses
+- Conversation management commands (new, list, show, delete)
+- Database integration for persistence
+- Configuration via environment variables
 
 ## Self-Hosted on Consumer Hardware
 
@@ -107,22 +115,14 @@ Alicia runs entirely on standard consumer devices - no cloud services required. 
 - **Performance**: Optimized for efficient resource usage on standard hardware
 - **Control**: You own your data and your assistant
 
-## Multi-Platform Support
+## Technology Stack
 
-### Current Platform Support
-
-- **Desktop & Mobile Web** ✅: A responsive web interface (text-only) that works across desktop browsers and mobile devices
-  - Implemented: Text conversations via REST API
-  - Planned: LiveKit integration for voice conversations
-
-### Planned Platform Support 🚧
-
-- **Native Mobile**: Android application with voice assistant integration for a native mobile experience
-  - Platform: Android (Kotlin/Java)
-  - Status: Not yet implemented
-  - Features: Native audio, background support, push notifications
-
-- **Command Line**: Terminal interface for quick interactions and scripting
-  - Language: Go
-  - Status: Not yet implemented
-  - Features: Voice and text modes, history export, script integration
+| Layer | Technology |
+|-------|------------|
+| Backend | Go 1.25, Chi, pgx, LiveKit Server SDK |
+| Frontend | React 19, TypeScript, Vite 7, LiveKit Components |
+| Android | Kotlin, Jetpack Compose, Hilt, Room, LiveKit SDK |
+| Database | PostgreSQL with pgvector |
+| Protocol | MessagePack over LiveKit data channels |
+| AI/ML | Whisper (ASR), Qwen (LLM), Kokoro (TTS) |
+| Build | Nix Flakes, sqlc |

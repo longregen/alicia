@@ -1,123 +1,171 @@
 import { pack } from 'msgpackr';
 import { Message } from '../types/models';
-import { SyncResponse, SyncedMessage } from '../types/sync';
+import { SyncResponse, SyncedMessage, SyncRequest, MessageResponse } from '../types/sync';
+import { Envelope, MessageType } from '../types/protocol';
+
+// Helper to convert domain model (snake_case) to wire format (camelCase)
+function messageToMessageResponse(msg: Message): MessageResponse {
+  return {
+    id: msg.id,
+    conversationId: msg.conversation_id,
+    sequenceNumber: msg.sequence_number,
+    previousId: msg.previous_id,
+    role: msg.role,
+    contents: msg.contents,
+    createdAt: msg.created_at,
+    updatedAt: msg.updated_at,
+    localId: msg.local_id,
+    serverId: msg.server_id,
+    syncStatus: msg.sync_status,
+  };
+}
 
 /**
- * Builder for creating sync protocol messages
+ * Builder for creating sync protocol messages using standard Envelope format
+ * NOTE: Wire format uses camelCase to match Go msgpack serialization
  */
 export class SyncProtocolBuilder {
   /**
-   * Create a sync request envelope
+   * Create a sync request envelope (uses camelCase for wire format)
    */
-  static createSyncRequest(messages: Message[]): unknown {
+  static createSyncRequest(messages: Message[], conversationId: string): Envelope {
+    const syncRequest: SyncRequest = {
+      messages: messages.map((msg) => ({
+        localId: msg.local_id!,
+        sequenceNumber: msg.sequence_number,
+        previousId: msg.previous_id,
+        role: msg.role,
+        contents: msg.contents,
+        createdAt: msg.created_at,
+        updatedAt: msg.updated_at,
+      })),
+    };
+
     return {
-      type: 'sync_request',
-      payload: {
-        messages: messages.map((msg) => ({
-          local_id: msg.local_id,
-          sequence_number: msg.sequence_number,
-          role: msg.role,
-          contents: msg.contents,
-          created_at: msg.created_at,
-        })),
-      },
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.SyncRequest,
+      body: syncRequest,
     };
   }
 
   /**
-   * Create a sync request as MessagePack binary
+   * Create a sync request as MessagePack binary.
+   * Note: Backend expects raw DTO, not wrapped in Envelope.
    */
-  static createSyncRequestBinary(messages: Message[]): Uint8Array {
-    return pack(this.createSyncRequest(messages));
+  static createSyncRequestBinary(messages: Message[], conversationId: string): Uint8Array {
+    const envelope = this.createSyncRequest(messages, conversationId);
+    // Extract body for wire format (backend expects raw DTO)
+    return pack(envelope.body);
   }
 
   /**
-   * Create a sync response envelope
+   * Create a sync response envelope (uses camelCase for wire format)
    */
   static createSyncResponse(
-    syncedMessages: SyncedMessage[]
-  ): unknown {
+    syncedMessages: SyncedMessage[],
+    conversationId: string
+  ): Envelope {
+    const syncResponse: SyncResponse = {
+      syncedMessages: syncedMessages,
+      syncedAt: new Date().toISOString(),
+    };
+
     return {
-      type: 'sync_response',
-      payload: {
-        messages: syncedMessages.map((sm) => sm.message),
-      },
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.SyncResponse,
+      body: syncResponse,
     };
   }
 
   /**
-   * Create a sync response as MessagePack binary
+   * Create a sync response as MessagePack binary.
+   * Note: Backend sends raw DTO, not wrapped in Envelope.
    */
   static createSyncResponseBinary(
-    syncedMessages: SyncedMessage[]
+    syncedMessages: SyncedMessage[],
+    conversationId: string
   ): Uint8Array {
-    return pack(this.createSyncResponse(syncedMessages));
+    const envelope = this.createSyncResponse(syncedMessages, conversationId);
+    // Extract body for wire format (backend sends raw DTO)
+    return pack(envelope.body);
   }
 
   /**
    * Create a message envelope for incoming messages
    */
-  static createMessageEnvelope(message: Message): unknown {
+  static createMessageEnvelope(message: Message, conversationId: string): Envelope {
     return {
-      type: 'message',
-      payload: {
-        message,
-      },
+      stanzaId: 0,
+      conversationId,
+      type: message.role === 'user' ? MessageType.UserMessage : MessageType.AssistantMessage,
+      body: message,
     };
   }
 
   /**
-   * Create a message envelope as MessagePack binary
+   * Create a message envelope as MessagePack binary.
+   * Note: Backend sends raw message DTO, not wrapped in Envelope.
    */
-  static createMessageEnvelopeBinary(message: Message): Uint8Array {
-    return pack(this.createMessageEnvelope(message));
+  static createMessageEnvelopeBinary(message: Message, conversationId: string): Uint8Array {
+    const envelope = this.createMessageEnvelope(message, conversationId);
+    // Extract body for wire format (backend sends raw DTO)
+    return pack(envelope.body);
   }
 
   /**
    * Create an acknowledgement envelope
    */
-  static createAckEnvelope(messageId: string, status = 'received'): unknown {
+  static createAckEnvelope(stanzaId: number, conversationId: string, success = true): Envelope {
     return {
-      type: 'ack',
-      payload: {
-        message_id: messageId,
-        status,
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.Acknowledgement,
+      body: {
+        conversationId,
+        acknowledgedStanzaId: stanzaId,
+        success,
       },
     };
   }
 
   /**
-   * Create an acknowledgement envelope as MessagePack binary
+   * Create an acknowledgement envelope as MessagePack binary.
+   * Note: Backend sends raw DTO, not wrapped in Envelope.
    */
   static createAckEnvelopeBinary(
-    messageId: string,
-    status = 'received'
+    stanzaId: number,
+    conversationId: string,
+    success = true
   ): Uint8Array {
-    return pack(this.createAckEnvelope(messageId, status));
+    const envelope = this.createAckEnvelope(stanzaId, conversationId, success);
+    // Extract body for wire format (backend sends raw DTO)
+    return pack(envelope.body);
   }
 
   /**
-   * Create a successful sync response for pending messages
+   * Create a successful sync response for pending messages (uses camelCase)
    */
   static createSuccessfulSyncResponse(
     pendingMessages: Message[]
   ): SyncResponse {
     return {
-      synced_messages: pendingMessages.map((msg) => ({
-        local_id: msg.local_id!,
-        server_id: msg.id,
+      syncedMessages: pendingMessages.map((msg) => ({
+        localId: msg.local_id!,
+        serverId: msg.id,
         status: 'synced',
-        message: {
+        message: messageToMessageResponse({
           ...msg,
           sync_status: 'synced',
-        },
+        }),
       })),
-      synced_at: new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
     };
   }
 
   /**
-   * Create a conflict sync response
+   * Create a conflict sync response (uses camelCase)
    */
   static createConflictSyncResponse(
     localMessage: Message,
@@ -125,55 +173,55 @@ export class SyncProtocolBuilder {
     reason = 'Content mismatch'
   ): SyncResponse {
     return {
-      synced_messages: [
+      syncedMessages: [
         {
-          local_id: localMessage.local_id!,
-          server_id: serverMessage.id,
+          localId: localMessage.local_id!,
+          serverId: serverMessage.id,
           status: 'conflict',
           conflict: {
             reason,
-            server_message: serverMessage,
+            serverMessage: messageToMessageResponse(serverMessage),
             resolution: 'server_wins',
           },
         },
       ],
-      synced_at: new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
     };
   }
 
   /**
-   * Create a mixed sync response (some synced, some conflicts)
+   * Create a mixed sync response (some synced, some conflicts) - uses camelCase
    */
   static createMixedSyncResponse(
     syncedMessages: Message[],
     conflictPairs: Array<{ local: Message; server: Message }>
   ): SyncResponse {
     const syncedMessageResults: SyncedMessage[] = syncedMessages.map((msg) => ({
-      local_id: msg.local_id!,
-      server_id: msg.id,
+      localId: msg.local_id!,
+      serverId: msg.id,
       status: 'synced',
-      message: {
+      message: messageToMessageResponse({
         ...msg,
         sync_status: 'synced',
-      },
+      }),
     }));
 
     const conflictResults: SyncedMessage[] = conflictPairs.map(
       ({ local, server }) => ({
-        local_id: local.local_id!,
-        server_id: server.id,
+        localId: local.local_id!,
+        serverId: server.id,
         status: 'conflict',
         conflict: {
           reason: 'Sequence mismatch',
-          server_message: server,
+          serverMessage: messageToMessageResponse(server),
           resolution: 'server_wins',
         },
       })
     );
 
     return {
-      synced_messages: [...syncedMessageResults, ...conflictResults],
-      synced_at: new Date().toISOString(),
+      syncedMessages: [...syncedMessageResults, ...conflictResults],
+      syncedAt: new Date().toISOString(),
     };
   }
 

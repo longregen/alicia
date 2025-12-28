@@ -31,13 +31,17 @@ export async function initDatabase(): Promise<Database> {
       role TEXT NOT NULL,
       contents TEXT NOT NULL DEFAULT '',
       local_id TEXT,
+      server_id TEXT,
       sync_status TEXT DEFAULT 'synced',
+      retry_count INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, sequence_number);
+    CREATE INDEX IF NOT EXISTS idx_messages_server_id ON messages(server_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_local_id ON messages(local_id);
   `);
 
   return db;

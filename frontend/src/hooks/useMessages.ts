@@ -123,10 +123,13 @@ export function useMessages(conversationId: string | null) {
       setRefreshCounter(prev => prev + 1);
       return true;
     } catch {
-      // Mark message as failed but keep it visible
+      // Network errors should keep message as pending for retry via WebSocket sync
+      // Only server-side rejections (handled above) should mark as synced
+      // This allows WebSocket reconnection to retry pending messages
       messageRepository.update(localId, {
-        sync_status: 'conflict',
+        sync_status: 'pending',
       });
+      messageRepository.incrementRetryCount(localId);
       setRefreshCounter(prev => prev + 1);
       return false;
     } finally {
