@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useWebSocketSync } from './useWebSocketSync';
 import { SyncState } from '../types/sync';
+import { Message } from '../types/models';
 
 interface UseSyncOptions {
+  onMessage?: (message: Message) => void;
   onSync?: () => void;
 }
 
@@ -21,6 +23,7 @@ export function useSync(conversationId: string | null, options?: UseSyncOptions)
 
   const { isConnected, error, syncNow } = useWebSocketSync(conversationId, {
     onSync: handleSync,
+    onMessage: options?.onMessage,
     enabled: !!conversationId,
   });
 
