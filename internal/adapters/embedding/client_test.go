@@ -350,12 +350,9 @@ func TestEmbedBatch_SingleText(t *testing.T) {
 
 func TestEmbedBatch_NoDimensions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Dimensions field was removed from EmbeddingRequest - just verify request parses
 		var req EmbeddingRequest
 		json.NewDecoder(r.Body).Decode(&req)
-
-		if req.Dimensions != 0 {
-			t.Errorf("expected Dimensions to be 0, got %d", req.Dimensions)
-		}
 
 		resp := EmbeddingResponse{
 			Object: "list",
