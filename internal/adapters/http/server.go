@@ -119,7 +119,7 @@ func (s *Server) setupRouter() {
 		r.Patch("/conversations/{id}", conversationsHandler.Patch)
 		r.Delete("/conversations/{id}", conversationsHandler.Delete)
 
-		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.broadcaster)
+		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.broadcaster, s.wsBroadcaster)
 		r.Get("/conversations/{id}/messages", messagesHandler.List)
 		r.Post("/conversations/{id}/messages", messagesHandler.Send)
 

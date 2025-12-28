@@ -19,6 +19,7 @@ type MessagesHandler struct {
 	idGen                   ports.IDGenerator
 	generateResponseUseCase ports.GenerateResponseUseCase
 	broadcaster             *SSEBroadcaster
+	wsBroadcaster           *WebSocketBroadcaster
 }
 
 func NewMessagesHandler(
@@ -27,6 +28,7 @@ func NewMessagesHandler(
 	idGen ports.IDGenerator,
 	generateResponseUseCase ports.GenerateResponseUseCase,
 	broadcaster *SSEBroadcaster,
+	wsBroadcaster *WebSocketBroadcaster,
 ) *MessagesHandler {
 	return &MessagesHandler{
 		conversationRepo:        conversationRepo,
@@ -34,6 +36,7 @@ func NewMessagesHandler(
 		idGen:                   idGen,
 		generateResponseUseCase: generateResponseUseCase,
 		broadcaster:             broadcaster,
+		wsBroadcaster:           wsBroadcaster,
 	}
 }
 
@@ -137,10 +140,13 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Broadcast message to SSE subscribers
+	// Broadcast message to SSE and WebSocket subscribers
+	messageResponse := (&dto.MessageResponse{}).FromModel(message)
 	if h.broadcaster != nil {
-		messageResponse := (&dto.MessageResponse{}).FromModel(message)
 		h.broadcaster.BroadcastMessageEvent(conversationID, messageResponse)
+	}
+	if h.wsBroadcaster != nil {
+		h.wsBroadcaster.BroadcastMessage(conversationID, messageResponse)
 	}
 
 	// Trigger response generation asynchronously (if use case is available)
@@ -173,10 +179,13 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 			log.Printf("Generated response for REST API message %s: %s", message.ID, output.Message.ID)
 
-			// Broadcast AI response to SSE subscribers
+			// Broadcast AI response to SSE and WebSocket subscribers
+			responseMsg := (&dto.MessageResponse{}).FromModel(output.Message)
 			if h.broadcaster != nil {
-				responseMsg := (&dto.MessageResponse{}).FromModel(output.Message)
 				h.broadcaster.BroadcastMessageEvent(conversationID, responseMsg)
+			}
+			if h.wsBroadcaster != nil {
+				h.wsBroadcaster.BroadcastMessage(conversationID, responseMsg)
 			}
 		}()
 	}
