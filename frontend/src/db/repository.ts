@@ -2,6 +2,20 @@ import { getDatabase, scheduleSave } from './sqlite';
 import { Message, Conversation } from '../types/models';
 import type { SqlValue } from 'sql.js';
 
+/**
+ * Safely converts a date value to an ISO string for SQL binding.
+ * Handles Date objects, strings, and null/undefined values.
+ */
+function toISOString(value: string | Date | null | undefined): string | null {
+  if (value == null) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return value;
+}
+
 function rowToMessage(row: unknown[]): Message {
   return {
     id: row[0] as string,
@@ -81,8 +95,8 @@ export const messageRepository = {
         message.server_id || null,
         message.sync_status || 'synced',
         message.retry_count || 0,
-        message.created_at,
-        message.updated_at,
+        toISOString(message.created_at),
+        toISOString(message.updated_at),
       ]
     );
     scheduleSave();
@@ -223,8 +237,8 @@ export const conversationRepository = {
         conversation.id,
         conversation.title,
         conversation.status,
-        conversation.created_at,
-        conversation.updated_at,
+        toISOString(conversation.created_at),
+        toISOString(conversation.updated_at),
       ]
     );
     scheduleSave();
