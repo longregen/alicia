@@ -14,13 +14,13 @@ type SendMessageRequest struct {
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
 	ID             string    `json:"id" msgpack:"id"`
-	ConversationID string    `json:"conversation_id" msgpack:"conversationId"`
-	SequenceNumber int       `json:"sequence_number" msgpack:"sequenceNumber"`
-	PreviousID     string    `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
+	ConversationID string    `json:"conversation_id" msgpack:"conversation_id"`
+	SequenceNumber int       `json:"sequence_number" msgpack:"sequence_number"`
+	PreviousID     string    `json:"previous_id,omitempty" msgpack:"previous_id,omitempty"`
 	Role           string    `json:"role" msgpack:"role"`
 	Contents       string    `json:"contents" msgpack:"contents"`
-	CreatedAt      time.Time `json:"created_at" msgpack:"createdAt"`
-	UpdatedAt      time.Time `json:"updated_at" msgpack:"updatedAt"`
+	CreatedAt      time.Time `json:"created_at" msgpack:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at" msgpack:"updated_at"`
 }
 
 // MessageListResponse represents a list of messages

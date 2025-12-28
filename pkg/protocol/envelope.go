@@ -6,11 +6,11 @@ type Envelope struct {
 	// StanzaID identifies the message's position in the conversation sequence.
 	// Client messages: positive, incrementing (1, 2, 3, ...)
 	// Server messages: negative, decrementing (-1, -2, -3, ...)
-	StanzaID int32 `msgpack:"stanzaId" json:"stanzaId"`
+	StanzaID int32 `msgpack:"stanza_id" json:"stanza_id"`
 
 	// ConversationID is the unique identifier of the conversation.
 	// Format: conv_{nanoid} - maps directly to LiveKit room name.
-	ConversationID string `msgpack:"conversationId" json:"conversationId"`
+	ConversationID string `msgpack:"conversation_id" json:"conversation_id"`
 
 	// Type is the numeric message type (1-16)
 	Type MessageType `msgpack:"type" json:"type"`
@@ -25,7 +25,7 @@ type Envelope struct {
 // Common meta keys
 const (
 	MetaKeyTimestamp     = "timestamp"
-	MetaKeyClientVersion = "clientVersion"
+	MetaKeyClientVersion = "client_version"
 	MetaKeyTraceID       = "messaging.trace_id"
 	MetaKeySpanID        = "messaging.span_id"
 )

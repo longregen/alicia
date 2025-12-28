@@ -19,15 +19,15 @@ class ProtocolHandler {
         val packer = MessagePack.newDefaultPacker(output)
 
         try {
-            // Pack envelope as map with 5 fields: stanzaId, conversationId, type, meta, body
+            // Pack envelope as map with 5 fields: stanza_id, conversation_id, type, meta, body
             packer.packMapHeader(5)
 
-            // stanzaId
-            packer.packString("stanzaId")
+            // stanza_id
+            packer.packString("stanza_id")
             packer.packInt(envelope.stanzaId)
 
-            // conversationId
-            packer.packString("conversationId")
+            // conversation_id
+            packer.packString("conversation_id")
             packer.packString(envelope.conversationId)
 
             // type
@@ -77,8 +77,8 @@ class ProtocolHandler {
 
             for (i in 0 until mapSize) {
                 when (unpacker.unpackString()) {
-                    "stanzaId" -> stanzaId = unpacker.unpackInt()
-                    "conversationId" -> conversationId = unpacker.unpackString()
+                    "stanza_id" -> stanzaId = unpacker.unpackInt()
+                    "conversation_id" -> conversationId = unpacker.unpackString()
                     "type" -> type = MessageType.fromInt(unpacker.unpackInt())
                     "meta" -> meta = if (unpacker.tryUnpackNil()) null else unpackMap(unpacker)
                     "body" -> {
@@ -92,8 +92,8 @@ class ProtocolHandler {
 
 
             return Envelope(
-                stanzaId = stanzaId ?: throw IllegalArgumentException("Missing stanzaId"),
-                conversationId = conversationId ?: throw IllegalArgumentException("Missing conversationId"),
+                stanzaId = stanzaId ?: throw IllegalArgumentException("Missing stanza_id"),
+                conversationId = conversationId ?: throw IllegalArgumentException("Missing conversation_id"),
                 type = type ?: throw IllegalArgumentException("Missing type"),
                 meta = filteredMeta,
                 body = body ?: throw IllegalArgumentException("Missing body")
@@ -247,13 +247,11 @@ class ProtocolHandler {
 
     // Pack/Unpack methods for each message type
     private fun packTranscription(packer: org.msgpack.core.MessagePacker, body: TranscriptionBody) {
-        // Always packs 7 fields: id, previousId, conversationId, text, final, confidence, language
-        // Optional fields (previousId, confidence, language) are packed as nil when absent
         packer.packMapHeader(7)
         packer.packString("id").packString(body.id)
-        packer.packString("previousId")
+        packer.packString("previous_id")
         if (body.previousId != null) packer.packString(body.previousId) else packer.packNil()
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("text").packString(body.text)
         packer.packString("final").packBoolean(body.final)
         packer.packString("confidence")
@@ -275,8 +273,8 @@ class ProtocolHandler {
         for (i in 0 until size) {
             when (unpacker.unpackString()) {
                 "id" -> id = unpacker.unpackString()
-                "previousId" -> previousId = if (unpacker.tryUnpackNil()) null else unpacker.unpackString()
-                "conversationId" -> conversationId = unpacker.unpackString()
+                "previous_id" -> previousId = if (unpacker.tryUnpackNil()) null else unpacker.unpackString()
+                "conversation_id" -> conversationId = unpacker.unpackString()
                 "text" -> text = unpacker.unpackString()
                 "final" -> final = unpacker.unpackBoolean()
                 "confidence" -> confidence = if (unpacker.tryUnpackNil()) null else unpacker.unpackFloat()
@@ -287,7 +285,7 @@ class ProtocolHandler {
         return TranscriptionBody(
             id = id ?: throw IllegalArgumentException("Missing id"),
             previousId = previousId,
-            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversationId"),
+            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversation_id"),
             text = text ?: throw IllegalArgumentException("Missing text"),
             final = final,
             confidence = confidence,
@@ -296,20 +294,18 @@ class ProtocolHandler {
     }
 
     private fun packStartAnswer(packer: org.msgpack.core.MessagePacker, body: StartAnswerBody) {
-        // Always packs 5 fields: id, previousId, conversationId, answerType, plannedSentenceCount
-        // Optional fields (answerType, plannedSentenceCount) are packed as nil when absent
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
-        packer.packString("previousId").packString(body.previousId)
-        packer.packString("conversationId").packString(body.conversationId)
-        packer.packString("answerType")
+        packer.packString("previous_id").packString(body.previousId)
+        packer.packString("conversation_id").packString(body.conversationId)
+        packer.packString("answer_type")
         if (body.answerType != null) {
             // Convert enum underscores to plus signs (e.g., TEXT_VOICE -> text+voice)
             packer.packString(body.answerType.name.lowercase().replace("_", "+"))
         } else {
             packer.packNil()
         }
-        packer.packString("plannedSentenceCount")
+        packer.packString("planned_sentence_count")
         if (body.plannedSentenceCount != null) packer.packInt(body.plannedSentenceCount) else packer.packNil()
     }
 
@@ -324,33 +320,31 @@ class ProtocolHandler {
         for (i in 0 until size) {
             when (unpacker.unpackString()) {
                 "id" -> id = unpacker.unpackString()
-                "previousId" -> previousId = unpacker.unpackString()
-                "conversationId" -> conversationId = unpacker.unpackString()
-                "answerType" -> answerType = if (unpacker.tryUnpackNil()) null else AnswerType.fromString(unpacker.unpackString())
-                "plannedSentenceCount" -> plannedSentenceCount = if (unpacker.tryUnpackNil()) null else unpacker.unpackInt()
+                "previous_id" -> previousId = unpacker.unpackString()
+                "conversation_id" -> conversationId = unpacker.unpackString()
+                "answer_type" -> answerType = if (unpacker.tryUnpackNil()) null else AnswerType.fromString(unpacker.unpackString())
+                "planned_sentence_count" -> plannedSentenceCount = if (unpacker.tryUnpackNil()) null else unpacker.unpackInt()
             }
         }
 
         return StartAnswerBody(
             id = id ?: throw IllegalArgumentException("Missing id"),
-            previousId = previousId ?: throw IllegalArgumentException("Missing previousId"),
-            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversationId"),
+            previousId = previousId ?: throw IllegalArgumentException("Missing previous_id"),
+            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversation_id"),
             answerType = answerType,
             plannedSentenceCount = plannedSentenceCount
         )
     }
 
     private fun packAssistantSentence(packer: org.msgpack.core.MessagePacker, body: AssistantSentenceBody) {
-        // Always packs 7 fields: id, previousId, conversationId, sequence, text, isFinal, audio
-        // Optional fields (id, isFinal, audio) are packed as nil when absent
         packer.packMapHeader(7)
         packer.packString("id")
         if (body.id != null) packer.packString(body.id) else packer.packNil()
-        packer.packString("previousId").packString(body.previousId)
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("previous_id").packString(body.previousId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("sequence").packInt(body.sequence)
         packer.packString("text").packString(body.text)
-        packer.packString("isFinal")
+        packer.packString("is_final")
         if (body.isFinal != null) packer.packBoolean(body.isFinal) else packer.packNil()
         packer.packString("audio")
         if (body.audio != null) {
@@ -373,11 +367,11 @@ class ProtocolHandler {
         for (i in 0 until size) {
             when (unpacker.unpackString()) {
                 "id" -> id = if (unpacker.tryUnpackNil()) null else unpacker.unpackString()
-                "previousId" -> previousId = unpacker.unpackString()
-                "conversationId" -> conversationId = unpacker.unpackString()
+                "previous_id" -> previousId = unpacker.unpackString()
+                "conversation_id" -> conversationId = unpacker.unpackString()
                 "sequence" -> sequence = unpacker.unpackInt()
                 "text" -> text = unpacker.unpackString()
-                "isFinal" -> isFinal = if (unpacker.tryUnpackNil()) null else unpacker.unpackBoolean()
+                "is_final" -> isFinal = if (unpacker.tryUnpackNil()) null else unpacker.unpackBoolean()
                 "audio" -> audio = if (unpacker.tryUnpackNil()) null else {
                     val audioSize = unpacker.unpackBinaryHeader()
                     unpacker.readPayload(audioSize)
@@ -387,8 +381,8 @@ class ProtocolHandler {
 
         return AssistantSentenceBody(
             id = id,
-            previousId = previousId ?: throw IllegalArgumentException("Missing previousId"),
-            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversationId"),
+            previousId = previousId ?: throw IllegalArgumentException("Missing previous_id"),
+            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversation_id"),
             sequence = sequence ?: throw IllegalArgumentException("Missing sequence"),
             text = text ?: throw IllegalArgumentException("Missing text"),
             isFinal = isFinal,
@@ -396,14 +390,12 @@ class ProtocolHandler {
         )
     }
 
-    // Pack/unpack methods for remaining message types
-    // Pack methods use explicit field packing; unpack methods use either explicit unpacking or generic unpackMap()
     private fun packUserMessage(packer: org.msgpack.core.MessagePacker, body: UserMessageBody) {
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
-        packer.packString("previousId")
+        packer.packString("previous_id")
         if (body.previousId != null) packer.packString(body.previousId) else packer.packNil()
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("content").packString(body.content)
         packer.packString("timestamp")
         if (body.timestamp != null) packer.packLong(body.timestamp) else packer.packNil()
@@ -413,8 +405,8 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return UserMessageBody(
             id = map["id"] as String,
-            previousId = map["previousId"] as? String,
-            conversationId = map["conversationId"] as String,
+            previousId = map["previous_id"] as? String,
+            conversationId = map["conversation_id"] as String,
             content = map["content"] as String,
             timestamp = map["timestamp"] as? Long
         )
@@ -423,9 +415,9 @@ class ProtocolHandler {
     private fun packAssistantMessage(packer: org.msgpack.core.MessagePacker, body: AssistantMessageBody) {
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
-        packer.packString("previousId")
+        packer.packString("previous_id")
         if (body.previousId != null) packer.packString(body.previousId) else packer.packNil()
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("content").packString(body.content)
         packer.packString("timestamp")
         if (body.timestamp != null) packer.packLong(body.timestamp) else packer.packNil()
@@ -435,8 +427,8 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return AssistantMessageBody(
             id = map["id"] as String,
-            previousId = map["previousId"] as? String,
-            conversationId = map["conversationId"] as String,
+            previousId = map["previous_id"] as? String,
+            conversationId = map["conversation_id"] as String,
             content = map["content"] as String,
             timestamp = map["timestamp"] as? Long
         )
@@ -444,13 +436,13 @@ class ProtocolHandler {
 
     private fun packConfiguration(packer: org.msgpack.core.MessagePacker, body: ConfigurationBody) {
         packer.packMapHeader(6)
-        packer.packString("conversationId")
+        packer.packString("conversation_id")
         if (body.conversationId != null) packer.packString(body.conversationId) else packer.packNil()
-        packer.packString("lastSequenceSeen")
+        packer.packString("last_sequence_seen")
         if (body.lastSequenceSeen != null) packer.packInt(body.lastSequenceSeen) else packer.packNil()
-        packer.packString("clientVersion")
+        packer.packString("client_version")
         if (body.clientVersion != null) packer.packString(body.clientVersion) else packer.packNil()
-        packer.packString("preferredLanguage")
+        packer.packString("preferred_language")
         if (body.preferredLanguage != null) packer.packString(body.preferredLanguage) else packer.packNil()
         packer.packString("device")
         if (body.device != null) packer.packString(body.device) else packer.packNil()
@@ -466,10 +458,10 @@ class ProtocolHandler {
     private fun unpackConfiguration(unpacker: MessageUnpacker): ConfigurationBody {
         val map = unpackMap(unpacker)
         return ConfigurationBody(
-            conversationId = map["conversationId"] as? String,
-            lastSequenceSeen = (map["lastSequenceSeen"] as? Number)?.toInt(),
-            clientVersion = map["clientVersion"] as? String,
-            preferredLanguage = map["preferredLanguage"] as? String,
+            conversationId = map["conversation_id"] as? String,
+            lastSequenceSeen = (map["last_sequence_seen"] as? Number)?.toInt(),
+            clientVersion = map["client_version"] as? String,
+            preferredLanguage = map["preferred_language"] as? String,
             device = map["device"] as? String,
             features = (map["features"] as? List<*>)?.filterIsInstance<String>()
         )
@@ -477,37 +469,37 @@ class ProtocolHandler {
 
     private fun packControlStop(packer: org.msgpack.core.MessagePacker, body: ControlStopBody) {
         packer.packMapHeader(4)
-        packer.packString("conversationId").packString(body.conversationId)
-        packer.packString("targetId")
+        packer.packString("conversation_id").packString(body.conversationId)
+        packer.packString("target_id")
         if (body.targetId != null) packer.packString(body.targetId) else packer.packNil()
         packer.packString("reason")
         if (body.reason != null) packer.packString(body.reason) else packer.packNil()
-        packer.packString("stopType")
+        packer.packString("stop_type")
         if (body.stopType != null) packer.packString(body.stopType.name.lowercase()) else packer.packNil()
     }
 
     private fun unpackControlStop(unpacker: MessageUnpacker): ControlStopBody {
         val map = unpackMap(unpacker)
         return ControlStopBody(
-            conversationId = map["conversationId"] as String,
-            targetId = map["targetId"] as? String,
+            conversationId = map["conversation_id"] as String,
+            targetId = map["target_id"] as? String,
             reason = map["reason"] as? String,
-            stopType = StopType.fromString(map["stopType"] as? String)
+            stopType = StopType.fromString(map["stop_type"] as? String)
         )
     }
 
     private fun packAcknowledgement(packer: org.msgpack.core.MessagePacker, body: AcknowledgementBody) {
         packer.packMapHeader(3)
-        packer.packString("conversationId").packString(body.conversationId)
-        packer.packString("acknowledgedStanzaId").packInt(body.acknowledgedStanzaId)
+        packer.packString("conversation_id").packString(body.conversationId)
+        packer.packString("acknowledged_stanza_id").packInt(body.acknowledgedStanzaId)
         packer.packString("success").packBoolean(body.success)
     }
 
     private fun unpackAcknowledgement(unpacker: MessageUnpacker): AcknowledgementBody {
         val map = unpackMap(unpacker)
         return AcknowledgementBody(
-            conversationId = map["conversationId"] as String,
-            acknowledgedStanzaId = (map["acknowledgedStanzaId"] as Number).toInt(),
+            conversationId = map["conversation_id"] as String,
+            acknowledgedStanzaId = (map["acknowledged_stanza_id"] as Number).toInt(),
             success = map["success"] as Boolean
         )
     }
@@ -515,12 +507,12 @@ class ProtocolHandler {
     private fun packErrorMessage(packer: org.msgpack.core.MessagePacker, body: ErrorMessageBody) {
         packer.packMapHeader(7)
         packer.packString("id").packString(body.id)
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("code").packInt(body.code)
         packer.packString("message").packString(body.message)
         packer.packString("severity").packInt(body.severity.value)
         packer.packString("recoverable").packBoolean(body.recoverable)
-        packer.packString("originatingId")
+        packer.packString("originating_id")
         if (body.originatingId != null) packer.packString(body.originatingId) else packer.packNil()
     }
 
@@ -528,25 +520,25 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return ErrorMessageBody(
             id = map["id"] as String,
-            conversationId = map["conversationId"] as String,
+            conversationId = map["conversation_id"] as String,
             code = (map["code"] as Number).toInt(),
             message = map["message"] as String,
             severity = Severity.fromInt((map["severity"] as Number).toInt()),
             recoverable = map["recoverable"] as Boolean,
-            originatingId = map["originatingId"] as? String
+            originatingId = map["originating_id"] as? String
         )
     }
 
     private fun packToolUseRequest(packer: org.msgpack.core.MessagePacker, body: ToolUseRequestBody) {
         packer.packMapHeader(7)
         packer.packString("id").packString(body.id)
-        packer.packString("messageId").packString(body.messageId)
-        packer.packString("conversationId").packString(body.conversationId)
-        packer.packString("toolName").packString(body.toolName)
+        packer.packString("message_id").packString(body.messageId)
+        packer.packString("conversation_id").packString(body.conversationId)
+        packer.packString("tool_name").packString(body.toolName)
         packer.packString("parameters")
         packMap(packer, body.parameters)
         packer.packString("execution").packString(body.execution.name.lowercase())
-        packer.packString("timeoutMs")
+        packer.packString("timeout_ms")
         if (body.timeoutMs != null) packer.packInt(body.timeoutMs) else packer.packNil()
     }
 
@@ -565,26 +557,26 @@ class ProtocolHandler {
         @Suppress("UNCHECKED_CAST")
         return ToolUseRequestBody(
             id = map["id"] as String,
-            messageId = map["messageId"] as String,
-            conversationId = map["conversationId"] as String,
-            toolName = map["toolName"] as String,
+            messageId = map["message_id"] as String,
+            conversationId = map["conversation_id"] as String,
+            toolName = map["tool_name"] as String,
             parameters = parameters as Map<String, Any>,
             execution = ToolExecution.fromString(map["execution"] as? String) ?: ToolExecution.SERVER,
-            timeoutMs = (map["timeoutMs"] as? Number)?.toInt()
+            timeoutMs = (map["timeout_ms"] as? Number)?.toInt()
         )
     }
 
     private fun packToolUseResult(packer: org.msgpack.core.MessagePacker, body: ToolUseResultBody) {
         packer.packMapHeader(7)
         packer.packString("id").packString(body.id)
-        packer.packString("requestId").packString(body.requestId)
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("request_id").packString(body.requestId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("success").packBoolean(body.success)
         packer.packString("result")
         if (body.result != null) packValue(packer, body.result) else packer.packNil()
-        packer.packString("errorCode")
+        packer.packString("error_code")
         if (body.errorCode != null) packer.packString(body.errorCode) else packer.packNil()
-        packer.packString("errorMessage")
+        packer.packString("error_message")
         if (body.errorMessage != null) packer.packString(body.errorMessage) else packer.packNil()
     }
 
@@ -592,20 +584,20 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return ToolUseResultBody(
             id = map["id"] as String,
-            requestId = map["requestId"] as String,
-            conversationId = map["conversationId"] as String,
+            requestId = map["request_id"] as String,
+            conversationId = map["conversation_id"] as String,
             success = map["success"] as Boolean,
             result = map["result"],
-            errorCode = map["errorCode"] as? String,
-            errorMessage = map["errorMessage"] as? String
+            errorCode = map["error_code"] as? String,
+            errorMessage = map["error_message"] as? String
         )
     }
 
     private fun packReasoningStep(packer: org.msgpack.core.MessagePacker, body: ReasoningStepBody) {
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
-        packer.packString("messageId").packString(body.messageId)
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("message_id").packString(body.messageId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("sequence").packInt(body.sequence)
         packer.packString("content").packString(body.content)
     }
@@ -614,8 +606,8 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return ReasoningStepBody(
             id = map["id"] as String,
-            messageId = map["messageId"] as String,
-            conversationId = map["conversationId"] as String,
+            messageId = map["message_id"] as String,
+            conversationId = map["conversation_id"] as String,
             sequence = (map["sequence"] as? Number)?.toInt() ?: throw IllegalArgumentException("Missing sequence"),
             content = map["content"] as String
         )
@@ -624,9 +616,9 @@ class ProtocolHandler {
     private fun packMemoryTrace(packer: org.msgpack.core.MessagePacker, body: MemoryTraceBody) {
         packer.packMapHeader(6)
         packer.packString("id").packString(body.id)
-        packer.packString("messageId").packString(body.messageId)
-        packer.packString("conversationId").packString(body.conversationId)
-        packer.packString("memoryId").packString(body.memoryId)
+        packer.packString("message_id").packString(body.messageId)
+        packer.packString("conversation_id").packString(body.conversationId)
+        packer.packString("memory_id").packString(body.memoryId)
         packer.packString("content").packString(body.content)
         packer.packString("relevance").packFloat(body.relevance)
     }
@@ -635,9 +627,9 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return MemoryTraceBody(
             id = map["id"] as String,
-            messageId = map["messageId"] as String,
-            conversationId = map["conversationId"] as String,
-            memoryId = map["memoryId"] as String,
+            messageId = map["message_id"] as String,
+            conversationId = map["conversation_id"] as String,
+            memoryId = map["memory_id"] as String,
             content = map["content"] as String,
             relevance = (map["relevance"] as? Number)?.toFloat() ?: throw IllegalArgumentException("Missing relevance")
         )
@@ -646,10 +638,10 @@ class ProtocolHandler {
     private fun packCommentary(packer: org.msgpack.core.MessagePacker, body: CommentaryBody) {
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
-        packer.packString("messageId").packString(body.messageId)
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("message_id").packString(body.messageId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("content").packString(body.content)
-        packer.packString("commentaryType")
+        packer.packString("commentary_type")
         if (body.commentaryType != null) packer.packString(body.commentaryType) else packer.packNil()
     }
 
@@ -657,20 +649,20 @@ class ProtocolHandler {
         val map = unpackMap(unpacker)
         return CommentaryBody(
             id = map["id"] as String,
-            messageId = map["messageId"] as String,
-            conversationId = map["conversationId"] as String,
+            messageId = map["message_id"] as String,
+            conversationId = map["conversation_id"] as String,
             content = map["content"] as String,
-            commentaryType = map["commentaryType"] as? String
+            commentaryType = map["commentary_type"] as? String
         )
     }
 
     private fun packAudioChunk(packer: org.msgpack.core.MessagePacker, body: AudioChunkBody) {
         packer.packMapHeader(8)
-        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("conversation_id").packString(body.conversationId)
         packer.packString("format").packString(body.format)
         packer.packString("sequence").packInt(body.sequence)
-        packer.packString("durationMs").packInt(body.durationMs)
-        packer.packString("trackSid")
+        packer.packString("duration_ms").packInt(body.durationMs)
+        packer.packString("track_sid")
         if (body.trackSid != null) packer.packString(body.trackSid) else packer.packNil()
         packer.packString("data")
         if (body.data != null) {
@@ -678,7 +670,7 @@ class ProtocolHandler {
         } else {
             packer.packNil()
         }
-        packer.packString("isLast")
+        packer.packString("is_last")
         if (body.isLast != null) packer.packBoolean(body.isLast) else packer.packNil()
         packer.packString("timestamp")
         if (body.timestamp != null) packer.packLong(body.timestamp) else packer.packNil()
@@ -697,25 +689,25 @@ class ProtocolHandler {
 
         for (i in 0 until size) {
             when (unpacker.unpackString()) {
-                "conversationId" -> conversationId = unpacker.unpackString()
+                "conversation_id" -> conversationId = unpacker.unpackString()
                 "format" -> format = unpacker.unpackString()
                 "sequence" -> sequence = unpacker.unpackInt()
-                "durationMs" -> durationMs = unpacker.unpackInt()
-                "trackSid" -> trackSid = if (unpacker.tryUnpackNil()) null else unpacker.unpackString()
+                "duration_ms" -> durationMs = unpacker.unpackInt()
+                "track_sid" -> trackSid = if (unpacker.tryUnpackNil()) null else unpacker.unpackString()
                 "data" -> data = if (unpacker.tryUnpackNil()) null else {
                     val dataSize = unpacker.unpackBinaryHeader()
                     unpacker.readPayload(dataSize)
                 }
-                "isLast" -> isLast = if (unpacker.tryUnpackNil()) null else unpacker.unpackBoolean()
+                "is_last" -> isLast = if (unpacker.tryUnpackNil()) null else unpacker.unpackBoolean()
                 "timestamp" -> timestamp = if (unpacker.tryUnpackNil()) null else unpacker.unpackLong()
             }
         }
 
         return AudioChunkBody(
-            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversationId"),
+            conversationId = conversationId ?: throw IllegalArgumentException("Missing conversation_id"),
             format = format ?: throw IllegalArgumentException("Missing format"),
             sequence = sequence ?: throw IllegalArgumentException("Missing sequence"),
-            durationMs = durationMs ?: throw IllegalArgumentException("Missing durationMs"),
+            durationMs = durationMs ?: throw IllegalArgumentException("Missing duration_ms"),
             trackSid = trackSid,
             data = data,
             isLast = isLast,
@@ -725,21 +717,21 @@ class ProtocolHandler {
 
     private fun packControlVariation(packer: org.msgpack.core.MessagePacker, body: ControlVariationBody) {
         packer.packMapHeader(4)
-        packer.packString("conversationId").packString(body.conversationId)
-        packer.packString("targetId").packString(body.targetId)
+        packer.packString("conversation_id").packString(body.conversationId)
+        packer.packString("target_id").packString(body.targetId)
         packer.packString("mode").packString(body.mode.name.lowercase())
-        packer.packString("newContent")
+        packer.packString("new_content")
         if (body.newContent != null) packer.packString(body.newContent) else packer.packNil()
     }
 
     private fun unpackControlVariation(unpacker: MessageUnpacker): ControlVariationBody {
         val map = unpackMap(unpacker)
         return ControlVariationBody(
-            conversationId = map["conversationId"] as String,
-            targetId = map["targetId"] as String,
+            conversationId = map["conversation_id"] as String,
+            targetId = map["target_id"] as String,
             mode = VariationType.fromString(map["mode"] as? String)
                 ?: throw IllegalArgumentException("Invalid mode"),
-            newContent = map["newContent"] as? String
+            newContent = map["new_content"] as? String
         )
     }
 }

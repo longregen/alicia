@@ -67,8 +67,8 @@ func (c *Codec) Decode(data []byte) (*protocol.Envelope, error) {
 	}
 
 	var tempEnv struct {
-		StanzaID       int32                  `msgpack:"stanzaId"`
-		ConversationID string                 `msgpack:"conversationId"`
+		StanzaID       int32                  `msgpack:"stanza_id"`
+		ConversationID string                 `msgpack:"conversation_id"`
 		Type           protocol.MessageType   `msgpack:"type"`
 		Meta           map[string]interface{} `msgpack:"meta,omitempty"`
 		Body           msgpack.RawMessage     `msgpack:"body"`

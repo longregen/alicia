@@ -21,13 +21,13 @@ type UpdateConversationRequest struct {
 // ConversationResponse represents a conversation in API responses
 type ConversationResponse struct {
 	ID              string                          `json:"id" msgpack:"id"`
-	UserID          string                          `json:"user_id" msgpack:"userId"`
+	UserID          string                          `json:"user_id" msgpack:"user_id"`
 	Title           string                          `json:"title" msgpack:"title"`
 	Status          string                          `json:"status" msgpack:"status"`
-	LiveKitRoomName string                          `json:"livekit_room_name,omitempty" msgpack:"liveKitRoomName,omitempty"`
+	LiveKitRoomName string                          `json:"livekit_room_name,omitempty" msgpack:"livekit_room_name,omitempty"`
 	Preferences     *models.ConversationPreferences `json:"preferences,omitempty" msgpack:"preferences,omitempty"`
-	CreatedAt       time.Time                       `json:"created_at" msgpack:"createdAt"`
-	UpdatedAt       time.Time                       `json:"updated_at" msgpack:"updatedAt"`
+	CreatedAt       time.Time                       `json:"created_at" msgpack:"created_at"`
+	UpdatedAt       time.Time                       `json:"updated_at" msgpack:"updated_at"`
 }
 
 // ConversationListResponse represents a list of conversations

@@ -18,7 +18,7 @@ export enum MessageType {
   MemoryTrace = 14,
   Commentary = 15,
   AssistantSentence = 16,
-  // WebSocket sync message types
+  // WebSocket sync message types (frontend-only, used for local routing)
   SyncRequest = 17,
   SyncResponse = 18,
 }
@@ -37,8 +37,8 @@ export type VariationType = 'regenerate' | 'edit' | 'continue';
 
 // Envelope wraps all protocol messages
 export interface Envelope {
-  stanzaId: number;
-  conversationId: string;
+  stanza_id: number;
+  conversation_id: string;
   type: MessageType;
   meta?: Record<string, unknown>;
   body: unknown;
@@ -48,79 +48,79 @@ export interface Envelope {
 
 export interface ErrorMessage {
   id: string;
-  conversationId: string;
+  conversation_id: string;
   code: number;
   message: string;
   severity: Severity;
   recoverable: boolean;
-  originatingId?: string;
+  originating_id?: string;
 }
 
 export interface UserMessage {
   id: string;
-  previousId?: string;
-  conversationId: string;
+  previous_id?: string;
+  conversation_id: string;
   content: string;
   timestamp?: number;
 }
 
 export interface AssistantMessage {
   id: string;
-  previousId?: string;
-  conversationId: string;
+  previous_id?: string;
+  conversation_id: string;
   content: string;
   timestamp?: number;
 }
 
 export interface AudioChunk {
-  conversationId: string;
+  conversation_id: string;
   format: string;
   sequence: number;
-  durationMs: number;
-  trackSid?: string;
+  duration_ms: number;
+  track_sid?: string;
   data?: Uint8Array;
-  isLast?: boolean;
+  is_last?: boolean;
   timestamp?: number;
 }
 
 export interface ReasoningStep {
   id: string;
-  messageId: string;
-  conversationId: string;
+  message_id: string;
+  conversation_id: string;
   sequence: number;
   content: string;
 }
 
 export interface ToolUseRequest {
   id: string;
-  messageId: string;
-  conversationId: string;
-  toolName: string;
+  message_id: string;
+  conversation_id: string;
+  tool_name: string;
   parameters: Record<string, unknown>;
   execution: ToolExecution;
-  timeoutMs?: number;
+  timeout_ms?: number;
 }
 
 export interface ToolUseResult {
   id: string;
-  requestId: string;
-  conversationId: string;
+  request_id: string;
+  conversation_id: string;
   success: boolean;
   result?: unknown;
-  errorCode?: string;
-  errorMessage?: string;
+  error_code?: string;
+  error_message?: string;
 }
 
 export interface Acknowledgement {
-  conversationId: string;
-  acknowledgedStanzaId: number;
+  conversation_id: string;
+  acknowledged_stanza_id: number;
   success: boolean;
 }
 
 export interface Transcription {
   id: string;
-  previousId?: string;
-  conversationId: string;
+  previous_id?: string;
+  conversation_id: string;
   text: string;
   final: boolean;
   confidence?: number;
@@ -128,60 +128,60 @@ export interface Transcription {
 }
 
 export interface ControlStop {
-  conversationId: string;
-  targetId?: string;
+  conversation_id: string;
+  target_id?: string;
   reason?: string;
-  stopType?: StopType;
+  stop_type?: StopType;
 }
 
 export interface ControlVariation {
-  conversationId: string;
-  targetId: string;
+  conversation_id: string;
+  target_id: string;
   mode: VariationType;
-  newContent?: string;
+  new_content?: string;
 }
 
 export interface Configuration {
-  conversationId?: string;
-  lastSequenceSeen?: number;
-  clientVersion?: string;
-  preferredLanguage?: string;
+  conversation_id?: string;
+  last_sequence_seen?: number;
+  client_version?: string;
+  preferred_language?: string;
   device?: string;
   features?: string[];
 }
 
 export interface StartAnswer {
   id: string;
-  previousId: string;
-  conversationId: string;
-  answerType?: AnswerType;
-  plannedSentenceCount?: number;
+  previous_id: string;
+  conversation_id: string;
+  answer_type?: AnswerType;
+  planned_sentence_count?: number;
 }
 
 export interface MemoryTrace {
   id: string;
-  messageId: string;
-  conversationId: string;
-  memoryId: string;
+  message_id: string;
+  conversation_id: string;
+  memory_id: string;
   content: string;
   relevance: number;
 }
 
 export interface Commentary {
   id: string;
-  messageId: string;
-  conversationId: string;
+  message_id: string;
+  conversation_id: string;
   content: string;
-  commentaryType?: string;
+  commentary_type?: string;
 }
 
 export interface AssistantSentence {
   id?: string;
-  previousId: string;
-  conversationId: string;
+  previous_id: string;
+  conversation_id: string;
   sequence: number;
   text: string;
-  isFinal?: boolean;
+  is_final?: boolean;
   audio?: Uint8Array;
 }
 

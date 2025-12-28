@@ -16,24 +16,24 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
   if ('synced_messages' in dto) {
     // SyncResponse DTO
     return {
-      stanzaId: 0, // Backend doesn't send stanzaId for sync messages
-      conversationId,
+      stanza_id: 0, // Backend doesn't send stanza_id for sync messages
+      conversation_id: conversationId,
       type: MessageType.SyncResponse,
       body: data,
     };
   } else if ('id' in dto && 'contents' in dto) {
     // MessageResponse DTO (broadcast from other clients)
     return {
-      stanzaId: 0,
-      conversationId,
+      stanza_id: 0,
+      conversation_id: conversationId,
       type: MessageType.AssistantMessage, // Could be user or assistant
       body: data,
     };
-  } else if ('message_id' in dto || 'acknowledgedStanzaId' in dto) {
+  } else if ('message_id' in dto || 'acknowledged_stanza_id' in dto) {
     // Acknowledgement DTO
     return {
-      stanzaId: 0,
-      conversationId,
+      stanza_id: 0,
+      conversation_id: conversationId,
       type: MessageType.Acknowledgement,
       body: data,
     };
@@ -41,8 +41,8 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
 
   // Default to unknown
   return {
-    stanzaId: 0,
-    conversationId,
+    stanza_id: 0,
+    conversation_id: conversationId,
     type: MessageType.ErrorMessage,
     body: data,
   };
@@ -166,8 +166,8 @@ export function useWebSocketSync(
             })),
           };
           const envelope: Envelope = {
-            stanzaId: 0,
-            conversationId: conversationId,
+            stanza_id: 0,
+            conversation_id: conversationId,
             type: MessageType.SyncRequest,
             body: syncRequest,
           };
@@ -245,8 +245,8 @@ export function useWebSocketSync(
         })),
       };
       const envelope: Envelope = {
-        stanzaId: 0,
-        conversationId,
+        stanza_id: 0,
+        conversation_id: conversationId,
         type: MessageType.SyncRequest,
         body: syncRequest,
       };

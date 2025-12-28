@@ -38,15 +38,15 @@ export class ProtocolService {
   ): Envelope {
     const body: UserMessage = {
       id: this.generateId(),
-      conversationId,
+      conversation_id: conversationId,
       content,
-      previousId,
+      previous_id: previousId,
       timestamp: Date.now(),
     };
 
     return {
-      stanzaId: this.nextStanzaId(),
-      conversationId,
+      stanza_id: this.nextStanzaId(),
+      conversation_id: conversationId,
       type: MessageType.UserMessage,
       body,
     };
@@ -61,16 +61,16 @@ export class ProtocolService {
     lastSequenceSeen?: number
   ): Envelope {
     const body: Configuration = {
-      conversationId,
-      clientVersion: '0.1.0',
+      conversation_id: conversationId,
+      client_version: '0.1.0',
       features,
       device: 'web',
-      lastSequenceSeen,
+      last_sequence_seen: lastSequenceSeen,
     };
 
     return {
-      stanzaId: this.nextStanzaId(),
-      conversationId,
+      stanza_id: this.nextStanzaId(),
+      conversation_id: conversationId,
       type: MessageType.Configuration,
       body,
     };
@@ -81,15 +81,15 @@ export class ProtocolService {
    */
   createControlStop(conversationId: string, targetId?: string): Envelope {
     const body: ControlStop = {
-      conversationId,
-      stopType: 'all',
-      targetId,
+      conversation_id: conversationId,
+      stop_type: 'all',
+      target_id: targetId,
       reason: 'user_requested',
     };
 
     return {
-      stanzaId: this.nextStanzaId(),
-      conversationId,
+      stanza_id: this.nextStanzaId(),
+      conversation_id: conversationId,
       type: MessageType.ControlStop,
       body,
     };
@@ -105,15 +105,15 @@ export class ProtocolService {
     newContent?: string
   ): Envelope {
     const body: ControlVariation = {
-      conversationId,
-      targetId,
+      conversation_id: conversationId,
+      target_id: targetId,
       mode: variationType,
-      newContent,
+      new_content: newContent,
     };
 
     return {
-      stanzaId: this.nextStanzaId(),
-      conversationId,
+      stanza_id: this.nextStanzaId(),
+      conversation_id: conversationId,
       type: MessageType.ControlVariation,
       body,
     };
