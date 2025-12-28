@@ -10,10 +10,11 @@ on:
         default: 'e2e'
 
 jobs:
-  e2e-test:
-    name: E2E Tests on Emulator
+  # Stage 1: Build APKs (separate job to avoid disk space issues)
+  build-apks:
+    name: Build Test APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     permissions:
       contents: read
@@ -49,6 +50,50 @@ jobs:
           restore-keys: |
             gradle-build-${{ runner.os }}-
 
+      - name: Build debug APK and test APK
+        working-directory: android
+        run: |
+          nix develop ..#android --command android-fhs-env -c '
+            ./gradlew assembleDebug assembleAndroidTest \
+              --parallel \
+              --no-daemon \
+              --stacktrace
+          '
+
+      - name: Upload APKs for e2e tests
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.artifact_prefix }}-apks
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 1
+
+  # Stage 2: Run E2E tests on emulator (separate job with fresh disk)
+  run-e2e-tests:
+    name: E2E Tests on Emulator
+    needs: build-apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b # v8
+
+      - name: Enable unprivileged user namespaces for bwrap
+        run: |
+          # buildFHSEnv uses bubblewrap which requires user namespaces
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -64,15 +109,11 @@ jobs:
             ~/.android/adb*
           key: avd-api-34-${{ runner.os }}
 
-      - name: Build debug APK and test APK
-        working-directory: android
-        run: |
-          nix develop ..#android --command android-fhs-env -c '
-            ./gradlew assembleDebug assembleAndroidTest \
-              --parallel \
-              --no-daemon \
-              --stacktrace
-          '
+      - name: Download APKs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ inputs.artifact_prefix }}-apks
+          path: android/app/build/outputs
 
       - name: Download system images
         run: |
@@ -98,9 +139,13 @@ jobs:
             adb wait-for-device
             adb shell "while [ -z \$(getprop sys.boot_completed) ]; do sleep 1; done"
 
-            # Run tests and capture exit code
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-            TEST_EXIT_CODE=$?
+            # Install APKs
+            adb install -t app/build/outputs/apk/debug/app-debug.apk
+            adb install -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+            # Run instrumentation tests
+            adb shell am instrument -w -e debug false \
+              org.localforge.alicia.debug.test/androidx.test.runner.AndroidJUnitRunner || TEST_EXIT_CODE=$?
 
             # Capture screenshot (always run for debugging)
             mkdir -p screenshots
@@ -110,7 +155,7 @@ jobs:
             kill $EMULATOR_PID 2>/dev/null || true
 
             # Exit with test result code
-            exit $TEST_EXIT_CODE
+            exit ${TEST_EXIT_CODE:-0}
           '
 
       - name: Upload test results
