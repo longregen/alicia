@@ -1,99 +1,129 @@
 import { pack } from 'msgpackr';
 import { Message } from '../types/models';
-import { SyncResponse, SyncedMessage } from '../types/sync';
+import { SyncResponse, SyncedMessage, SyncRequest } from '../types/sync';
+import { Envelope, MessageType } from '../types/protocol';
 
 /**
- * Builder for creating sync protocol messages
+ * Builder for creating sync protocol messages using standard Envelope format
  */
 export class SyncProtocolBuilder {
   /**
    * Create a sync request envelope
    */
-  static createSyncRequest(messages: Message[]): unknown {
+  static createSyncRequest(messages: Message[], conversationId: string): Envelope {
+    const syncRequest: SyncRequest = {
+      messages: messages.map((msg) => ({
+        local_id: msg.local_id!,
+        sequence_number: msg.sequence_number,
+        previous_id: msg.previous_id,
+        role: msg.role,
+        contents: msg.contents,
+        created_at: msg.created_at,
+        updated_at: msg.updated_at,
+      })),
+    };
+
     return {
-      type: 'sync_request',
-      payload: {
-        messages: messages.map((msg) => ({
-          local_id: msg.local_id,
-          sequence_number: msg.sequence_number,
-          role: msg.role,
-          contents: msg.contents,
-          created_at: msg.created_at,
-        })),
-      },
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.SyncRequest,
+      body: syncRequest,
     };
   }
 
   /**
-   * Create a sync request as MessagePack binary
+   * Create a sync request as MessagePack binary.
+   * Note: Backend expects raw DTO, not wrapped in Envelope.
    */
-  static createSyncRequestBinary(messages: Message[]): Uint8Array {
-    return pack(this.createSyncRequest(messages));
+  static createSyncRequestBinary(messages: Message[], conversationId: string): Uint8Array {
+    const envelope = this.createSyncRequest(messages, conversationId);
+    // Extract body for wire format (backend expects raw DTO)
+    return pack(envelope.body);
   }
 
   /**
    * Create a sync response envelope
    */
   static createSyncResponse(
-    syncedMessages: SyncedMessage[]
-  ): unknown {
+    syncedMessages: SyncedMessage[],
+    conversationId: string
+  ): Envelope {
+    const syncResponse: SyncResponse = {
+      synced_messages: syncedMessages,
+      synced_at: new Date().toISOString(),
+    };
+
     return {
-      type: 'sync_response',
-      payload: {
-        messages: syncedMessages.map((sm) => sm.message),
-      },
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.SyncResponse,
+      body: syncResponse,
     };
   }
 
   /**
-   * Create a sync response as MessagePack binary
+   * Create a sync response as MessagePack binary.
+   * Note: Backend sends raw DTO, not wrapped in Envelope.
    */
   static createSyncResponseBinary(
-    syncedMessages: SyncedMessage[]
+    syncedMessages: SyncedMessage[],
+    conversationId: string
   ): Uint8Array {
-    return pack(this.createSyncResponse(syncedMessages));
+    const envelope = this.createSyncResponse(syncedMessages, conversationId);
+    // Extract body for wire format (backend sends raw DTO)
+    return pack(envelope.body);
   }
 
   /**
    * Create a message envelope for incoming messages
    */
-  static createMessageEnvelope(message: Message): unknown {
+  static createMessageEnvelope(message: Message, conversationId: string): Envelope {
     return {
-      type: 'message',
-      payload: {
-        message,
-      },
+      stanzaId: 0,
+      conversationId,
+      type: message.role === 'user' ? MessageType.UserMessage : MessageType.AssistantMessage,
+      body: message,
     };
   }
 
   /**
-   * Create a message envelope as MessagePack binary
+   * Create a message envelope as MessagePack binary.
+   * Note: Backend sends raw message DTO, not wrapped in Envelope.
    */
-  static createMessageEnvelopeBinary(message: Message): Uint8Array {
-    return pack(this.createMessageEnvelope(message));
+  static createMessageEnvelopeBinary(message: Message, conversationId: string): Uint8Array {
+    const envelope = this.createMessageEnvelope(message, conversationId);
+    // Extract body for wire format (backend sends raw DTO)
+    return pack(envelope.body);
   }
 
   /**
    * Create an acknowledgement envelope
    */
-  static createAckEnvelope(messageId: string, status = 'received'): unknown {
+  static createAckEnvelope(messageId: string, conversationId: string, success = true): Envelope {
     return {
-      type: 'ack',
-      payload: {
-        message_id: messageId,
-        status,
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.Acknowledgement,
+      body: {
+        conversationId,
+        acknowledgedStanzaId: 0,
+        success,
       },
     };
   }
 
   /**
-   * Create an acknowledgement envelope as MessagePack binary
+   * Create an acknowledgement envelope as MessagePack binary.
+   * Note: Backend sends raw DTO, not wrapped in Envelope.
    */
   static createAckEnvelopeBinary(
     messageId: string,
-    status = 'received'
+    conversationId: string,
+    success = true
   ): Uint8Array {
-    return pack(this.createAckEnvelope(messageId, status));
+    const envelope = this.createAckEnvelope(messageId, conversationId, success);
+    // Extract body for wire format (backend sends raw DTO)
+    return pack(envelope.body);
   }
 
   /**

@@ -2,18 +2,58 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { pack, unpack } from 'msgpackr';
 import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
+import { Envelope, MessageType } from '../types/protocol';
+import { SyncRequest, SyncResponse } from '../types/sync';
 
-interface SyncEnvelope {
-  type: 'sync_request' | 'sync_response' | 'message' | 'ack';
-  payload: unknown;
+/**
+ * Adapter to convert backend DTO to Envelope format.
+ * The backend currently sends raw DTOs, but we use Envelope internally for consistency.
+ */
+function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
+  // Detect message type based on DTO structure
+  const dto = data as Record<string, unknown>;
+
+  if ('synced_messages' in dto) {
+    // SyncResponse DTO
+    return {
+      stanzaId: 0, // Backend doesn't send stanzaId for sync messages
+      conversationId,
+      type: MessageType.SyncResponse,
+      body: data,
+    };
+  } else if ('id' in dto && 'contents' in dto) {
+    // MessageResponse DTO (broadcast from other clients)
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.AssistantMessage, // Could be user or assistant
+      body: data,
+    };
+  } else if ('message_id' in dto || 'acknowledgedStanzaId' in dto) {
+    // Acknowledgement DTO
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.Acknowledgement,
+      body: data,
+    };
+  }
+
+  // Default to unknown
+  return {
+    stanzaId: 0,
+    conversationId,
+    type: MessageType.ErrorMessage,
+    body: data,
+  };
 }
 
-interface SyncResponse {
-  messages: Message[];
-}
-
-interface MessagePayload {
-  message: Message;
+/**
+ * Adapter to extract DTO from Envelope for sending to backend.
+ * The backend expects raw DTOs, not Envelope-wrapped messages.
+ */
+function unwrapEnvelope(envelope: Envelope): unknown {
+  return envelope.body;
 }
 
 export interface UseWebSocketSyncOptions {
@@ -48,23 +88,27 @@ export function useWebSocketSync(
     onSyncRef.current = onSync;
   }, [onSync]);
 
-  const handleEnvelope = useCallback((envelope: SyncEnvelope) => {
+  const handleEnvelope = useCallback((envelope: Envelope) => {
     switch (envelope.type) {
-      case 'sync_response': {
-        const response = envelope.payload as SyncResponse;
+      case MessageType.SyncResponse: {
+        const response = envelope.body as SyncResponse;
         // Update local database with synced messages
-        response.messages.forEach(msg => {
-          messageRepository.upsert({
-            ...msg,
-            sync_status: 'synced',
-          });
+        response.synced_messages.forEach(syncedMsg => {
+          if (syncedMsg.message) {
+            messageRepository.upsert({
+              ...syncedMsg.message,
+              sync_status: 'synced',
+            });
+          }
         });
         onSyncRef.current?.();
         break;
       }
 
-      case 'message': {
-        const { message } = envelope.payload as MessagePayload;
+      case MessageType.UserMessage:
+      case MessageType.AssistantMessage: {
+        // Incoming message broadcast from server (e.g., from another client)
+        const message = envelope.body as Message;
         // Save incoming message to database
         messageRepository.upsert({
           ...message,
@@ -74,9 +118,9 @@ export function useWebSocketSync(
         break;
       }
 
-      case 'ack': {
+      case MessageType.Acknowledgement: {
         // Message acknowledged by server
-        console.log('Message acknowledged:', envelope.payload);
+        console.log('Message acknowledged:', envelope.body);
         break;
       }
 
@@ -110,11 +154,25 @@ export function useWebSocketSync(
         // Send initial sync request to get pending messages
         const pendingMessages = messageRepository.getPending();
         if (pendingMessages.length > 0) {
-          const envelope: SyncEnvelope = {
-            type: 'sync_request',
-            payload: { messages: pendingMessages },
+          const syncRequest: SyncRequest = {
+            messages: pendingMessages.map(msg => ({
+              local_id: msg.local_id!,
+              sequence_number: msg.sequence_number,
+              previous_id: msg.previous_id,
+              role: msg.role,
+              contents: msg.contents,
+              created_at: msg.created_at,
+              updated_at: msg.updated_at,
+            })),
           };
-          ws.send(pack(envelope));
+          const envelope: Envelope = {
+            stanzaId: 0,
+            conversationId: conversationId,
+            type: MessageType.SyncRequest,
+            body: syncRequest,
+          };
+          // Backend expects raw DTO, not envelope
+          ws.send(pack(unwrapEnvelope(envelope)));
         }
       };
 
@@ -146,7 +204,9 @@ export function useWebSocketSync(
 
       ws.onmessage = (event) => {
         try {
-          const envelope = unpack(new Uint8Array(event.data)) as SyncEnvelope;
+          // Backend sends raw DTOs, wrap in Envelope for consistent handling
+          const dto = unpack(new Uint8Array(event.data));
+          const envelope = wrapInEnvelope(dto, conversationId);
           handleEnvelope(envelope);
         } catch (err) {
           console.error('Failed to parse WebSocket message:', err);
@@ -159,20 +219,34 @@ export function useWebSocketSync(
     }
   }, [conversationId, enabled, handleEnvelope]);
 
-  const send = useCallback((envelope: SyncEnvelope) => {
+  const send = useCallback((envelope: Envelope) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(pack(envelope));
+      // Backend expects raw DTO, not envelope
+      wsRef.current.send(pack(unwrapEnvelope(envelope)));
     } else {
       console.warn('WebSocket not connected, cannot send message');
     }
   }, []);
 
-  const syncNow = useCallback(() => {
+  const syncNow = useCallback((conversationId: string) => {
     const pendingMessages = messageRepository.getPending();
     if (pendingMessages.length > 0) {
-      const envelope: SyncEnvelope = {
-        type: 'sync_request',
-        payload: { messages: pendingMessages },
+      const syncRequest: SyncRequest = {
+        messages: pendingMessages.map(msg => ({
+          local_id: msg.local_id!,
+          sequence_number: msg.sequence_number,
+          previous_id: msg.previous_id,
+          role: msg.role,
+          contents: msg.contents,
+          created_at: msg.created_at,
+          updated_at: msg.updated_at,
+        })),
+      };
+      const envelope: Envelope = {
+        stanzaId: 0,
+        conversationId: conversationId,
+        type: MessageType.SyncRequest,
+        body: syncRequest,
       };
       send(envelope);
     }

@@ -18,6 +18,9 @@ export enum MessageType {
   MemoryTrace = 14,
   Commentary = 15,
   AssistantSentence = 16,
+  // WebSocket sync message types
+  SyncRequest = 17,
+  SyncResponse = 18,
 }
 
 export enum Severity {

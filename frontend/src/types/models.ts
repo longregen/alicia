@@ -44,6 +44,7 @@ export interface Message {
   server_id?: string;
   sync_status?: SyncStatus;
   synced_at?: string;
+  retry_count?: number;
 
   // Related entities (loaded separately)
   sentences?: AssistantSentence[];
