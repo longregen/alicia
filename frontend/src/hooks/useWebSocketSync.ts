@@ -228,7 +228,9 @@ export function useWebSocketSync(
     }
   }, []);
 
-  const syncNow = useCallback((conversationId: string) => {
+  const syncNow = useCallback(() => {
+    if (!conversationId) return;
+
     const pendingMessages = messageRepository.getPending();
     if (pendingMessages.length > 0) {
       const syncRequest: SyncRequest = {
@@ -244,13 +246,13 @@ export function useWebSocketSync(
       };
       const envelope: Envelope = {
         stanzaId: 0,
-        conversationId: conversationId,
+        conversationId,
         type: MessageType.SyncRequest,
         body: syncRequest,
       };
       send(envelope);
     }
-  }, [send]);
+  }, [conversationId, send]);
 
   useEffect(() => {
     // Reset cleanup flag when starting a new connection

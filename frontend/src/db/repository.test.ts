@@ -139,6 +139,7 @@ describe('repository', () => {
             'Hello, world!',
             'local-1',
             'pending',
+            0, // retry_count
             '2024-01-01T00:00:00Z',
             '2024-01-01T00:00:00Z',
           ]

@@ -99,14 +99,14 @@ export class SyncProtocolBuilder {
   /**
    * Create an acknowledgement envelope
    */
-  static createAckEnvelope(messageId: string, conversationId: string, success = true): Envelope {
+  static createAckEnvelope(stanzaId: number, conversationId: string, success = true): Envelope {
     return {
       stanzaId: 0,
       conversationId,
       type: MessageType.Acknowledgement,
       body: {
         conversationId,
-        acknowledgedStanzaId: 0,
+        acknowledgedStanzaId: stanzaId,
         success,
       },
     };
@@ -117,11 +117,11 @@ export class SyncProtocolBuilder {
    * Note: Backend sends raw DTO, not wrapped in Envelope.
    */
   static createAckEnvelopeBinary(
-    messageId: string,
+    stanzaId: number,
     conversationId: string,
     success = true
   ): Uint8Array {
-    const envelope = this.createAckEnvelope(messageId, conversationId, success);
+    const envelope = this.createAckEnvelope(stanzaId, conversationId, success);
     // Extract body for wire format (backend sends raw DTO)
     return pack(envelope.body);
   }
