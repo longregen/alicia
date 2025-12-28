@@ -555,6 +555,10 @@ func (m *mockToolService) RegisterTool(ctx context.Context, name, description st
 	return nil, nil
 }
 
+func (m *mockToolService) EnsureTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error) {
+	return nil, nil
+}
+
 func (m *mockToolService) RegisterExecutor(name string, executor func(ctx context.Context, arguments map[string]any) (any, error)) error {
 	return nil
 }

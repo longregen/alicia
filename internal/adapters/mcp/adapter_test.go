@@ -76,6 +76,13 @@ func (m *mockToolService) RegisterTool(ctx context.Context, name, description st
 	return tool, nil
 }
 
+func (m *mockToolService) EnsureTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error) {
+	if tool, exists := m.tools[name]; exists {
+		return tool, nil
+	}
+	return m.RegisterTool(ctx, name, description, schema)
+}
+
 func (m *mockToolService) GetByID(ctx context.Context, id string) (*models.Tool, error) {
 	for _, tool := range m.tools {
 		if tool.ID == id {
