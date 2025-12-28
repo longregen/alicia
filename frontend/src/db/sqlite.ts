@@ -32,6 +32,7 @@ export async function initDatabase(): Promise<Database> {
       contents TEXT NOT NULL DEFAULT '',
       local_id TEXT,
       sync_status TEXT DEFAULT 'synced',
+      retry_count INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id)

@@ -4,13 +4,22 @@ import okhttp3.*
 import okio.ByteString
 import org.localforge.alicia.core.network.protocol.Envelope
 import org.localforge.alicia.core.network.protocol.ProtocolHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.min
+import kotlin.math.pow
 
 /**
  * WebSocket connection for real-time message synchronization.
@@ -30,6 +39,19 @@ class SyncWebSocket @Inject constructor(
 
     private var sessionId: String? = null
 
+    // Reconnection logic
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var reconnectJob: Job? = null
+    private var reconnectAttempts = 0
+    private var isIntentionalDisconnect = false
+    private var lastUrl: String? = null
+    private var lastToken: String? = null
+
+    companion object {
+        private const val INITIAL_RECONNECT_DELAY_MS = 1000L
+        private const val MAX_RECONNECT_DELAY_MS = 30000L
+    }
+
     /**
      * Connect to the WebSocket server.
      * @param url WebSocket server URL (e.g., "wss://api.example.com/sync")
@@ -41,6 +63,15 @@ class SyncWebSocket @Inject constructor(
             Timber.w("Already connected or connecting to WebSocket")
             return
         }
+
+        // Cancel any pending reconnection attempt
+        reconnectJob?.cancel()
+        reconnectJob = null
+
+        // Store connection parameters for reconnection
+        lastUrl = url
+        lastToken = token
+        isIntentionalDisconnect = false
 
         _connectionState.value = WebSocketState.Connecting
 
@@ -54,6 +85,8 @@ class SyncWebSocket @Inject constructor(
                 Timber.d("WebSocket connection opened")
                 sessionId = response.header("X-Session-ID") ?: generateSessionId()
                 _connectionState.value = WebSocketState.Connected(sessionId!!)
+                // Reset reconnection attempts on successful connection
+                reconnectAttempts = 0
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -80,22 +113,40 @@ class SyncWebSocket @Inject constructor(
                 Timber.d("WebSocket closed: code=$code, reason=$reason")
                 _connectionState.value = WebSocketState.Disconnected
                 sessionId = null
+
+                // Schedule reconnection if not intentionally disconnected
+                if (!isIntentionalDisconnect && lastUrl != null && lastToken != null) {
+                    scheduleReconnect()
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Timber.e(t, "WebSocket connection failed: ${response?.message}")
                 _connectionState.value = WebSocketState.Error(t)
                 sessionId = null
+
+                // Schedule reconnection if not intentionally disconnected
+                if (!isIntentionalDisconnect && lastUrl != null && lastToken != null) {
+                    scheduleReconnect()
+                }
             }
         })
     }
 
     /**
      * Disconnect from the WebSocket server.
+     * This will prevent automatic reconnection.
      * @param code Close code (default: 1000 for normal closure)
      * @param reason Close reason
      */
     fun disconnect(code: Int = 1000, reason: String? = null) {
+        // Mark as intentional disconnect to prevent reconnection
+        isIntentionalDisconnect = true
+
+        // Cancel any pending reconnection attempt
+        reconnectJob?.cancel()
+        reconnectJob = null
+
         webSocket?.close(code, reason)
         webSocket = null
         _connectionState.value = WebSocketState.Disconnected
@@ -138,6 +189,43 @@ class SyncWebSocket @Inject constructor(
      * Get the current session ID.
      */
     fun getSessionId(): String? = sessionId
+
+    /**
+     * Schedule automatic reconnection with exponential backoff.
+     * Matches the frontend implementation behavior.
+     */
+    private fun scheduleReconnect() {
+        // Cancel any existing reconnection job
+        reconnectJob?.cancel()
+
+        // Calculate delay with exponential backoff: min(1000 * 2^attempts, 30000)
+        val delay = min(
+            INITIAL_RECONNECT_DELAY_MS * 2.0.pow(reconnectAttempts.toDouble()).toLong(),
+            MAX_RECONNECT_DELAY_MS
+        )
+
+        Timber.d("Scheduling reconnection attempt ${reconnectAttempts + 1} in ${delay}ms")
+        reconnectAttempts++
+
+        reconnectJob = scope.launch {
+            delay(delay)
+            if (!isIntentionalDisconnect && lastUrl != null && lastToken != null) {
+                Timber.d("Attempting to reconnect to WebSocket")
+                connect(lastUrl!!, lastToken!!)
+            }
+        }
+    }
+
+    /**
+     * Clean up resources. Should be called when the component is destroyed.
+     */
+    fun cleanup() {
+        isIntentionalDisconnect = true
+        reconnectJob?.cancel()
+        webSocket?.close(1000, "Cleanup")
+        webSocket = null
+        scope.cancel()
+    }
 
     private fun generateSessionId(): String {
         // Generate a simple session ID based on timestamp

@@ -120,8 +120,7 @@ See `.env.example` for full configuration.
 │   └── config/              # Configuration management
 ├── pkg/protocol/            # MessagePack protocol definitions
 ├── migrations/              # Database migrations
-├── docs/                    # Documentation (mdbook)
-└── extra/                   # Experiments and proof-of-concepts
+└── docs/                    # Documentation (mdbook)
 ```
 
 ## Technology Stack
@@ -201,7 +200,6 @@ Used only in `internal/adapters/livekit/audio_converter.go`.
 ## Documentation
 
 - `docs/` - mdbook documentation with architecture, protocol specs, and guides
-- `extra/` - Proof-of-concept experiments (ElectricSQL, MessagePack, PGLite, etc.)
 
 ## License
 

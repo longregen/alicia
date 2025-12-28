@@ -72,7 +72,7 @@ func NewClient(baseURL, apiKey, model string, maxTokens int, temperature float64
 		maxTokens:   maxTokens,
 		temperature: temperature,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second, // Default request timeout
+			Timeout: 60 * time.Second, // Timeout for LLM requests (generous to handle slow responses)
 		},
 		retryConfig: retry.HTTPConfig(),
 	}
