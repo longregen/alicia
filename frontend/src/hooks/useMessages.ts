@@ -111,7 +111,7 @@ export function useMessages(conversationId: string | null) {
 
     try {
       // Send to server
-      const serverMessage = await api.sendMessage(conversationId, { contents: content });
+      const serverMessage = await api.sendMessage(conversationId, { contents: content, local_id: localId });
 
       // Update SQLite with server response
       messageRepository.update(localId, {
