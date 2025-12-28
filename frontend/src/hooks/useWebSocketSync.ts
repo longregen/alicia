@@ -126,6 +126,21 @@ export function useWebSocketSync(
         // Wire format uses camelCase, convert to domain model (snake_case)
         const messageResponse = envelope.body as MessageResponse;
         const message = messageResponseToMessage(messageResponse);
+
+        // Check if this message already exists (handles REST+WebSocket race condition)
+        // This happens when the same client sends via REST API and receives the broadcast
+        const existingByServerId = messageRepository.findByServerId(message.id);
+        if (existingByServerId) {
+          // Already have this message from REST API response, skip to avoid duplicate
+          break;
+        }
+
+        // Also check by the message ID itself (in case it was already inserted)
+        const existingById = messageRepository.findById(message.id);
+        if (existingById) {
+          break;
+        }
+
         // Save incoming message to database
         messageRepository.upsert({
           ...message,
