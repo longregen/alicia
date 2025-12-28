@@ -116,6 +116,22 @@ func (c *Client) GetDimensions() int {
 	return c.dimensions
 }
 
+// curlExample returns a curl command for debugging embedding requests
+func (c *Client) curlExample() string {
+	authHeader := ""
+	if c.apiKey != "" {
+		authHeader = fmt.Sprintf(` -H "Authorization: Bearer %s"`, c.apiKey)
+	}
+	dimField := ""
+	if c.dimensions > 0 {
+		dimField = fmt.Sprintf(`, "dimensions": %d`, c.dimensions)
+	}
+	return fmt.Sprintf(
+		`curl -X POST "%s/v1/embeddings" -H "Content-Type: application/json"%s -d '{"input": "test", "model": "%s"%s}'`,
+		c.baseURL, authHeader, c.model, dimField,
+	)
+}
+
 // embedBatchInternal is the internal implementation for batch embedding
 func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*ports.EmbeddingResult, error) {
 	// Prepare request
@@ -174,7 +190,7 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w (debug: %s)", err, c.curlExample())
 	}
 
 	var embeddingResp EmbeddingResponse
