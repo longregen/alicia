@@ -6,6 +6,53 @@ import { Envelope, MessageType } from '../types/protocol';
 import { SyncRequest, SyncResponse } from '../types/sync';
 
 /**
+ * Converts a backend MessageResponse DTO (camelCase msgpack fields) to frontend Message type (snake_case).
+ * The backend uses camelCase for msgpack serialization but the frontend expects snake_case.
+ */
+function dtoToMessage(dto: Record<string, unknown>): Message {
+  return {
+    id: dto.id as string,
+    conversation_id: (dto.conversationId ?? dto.conversation_id) as string,
+    sequence_number: (dto.sequenceNumber ?? dto.sequence_number) as number,
+    previous_id: (dto.previousId ?? dto.previous_id) as string | undefined,
+    role: dto.role as 'user' | 'assistant' | 'system',
+    contents: dto.contents as string,
+    created_at: (dto.createdAt ?? dto.created_at) as string,
+    updated_at: (dto.updatedAt ?? dto.updated_at) as string,
+    // Preserve any existing sync fields if present
+    local_id: (dto.localId ?? dto.local_id) as string | undefined,
+    server_id: (dto.serverId ?? dto.server_id) as string | undefined,
+    sync_status: (dto.syncStatus ?? dto.sync_status) as 'pending' | 'synced' | 'conflict' | undefined,
+  };
+}
+
+/**
+ * Converts a backend SyncResponse DTO (camelCase msgpack fields) to frontend SyncResponse type (snake_case).
+ */
+function dtoToSyncResponse(dto: Record<string, unknown>): SyncResponse {
+  const syncedMessages = (dto.syncedMessages ?? dto.synced_messages) as Array<Record<string, unknown>> | undefined;
+
+  return {
+    synced_messages: (syncedMessages ?? []).map(sm => ({
+      local_id: (sm.localId ?? sm.local_id) as string,
+      server_id: (sm.serverId ?? sm.server_id) as string,
+      status: sm.status as 'synced' | 'conflict',
+      message: sm.message ? dtoToMessage(sm.message as Record<string, unknown>) : undefined,
+      conflict: sm.conflict ? {
+        reason: (sm.conflict as Record<string, unknown>).reason as string,
+        server_message: (sm.conflict as Record<string, unknown>).serverMessage
+          ? dtoToMessage((sm.conflict as Record<string, unknown>).serverMessage as Record<string, unknown>)
+          : (sm.conflict as Record<string, unknown>).server_message
+            ? dtoToMessage((sm.conflict as Record<string, unknown>).server_message as Record<string, unknown>)
+            : undefined,
+        resolution: (sm.conflict as Record<string, unknown>).resolution as string,
+      } : undefined,
+    })),
+    synced_at: (dto.syncedAt ?? dto.synced_at) as string,
+  };
+}
+
+/**
  * Adapter to convert backend DTO to Envelope format.
  * The backend currently sends raw DTOs, but we use Envelope internally for consistency.
  */
@@ -91,7 +138,8 @@ export function useWebSocketSync(
   const handleEnvelope = useCallback((envelope: Envelope) => {
     switch (envelope.type) {
       case MessageType.SyncResponse: {
-        const response = envelope.body as SyncResponse;
+        // Convert from backend DTO (camelCase) to frontend SyncResponse (snake_case)
+        const response = dtoToSyncResponse(envelope.body as Record<string, unknown>);
         // Update local database with synced messages
         response.synced_messages.forEach(syncedMsg => {
           if (syncedMsg.message) {
@@ -108,7 +156,8 @@ export function useWebSocketSync(
       case MessageType.UserMessage:
       case MessageType.AssistantMessage: {
         // Incoming message broadcast from server (e.g., from another client)
-        const message = envelope.body as Message;
+        // Convert from backend DTO (camelCase) to frontend Message (snake_case)
+        const message = dtoToMessage(envelope.body as Record<string, unknown>);
         // Save incoming message to database
         messageRepository.upsert({
           ...message,
