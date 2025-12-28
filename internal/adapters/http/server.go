@@ -36,6 +36,7 @@ type Server struct {
 	mcpAdapter              *mcp.Adapter
 	generateResponseUseCase ports.GenerateResponseUseCase
 	broadcaster             *handlers.SSEBroadcaster
+	wsBroadcaster           *handlers.WebSocketBroadcaster
 }
 
 func NewServer(
@@ -66,6 +67,7 @@ func NewServer(
 		mcpAdapter:              mcpAdapter,
 		generateResponseUseCase: generateResponseUseCase,
 		broadcaster:             handlers.NewSSEBroadcaster(),
+		wsBroadcaster:           handlers.NewWebSocketBroadcaster(),
 	}
 
 	s.setupRouter()
@@ -124,6 +126,10 @@ func (s *Server) setupRouter() {
 		syncHandler := handlers.NewSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.broadcaster)
 		r.Post("/conversations/{id}/sync", syncHandler.SyncMessages)
 		r.Get("/conversations/{id}/sync/status", syncHandler.GetSyncStatus)
+
+		// WebSocket endpoint for MessagePack sync
+		wsHandler := handlers.NewWebSocketSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster)
+		r.Get("/conversations/{id}/sync/ws", wsHandler.Handle)
 
 		// SSE endpoint for real-time events
 		sseHandler := handlers.NewSSEHandler(s.conversationRepo, s.broadcaster)

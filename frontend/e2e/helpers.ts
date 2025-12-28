@@ -92,7 +92,7 @@ export async function waitForApiResponse(
   page: Page,
   urlPattern: string | RegExp,
   timeout = 10000
-): Promise<any> {
+): Promise<unknown> {
   const response = await page.waitForResponse(
     (response) => {
       const url = response.url();
@@ -113,7 +113,7 @@ export async function waitForApiResponse(
 export async function mockApiEndpoint(
   page: Page,
   urlPattern: string | RegExp,
-  responseData: any,
+  responseData: unknown,
   statusCode = 200
 ) {
   await page.route(urlPattern, (route) => {

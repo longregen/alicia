@@ -4,6 +4,7 @@ import { ChatWindow } from './components/ChatWindow';
 import { Settings } from './components/Settings';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
+import { useDatabase } from './hooks/useDatabase';
 import { MessageProvider } from './contexts/MessageContext';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { Conversation } from './types/models';
@@ -122,6 +123,28 @@ function App() {
     return storage.getSelectedConversationId();
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Initialize database
+  const { isReady, error: dbError } = useDatabase();
+
+  if (dbError) {
+    return (
+      <div className="app-error">
+        <h1>Database Error</h1>
+        <p>{dbError.message}</p>
+        <p>Please refresh the page to try again.</p>
+      </div>
+    );
+  }
+
+  if (!isReady) {
+    return (
+      <div className="app-loading">
+        <div className="loading-spinner"></div>
+        <p>Initializing database...</p>
+      </div>
+    );
+  }
 
   return (
     <ConfigProvider>

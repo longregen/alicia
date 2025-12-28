@@ -58,6 +58,9 @@ type Message struct {
 	// Streaming completion tracking
 	CompletionStatus CompletionStatus `json:"completion_status,omitempty"` // Tracks streaming state
 
+	// Electric sync version tracking
+	ElectricVersion int64 `json:"electric_version,omitempty"` // Version number for electric sync protocol
+
 	// Related entities (loaded separately)
 	Sentences      []*Sentence      `json:"sentences,omitempty"`
 	Audio          *Audio           `json:"audio,omitempty"`
