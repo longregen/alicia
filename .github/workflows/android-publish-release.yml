@@ -14,6 +14,8 @@ jobs:
   check-release:
     name: Check if Release Commit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       is_release: ${{ steps.check.outputs.is_release }}
       version_name: ${{ steps.extract.outputs.version_name }}
