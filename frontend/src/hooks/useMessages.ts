@@ -122,11 +122,13 @@ export function useMessages(conversationId: string | null) {
 
       setRefreshCounter(prev => prev + 1);
       return true;
-    } catch {
-      // Mark message as failed but keep it visible
+    } catch (error) {
+      // Network errors should remain pending for retry, not marked as conflict
+      // Only mark as conflict if server explicitly rejected it
       messageRepository.update(localId, {
-        sync_status: 'conflict',
+        sync_status: 'pending',  // Keep as pending so it can be retried via WebSocket sync
       });
+      messageRepository.incrementRetryCount(localId);
       setRefreshCounter(prev => prev + 1);
       return false;
     } finally {

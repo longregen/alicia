@@ -94,10 +94,21 @@ export function useWebSocketSync(
         const response = envelope.body as SyncResponse;
         // Update local database with synced messages
         response.synced_messages.forEach(syncedMsg => {
-          if (syncedMsg.message) {
-            messageRepository.upsert({
+          const existingMessage = messageRepository.findByLocalId(syncedMsg.local_id);
+
+          if (existingMessage) {
+            // Update existing local message with server data
+            messageRepository.update(existingMessage.id, {
+              server_id: syncedMsg.server_id,
+              sequence_number: syncedMsg.message?.sequence_number,
+              sync_status: syncedMsg.status === 'synced' ? 'synced' : 'conflict',
+            });
+          } else if (syncedMsg.message) {
+            // New message from server (e.g., from another device)
+            messageRepository.insert({
               ...syncedMsg.message,
-              sync_status: 'synced',
+              server_id: syncedMsg.server_id,
+              sync_status: syncedMsg.status === 'synced' ? 'synced' : 'conflict',
             });
           }
         });
@@ -152,7 +163,7 @@ export function useWebSocketSync(
         reconnectAttemptsRef.current = 0;
 
         // Send initial sync request to get pending messages
-        const pendingMessages = messageRepository.getPending();
+        const pendingMessages = messageRepository.getPending(conversationId);
         if (pendingMessages.length > 0) {
           const syncRequest: SyncRequest = {
             messages: pendingMessages.map(msg => ({
@@ -231,7 +242,7 @@ export function useWebSocketSync(
   const syncNow = useCallback(() => {
     if (!conversationId) return;
 
-    const pendingMessages = messageRepository.getPending();
+    const pendingMessages = messageRepository.getPending(conversationId);
     if (pendingMessages.length > 0) {
       const syncRequest: SyncRequest = {
         messages: pendingMessages.map(msg => ({

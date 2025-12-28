@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { messageRepository, conversationRepository } from './repository';
 import { Message, Conversation } from '../types/models';
 import * as sqlite from './sqlite';
@@ -261,11 +261,11 @@ describe('repository', () => {
           },
         ]);
 
-        const pending = messageRepository.getPending();
+        const pending = messageRepository.getPending('conv-1');
 
         expect(mockDb.exec).toHaveBeenCalledWith(
-          expect.stringContaining("WHERE sync_status = ?"),
-          ['pending']
+          expect.stringContaining("WHERE sync_status = ? AND conversation_id = ?"),
+          ['pending', 'conv-1']
         );
 
         expect(pending).toHaveLength(2);
@@ -276,7 +276,7 @@ describe('repository', () => {
       it('should return empty array when no pending messages', () => {
         mockDb.exec.mockReturnValue([]);
 
-        const pending = messageRepository.getPending();
+        const pending = messageRepository.getPending('conv-1');
 
         expect(pending).toEqual([]);
       });
