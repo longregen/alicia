@@ -169,6 +169,7 @@ type LiveKitAgent interface {
 type ToolService interface {
 	// Tool registration and management
 	RegisterTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error)
+	EnsureTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error) // Idempotent: returns existing or creates new
 	RegisterExecutor(name string, executor func(ctx context.Context, arguments map[string]any) (any, error)) error
 	GetByID(ctx context.Context, id string) (*models.Tool, error)
 	GetByName(ctx context.Context, name string) (*models.Tool, error)

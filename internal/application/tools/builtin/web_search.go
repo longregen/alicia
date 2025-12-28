@@ -44,7 +44,7 @@ func RegisterWebSearch(ctx context.Context, toolService ports.ToolService) error
 		"required": []string{"query"},
 	}
 
-	tool, err := toolService.RegisterTool(
+	tool, err := toolService.EnsureTool(
 		ctx,
 		"web_search",
 		"Searches the web for information. Returns a list of search results with titles, URLs, and snippets.",
