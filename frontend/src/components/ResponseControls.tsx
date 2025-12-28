@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useMessageContext } from '../contexts/MessageContext';
-import { Message } from '../types/models';
 
 interface ResponseControlsProps {
   onStop: () => void;
@@ -9,15 +8,9 @@ interface ResponseControlsProps {
 }
 
 export function ResponseControls({ onStop, onRegenerate, disabled = false }: ResponseControlsProps) {
-  const { isGenerating, messages } = useMessageContext();
+  const { isGenerating } = useMessageContext();
   const [isStopping, setIsStopping] = useState(false);
-
-  // Find the last assistant message
-  const lastAssistantMessage = messages
-    .filter((msg: Message) => msg.role === 'assistant')
-    .sort((a: Message, b: Message) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )[0];
+  const [lastMessageId] = useState<string | null>(null);
 
   const handleStop = async () => {
     setIsStopping(true);
@@ -27,13 +20,13 @@ export function ResponseControls({ onStop, onRegenerate, disabled = false }: Res
   };
 
   const handleRegenerate = () => {
-    if (lastAssistantMessage) {
-      onRegenerate(lastAssistantMessage.id);
+    if (lastMessageId) {
+      onRegenerate(lastMessageId);
     }
   };
 
-  // Don't show anything if disabled or no messages
-  if (disabled || messages.length === 0) {
+  // Don't show anything if disabled
+  if (disabled) {
     return null;
   }
 
@@ -83,7 +76,7 @@ export function ResponseControls({ onStop, onRegenerate, disabled = false }: Res
           {isStopping ? 'Stopping...' : 'Stop'}
         </button>
       ) : (
-        lastAssistantMessage && (
+        lastMessageId && (
           <button
             onClick={handleRegenerate}
             className="control-button regenerate-button"

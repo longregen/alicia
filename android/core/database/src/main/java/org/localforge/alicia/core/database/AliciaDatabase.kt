@@ -6,8 +6,10 @@ import androidx.room.TypeConverters
 import org.localforge.alicia.core.database.converter.Converters
 import org.localforge.alicia.core.database.dao.ConversationDao
 import org.localforge.alicia.core.database.dao.MessageDao
+import org.localforge.alicia.core.database.dao.SyncQueueDao
 import org.localforge.alicia.core.database.entity.ConversationEntity
 import org.localforge.alicia.core.database.entity.MessageEntity
+import org.localforge.alicia.core.database.entity.SyncQueueEntity
 
 /**
  * Room database for the Alicia voice assistant.
@@ -16,9 +18,10 @@ import org.localforge.alicia.core.database.entity.MessageEntity
 @Database(
     entities = [
         ConversationEntity::class,
-        MessageEntity::class
+        MessageEntity::class,
+        SyncQueueEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -33,6 +36,11 @@ abstract class AliciaDatabase : RoomDatabase() {
      * DAO for message operations.
      */
     abstract fun messageDao(): MessageDao
+
+    /**
+     * DAO for sync queue operations.
+     */
+    abstract fun syncQueueDao(): SyncQueueDao
 
     companion object {
         const val DATABASE_NAME = "alicia_database"

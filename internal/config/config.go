@@ -59,8 +59,8 @@ type TTSConfig struct {
 type EmbeddingConfig struct {
 	URL        string `json:"url"`
 	APIKey     string `json:"api_key"`
-	Model      string `json:"model"`      // e.g., "text-embedding-3-small"
-	Dimensions int    `json:"dimensions"` // e.g., 1536 for text-embedding-3-small
+	Model      string `json:"model"`      // e.g., "e5-large"
+	Dimensions int    `json:"dimensions"` // e.g., 1024 for e5-large
 }
 
 // DatabaseConfig holds database configuration
@@ -131,8 +131,8 @@ func DefaultConfig() *Config {
 		Embedding: EmbeddingConfig{
 			URL:        "http://localhost:11434/v1",
 			APIKey:     "",
-			Model:      "text-embedding-3-small",
-			Dimensions: 1536,
+			Model:      "e5-large",
+			Dimensions: 1024,
 		},
 		Database: DatabaseConfig{
 			Path:        filepath.Join(dataDir, "alicia.db"),

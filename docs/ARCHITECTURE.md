@@ -70,7 +70,7 @@ graph TD
    - **LiveKit Agents Framework**: Framework for building AI agents
 
 2. **Backend Language & Tools**:
-   - Go 1.22+ (API services, CLI client, conversation management, agent worker)
+   - Go 1.25+ (API services, CLI client, conversation management, agent worker)
    - golangci-lint (static code analysis)
 
 3. **Database & Storage**:
@@ -98,7 +98,7 @@ graph TD
 
 - **Input/Output**: Opus codec at 48kHz (LiveKit negotiated)
 - **Internal Processing**: 16kHz PCM for Whisper
-- **TTS Output**: 24kHz stereo for Kokoro (resampled to 48kHz for LiveKit)
+- **TTS Output**: 24kHz mono for Kokoro (resampled to 48kHz for LiveKit)
 
 ## System Architecture
 
@@ -337,23 +337,29 @@ Alicia is designed to support multiple client implementations. Current status:
   - MessagePack protocol implementation
 - **Deployment**: Static site (Vite build)
 
-#### Mobile App 🚧 PLANNED
+#### Mobile App ✅ IMPLEMENTED
 
-- **Platform**: Android (Kotlin/Java)
-- **Status**: Not yet implemented
-- **Planned Features**:
+- **Platform**: Android (Kotlin/Jetpack Compose)
+- **Current Features**:
   - Native audio capture and playback via LiveKit SDK
-  - Background conversation support
+  - Porcupine wake word detection
+  - Room database for local storage
+  - Background voice service
+  - Hilt dependency injection
+- **Planned Features**:
   - Push notification integration
   - Offline message queueing
 
-#### CLI Tool 🚧 PLANNED
+#### CLI Tool ✅ IMPLEMENTED
 
 - **Language**: Go
-- **Status**: Not yet implemented
+- **Current Features**:
+  - Interactive chat with streaming responses (`chat` command)
+  - Conversation management (create, list, delete)
+  - Text-only mode for terminal sessions
+  - Database integration for persistence
 - **Planned Features**:
   - Terminal-based voice interaction
-  - Text-only mode for SSH sessions
   - Conversation history export
   - Script integration capabilities
 
@@ -829,14 +835,18 @@ All protocol messages use MessagePack for efficient binary serialization:
 ```go
 // Example envelope structure (Go)
 type Envelope struct {
-    StanzaID       int32       `msgpack:"stanzaId"`
-    ConversationID string      `msgpack:"conversationId"`
-    Type           uint16      `msgpack:"type"`
-    Meta           []MetaEntry `msgpack:"meta,omitempty"`
-    OtelSpan       string      `msgpack:"otelSpan,omitempty"`
-    OtelSpanCounter int32      `msgpack:"otelSpanCounter,omitempty"`
-    Body           interface{} `msgpack:"body"`
+    StanzaID       int32                  `msgpack:"stanzaId"`
+    ConversationID string                 `msgpack:"conversationId"`
+    Type           uint16                 `msgpack:"type"`
+    Meta           map[string]interface{} `msgpack:"meta,omitempty"`
+    Body           interface{}            `msgpack:"body"`
 }
+
+// Common meta keys for OpenTelemetry tracing
+const (
+    MetaKeyTraceID = "messaging.trace_id"
+    MetaKeySpanID  = "messaging.span_id"
+)
 
 // Serialize
 data, err := msgpack.Marshal(envelope)
@@ -855,16 +865,16 @@ All 16 protocol message types flow over LiveKit data channels:
 | 2 | UserMessage | Client → Agent | User input |
 | 3 | AssistantMessage | Agent → Client | Complete assistant response (non-streaming) |
 | 4 | AudioChunk | Both | Audio metadata (audio flows on tracks) |
-| 5 | MemoryTrace | Agent → Client | Memory retrieval events |
+| 5 | ReasoningStep | Agent → Client | Chain-of-thought steps |
 | 6 | ToolUseRequest | Agent → Client | Tool execution request |
 | 7 | ToolUseResult | Both | Tool execution result |
-| 8 | ReasoningStep | Agent → Client | Chain-of-thought steps |
+| 8 | Acknowledgement | Both | Message receipt confirmation |
 | 9 | Transcription | Agent → Client | Speech recognition results |
 | 10 | ControlStop | Client → Agent | Stop current response |
 | 11 | ControlVariation | Client → Agent | Request response variation |
 | 12 | Configuration | Both | Capability negotiation |
 | 13 | StartAnswer | Agent → Client | Begin streaming response |
-| 14 | Acknowledgement | Both | Message receipt confirmation |
+| 14 | MemoryTrace | Agent → Client | Memory retrieval events |
 | 15 | Commentary | Agent → Client | Meta-commentary |
 | 16 | AssistantSentence | Agent → Client | Streaming response chunk |
 
@@ -967,7 +977,7 @@ func (a *Agent) handleUserMessage(ctx context.Context, envelope Envelope) {
 }
 ```
 
-Traces flow through the envelope's `otelSpan` and `otelSpanCounter` fields.
+Traces flow through the envelope's `meta` map using the `messaging.trace_id` and `messaging.span_id` keys.
 
 ### Metrics
 
@@ -1075,11 +1085,11 @@ This section provides a clear overview of what is currently implemented versus w
 - [x] Context augmentation with memories
 - [ ] Memory management UI (planned)
 
-### Multi-Platform Support 🚧
+### Multi-Platform Support ✅
 
 - [x] Web frontend (full voice support)
-- [ ] Android app (planned)
-- [ ] CLI tool (planned)
+- [x] Android app (Kotlin/Compose, LiveKit, Porcupine wake word, Room database)
+- [x] CLI tool (interactive chat, conversation management, streaming responses)
 
 ### Future Enhancements 🚧
 

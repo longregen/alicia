@@ -32,7 +32,7 @@ func RegisterMemoryQuery(
 		"required": []string{"query"},
 	}
 
-	tool, err := toolService.RegisterTool(
+	tool, err := toolService.EnsureTool(
 		ctx,
 		"memory_query",
 		"Searches through conversation memories to retrieve relevant past information.",

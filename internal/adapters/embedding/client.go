@@ -51,9 +51,8 @@ func NewClient(baseURL, apiKey, model string, dimensions int) *Client {
 
 // EmbeddingRequest represents the request to the embeddings API
 type EmbeddingRequest struct {
-	Input      interface{} `json:"input"` // Can be string or []string
-	Model      string      `json:"model"`
-	Dimensions int         `json:"dimensions,omitempty"`
+	Input interface{} `json:"input"` // Can be string or []string
+	Model string      `json:"model"`
 }
 
 // EmbeddingResponse represents the response from the embeddings API
@@ -116,6 +115,18 @@ func (c *Client) GetDimensions() int {
 	return c.dimensions
 }
 
+// curlExample returns a curl command for debugging embedding requests
+func (c *Client) curlExample() string {
+	authHeader := ""
+	if c.apiKey != "" {
+		authHeader = fmt.Sprintf(` -H "Authorization: Bearer %s"`, c.apiKey)
+	}
+	return fmt.Sprintf(
+		`curl -X POST "%s/v1/embeddings" -H "Content-Type: application/json"%s -d '{"input": "test", "model": "%s"}'`,
+		c.baseURL, authHeader, c.model,
+	)
+}
+
 // embedBatchInternal is the internal implementation for batch embedding
 func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*ports.EmbeddingResult, error) {
 	// Prepare request
@@ -128,11 +139,6 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 		req.Input = texts[0]
 	} else {
 		req.Input = texts
-	}
-
-	// Set dimensions if specified
-	if c.dimensions > 0 {
-		req.Dimensions = c.dimensions
 	}
 
 	body, err := json.Marshal(req)
@@ -174,7 +180,7 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w (debug: %s)", err, c.curlExample())
 	}
 
 	var embeddingResp EmbeddingResponse

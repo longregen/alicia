@@ -42,7 +42,7 @@ func TestVoiceConversationFlow(t *testing.T) {
 	conversation := fixtures.CreateConversation(ctx, t, "test-conv", "Voice Test")
 
 	// Create a memory for retrieval testing
-	embedding := fixtures.GenerateEmbedding(384)
+	embedding := fixtures.GenerateEmbedding(1024)
 	memory := fixtures.CreateMemoryWithEmbedding(ctx, t, "mem1", "User prefers concise answers", embedding)
 
 	// Register a test tool

@@ -25,7 +25,7 @@ func RegisterCalculator(ctx context.Context, toolService ports.ToolService) erro
 		"required": []string{"expression"},
 	}
 
-	tool, err := toolService.RegisterTool(
+	tool, err := toolService.EnsureTool(
 		ctx,
 		"calculator",
 		"Evaluates mathematical expressions. Supports basic operations (+, -, *, /), exponentiation (^), and functions like sqrt, sin, cos, tan, log, ln, abs, ceil, floor.",

@@ -93,7 +93,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Extends Message
    - Contains user's input text
    - Key attributes:
-     - `content`: The text content of the user's message
+     - `contents`: The text content of the user's message
      - `audio_id`: Optional reference to associated audio
    - Represents the user's side of the conversation
    - May be created from text input or transcribed audio
@@ -102,7 +102,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Extends Message
    - Contains assistant's response text
    - Key attributes:
-     - `content`: The text content of the assistant's response
+     - `contents`: The text content of the assistant's response
      - `audio_id`: Optional reference to associated audio
      - `reasoning_text`: Optional references to reasoning steps
      - `tool_uses`: Optional references to tool uses
@@ -889,65 +889,86 @@ The implementation follows this package structure:
 
 ```
 alicia/
-├── cmd/                    # Application entry points
-│   ├── agent/              # LiveKit agent
-│   │   └── main.go
-│   └── api/                # REST API server
-│       └── main.go
+├── cmd/alicia/             # CLI entry point (unified)
+│   ├── main.go             # Entry point with Cobra commands
+│   ├── agent.go            # LiveKit agent command
+│   ├── serve.go            # HTTP server command
+│   ├── chat.go             # Interactive chat command
+│   ├── conversation.go     # Conversation management commands
+│   └── common.go           # Shared utilities
 ├── internal/               # Private application code
 │   ├── adapters/           # Adapter implementations
-│   │   ├── input/          # Input adapters
-│   │   │   ├── livekit_agent.go
-│   │   │   └── rest_api.go
-│   │   └── output/         # Output adapters
-│   │       ├── database/   # Database adapters
-│   │       │   ├── postgres_message_repository.go
-│   │       │   ├── postgres_conversation_repository.go
-│   │       │   ├── postgres_audio_repository.go
-│   │       │   └── pgvector_memory_repository.go
-│   │       ├── services/   # External service adapters
-│   │       │   ├── speaches_asr.go      # STT via speaches
-│   │       │   ├── speaches_tts.go      # TTS via speaches
-│   │       │   └── litellm_adapter.go   # LLM via LiteLLM
-│   │       └── livekit_room_adapter.go
+│   │   ├── http/           # HTTP API server
+│   │   │   ├── server.go
+│   │   │   ├── handlers/   # Endpoint handlers
+│   │   │   ├── dto/        # Data transfer objects
+│   │   │   └── middleware/ # HTTP middleware
+│   │   ├── postgres/       # Database adapters
+│   │   │   ├── conversation_repository.go
+│   │   │   ├── message_repository.go
+│   │   │   ├── memory_repository.go
+│   │   │   ├── audio_repository.go
+│   │   │   └── sqlc/       # Generated sqlc code
+│   │   ├── livekit/        # LiveKit integration
+│   │   │   └── audio_converter.go  # Opus codec handling
+│   │   ├── speech/         # ASR/TTS adapters
+│   │   ├── embedding/      # Embedding service adapter
+│   │   ├── mcp/            # Model Context Protocol
+│   │   ├── id/             # ID generation (NanoID)
+│   │   └── metrics/        # Prometheus metrics
+│   ├── application/        # Application layer
+│   │   ├── services/       # Application services
+│   │   │   ├── conversation.go
+│   │   │   ├── message.go
+│   │   │   ├── memory.go
+│   │   │   ├── tool.go
+│   │   │   └── audio.go
+│   │   ├── usecases/       # Use case implementations
+│   │   │   ├── generate_response.go
+│   │   │   ├── manage_conversation.go
+│   │   │   └── handle_tool.go
+│   │   ├── chat/           # Chat session logic
+│   │   │   └── session.go
+│   │   └── tools/          # Tool system
+│   │       ├── coordinator.go
+│   │       └── builtin/    # Built-in tools
 │   ├── domain/             # Domain layer
 │   │   ├── models/         # Domain models
 │   │   │   ├── conversation.go
 │   │   │   ├── message.go
 │   │   │   ├── audio.go
 │   │   │   ├── memory.go
-│   │   │   └── tool.go
-│   │   ├── services/       # Domain services
-│   │   │   ├── conversation_service.go
-│   │   │   ├── transcription_service.go
-│   │   │   ├── response_service.go
-│   │   │   ├── memory_service.go
-│   │   │   ├── tool_service.go
-│   │   │   └── audio_service.go
-│   │   └── ports/          # Port interfaces
-│   │       ├── repositories.go
-│   │       ├── external_services.go
-│   │       └── livekit_ports.go
-│   └── application/        # Application layer
-│       └── usecases/       # Use case implementations
-│           ├── start_conversation.go
-│           ├── process_user_message.go
-│           ├── generate_response.go
-│           ├── transcribe_audio.go
-│           ├── synthesize_speech.go
-│           ├── retrieve_memory.go
-│           ├── store_memory.go
-│           ├── execute_tool.go
-│           └── manage_history.go
+│   │   │   ├── tool.go
+│   │   │   ├── reasoning.go
+│   │   │   └── sentence.go
+│   │   └── errors.go       # Domain-specific errors
+│   ├── ports/              # Interface definitions
+│   │   ├── services.go
+│   │   └── repositories.go
+│   ├── llm/                # LLM client
+│   │   ├── client.go
+│   │   └── service.go
+│   └── config/             # Configuration management
+│       └── config.go
 ├── pkg/                    # Public library code
 │   └── protocol/           # Protocol definitions
-│       ├── envelope.go
-│       └── messages.go
-├── config/                 # Configuration files
-│   └── config.yaml
-├── scripts/                # Deployment scripts
-│   ├── setup.sh
-│   └── deploy.sh
+│       ├── types.go        # Message type constants
+│       ├── envelope.go     # Envelope structure
+│       └── messages.go     # Message structures
+├── migrations/             # Database migrations
+│   └── 001_init.up.sql
+├── frontend/               # React web application
+│   └── src/
+│       ├── components/     # UI components
+│       ├── hooks/          # React hooks
+│       ├── services/       # API integration
+│       └── types/          # TypeScript types
+├── android/                # Native Android app
+│   ├── app/                # Main application module
+│   ├── core/               # Shared modules
+│   ├── feature/            # Feature modules
+│   └── service/            # Background services
+├── docs/                   # Documentation (mdbook)
 └── flake.nix               # Nix flake for reproducible builds
 ```
 

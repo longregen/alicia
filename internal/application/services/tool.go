@@ -62,6 +62,40 @@ func (s *ToolService) RegisterTool(ctx context.Context, name, description string
 	return tool, nil
 }
 
+// EnsureTool is an idempotent version of RegisterTool.
+// If a tool with the given name already exists, it returns the existing tool.
+// Otherwise, it creates a new tool with the given parameters.
+func (s *ToolService) EnsureTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error) {
+	if name == "" {
+		return nil, domain.NewDomainError(domain.ErrEmptyContent, "tool name cannot be empty")
+	}
+
+	if description == "" {
+		return nil, domain.NewDomainError(domain.ErrEmptyContent, "tool description cannot be empty")
+	}
+
+	if schema == nil {
+		schema = make(map[string]any)
+	}
+
+	// Check if tool already exists
+	existing, err := s.toolRepo.GetByName(ctx, name)
+	if err == nil && existing != nil {
+		// Tool already exists, return it
+		return existing, nil
+	}
+
+	// Tool doesn't exist, create it
+	id := s.idGenerator.GenerateToolID()
+	tool := models.NewTool(id, name, description, schema)
+
+	if err := s.toolRepo.Create(ctx, tool); err != nil {
+		return nil, domain.NewDomainError(err, "failed to register tool")
+	}
+
+	return tool, nil
+}
+
 func (s *ToolService) RegisterExecutor(name string, executor func(ctx context.Context, arguments map[string]any) (any, error)) error {
 	if name == "" {
 		return domain.NewDomainError(domain.ErrEmptyContent, "tool name cannot be empty")
@@ -71,10 +105,7 @@ func (s *ToolService) RegisterExecutor(name string, executor func(ctx context.Co
 		return domain.NewDomainError(domain.ErrInvalidState, "executor cannot be nil")
 	}
 
-	if _, exists := s.executors[name]; exists {
-		return domain.NewDomainError(domain.ErrInvalidState, "executor for this tool already registered")
-	}
-
+	// Allow re-registration of executors (idempotent behavior for built-in tools)
 	s.executors[name] = executor
 	return nil
 }

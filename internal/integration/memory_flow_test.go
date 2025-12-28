@@ -90,9 +90,9 @@ func TestMemoryFlow_SearchBySimilarity(t *testing.T) {
 	memoryRepo := postgres.NewMemoryRepository(db.Pool)
 
 	// Create memories with embeddings
-	embedding1 := fixtures.GenerateEmbedding(1536)
-	embedding2 := fixtures.GenerateEmbedding(1536)
-	embedding3 := fixtures.GenerateEmbedding(1536)
+	embedding1 := fixtures.GenerateEmbedding(1024)
+	embedding2 := fixtures.GenerateEmbedding(1024)
+	embedding3 := fixtures.GenerateEmbedding(1024)
 
 	// Modify embeddings to create different similarities
 	for i := range embedding1 {
@@ -279,7 +279,7 @@ type mockEmbedder struct{}
 
 func (m *mockEmbedder) GenerateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	// Return a simple mock embedding
-	embedding := make([]float32, 1536)
+	embedding := make([]float32, 1024)
 	for i := range embedding {
 		embedding[i] = 0.5
 	}

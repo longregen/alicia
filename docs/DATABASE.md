@@ -20,10 +20,13 @@ erDiagram
 
     alicia_conversations {
         text id PK
+        text user_id
         text title
         text status
         text livekit_room_name
         jsonb preferences
+        integer last_client_stanza_id
+        integer last_server_stanza_id
     }
 
     alicia_messages {
@@ -33,7 +36,11 @@ erDiagram
         text previous_id FK
         text conversation_id FK
         integer sequence_number
-        text audio_id FK
+        text local_id
+        text server_id
+        sync_status sync_status
+        timestamp synced_at
+        completion_status completion_status
     }
 
     alicia_meta {
@@ -127,6 +134,7 @@ erDiagram
         integer audio_bytesize
         bytea audio_data
         jsonb meta
+        completion_status completion_status
     }
 ```
 
@@ -139,15 +147,18 @@ This table stores information about conversations with Alicia and their associat
 | Field | Type | Description | Relationships |
 |-------|------|-------------|--------------|
 | id | text | Primary key with 'ac' prefix | Referenced by alicia_messages.conversation_id |
+| user_id | text | User identifier for multi-user support and cross-device sync | |
 | title | text | Descriptive title for the conversation | |
 | status | text | Whether the conversation is active, archived, or other | |
 | livekit_room_name | text | LiveKit room name for real-time communication | |
 | preferences | jsonb | User preferences for this conversation (TTS settings, language, etc.) | |
+| last_client_stanza_id | integer | Last stanza ID received from the client (for reconnection support) | |
+| last_server_stanza_id | integer | Last stanza ID sent by the server - negative values (for reconnection support) | |
 | created_at | timestamp | When the conversation was created | |
 | updated_at | timestamp | When the conversation was last updated | |
 | deleted_at | timestamp | When the conversation was soft-deleted | |
 
-**Purpose**: Serves as the top-level container for all messages in a conversation. The `livekit_room_name` field enables reconnection to the same LiveKit room for continued real-time communication. The preferences field allows for conversation-specific settings without needing a separate preferences table.
+**Purpose**: Serves as the top-level container for all messages in a conversation. The `livekit_room_name` field enables reconnection to the same LiveKit room for continued real-time communication. The preferences field allows for conversation-specific settings without needing a separate preferences table. The stanza ID fields track message ordering for reconnection recovery.
 
 **LiveKit Integration**: Each conversation maps to a LiveKit room. When a user reconnects to a conversation, Alicia uses the stored `livekit_room_name` to join the appropriate room and resume real-time audio/data communication.
 
@@ -172,11 +183,16 @@ This table stores individual messages in conversations.
 | previous_id | text | Reference to the previous message in the conversation | Foreign key to alicia_messages.id |
 | message_role | role | Role of the message sender ('user', 'assistant', 'system') | |
 | contents | text | The actual message content | |
+| local_id | text | Client-generated ID before server assignment (for offline support) | |
+| server_id | text | Canonical server-assigned ID (for offline support) | |
+| sync_status | sync_status | Synchronization state: pending, synced, or conflict | |
+| synced_at | timestamp | Timestamp when the message was last synced with the server | |
+| completion_status | completion_status | Tracks message completion: pending, streaming, completed, failed | |
 | created_at | timestamp | When the message was created | |
 | updated_at | timestamp | When the message was last updated | |
 | deleted_at | timestamp | When the message was soft-deleted | |
 
-**Purpose**: Stores the actual content of conversations. The linked list structure (previous_id) combined with sequence_number provides flexibility in message ordering while maintaining performance for sequential access.
+**Purpose**: Stores the actual content of conversations. The linked list structure (previous_id) combined with sequence_number provides flexibility in message ordering while maintaining performance for sequential access. The sync fields enable offline-first functionality with conflict resolution.
 
 **Example Query**: Retrieving conversation history in order:
 ```sql
@@ -203,11 +219,12 @@ This table stores individual sentence chunks from messages, along with their aud
 | audio_bytesize | integer | Size of the audio data in bytes | |
 | audio_data | bytea | The actual audio data for this sentence | |
 | meta | jsonb | Additional metadata about the sentence and audio | |
+| completion_status | completion_status | Tracks sentence completion: pending, streaming, completed, failed | |
 | created_at | timestamp | When the sentence record was created | |
 | updated_at | timestamp | When the sentence was last updated | |
 | deleted_at | timestamp | When the sentence was soft-deleted | |
 
-**Purpose**: Breaks down messages into individual sentences with their corresponding audio segments. This enables streaming text-to-speech output sentence by sentence over LiveKit data channels, providing progressive audio playback rather than waiting for the entire message audio to be generated. Each sentence chunk is transmitted as it becomes available, improving perceived responsiveness.
+**Purpose**: Breaks down messages into individual sentences with their corresponding audio segments. This enables streaming text-to-speech output sentence by sentence over LiveKit data channels, providing progressive audio playback rather than waiting for the entire message audio to be generated. Each sentence chunk is transmitted as it becomes available, improving perceived responsiveness. The completion_status tracks the streaming state of each sentence.
 
 **LiveKit Integration**: As Alicia generates each sentence, the text and audio are sent via LiveKit data channels and simultaneously persisted to this table. This allows for real-time streaming while maintaining a complete record of the conversation.
 

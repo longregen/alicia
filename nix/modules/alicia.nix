@@ -322,23 +322,14 @@ in
         # Resource limits
         LimitNOFILE = "65536";
 
-        # Load secrets via LoadCredential
-        LoadCredential =
-          (optional (cfg.database.urlFile != null) "db-url:${cfg.database.urlFile}")
-          ++ (optional (cfg.llm.apiKeyFile != null) "llm-api-key:${cfg.llm.apiKeyFile}")
-          ++ (optional (cfg.livekit.apiKeyFile != null) "livekit-api-key:${cfg.livekit.apiKeyFile}")
-          ++ (optional (cfg.livekit.apiSecretFile != null) "livekit-api-secret:${cfg.livekit.apiSecretFile}")
-          ++ (optional (cfg.asr.apiKeyFile != null) "asr-api-key:${cfg.asr.apiKeyFile}")
-          ++ (optional (cfg.tts.apiKeyFile != null) "tts-api-key:${cfg.tts.apiKeyFile}")
-          ++ (optional (cfg.embedding.apiKeyFile != null) "embedding-api-key:${cfg.embedding.apiKeyFile}");
       } // (optionalAttrs (cfg.database.autoMigrate && (cfg.database.url != null || cfg.database.urlFile != null)) {
         # Run database migrations before starting the service
         ExecStartPre = pkgs.writeShellScript "alicia-migrate" ''
           set -e
 
-          # Get database URL from credentials or environment
+          # Get database URL from file or config
           ${optionalString (cfg.database.urlFile != null) ''
-            DB_URL=$(cat "$CREDENTIALS_DIRECTORY/db-url")
+            DB_URL=$(cat "${cfg.database.urlFile}")
           ''}
           ${optionalString (cfg.database.url != null && cfg.database.urlFile == null) ''
             DB_URL="${cfg.database.url}"
@@ -416,25 +407,25 @@ in
       # Script to load credentials and start service
       script = ''
         ${optionalString (cfg.database.urlFile != null) ''
-          export ALICIA_POSTGRES_URL=$(cat "$CREDENTIALS_DIRECTORY/db-url")
+          export ALICIA_POSTGRES_URL=$(cat "${cfg.database.urlFile}")
         ''}
         ${optionalString (cfg.llm.apiKeyFile != null) ''
-          export ALICIA_LLM_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/llm-api-key")
+          export ALICIA_LLM_API_KEY=$(cat "${cfg.llm.apiKeyFile}")
         ''}
         ${optionalString (cfg.livekit.enable && cfg.livekit.apiKeyFile != null) ''
-          export ALICIA_LIVEKIT_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/livekit-api-key")
+          export ALICIA_LIVEKIT_API_KEY=$(cat "${cfg.livekit.apiKeyFile}")
         ''}
         ${optionalString (cfg.livekit.enable && cfg.livekit.apiSecretFile != null) ''
-          export ALICIA_LIVEKIT_API_SECRET=$(cat "$CREDENTIALS_DIRECTORY/livekit-api-secret")
+          export ALICIA_LIVEKIT_API_SECRET=$(cat "${cfg.livekit.apiSecretFile}")
         ''}
         ${optionalString (cfg.asr.url != null && cfg.asr.apiKeyFile != null) ''
-          export ALICIA_ASR_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/asr-api-key")
+          export ALICIA_ASR_API_KEY=$(cat "${cfg.asr.apiKeyFile}")
         ''}
         ${optionalString (cfg.tts.url != null && cfg.tts.apiKeyFile != null) ''
-          export ALICIA_TTS_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/tts-api-key")
+          export ALICIA_TTS_API_KEY=$(cat "${cfg.tts.apiKeyFile}")
         ''}
         ${optionalString (cfg.embedding.url != null && cfg.embedding.apiKeyFile != null) ''
-          export ALICIA_EMBEDDING_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/embedding-api-key")
+          export ALICIA_EMBEDDING_API_KEY=$(cat "${cfg.embedding.apiKeyFile}")
         ''}
 
         exec ${cfg.package}/bin/alicia serve
@@ -491,15 +482,6 @@ in
         # Resource limits
         LimitNOFILE = "65536";
 
-        # Load secrets via LoadCredential
-        LoadCredential =
-          (optional (cfg.database.urlFile != null) "db-url:${cfg.database.urlFile}")
-          ++ (optional (cfg.llm.apiKeyFile != null) "llm-api-key:${cfg.llm.apiKeyFile}")
-          ++ (optional (cfg.livekit.apiKeyFile != null) "livekit-api-key:${cfg.livekit.apiKeyFile}")
-          ++ (optional (cfg.livekit.apiSecretFile != null) "livekit-api-secret:${cfg.livekit.apiSecretFile}")
-          ++ (optional (cfg.asr.apiKeyFile != null) "asr-api-key:${cfg.asr.apiKeyFile}")
-          ++ (optional (cfg.tts.apiKeyFile != null) "tts-api-key:${cfg.tts.apiKeyFile}")
-          ++ (optional (cfg.embedding.apiKeyFile != null) "embedding-api-key:${cfg.embedding.apiKeyFile}");
       };
 
       environment = {
@@ -535,25 +517,25 @@ in
       # Script to load credentials and start agent
       script = ''
         ${optionalString (cfg.database.urlFile != null) ''
-          export ALICIA_POSTGRES_URL=$(cat "$CREDENTIALS_DIRECTORY/db-url")
+          export ALICIA_POSTGRES_URL=$(cat "${cfg.database.urlFile}")
         ''}
         ${optionalString (cfg.llm.apiKeyFile != null) ''
-          export ALICIA_LLM_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/llm-api-key")
+          export ALICIA_LLM_API_KEY=$(cat "${cfg.llm.apiKeyFile}")
         ''}
         ${optionalString (cfg.livekit.apiKeyFile != null) ''
-          export ALICIA_LIVEKIT_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/livekit-api-key")
+          export ALICIA_LIVEKIT_API_KEY=$(cat "${cfg.livekit.apiKeyFile}")
         ''}
         ${optionalString (cfg.livekit.apiSecretFile != null) ''
-          export ALICIA_LIVEKIT_API_SECRET=$(cat "$CREDENTIALS_DIRECTORY/livekit-api-secret")
+          export ALICIA_LIVEKIT_API_SECRET=$(cat "${cfg.livekit.apiSecretFile}")
         ''}
         ${optionalString (cfg.asr.url != null && cfg.asr.apiKeyFile != null) ''
-          export ALICIA_ASR_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/asr-api-key")
+          export ALICIA_ASR_API_KEY=$(cat "${cfg.asr.apiKeyFile}")
         ''}
         ${optionalString (cfg.tts.url != null && cfg.tts.apiKeyFile != null) ''
-          export ALICIA_TTS_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/tts-api-key")
+          export ALICIA_TTS_API_KEY=$(cat "${cfg.tts.apiKeyFile}")
         ''}
         ${optionalString (cfg.embedding.url != null && cfg.embedding.apiKeyFile != null) ''
-          export ALICIA_EMBEDDING_API_KEY=$(cat "$CREDENTIALS_DIRECTORY/embedding-api-key")
+          export ALICIA_EMBEDDING_API_KEY=$(cat "${cfg.embedding.apiKeyFile}")
         ''}
 
         exec ${cfg.package}/bin/alicia agent
