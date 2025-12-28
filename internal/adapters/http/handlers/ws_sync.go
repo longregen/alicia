@@ -212,7 +212,7 @@ func (h *WebSocketSyncHandler) processSyncRequest(ctx context.Context, conversat
 
 	return &dto.SyncResponse{
 		SyncedMessages: syncedMessages,
-		SyncedAt:       time.Now(),
+		SyncedAt:       time.Now().Format(time.RFC3339),
 	}
 }
 
