@@ -8,25 +8,25 @@ import (
 
 // SendMessageRequest represents a request to send a message
 type SendMessageRequest struct {
-	Contents string `json:"contents"`
+	Contents string `json:"contents" msgpack:"contents"`
 }
 
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversation_id"`
-	SequenceNumber int       `json:"sequence_number"`
-	PreviousID     string    `json:"previous_id,omitempty"`
-	Role           string    `json:"role"`
-	Contents       string    `json:"contents"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             string    `json:"id" msgpack:"id"`
+	ConversationID string    `json:"conversation_id" msgpack:"conversationId"`
+	SequenceNumber int       `json:"sequence_number" msgpack:"sequenceNumber"`
+	PreviousID     string    `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
+	Role           string    `json:"role" msgpack:"role"`
+	Contents       string    `json:"contents" msgpack:"contents"`
+	CreatedAt      time.Time `json:"created_at" msgpack:"createdAt"`
+	UpdatedAt      time.Time `json:"updated_at" msgpack:"updatedAt"`
 }
 
 // MessageListResponse represents a list of messages
 type MessageListResponse struct {
-	Messages []*MessageResponse `json:"messages"`
-	Total    int                `json:"total"`
+	Messages []*MessageResponse `json:"messages" msgpack:"messages"`
+	Total    int                `json:"total" msgpack:"total"`
 }
 
 // FromModel converts a domain model to a response DTO

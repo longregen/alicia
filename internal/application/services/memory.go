@@ -57,7 +57,7 @@ func (s *MemoryService) CreateWithEmbeddings(ctx context.Context, content string
 
 	result, err := s.embedding.Embed(ctx, content)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate embeddings")
 	}
 
 	id := s.idGenerator.GenerateMemoryID()
@@ -84,7 +84,7 @@ func (s *MemoryService) CreateFromConversation(ctx context.Context, content, con
 	// Generate embeddings before starting transaction (external API call)
 	result, err := s.embedding.Embed(ctx, content)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate embeddings")
 	}
 
 	id := s.idGenerator.GenerateMemoryID()
@@ -169,7 +169,7 @@ func (s *MemoryService) RegenerateEmbeddings(ctx context.Context, id string) (*m
 
 	result, err := s.embedding.Embed(ctx, memory.Content)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate embeddings")
 	}
 
 	embeddingsInfo := &models.EmbeddingsInfo{
@@ -209,7 +209,7 @@ func (s *MemoryService) Search(ctx context.Context, query string, limit int) ([]
 
 	result, err := s.embedding.Embed(ctx, query)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate query embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate query embeddings")
 	}
 
 	results, err := s.memoryRepo.SearchMemories(ctx, ports.MemorySearchOptions{
@@ -245,7 +245,7 @@ func (s *MemoryService) SearchWithThreshold(ctx context.Context, query string, t
 
 	result, err := s.embedding.Embed(ctx, query)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate query embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate query embeddings")
 	}
 
 	results, err := s.memoryRepo.SearchMemories(ctx, ports.MemorySearchOptions{
@@ -562,7 +562,7 @@ func (s *MemoryService) SearchWithScores(ctx context.Context, query string, thre
 
 	result, err := s.embedding.Embed(ctx, query)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate query embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate query embeddings")
 	}
 
 	searchResults, err := s.memoryRepo.SearchMemories(ctx, ports.MemorySearchOptions{
@@ -597,7 +597,7 @@ func (s *MemoryService) SearchWithDynamicImportance(ctx context.Context, query s
 
 	result, err := s.embedding.Embed(ctx, query)
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrEmbeddingsFailed, "failed to generate query embeddings")
+		return nil, domain.NewDomainError(err, "failed to generate query embeddings")
 	}
 
 	searchResults, err := s.memoryRepo.SearchMemories(ctx, ports.MemorySearchOptions{

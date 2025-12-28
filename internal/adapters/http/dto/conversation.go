@@ -8,34 +8,34 @@ import (
 
 // CreateConversationRequest represents a request to create a new conversation
 type CreateConversationRequest struct {
-	Title       string                          `json:"title"`
-	Preferences *models.ConversationPreferences `json:"preferences,omitempty"`
+	Title       string                          `json:"title" msgpack:"title"`
+	Preferences *models.ConversationPreferences `json:"preferences,omitempty" msgpack:"preferences,omitempty"`
 }
 
 // UpdateConversationRequest represents a request to update a conversation
 type UpdateConversationRequest struct {
-	Title       *string                         `json:"title,omitempty"`
-	Preferences *models.ConversationPreferences `json:"preferences,omitempty"`
+	Title       *string                         `json:"title,omitempty" msgpack:"title,omitempty"`
+	Preferences *models.ConversationPreferences `json:"preferences,omitempty" msgpack:"preferences,omitempty"`
 }
 
 // ConversationResponse represents a conversation in API responses
 type ConversationResponse struct {
-	ID              string                          `json:"id"`
-	UserID          string                          `json:"user_id"`
-	Title           string                          `json:"title"`
-	Status          string                          `json:"status"`
-	LiveKitRoomName string                          `json:"livekit_room_name,omitempty"`
-	Preferences     *models.ConversationPreferences `json:"preferences,omitempty"`
-	CreatedAt       time.Time                       `json:"created_at"`
-	UpdatedAt       time.Time                       `json:"updated_at"`
+	ID              string                          `json:"id" msgpack:"id"`
+	UserID          string                          `json:"user_id" msgpack:"userId"`
+	Title           string                          `json:"title" msgpack:"title"`
+	Status          string                          `json:"status" msgpack:"status"`
+	LiveKitRoomName string                          `json:"livekit_room_name,omitempty" msgpack:"liveKitRoomName,omitempty"`
+	Preferences     *models.ConversationPreferences `json:"preferences,omitempty" msgpack:"preferences,omitempty"`
+	CreatedAt       time.Time                       `json:"created_at" msgpack:"createdAt"`
+	UpdatedAt       time.Time                       `json:"updated_at" msgpack:"updatedAt"`
 }
 
 // ConversationListResponse represents a list of conversations
 type ConversationListResponse struct {
-	Conversations []*ConversationResponse `json:"conversations"`
-	Total         int                     `json:"total"`
-	Limit         int                     `json:"limit"`
-	Offset        int                     `json:"offset"`
+	Conversations []*ConversationResponse `json:"conversations" msgpack:"conversations"`
+	Total         int                     `json:"total" msgpack:"total"`
+	Limit         int                     `json:"limit" msgpack:"limit"`
+	Offset        int                     `json:"offset" msgpack:"offset"`
 }
 
 // FromModel converts a domain model to a response DTO

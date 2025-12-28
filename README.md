@@ -64,7 +64,7 @@ A self-hosted, consumer-hardware voice assistant with real-time audio streaming,
 
 ### Prerequisites
 
-- Nix (recommended) or Go 1.24+, Node.js 22+, PostgreSQL with pgvector
+- Nix (recommended) or Go 1.25+, Node.js 22+, PostgreSQL with pgvector
 - LiveKit server
 - LLM server (vLLM with Qwen or compatible)
 - ASR/TTS server (speaches or compatible)
@@ -128,7 +128,7 @@ See `.env.example` for full configuration.
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Go 1.24, Chi, pgx, LiveKit Server SDK |
+| Backend | Go 1.25, Chi, pgx, LiveKit Server SDK |
 | Frontend | React 19, TypeScript, Vite 7, LiveKit Components |
 | Android | Kotlin, Jetpack Compose, Hilt, Room, LiveKit Android SDK |
 | Database | PostgreSQL with pgvector |

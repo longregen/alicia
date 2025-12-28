@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient("http://localhost:11434/v1", "test-key", "text-embedding-3-small", 1536)
+	client := NewClient("http://localhost:11434/v1", "test-key", "e5-large", 1024)
 
 	if client == nil {
 		t.Fatal("expected non-nil client")
@@ -24,20 +24,20 @@ func TestNewClient(t *testing.T) {
 		t.Errorf("expected apiKey to be test-key, got %s", client.apiKey)
 	}
 
-	if client.model != "text-embedding-3-small" {
-		t.Errorf("expected model to be text-embedding-3-small, got %s", client.model)
+	if client.model != "e5-large" {
+		t.Errorf("expected model to be e5-large, got %s", client.model)
 	}
 
-	if client.dimensions != 1536 {
-		t.Errorf("expected dimensions to be 1536, got %d", client.dimensions)
+	if client.dimensions != 1024 {
+		t.Errorf("expected dimensions to be 1024, got %d", client.dimensions)
 	}
 }
 
 func TestGetDimensions(t *testing.T) {
-	client := NewClient("http://localhost:11434/v1", "", "text-embedding-3-small", 1536)
+	client := NewClient("http://localhost:11434/v1", "", "e5-large", 1024)
 
-	if client.GetDimensions() != 1536 {
-		t.Errorf("expected GetDimensions() to return 1536, got %d", client.GetDimensions())
+	if client.GetDimensions() != 1024 {
+		t.Errorf("expected GetDimensions() to return 1024, got %d", client.GetDimensions())
 	}
 }
 
@@ -71,7 +71,7 @@ func TestNewClient_URLNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := NewClient(tt.inputURL, "", "test-model", 1536)
+			client := NewClient(tt.inputURL, "", "test-model", 1024)
 			if client.baseURL != tt.expectedURL {
 				t.Errorf("expected baseURL to be %s, got %s", tt.expectedURL, client.baseURL)
 			}

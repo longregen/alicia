@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
+	"github.com/longregen/alicia/internal/adapters/http/encoding"
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
@@ -64,8 +65,16 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse sync request
-	req, ok := decodeJSON[dto.SyncRequest](r, w)
+	// Parse sync request based on Content-Type
+	contentType := r.Header.Get("Content-Type")
+	var req *dto.SyncRequest
+
+	if contentType == encoding.ContentTypeMsgpack {
+		req, ok = decodeMsgpack[dto.SyncRequest](r, w)
+	} else {
+		req, ok = decodeJSON[dto.SyncRequest](r, w)
+	}
+
 	if !ok {
 		return
 	}
@@ -94,7 +103,13 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		SyncedAt:       time.Now().UTC(),
 	}
 
-	respondJSON(w, response, http.StatusOK)
+	// Respond based on Accept header
+	acceptType := encoding.NegotiateContentType(r)
+	if acceptType == encoding.ContentTypeMsgpack {
+		respondMsgpack(w, response, http.StatusOK)
+	} else {
+		respondJSON(w, response, http.StatusOK)
+	}
 }
 
 // processMessage processes a single message sync request

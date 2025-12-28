@@ -231,7 +231,7 @@ test.describe('End-to-End Integration', () => {
     await page.goto('/');
 
     // Create conversation
-    const conversationId = await conversationHelpers.createConversation();
+    await conversationHelpers.createConversation();
 
     // Simulate network error by going offline
     await page.context().setOffline(true);
