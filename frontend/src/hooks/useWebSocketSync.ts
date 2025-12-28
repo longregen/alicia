@@ -3,17 +3,17 @@ import { pack, unpack } from 'msgpackr';
 import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
 import { Envelope, MessageType } from '../types/protocol';
-import { SyncRequest, SyncResponse } from '../types/sync';
+import { SyncRequest, SyncResponse, MessageResponse, messageResponseToMessage } from '../types/sync';
 
 /**
  * Adapter to convert backend DTO to Envelope format.
  * The backend currently sends raw DTOs, but we use Envelope internally for consistency.
  */
 function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
-  // Detect message type based on DTO structure
+  // Detect message type based on DTO structure (camelCase from msgpack)
   const dto = data as Record<string, unknown>;
 
-  if ('synced_messages' in dto) {
+  if ('syncedMessages' in dto) {
     // SyncResponse DTO
     return {
       stanzaId: 0, // Backend doesn't send stanzaId for sync messages
@@ -29,7 +29,7 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
       type: MessageType.AssistantMessage, // Could be user or assistant
       body: data,
     };
-  } else if ('message_id' in dto || 'acknowledgedStanzaId' in dto) {
+  } else if ('messageId' in dto || 'acknowledgedStanzaId' in dto) {
     // Acknowledgement DTO
     return {
       stanzaId: 0,
@@ -93,10 +93,12 @@ export function useWebSocketSync(
       case MessageType.SyncResponse: {
         const response = envelope.body as SyncResponse;
         // Update local database with synced messages
-        response.synced_messages.forEach(syncedMsg => {
+        response.syncedMessages.forEach(syncedMsg => {
           if (syncedMsg.message) {
+            // Convert wire format (camelCase) to domain model (snake_case)
+            const message = messageResponseToMessage(syncedMsg.message);
             messageRepository.upsert({
-              ...syncedMsg.message,
+              ...message,
               sync_status: 'synced',
             });
           }
@@ -108,7 +110,9 @@ export function useWebSocketSync(
       case MessageType.UserMessage:
       case MessageType.AssistantMessage: {
         // Incoming message broadcast from server (e.g., from another client)
-        const message = envelope.body as Message;
+        // Wire format uses camelCase, convert to domain model (snake_case)
+        const messageResponse = envelope.body as MessageResponse;
+        const message = messageResponseToMessage(messageResponse);
         // Save incoming message to database
         messageRepository.upsert({
           ...message,
@@ -156,13 +160,13 @@ export function useWebSocketSync(
         if (pendingMessages.length > 0) {
           const syncRequest: SyncRequest = {
             messages: pendingMessages.map(msg => ({
-              local_id: msg.local_id!,
-              sequence_number: msg.sequence_number,
-              previous_id: msg.previous_id,
+              localId: msg.local_id!,
+              sequenceNumber: msg.sequence_number,
+              previousId: msg.previous_id,
               role: msg.role,
               contents: msg.contents,
-              created_at: msg.created_at,
-              updated_at: msg.updated_at,
+              createdAt: msg.created_at,
+              updatedAt: msg.updated_at,
             })),
           };
           const envelope: Envelope = {
@@ -235,13 +239,13 @@ export function useWebSocketSync(
     if (pendingMessages.length > 0) {
       const syncRequest: SyncRequest = {
         messages: pendingMessages.map(msg => ({
-          local_id: msg.local_id!,
-          sequence_number: msg.sequence_number,
-          previous_id: msg.previous_id,
+          localId: msg.local_id!,
+          sequenceNumber: msg.sequence_number,
+          previousId: msg.previous_id,
           role: msg.role,
           contents: msg.contents,
-          created_at: msg.created_at,
-          updated_at: msg.updated_at,
+          createdAt: msg.created_at,
+          updatedAt: msg.updated_at,
         })),
       };
       const envelope: Envelope = {

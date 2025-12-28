@@ -1,7 +1,24 @@
 import { pack } from 'msgpackr';
 import { Message } from '../types/models';
-import { SyncResponse, SyncedMessage, SyncRequest } from '../types/sync';
+import { SyncResponse, SyncedMessage, SyncRequest, MessageResponse } from '../types/sync';
 import { Envelope, MessageType } from '../types/protocol';
+
+// Helper to convert domain model (snake_case) to wire format (camelCase)
+function messageToMessageResponse(msg: Message): MessageResponse {
+  return {
+    id: msg.id,
+    conversationId: msg.conversation_id,
+    sequenceNumber: msg.sequence_number,
+    previousId: msg.previous_id,
+    role: msg.role,
+    contents: msg.contents,
+    createdAt: msg.created_at,
+    updatedAt: msg.updated_at,
+    localId: msg.local_id,
+    serverId: msg.server_id,
+    syncStatus: msg.sync_status,
+  };
+}
 
 /**
  * Builder for creating sync protocol messages using standard Envelope format
@@ -13,13 +30,13 @@ export class SyncProtocolBuilder {
   static createSyncRequest(messages: Message[], conversationId: string): Envelope {
     const syncRequest: SyncRequest = {
       messages: messages.map((msg) => ({
-        local_id: msg.local_id!,
-        sequence_number: msg.sequence_number,
-        previous_id: msg.previous_id,
+        localId: msg.local_id!,
+        sequenceNumber: msg.sequence_number,
+        previousId: msg.previous_id,
         role: msg.role,
         contents: msg.contents,
-        created_at: msg.created_at,
-        updated_at: msg.updated_at,
+        createdAt: msg.created_at,
+        updatedAt: msg.updated_at,
       })),
     };
 
@@ -49,8 +66,8 @@ export class SyncProtocolBuilder {
     conversationId: string
   ): Envelope {
     const syncResponse: SyncResponse = {
-      synced_messages: syncedMessages,
-      synced_at: new Date().toISOString(),
+      syncedMessages: syncedMessages,
+      syncedAt: new Date().toISOString(),
     };
 
     return {
@@ -133,16 +150,16 @@ export class SyncProtocolBuilder {
     pendingMessages: Message[]
   ): SyncResponse {
     return {
-      synced_messages: pendingMessages.map((msg) => ({
-        local_id: msg.local_id!,
-        server_id: msg.id,
+      syncedMessages: pendingMessages.map((msg) => ({
+        localId: msg.local_id!,
+        serverId: msg.id,
         status: 'synced',
-        message: {
+        message: messageToMessageResponse({
           ...msg,
           sync_status: 'synced',
-        },
+        }),
       })),
-      synced_at: new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
     };
   }
 
@@ -155,19 +172,19 @@ export class SyncProtocolBuilder {
     reason = 'Content mismatch'
   ): SyncResponse {
     return {
-      synced_messages: [
+      syncedMessages: [
         {
-          local_id: localMessage.local_id!,
-          server_id: serverMessage.id,
+          localId: localMessage.local_id!,
+          serverId: serverMessage.id,
           status: 'conflict',
           conflict: {
             reason,
-            server_message: serverMessage,
+            serverMessage: messageToMessageResponse(serverMessage),
             resolution: 'server_wins',
           },
         },
       ],
-      synced_at: new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
     };
   }
 
@@ -179,31 +196,31 @@ export class SyncProtocolBuilder {
     conflictPairs: Array<{ local: Message; server: Message }>
   ): SyncResponse {
     const syncedMessageResults: SyncedMessage[] = syncedMessages.map((msg) => ({
-      local_id: msg.local_id!,
-      server_id: msg.id,
+      localId: msg.local_id!,
+      serverId: msg.id,
       status: 'synced',
-      message: {
+      message: messageToMessageResponse({
         ...msg,
         sync_status: 'synced',
-      },
+      }),
     }));
 
     const conflictResults: SyncedMessage[] = conflictPairs.map(
       ({ local, server }) => ({
-        local_id: local.local_id!,
-        server_id: server.id,
+        localId: local.local_id!,
+        serverId: server.id,
         status: 'conflict',
         conflict: {
           reason: 'Sequence mismatch',
-          server_message: server,
+          serverMessage: messageToMessageResponse(server),
           resolution: 'server_wins',
         },
       })
     );
 
     return {
-      synced_messages: [...syncedMessageResults, ...conflictResults],
-      synced_at: new Date().toISOString(),
+      syncedMessages: [...syncedMessageResults, ...conflictResults],
+      syncedAt: new Date().toISOString(),
     };
   }
 
