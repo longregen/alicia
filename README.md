@@ -9,8 +9,6 @@ A self-hosted, consumer-hardware voice assistant with real-time audio streaming,
 │                              Clients                                    │
 ├───────────────┬───────────────────────────────┬─────────────────────────┤
 │  Web Frontend │         CLI Tool              │     Android App         │
-│  React 19     │         Cobra                 │     Kotlin/Compose      │
-│  LiveKit SDK  │         Streaming Chat        │     LiveKit SDK         │
 └───────┬───────┴───────────────┬───────────────┴────────────┬────────────┘
         │                       │                            │
         └───────────────────────┼────────────────────────────┘
@@ -21,17 +19,17 @@ A self-hosted, consumer-hardware voice assistant with real-time audio streaming,
 ├─────────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
 │  │   LiveKit   │  │   HTTP API  │  │  LLM Client │  │   Tool System   │ │
-│  │   Agent     │  │   (Chi)     │  │  (LiteLLM)  │  │   (MCP + Builtin│ │
+│  │   Agent     │  │             │  │             │  │ (MCP + Builtin) │ │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └────────┬────────┘ │
 │         │                │                │                  │          │
 │  ┌──────┴────────────────┴────────────────┴──────────────────┴────────┐ │
 │  │                    Application Services                            │ │
-│  │  Conversation │ Message │ Memory │ Tool │ Audio                    │ │
+│  │        Conversation │ Message │ Memory │ Tool │ Audio              │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │         │                                                               │
 │  ┌──────┴──────────────────────────────────────────────────────────────┐│
 │  │                    PostgreSQL + pgvector                            ││
-│  │  Conversations │ Messages │ Memory (embeddings) │ Tools │ MCP       ││
+│  │    Conversations │ Messages │ Memory (embeddings) │ Tools │ MCP     ││
 │  └─────────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────┘
                                 │
@@ -56,9 +54,8 @@ A self-hosted, consumer-hardware voice assistant with real-time audio streaming,
 
 ### Planned
 
-- Multi-user conversations
-- Video/screen sharing
-- Enhanced memory consolidation
+- Debugging, evals, prompt optimization for messages, tool use, and memory
+- Full integration with personal knowledge database systems
 
 ## Quick Start
 
@@ -199,8 +196,8 @@ Used only in `internal/adapters/livekit/audio_converter.go`.
 
 ## Documentation
 
-- `docs/` - mdbook documentation with architecture, protocol specs, and guides
+https://longregen.github.io/alicia
 
 ## License
 
-See LICENSE file.
+MIT

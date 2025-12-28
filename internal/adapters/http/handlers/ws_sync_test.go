@@ -327,7 +327,7 @@ func TestWebSocketSyncHandler_ProcessSyncRequest(t *testing.T) {
 	if len(response.SyncedMessages) != 2 {
 		t.Errorf("expected 2 synced messages, got %d", len(response.SyncedMessages))
 	}
-	if response.SyncedAt.IsZero() {
+	if response.SyncedAt == "" {
 		t.Error("expected SyncedAt to be set")
 	}
 }

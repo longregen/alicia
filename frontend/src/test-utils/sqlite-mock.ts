@@ -33,7 +33,7 @@ export class TestDatabase {
     if (this.db) return this.db;
 
     const SQL = await initSqlJs({
-      locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
+      locateFile: () => '/sql-wasm.wasm',
     });
 
     this.db = new SQL.Database();

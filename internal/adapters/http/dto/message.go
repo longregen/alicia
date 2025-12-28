@@ -13,14 +13,14 @@ type SendMessageRequest struct {
 
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID             string    `json:"id" msgpack:"id"`
-	ConversationID string    `json:"conversation_id" msgpack:"conversationId"`
-	SequenceNumber int       `json:"sequence_number" msgpack:"sequenceNumber"`
-	PreviousID     string    `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
-	Role           string    `json:"role" msgpack:"role"`
-	Contents       string    `json:"contents" msgpack:"contents"`
-	CreatedAt      time.Time `json:"created_at" msgpack:"createdAt"`
-	UpdatedAt      time.Time `json:"updated_at" msgpack:"updatedAt"`
+	ID             string `json:"id" msgpack:"id"`
+	ConversationID string `json:"conversation_id" msgpack:"conversationId"`
+	SequenceNumber int    `json:"sequence_number" msgpack:"sequenceNumber"`
+	PreviousID     string `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
+	Role           string `json:"role" msgpack:"role"`
+	Contents       string `json:"contents" msgpack:"contents"`
+	CreatedAt      string `json:"created_at" msgpack:"createdAt"`
+	UpdatedAt      string `json:"updated_at" msgpack:"updatedAt"`
 }
 
 // MessageListResponse represents a list of messages
@@ -38,8 +38,8 @@ func (r *MessageResponse) FromModel(msg *models.Message) *MessageResponse {
 		PreviousID:     msg.PreviousID,
 		Role:           string(msg.Role),
 		Contents:       msg.Contents,
-		CreatedAt:      msg.CreatedAt,
-		UpdatedAt:      msg.UpdatedAt,
+		CreatedAt:      msg.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      msg.UpdatedAt.Format(time.RFC3339),
 	}
 }
 
