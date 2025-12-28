@@ -76,15 +76,21 @@ jobs:
           # buildFHSEnv uses bubblewrap which requires user namespaces
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
-      - name: Cache Gradle
+      - name: Cache Gradle wrapper
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-wrapper-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Cache Gradle dependencies and build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
-            ~/.gradle/wrapper/dists
             ~/.gradle/caches
-          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
+            android/.gradle
+          key: gradle-build-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle.properties') }}
           restore-keys: |
-            gradle-${{ runner.os }}-
+            gradle-build-${{ runner.os }}-
 
       - name: Build debug APK
         run: |
