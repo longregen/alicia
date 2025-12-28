@@ -17,7 +17,7 @@ test.describe('Voice Workflow', () => {
       };
 
       // Mock AudioContext
-      (window as any).AudioContext = class MockAudioContext {
+      (window as Record<string, unknown>).AudioContext = class MockAudioContext {
         createAnalyser() {
           return {
             fftSize: 256,

@@ -350,3 +350,160 @@ func TestSyncFlow_ReconnectionScenario(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncFlow_WebSocketMessageSync(t *testing.T) {
+	db := SetupTestDB(t)
+	ctx := context.Background()
+	fixtures := NewFixtures(db)
+
+	messageRepo := postgres.NewMessageRepository(db.Pool)
+
+	// Create conversation
+	conversation := fixtures.CreateConversation(ctx, t, "conv1", "WebSocket Sync Test")
+
+	// Test: Sync a local message via WebSocket-style sync
+	localMessage := models.NewLocalMessage("local_ws_1", conversation.ID, 1, models.MessageRoleUser, "WebSocket message")
+	err := messageRepo.Create(ctx, localMessage)
+	if err != nil {
+		t.Fatalf("failed to create local message: %v", err)
+	}
+
+	// Verify initial state
+	if localMessage.SyncStatus != models.SyncStatusPending {
+		t.Errorf("expected sync status 'pending', got '%s'", localMessage.SyncStatus)
+	}
+
+	// Simulate WebSocket sync: mark as synced
+	serverID := "msg_ws_server1"
+	localMessage.MarkAsSynced(serverID)
+	err = messageRepo.Update(ctx, localMessage)
+	if err != nil {
+		t.Fatalf("failed to update message: %v", err)
+	}
+
+	// Verify synced state
+	synced, err := messageRepo.GetByID(ctx, localMessage.ID)
+	if err != nil {
+		t.Fatalf("failed to retrieve synced message: %v", err)
+	}
+
+	if synced.SyncStatus != models.SyncStatusSynced {
+		t.Errorf("expected sync status 'synced', got '%s'", synced.SyncStatus)
+	}
+	if synced.ServerID != serverID {
+		t.Errorf("expected server ID '%s', got '%s'", serverID, synced.ServerID)
+	}
+	if synced.LocalID != "local_ws_1" {
+		t.Errorf("expected local ID 'local_ws_1', got '%s'", synced.LocalID)
+	}
+	if synced.SyncedAt == nil {
+		t.Error("expected synced_at to be set")
+	}
+}
+
+func TestSyncFlow_WebSocketBatchSync(t *testing.T) {
+	db := SetupTestDB(t)
+	ctx := context.Background()
+	fixtures := NewFixtures(db)
+
+	messageRepo := postgres.NewMessageRepository(db.Pool)
+
+	// Create conversation
+	conversation := fixtures.CreateConversation(ctx, t, "conv1", "WebSocket Batch Sync Test")
+
+	// Test: Sync multiple messages in batch (simulating WebSocket batch sync)
+	messages := []*models.Message{
+		models.NewLocalMessage("local_batch_1", conversation.ID, 1, models.MessageRoleUser, "Batch message 1"),
+		models.NewLocalMessage("local_batch_2", conversation.ID, 2, models.MessageRoleAssistant, "Batch message 2"),
+		models.NewLocalMessage("local_batch_3", conversation.ID, 3, models.MessageRoleUser, "Batch message 3"),
+	}
+
+	// Create all messages
+	for _, msg := range messages {
+		err := messageRepo.Create(ctx, msg)
+		if err != nil {
+			t.Fatalf("failed to create message %s: %v", msg.LocalID, err)
+		}
+	}
+
+	// Sync all messages
+	for i, msg := range messages {
+		serverID := "msg_batch_server" + string(rune('1'+i))
+		msg.MarkAsSynced(serverID)
+		err := messageRepo.Update(ctx, msg)
+		if err != nil {
+			t.Fatalf("failed to update message %s: %v", msg.LocalID, err)
+		}
+	}
+
+	// Verify all messages are synced
+	allMessages, err := messageRepo.GetByConversation(ctx, conversation.ID)
+	if err != nil {
+		t.Fatalf("failed to retrieve messages: %v", err)
+	}
+
+	if len(allMessages) != 3 {
+		t.Errorf("expected 3 messages, got %d", len(allMessages))
+	}
+
+	for _, msg := range allMessages {
+		if msg.SyncStatus != models.SyncStatusSynced {
+			t.Errorf("message %s: expected sync status 'synced', got '%s'", msg.LocalID, msg.SyncStatus)
+		}
+		if msg.SyncedAt == nil {
+			t.Errorf("message %s: expected synced_at to be set", msg.LocalID)
+		}
+	}
+}
+
+func TestSyncFlow_WebSocketConflictResolution(t *testing.T) {
+	db := SetupTestDB(t)
+	ctx := context.Background()
+	fixtures := NewFixtures(db)
+
+	messageRepo := postgres.NewMessageRepository(db.Pool)
+
+	// Create conversation
+	conversation := fixtures.CreateConversation(ctx, t, "conv1", "WebSocket Conflict Test")
+
+	// Test: Create a message, then try to sync a different message with same local ID
+	originalMessage := models.NewLocalMessage("local_conflict_1", conversation.ID, 1, models.MessageRoleUser, "Original content")
+	err := messageRepo.Create(ctx, originalMessage)
+	if err != nil {
+		t.Fatalf("failed to create original message: %v", err)
+	}
+
+	// Mark as synced
+	originalMessage.MarkAsSynced("msg_conflict_server1")
+	err = messageRepo.Update(ctx, originalMessage)
+	if err != nil {
+		t.Fatalf("failed to update original message: %v", err)
+	}
+
+	// Try to retrieve message by local ID
+	retrieved, err := messageRepo.GetByLocalID(ctx, "local_conflict_1")
+	if err != nil {
+		t.Fatalf("failed to retrieve message by local ID: %v", err)
+	}
+
+	if retrieved.Contents != "Original content" {
+		t.Errorf("expected contents 'Original content', got '%s'", retrieved.Contents)
+	}
+
+	// Simulate conflict: mark as conflict
+	retrieved.MarkAsConflict()
+	err = messageRepo.Update(ctx, retrieved)
+	if err != nil {
+		t.Fatalf("failed to mark message as conflict: %v", err)
+	}
+
+	// Verify conflict state
+	conflicted, err := messageRepo.GetByID(ctx, retrieved.ID)
+	if err != nil {
+		t.Fatalf("failed to retrieve conflicted message: %v", err)
+	}
+
+	if conflicted.SyncStatus != models.SyncStatusConflict {
+		t.Errorf("expected sync status 'conflict', got '%s'", conflicted.SyncStatus)
+	}
+}

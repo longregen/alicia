@@ -1,4 +1,4 @@
-import { test as base, expect, Page } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 
 // Mock config response for e2e tests
 const mockConfigResponse = {

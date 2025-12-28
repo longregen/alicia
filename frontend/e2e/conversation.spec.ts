@@ -98,7 +98,7 @@ test.describe('Conversation Management', () => {
   });
 
   test('should show empty state when no messages', async ({ page, conversationHelpers }) => {
-    const conversationId = await conversationHelpers.createConversation();
+    await conversationHelpers.createConversation();
 
     // Verify empty state or placeholder
     const chatWindow = page.locator('.chat-window');

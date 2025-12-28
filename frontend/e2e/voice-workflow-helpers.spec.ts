@@ -20,7 +20,7 @@ test.describe('Voice Workflow (Using Helpers)', () => {
         return destination.stream;
       };
 
-      (window as any).AudioContext = class MockAudioContext {
+      (window as Record<string, unknown>).AudioContext = class MockAudioContext {
         createAnalyser() {
           return {
             fftSize: 256,
@@ -41,7 +41,7 @@ test.describe('Voice Workflow (Using Helpers)', () => {
     await conversationHelpers.createConversation();
   });
 
-  test('should activate and deactivate voice mode', async ({ page, voiceHelpers }) => {
+  test('should activate and deactivate voice mode', async ({ voiceHelpers }) => {
     await voiceHelpers.activateVoiceMode();
     expect(await voiceHelpers.isVoiceModeActive()).toBe(true);
 
@@ -78,7 +78,7 @@ test.describe('Voice Workflow (Using Helpers)', () => {
     await expect(page.locator('.voice-selector-panel')).not.toBeVisible();
   });
 
-  test('should complete full voice interaction with helpers', async ({ page, voiceHelpers, conversationHelpers }) => {
+  test('should complete full voice interaction with helpers', async ({ page, voiceHelpers }) => {
     // Activate voice mode
     await voiceHelpers.activateVoiceMode();
     expect(await voiceHelpers.isVoiceModeActive()).toBe(true);
@@ -99,7 +99,7 @@ test.describe('Voice Workflow (Using Helpers)', () => {
     expect(await voiceHelpers.isVoiceModeActive()).toBe(false);
   });
 
-  test('should handle idempotent operations', async ({ page, voiceHelpers }) => {
+  test('should handle idempotent operations', async ({ voiceHelpers }) => {
     // Activating when already active should not cause issues
     await voiceHelpers.activateVoiceMode();
     await voiceHelpers.activateVoiceMode();
