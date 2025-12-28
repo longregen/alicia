@@ -1093,44 +1093,42 @@ This section provides a clear overview of what is currently implemented versus w
 
 ### Future Enhancements 🚧
 
-#### Multi-User Conversations
+#### Frontend UX Enhancements
 
-LiveKit supports multiple participants per room:
+Comprehensive UI improvements to enable users to actively participate in improving AI responses. See the [Frontend UX Enhancement Plan](frontend-ux-plan.md) for complete specifications.
 
-```go
-// Configure room for group conversations
-room, err := livekitAPI.Room.CreateRoom(ctx, &livekit.CreateRoomRequest{
-    Name:            fmt.Sprintf("conv_%s", conversationID),
-    MaxParticipants: 10, // Multiple users + Alicia
-})
-```
+Key features:
+- **Granular Voting System**: Vote on individual messages, tool uses, memory selections, and reasoning steps
+- **User Notes**: Annotate messages with improvement suggestions and corrections
+- **Memory Management**: Full CRUD interface for viewing, editing, and organizing memories
+- **Server Information Panel**: Real-time visibility into connection status, sync state, and model configuration
 
-#### Video Support
+#### DSPy + GEPA Prompt Optimization
 
-LiveKit provides video tracks out of the box:
+Integration of Stanford's DSPy framework with GEPA optimizer for automatic prompt improvement. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for architecture and implementation details.
 
-```typescript
-// Publish camera
-const videoTrack = await createLocalVideoTrack();
-await room.localParticipant.publishTrack(videoTrack);
-```
+Key capabilities:
+- **Automatic Prompt Optimization**: Use GEPA's reflective mutation to evolve better prompts
+- **Tool Usage Optimization**: Improve tool descriptions, argument generation, and result formatting
+- **Memory-Aware Learning**: Leverage conversation memories as few-shot demonstrations
+- **Feedback Loop**: User votes and notes feed directly into optimization metrics
 
-#### Screen Sharing
+#### Silero VAD (Voice Activity Detection)
 
-```typescript
-// Share screen for visual context
-const screenTrack = await createLocalScreenTrack();
-await room.localParticipant.publishTrack(screenTrack);
-```
+Planned integration of Silero VAD in the web frontend to automatically detect when users start and stop speaking, eliminating the need for push-to-talk buttons:
 
-#### Cloud Deployment
+- Browser-based speech detection using Silero VAD
+- Configurable sensitivity threshold
+- Automatic microphone activation on speech
+- Visual indicator showing when speech is detected
 
-For cloud deployment, LiveKit Cloud provides managed infrastructure:
+#### Personal Knowledge Integration
 
-- Global edge network for low latency
-- Automatic scaling
-- Built-in TURN/STUN servers
-- Managed webhooks
+Full integration with personal knowledge database systems:
+
+- Connect to personal wikis and note-taking apps
+- Index local documents for context retrieval
+- Semantic search across personal knowledge bases
 
 ## Conclusion
 

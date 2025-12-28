@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
 )
@@ -107,7 +108,7 @@ func (m *mockMessageRepo) GetByLocalID(ctx context.Context, localID string) (*mo
 			return msg, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, pgx.ErrNoRows
 }
 
 func (m *mockMessageRepo) GetIncompleteOlderThan(ctx context.Context, olderThan time.Time) ([]*models.Message, error) {

@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
+import tailwindcss from '@tailwindcss/vite'
 
 // Versions from package.json for cache-busting
 const vendorVersions: Record<string, string> = {
@@ -11,7 +13,22 @@ const vendorVersions: Record<string, string> = {
 };
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'serve-sql-wasm',
+      configureServer(server) {
+        server.middlewares.use('/sql-wasm.wasm', (_req, res) => {
+          const wasmPath = resolve(__dirname, 'node_modules/sql.js/dist/sql-wasm.wasm')
+          res.setHeader('Content-Type', 'application/wasm')
+          import('fs').then(fs => {
+            fs.createReadStream(wasmPath).pipe(res)
+          })
+        })
+      },
+    },
+  ],
   build: {
     rollupOptions: {
       output: {

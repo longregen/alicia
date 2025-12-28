@@ -9,6 +9,8 @@ livekit-debug.log*
 
 # Dependencies
 node_modules
+public/models/
+public/onnx/
 
 # Build output
 dist
@@ -34,3 +36,7 @@ test-results/
 playwright-report/
 playwright/.cache/
 screenshots/
+e2e/__screenshots__/
+
+# Old files
+new-components

@@ -1,0 +1,14 @@
+{
+  "name": "Alicia Voice Assistant",
+  "short_name": "Alicia",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#10B981",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

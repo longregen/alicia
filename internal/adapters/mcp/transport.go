@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -40,13 +42,60 @@ type StdioTransport struct {
 	receiveCh chan Message
 	closeCh   chan struct{}
 	closeOnce sync.Once
+	wg        sync.WaitGroup // tracks goroutines that send on receiveCh
 	mu        sync.RWMutex
 	connected bool
 }
 
+// validateCommand validates a command and its arguments to prevent command injection.
+// It ensures the command exists as an executable and validates arguments for safety.
+func validateCommand(command string, args []string) (string, error) {
+	// Reject empty commands
+	if command == "" {
+		return "", fmt.Errorf("command cannot be empty")
+	}
+
+	// Reject commands containing shell metacharacters that could enable injection
+	shellMetaChars := regexp.MustCompile(`[;&|$` + "`" + `\(\)<>]`)
+	if shellMetaChars.MatchString(command) {
+		return "", fmt.Errorf("command contains invalid characters")
+	}
+
+	// Use LookPath to resolve the command to its full path
+	// This validates the command exists and is executable
+	cmdPath, err := exec.LookPath(command)
+	if err != nil {
+		return "", fmt.Errorf("command not found: %s", command)
+	}
+
+	// Validate arguments don't contain shell injection patterns
+	for i, arg := range args {
+		if shellMetaChars.MatchString(arg) {
+			return "", fmt.Errorf("argument %d contains invalid characters", i)
+		}
+		// Prevent flag injection for commands that may execute arbitrary code
+		// Some commands (like git, curl) can be tricked with flags like --config
+		// For safety, reject arguments that look like flags attempting to set dangerous options
+		lowerArg := strings.ToLower(arg)
+		if strings.HasPrefix(lowerArg, "--exec") ||
+			strings.HasPrefix(lowerArg, "--config=") ||
+			strings.HasPrefix(lowerArg, "-c=") {
+			return "", fmt.Errorf("argument %d contains potentially dangerous flag", i)
+		}
+	}
+
+	return cmdPath, nil
+}
+
 // NewStdioTransport creates a new stdio transport
 func NewStdioTransport(command string, args []string, env []string) (*StdioTransport, error) {
-	cmd := exec.Command(command, args...)
+	// Validate and resolve the command path to prevent command injection
+	cmdPath, err := validateCommand(command, args)
+	if err != nil {
+		return nil, fmt.Errorf("invalid command: %w", err)
+	}
+
+	cmd := exec.Command(cmdPath, args...)
 	if env != nil {
 		cmd.Env = env
 	}
@@ -89,6 +138,9 @@ func NewStdioTransport(command string, args []string, env []string) (*StdioTrans
 	transport.mu.Lock()
 	transport.connected = true
 	transport.mu.Unlock()
+
+	// Track goroutines that may send to receiveCh
+	transport.wg.Add(2) // readLoop and monitorProcess
 
 	// Start reading from stdout
 	go transport.readLoop()
@@ -159,7 +211,12 @@ func (t *StdioTransport) Close() error {
 			t.stderr.Close()
 		}
 
-		close(t.receiveCh)
+		// Wait for all senders to finish, then close receiveCh
+		// Use a goroutine to avoid blocking Close() indefinitely
+		go func() {
+			t.wg.Wait()
+			close(t.receiveCh)
+		}()
 	})
 	return err
 }
@@ -173,6 +230,8 @@ func (t *StdioTransport) IsConnected() bool {
 
 // readLoop reads messages from stdout
 func (t *StdioTransport) readLoop() {
+	defer t.wg.Done()
+
 	scanner := bufio.NewScanner(t.stdout)
 	// Set a larger buffer size for scanner to handle large messages
 	buf := make([]byte, 0, 64*1024)
@@ -223,6 +282,8 @@ func (t *StdioTransport) readStderr() {
 
 // monitorProcess monitors the process and closes the transport if it exits
 func (t *StdioTransport) monitorProcess() {
+	defer t.wg.Done()
+
 	if err := t.cmd.Wait(); err != nil {
 		t.mu.Lock()
 		if t.connected {
