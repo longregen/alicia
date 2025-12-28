@@ -138,6 +138,7 @@ describe('repository', () => {
             'user',
             'Hello, world!',
             'local-1',
+            null, // server_id
             'pending',
             0, // retry_count
             '2024-01-01T00:00:00Z',
@@ -253,10 +254,10 @@ describe('repository', () => {
       it('should return pending messages', () => {
         mockDb.exec.mockReturnValue([
           {
-            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'sync_status', 'created_at', 'updated_at'],
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
             values: [
-              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', 'pending', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
-              ['msg-2', 'conv-1', 2, 'user', 'World', 'local-2', 'pending', '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
+              ['msg-1', 'conv-1', 1, 'user', 'Hello', 'local-1', null, 'pending', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
+              ['msg-2', 'conv-1', 2, 'user', 'World', 'local-2', null, 'pending', 0, '2024-01-01T00:01:00Z', '2024-01-01T00:01:00Z'],
             ],
           },
         ]);
