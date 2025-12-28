@@ -15,7 +15,7 @@ export function MessageBubble({ message, toolUsages = [], isLatestMessage = fals
         {message.role === 'user' ? 'You' : 'Alicia'}
       </div>
       <div className="message-content">
-        {message.contents}
+        {message.contents.trim()}
       </div>
       {toolUsages.length > 0 && (
         <ToolUsageDisplay toolUsages={toolUsages} isLatestMessage={isLatestMessage} />

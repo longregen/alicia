@@ -111,12 +111,14 @@ export function useMessages(conversationId: string | null) {
 
     try {
       // Send to server
-      const serverMessage = await api.sendMessage(conversationId, { contents: content });
+      const serverMessage = await api.sendMessage(conversationId, { contents: content, local_id: localId });
 
       // Update SQLite with server response
+      // Explicitly set server_id from the server's message ID to enable duplicate detection
       messageRepository.update(localId, {
         ...serverMessage,
         local_id: localId,
+        server_id: serverMessage.id, // The server's ID is in the 'id' field of the response
         sync_status: 'synced',
       });
 

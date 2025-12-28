@@ -25,6 +25,7 @@
           gomod2nix.overlays.default
           (import ./nix/overlays/mdbook-mermaid)
           (import ./nix/overlays/mdbook-mermaid/files.nix)
+          (import ./nix/overlays/sql-wasm)
         ];
         pkgs = import nixpkgs {
           inherit system overlays;

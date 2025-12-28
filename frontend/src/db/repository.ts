@@ -67,6 +67,18 @@ export const messageRepository = {
     return rowToMessage(results[0].values[0]);
   },
 
+  findByServerId(serverId: string): Message | null {
+    const db = getDatabase();
+    const results = db.exec(
+      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE server_id = ?',
+      [serverId]
+    );
+
+    if (results.length === 0 || results[0].values.length === 0) return null;
+
+    return rowToMessage(results[0].values[0]);
+  },
+
   insert(message: Message): void {
     const db = getDatabase();
     db.run(

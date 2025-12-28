@@ -1093,44 +1093,31 @@ This section provides a clear overview of what is currently implemented versus w
 
 ### Future Enhancements 🚧
 
-#### Multi-User Conversations
+#### Silero VAD (Voice Activity Detection)
 
-LiveKit supports multiple participants per room:
+Planned integration of Silero VAD in the web frontend to automatically detect when users start and stop speaking, eliminating the need for push-to-talk buttons:
 
-```go
-// Configure room for group conversations
-room, err := livekitAPI.Room.CreateRoom(ctx, &livekit.CreateRoomRequest{
-    Name:            fmt.Sprintf("conv_%s", conversationID),
-    MaxParticipants: 10, // Multiple users + Alicia
-})
-```
+- Browser-based speech detection using Silero VAD
+- Configurable sensitivity threshold
+- Automatic microphone activation on speech
+- Visual indicator showing when speech is detected
 
-#### Video Support
+#### Debugging, Evals & Prompt Optimization
 
-LiveKit provides video tracks out of the box:
+Planned tooling for improving message quality, tool use, and memory:
 
-```typescript
-// Publish camera
-const videoTrack = await createLocalVideoTrack();
-await room.localParticipant.publishTrack(videoTrack);
-```
+- Evaluation framework for measuring response quality
+- Prompt optimization workflow
+- Debug views for tool execution traces
+- Memory retrieval quality metrics
 
-#### Screen Sharing
+#### Personal Knowledge Integration
 
-```typescript
-// Share screen for visual context
-const screenTrack = await createLocalScreenTrack();
-await room.localParticipant.publishTrack(screenTrack);
-```
+Full integration with personal knowledge database systems:
 
-#### Cloud Deployment
-
-For cloud deployment, LiveKit Cloud provides managed infrastructure:
-
-- Global edge network for low latency
-- Automatic scaling
-- Built-in TURN/STUN servers
-- Managed webhooks
+- Connect to personal wikis and note-taking apps
+- Index local documents for context retrieval
+- Semantic search across personal knowledge bases
 
 ## Conclusion
 

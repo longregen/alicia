@@ -100,7 +100,7 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 	// Return sync response
 	response := &dto.SyncResponse{
 		SyncedMessages: syncedMessages,
-		SyncedAt:       time.Now().UTC(),
+		SyncedAt:       time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Respond based on Accept header
@@ -264,12 +264,17 @@ func (h *SyncHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var lastSyncedAtStr string
+	if lastSyncedAt != nil {
+		lastSyncedAtStr = lastSyncedAt.Format(time.RFC3339)
+	}
+
 	response := &dto.SyncStatusResponse{
 		ConversationID: conversationID,
 		PendingCount:   pendingCount,
 		SyncedCount:    syncedCount,
 		ConflictCount:  conflictCount,
-		LastSyncedAt:   lastSyncedAt,
+		LastSyncedAt:   lastSyncedAtStr,
 	}
 
 	respondJSON(w, response, http.StatusOK)

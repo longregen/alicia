@@ -163,6 +163,19 @@ This document outlines the high-level user stories for the Alicia voice assistan
 - ✅ Clear indication of sync status
 - ✅ Conflict detection and resolution
 
+## 13. Voice Activity Detection (VAD) 🚧
+
+**As a user**, I want Alicia to automatically detect when I start and stop speaking, so that I don't need to press and hold a button to talk.
+
+**Status**: Planned - Silero VAD integration for the web frontend.
+
+**Acceptance Criteria:**
+- 🚧 Automatic speech detection using Silero VAD in the browser
+- 🚧 No push-to-talk button required for voice conversations
+- 🚧 Visual indicator shows when speech is detected
+- 🚧 Configurable sensitivity threshold
+- 🚧 Fallback to manual push-to-talk if preferred
+
 ## Summary
 
 | User Story | Status |
@@ -179,5 +192,6 @@ This document outlines the high-level user stories for the Alicia voice assistan
 | 10. History Management | ✅ Implemented |
 | 11. Context-Aware Assistance | ⚠️ Partial |
 | 12. Offline Mode with Sync | ✅ Implemented |
+| 13. Voice Activity Detection | 🚧 Planned |
 
-**Overall Progress**: 8 fully implemented, 3 partially implemented, 1 planned
+**Overall Progress**: 8 fully implemented, 3 partially implemented, 2 planned
