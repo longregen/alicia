@@ -17,8 +17,15 @@ export function useMessages(conversationId: string | null) {
   const [sending, setSending] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
+  // Callback to refresh UI when WebSocket sync occurs
+  const handleSyncComplete = useCallback(() => {
+    setRefreshCounter(prev => prev + 1);
+  }, []);
+
   // Use sync hook for multi-device sync
-  const { isSyncing, lastSyncTime, syncError, syncNow } = useSync(conversationId);
+  const { isSyncing, lastSyncTime, syncError, syncNow } = useSync(conversationId, {
+    onSync: handleSyncComplete,
+  });
 
   // Refresh messages from SQLite
   const refreshMessages = useCallback(() => {
