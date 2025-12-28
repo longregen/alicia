@@ -18,6 +18,7 @@ type messageFactory func() interface{}
 
 // messageTypeRegistry maps message types to their factory functions
 var messageTypeRegistry = map[protocol.MessageType]messageFactory{
+	// Core protocol messages (1-16)
 	protocol.TypeErrorMessage:      func() interface{} { return &protocol.ErrorMessage{} },
 	protocol.TypeUserMessage:       func() interface{} { return &protocol.UserMessage{} },
 	protocol.TypeAssistantMessage:  func() interface{} { return &protocol.AssistantMessage{} },
@@ -34,6 +35,20 @@ var messageTypeRegistry = map[protocol.MessageType]messageFactory{
 	protocol.TypeMemoryTrace:       func() interface{} { return &protocol.MemoryTrace{} },
 	protocol.TypeCommentary:        func() interface{} { return &protocol.Commentary{} },
 	protocol.TypeAssistantSentence: func() interface{} { return &protocol.AssistantSentence{} },
+	// Feedback and voting messages (20-25)
+	protocol.TypeFeedback:             func() interface{} { return &protocol.Feedback{} },
+	protocol.TypeFeedbackConfirmation: func() interface{} { return &protocol.FeedbackConfirmation{} },
+	protocol.TypeUserNote:             func() interface{} { return &protocol.UserNote{} },
+	protocol.TypeNoteConfirmation:     func() interface{} { return &protocol.NoteConfirmation{} },
+	protocol.TypeMemoryAction:         func() interface{} { return &protocol.MemoryAction{} },
+	protocol.TypeMemoryConfirmation:   func() interface{} { return &protocol.MemoryConfirmation{} },
+	// Server info and stats (26-27)
+	protocol.TypeServerInfo:   func() interface{} { return &protocol.ServerInfo{} },
+	protocol.TypeSessionStats: func() interface{} { return &protocol.SessionStats{} },
+	// Dimension optimization messages (29-31)
+	protocol.TypeDimensionPreference: func() interface{} { return &protocol.DimensionPreference{} },
+	protocol.TypeEliteSelect:         func() interface{} { return &protocol.EliteSelect{} },
+	protocol.TypeEliteOptions:        func() interface{} { return &protocol.EliteOptions{} },
 }
 
 // Encode serializes an envelope to MessagePack bytes
@@ -42,8 +57,8 @@ func (c *Codec) Encode(envelope *protocol.Envelope) ([]byte, error) {
 		return nil, fmt.Errorf("envelope is nil")
 	}
 
-	// Validate message type
-	if envelope.Type < protocol.TypeErrorMessage || envelope.Type > protocol.TypeAssistantSentence {
+	// Validate message type is in the registry
+	if _, ok := messageTypeRegistry[envelope.Type]; !ok {
 		return nil, fmt.Errorf("invalid message type: %d", envelope.Type)
 	}
 

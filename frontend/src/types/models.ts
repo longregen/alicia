@@ -59,6 +59,7 @@ export interface CreateConversationRequest {
 
 export interface CreateMessageRequest {
   contents: string;
+  local_id?: string;
 }
 
 export interface ConversationsResponse {

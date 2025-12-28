@@ -109,6 +109,9 @@ func runAgentWorker(ctx context.Context) error {
 	memoryUsageRepo := postgres.NewMemoryUsageRepository(pool)
 	commentaryRepo := postgres.NewCommentaryRepository(pool)
 	mcpRepo := postgres.NewMCPServerRepository(pool)
+	voteRepo := postgres.NewVoteRepository(pool)
+	noteRepo := postgres.NewNoteRepository(pool)
+	optimizationRepo := postgres.NewOptimizationRepository(pool)
 
 	// Initialize ID generator
 	idGen := id.New()
@@ -177,6 +180,16 @@ func runAgentWorker(ctx context.Context) error {
 		log.Println("Memory service initialized")
 	}
 
+	// Initialize optimization service
+	optimizationConfig := services.DefaultOptimizationConfig()
+	optimizationService := services.NewOptimizationService(
+		optimizationRepo,
+		llmService,
+		idGen,
+		optimizationConfig,
+	)
+	log.Println("Optimization service initialized")
+
 	// Register built-in tools
 	if err := builtin.RegisterAllBuiltinTools(ctx, toolService, memoryRepo, embeddingService); err != nil {
 		log.Printf("Warning: Failed to register built-in tools: %v", err)
@@ -234,6 +247,10 @@ func runAgentWorker(ctx context.Context) error {
 		toolUseRepo,
 		memoryUsageRepo,
 		commentaryRepo,
+		voteRepo,
+		noteRepo,
+		memoryService,
+		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,

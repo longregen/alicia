@@ -96,6 +96,10 @@ type MemoryRepository interface {
 	SearchMemories(ctx context.Context, opts MemorySearchOptions) ([]*MemorySearchResult, error)
 
 	GetByTags(ctx context.Context, tags []string, limit int) ([]*models.Memory, error)
+
+	// Pin and Archive operations
+	Pin(ctx context.Context, id string, pinned bool) error
+	Archive(ctx context.Context, id string) error
 }
 
 // MemoryUsageStats contains statistics about memory usage
@@ -169,6 +173,51 @@ type MCPServerRepository interface {
 	List(ctx context.Context) ([]*models.MCPServer, error)
 }
 
+// VoteRepository handles vote persistence
+type VoteRepository interface {
+	Create(ctx context.Context, vote *models.Vote) error
+	Delete(ctx context.Context, targetType string, targetID string) error
+	GetByTarget(ctx context.Context, targetType string, targetID string) ([]*models.Vote, error)
+	GetByMessage(ctx context.Context, messageID string) ([]*models.Vote, error)
+	GetAggregates(ctx context.Context, targetType string, targetID string) (*models.VoteAggregates, error)
+}
+
+// NoteRepository handles note persistence
+type NoteRepository interface {
+	Create(ctx context.Context, note *models.Note) error
+	Update(ctx context.Context, id string, content string) error
+	Delete(ctx context.Context, id string) error
+	GetByMessage(ctx context.Context, messageID string) ([]*models.Note, error)
+	GetByID(ctx context.Context, id string) (*models.Note, error)
+}
+
+// SessionStatsRepository handles session statistics
+type SessionStatsRepository interface {
+	Create(ctx context.Context, stats *models.SessionStats) error
+	Update(ctx context.Context, stats *models.SessionStats) error
+	GetByConversation(ctx context.Context, conversationID string) (*models.SessionStats, error)
+}
+
+// ListOptimizationRunsOptions contains options for listing optimization runs
+type ListOptimizationRunsOptions struct {
+	Status string // Optional filter by status: "running", "completed", "failed"
+	Limit  int    // Maximum number of runs to return (default: 50)
+	Offset int    // Number of runs to skip for pagination (default: 0)
+}
+
+// PromptOptimizationRepository handles DSPy/GEPA prompt optimization persistence
+type PromptOptimizationRepository interface {
+	CreateRun(ctx context.Context, run *models.OptimizationRun) error
+	GetRun(ctx context.Context, id string) (*models.OptimizationRun, error)
+	UpdateRun(ctx context.Context, run *models.OptimizationRun) error
+	ListRuns(ctx context.Context, opts ListOptimizationRunsOptions) ([]*models.OptimizationRun, error)
+	SaveCandidate(ctx context.Context, runID string, candidate *models.PromptCandidate) error
+	GetCandidates(ctx context.Context, runID string) ([]*models.PromptCandidate, error)
+	GetBestCandidate(ctx context.Context, runID string) (*models.PromptCandidate, error)
+	SaveEvaluation(ctx context.Context, eval *models.PromptEvaluation) error
+	GetEvaluations(ctx context.Context, candidateID string) ([]*models.PromptEvaluation, error)
+}
+
 // TransactionManager handles database transactions
 type TransactionManager interface {
 	// WithTransaction executes a function within a database transaction
@@ -214,6 +263,24 @@ type IDGenerator interface {
 
 	// GenerateMCPServerID generates a new MCP server ID (amcp_xxx)
 	GenerateMCPServerID() string
+
+	// GenerateVoteID generates a new vote ID (av_xxx)
+	GenerateVoteID() string
+
+	// GenerateNoteID generates a new note ID (an_xxx)
+	GenerateNoteID() string
+
+	// GenerateSessionStatsID generates a new session stats ID (ass_xxx)
+	GenerateSessionStatsID() string
+
+	// GenerateOptimizationRunID generates a new optimization run ID (aor_xxx)
+	GenerateOptimizationRunID() string
+
+	// GeneratePromptCandidateID generates a new prompt candidate ID (apc_xxx)
+	GeneratePromptCandidateID() string
+
+	// GeneratePromptEvaluationID generates a new prompt evaluation ID (ape_xxx)
+	GeneratePromptEvaluationID() string
 }
 
 // ToolExecutor executes tools with given arguments

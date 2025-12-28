@@ -1,0 +1,308 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surface colors */
+  --color-surface-50: #f8fafc;
+  --color-surface-100: #f1f5f9;
+  --color-surface-200: #e2e8f0;
+  --color-surface-300: #cbd5e1;
+  --color-surface-400: #94a3b8;
+  --color-surface-500: #64748b;
+  --color-surface-600: #475569;
+  --color-surface-700: #334155;
+  --color-surface-800: #1e293b;
+  --color-surface-900: #0f172a;
+  --color-surface-950: #020617;
+
+  /* Background colors from STYLE.md */
+  --color-main-bg: #050e24;
+  --color-container-bg: rgba(10, 20, 50, 0.7);
+  --color-surface-bg: rgba(20, 40, 90, 0.6);
+  --color-message-received-bg: rgba(32, 124, 229, 0.2);
+  --color-message-sent-bg: #011327cc;
+
+  /* Brand colors from STYLE.md */
+  --color-primary-blue: rgba(32, 124, 229, 0.8);
+  --color-primary-blue-hover: rgba(32, 124, 229, 0.9);
+  --color-primary-blue-active: rgba(32, 125, 229, 1);
+  --color-primary-blue-glow: rgba(32, 124, 229, 0.6);
+
+  /* State colors from STYLE.md */
+  --color-active-speaking: rgba(40, 200, 80, 0.9);
+  --color-inactive-disabled: rgba(128, 128, 128, 0.8);
+  --color-error: rgba(255, 100, 100, 0.9);
+
+  /* Text colors from STYLE.md */
+  --color-primary-text: #e0e6ff;
+  --color-white-text: white;
+  --color-muted-text: rgba(255, 255, 255, 0.6);
+
+  /* Special colors from STYLE.md */
+  --color-reasoning: #9c27b0;
+  --color-tool-use: #2196f3;
+  --color-tool-result: #ff9800;
+  --color-translation-complete: #4CAF50;
+}
+
+/* Custom CSS for smooth animations and transitions */
+@layer base {
+  html {
+    @apply text-surface-900 dark:text-surface-100;
+    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-surface-50 dark:bg-surface-900 transition-colors duration-300;
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+  }
+
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+/* Storybook Docs overrides for dark mode */
+.docs-story,
+.sbdocs-wrapper,
+.sbdocs-content,
+.sbdocs-preview {
+  background-color: transparent !important;
+}
+
+.dark .docs-story,
+.dark .sbdocs-wrapper,
+.dark .sbdocs-content {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+}
+
+.dark .sbdocs h1,
+.dark .sbdocs h2,
+.dark .sbdocs h3,
+.dark .sbdocs h4,
+.dark .sbdocs h5,
+.dark .sbdocs h6,
+.dark .sbdocs-title {
+  color: #f1f5f9 !important;
+}
+
+.dark .sbdocs p,
+.dark .sbdocs span,
+.dark .sbdocs div {
+  color: #e2e8f0 !important;
+}
+
+.dark .sbdocs pre,
+.dark .sbdocs code {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+.dark .sbdocs table {
+  color: #f1f5f9 !important;
+}
+
+.dark .sbdocs th {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+.dark .sbdocs td {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+/* Additional Storybook CSS class overrides */
+.dark .css-11xgcgt,
+.dark .css-1fdphfk,
+.dark .css-14m39zm,
+.dark .css-v2ifgj,
+.dark .css-4lbn0a,
+.dark .css-in3yi3,
+.dark .css-18pz2h2,
+.dark .css-1ije3e2,
+.dark .css-13nzt7e,
+.dark .css-o1d7ko,
+.dark .css-obbby0,
+.dark .css-14o1cbe,
+.dark .css-k008qs,
+.dark .css-r7fl1p,
+.dark .css-177r6r9,
+.dark .css-10lkeuu,
+.dark .css-1vgq5xr,
+.dark .css-jy82ux,
+.dark .css-wzniqs,
+.dark .css-1ofkq6d,
+.dark .css-s230ta,
+.dark .css-kdwx3d,
+.dark .css-1erac46,
+.dark .css-1j788oe,
+.dark .css-pgmbsj,
+.dark .css-1k2hs4d,
+.dark .css-1i5lbud,
+.dark .css-cmemei,
+.dark .css-1tt1zzx,
+.dark .css-9nwgnc {
+  background-color: transparent !important;
+}
+
+/* Storybook specific elements */
+.dark .docblock-argstable {
+  background-color: #1e293b !important;
+}
+
+.dark .docblock-argstable-head {
+  background-color: #334155 !important;
+}
+
+.dark .docblock-argstable-body {
+  background-color: #1e293b !important;
+}
+
+.dark .docblock-code-toggle {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+
+.dark .sb-bar {
+  background-color: #1e293b !important;
+}
+
+.dark .css-1980ace {
+  background-color: #1e293b !important;
+}
+
+.dark .css-18rvurk {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark .css-18rvurk:hover {
+  background-color: #475569 !important;
+}
+
+/* Input and select elements */
+.dark .css-14o1cbe,
+.dark .css-r7fl1p {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+/* Buttons */
+.dark .css-10lkeuu,
+.dark .css-1vgq5xr,
+.dark .css-1cu29rp {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+
+.dark .css-10lkeuu:hover,
+.dark .css-1vgq5xr:hover,
+.dark .css-1cu29rp:hover {
+  background-color: #475569 !important;
+}
+
+/* Story preview backgrounds */
+.dark .sb-story {
+  background-color: #0f172a !important;
+}
+
+.dark .innerZoomElementWrapper {
+  background-color: #0f172a !important;
+}
+
+@layer components {
+  .animate-recording-pulse {
+    animation: recording-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes recording-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.8;
+    }
+  }
+
+  .animate-typing {
+    animation: typing 1.4s infinite;
+  }
+
+  @keyframes typing {
+    0%, 44% {
+      opacity: 1;
+    }
+    45%, 55% {
+      opacity: 0.5;
+    }
+    56%, 100% {
+      opacity: 1;
+    }
+  }
+
+  .animate-volume-bar {
+    animation: volume-pulse 0.3s ease-in-out;
+  }
+
+  @keyframes volume-pulse {
+    0% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
+    100% { transform: scaleY(var(--volume-height, 0.5)); }
+  }
+
+  .animate-bounce-once {
+    animation: bounce-once 0.4s ease-in-out;
+  }
+
+  @keyframes bounce-once {
+    0%, 100% {
+      transform: translateY(0%);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+      transform: translateY(-25%);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+
+  /* Button glow effects */
+  .glow-primary {
+    box-shadow: 0 0 15px rgba(32, 124, 229, 0.5);
+  }
+
+  .glow-primary-hover {
+    box-shadow: 0 0 15px rgba(32, 124, 229, 0.7);
+  }
+
+  .glow-recording {
+    box-shadow: 0 0 20px rgba(32, 124, 229, 0.9);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+  }
+
+  .glow-error {
+    box-shadow: 0 0 15px rgba(255, 100, 100, 0.5);
+  }
+
+  /* Message effects */
+  .shadow-translation {
+    box-shadow: -2px 2px 8px rgba(30, 41, 59, 0.5), -1px 1px 4px rgba(30, 41, 59, 0.4);
+  }
+}

@@ -651,3 +651,43 @@ func (s *MemoryService) SearchWithDynamicImportance(ctx context.Context, query s
 
 	return memories, nil
 }
+
+// Pin sets the pinned status of a memory
+func (s *MemoryService) Pin(ctx context.Context, id string, pinned bool) (*models.Memory, error) {
+	if id == "" {
+		return nil, domain.NewDomainError(domain.ErrInvalidID, "memory ID cannot be empty")
+	}
+
+	// Update pin status in repository
+	if err := s.memoryRepo.Pin(ctx, id, pinned); err != nil {
+		return nil, domain.NewDomainError(err, "failed to pin memory")
+	}
+
+	// Fetch and return updated memory
+	memory, err := s.memoryRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, domain.NewDomainError(err, "failed to retrieve updated memory")
+	}
+
+	return memory, nil
+}
+
+// Archive archives a memory
+func (s *MemoryService) Archive(ctx context.Context, id string) (*models.Memory, error) {
+	if id == "" {
+		return nil, domain.NewDomainError(domain.ErrInvalidID, "memory ID cannot be empty")
+	}
+
+	// Update archive status in repository
+	if err := s.memoryRepo.Archive(ctx, id); err != nil {
+		return nil, domain.NewDomainError(err, "failed to archive memory")
+	}
+
+	// Fetch and return updated memory
+	memory, err := s.memoryRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, domain.NewDomainError(err, "failed to retrieve updated memory")
+	}
+
+	return memory, nil
+}

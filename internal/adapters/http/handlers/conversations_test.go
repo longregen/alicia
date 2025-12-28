@@ -196,6 +196,30 @@ func (m *mockIDGenerator) GenerateMCPServerID() string {
 	return "amcp_test123"
 }
 
+func (m *mockIDGenerator) GenerateVoteID() string {
+	return "av_test123"
+}
+
+func (m *mockIDGenerator) GenerateNoteID() string {
+	return "an_test123"
+}
+
+func (m *mockIDGenerator) GenerateSessionStatsID() string {
+	return "ass_test123"
+}
+
+func (m *mockIDGenerator) GenerateOptimizationRunID() string {
+	return "aor_test123"
+}
+
+func (m *mockIDGenerator) GeneratePromptCandidateID() string {
+	return "apc_test123"
+}
+
+func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
+	return "ape_test123"
+}
+
 // Tests for ConversationsHandler.Create
 
 func TestConversationsHandler_Create_Success(t *testing.T) {

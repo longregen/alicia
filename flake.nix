@@ -9,22 +9,43 @@
       url = "github:tadfisher/android-nixpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-hug = {
+      url = "github:longregen/nix-hug";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    speaches = {
+      url = "github:longregen/speaches";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+      inputs.nix-hug.follows = "nix-hug";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, gomod2nix, android-nixpkgs, ... }:
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    gomod2nix,
+    android-nixpkgs,
+    nix-hug,
+    speaches,
+    ...
+  }:
     {
       # NixOS module
       nixosModules.default = import ./nix/modules/alicia.nix;
 
       # Export gomod2nix overlay
       overlays.default = gomod2nix.overlays.default;
-    } //
-    flake-utils.lib.eachDefaultSystem (system:
-      let
+    }
+    // flake-utils.lib.eachDefaultSystem (
+      system: let
         overlays = [
           gomod2nix.overlays.default
           (import ./nix/overlays/mdbook-mermaid)
           (import ./nix/overlays/mdbook-mermaid/files.nix)
+          (import ./nix/overlays/sql-wasm)
         ];
         pkgs = import nixpkgs {
           inherit system overlays;
@@ -36,17 +57,77 @@
         lib = pkgs.lib;
 
         # PostgreSQL with pgvector extension for vector similarity search
-        postgresWithVector = pkgs.postgresql_17.withPackages (p: [ p.pgvector ]);
+        postgresWithVector = pkgs.postgresql_17.withPackages (p: [p.pgvector]);
 
         # Android SDK configuration (minimal for build/lint - saves ~10GB disk space)
-        androidSdk = android-nixpkgs.sdk.${system} (sdkPkgs: with sdkPkgs; [
-          cmdline-tools-latest
-          build-tools-36-0-0
-          platform-tools
-          platforms-android-36
-        ]);
-      in
-      {
+        androidSdk = android-nixpkgs.sdk.${system} (sdkPkgs:
+          with sdkPkgs; [
+            cmdline-tools-latest
+            build-tools-36-0-0
+            platform-tools
+            platforms-android-36
+          ]);
+
+        # VAD and ONNX Runtime dependencies for web frontend
+        vad-dependencies = pkgs.stdenv.mkDerivation {
+          name = "vad-dependencies";
+          version = "0.0.22";
+
+          src = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/package.json";
+            sha256 = "sha256-5CsjsXZoqvdc25fAvhLEOOxjzEpNmNCc1aU8i9dJ6nU=";
+          };
+
+          sileroModel = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/silero_vad_v5.onnx";
+            sha256 = "sha256-JiOilT9v89LB5hdAxs23FoEzR5smff7xFKSjzFvdeI8=";
+          };
+
+          vadWorklet = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/vad.worklet.bundle.min.js";
+            sha256 = "sha256-1SD9NRyZuhVT/7z6GTAvJnRwZolwXRlIw9ygf7QI4Lc=";
+          };
+
+          ortWasm = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort-wasm.wasm";
+            sha256 = "sha256-u9y2s8fSlFd9gGB3YwRgvk4TyjWjRay16BGI6WSfp0o=";
+          };
+
+          ortWasmThreaded = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort-wasm-threaded.wasm";
+            sha256 = "sha256-LuL3FQk6qswDRL+xYQMT60mjR06K/eXkY18w3fx2Fcg=";
+          };
+
+          ortWasmSimd = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort-wasm-simd.wasm";
+            sha256 = "sha256-m9B7q6vGX1PQYfRXIz7q5QG+fOuKKtue71LYf+d22GU=";
+          };
+
+          ortWasmSimdThreaded = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort-wasm-simd-threaded.wasm";
+            sha256 = "sha256-rCPy88vVGaZaB5b3x56zTq1MH28x6wbhTtipV51pfvY=";
+          };
+
+          dontUnpack = true;
+
+          installPhase = ''
+            mkdir -p $out/models
+            mkdir -p $out/onnx
+
+            cp $sileroModel $out/models/silero_vad_v5.onnx
+            cp $vadWorklet $out/models/vad.worklet.bundle.min.js
+            cp $ortWasm $out/onnx/ort-wasm.wasm
+            cp $ortWasmThreaded $out/onnx/ort-wasm-threaded.wasm
+            cp $ortWasmSimd $out/onnx/ort-wasm-simd.wasm
+            cp $ortWasmSimdThreaded $out/onnx/ort-wasm-simd-threaded.wasm
+          '';
+
+          meta = {
+            description = "VAD and ONNX Runtime dependencies for web";
+            license = pkgs.lib.licenses.mit;
+          };
+        };
+      in {
         packages = rec {
           # Main Alicia Go application
           alicia-backend = pkgs.callPackage ./nix/packages/backend.nix {
@@ -62,17 +143,16 @@
           };
 
           # Android Gradle dependency cache (separate to avoid circular dependency)
-          alicia-android-deps = 
-            let
-              # Minimal dummy package for fetchDeps
-              dummyPkg = pkgs.stdenv.mkDerivation {
-                pname = "alicia-android-deps-base";
-                version = "0.1.0";
-                src = ./android;
-                dontBuild = true;
-                installPhase = "mkdir -p $out";
-              };
-            in
+          alicia-android-deps = let
+            # Minimal dummy package for fetchDeps
+            dummyPkg = pkgs.stdenv.mkDerivation {
+              pname = "alicia-android-deps-base";
+              version = "0.1.0";
+              src = ./android;
+              dontBuild = true;
+              installPhase = "mkdir -p $out";
+            };
+          in
             pkgs.gradle.fetchDeps {
               pkg = dummyPkg;
               data = ./android/deps.json;
@@ -83,14 +163,14 @@
           # Uses buildFHSEnv to create a proper FHS environment where unpatched
           # ELF binaries (like aapt2) work without patching - solving the NixOS
           # Gradle/Android build problem.
-          alicia-android =
-            let
-              # FHS environment for running Gradle with Android tools
-              # This provides /lib64/ld-linux-x86-64.so.2 and standard paths
-              # so that aapt2 and other extracted binaries work without patching
-              androidFHSEnv = pkgs.buildFHSEnv {
-                name = "android-fhs-env";
-                targetPkgs = pkgs: with pkgs; [
+          alicia-android = let
+            # FHS environment for running Gradle with Android tools
+            # This provides /lib64/ld-linux-x86-64.so.2 and standard paths
+            # so that aapt2 and other extracted binaries work without patching
+            androidFHSEnv = pkgs.buildFHSEnv {
+              name = "android-fhs-env";
+              targetPkgs = pkgs:
+                with pkgs; [
                   # Core build tools
                   androidSdk
                   jdk17
@@ -114,18 +194,19 @@
                   gzip
                   bash
                 ];
-                multiPkgs = pkgs: with pkgs; [
+              multiPkgs = pkgs:
+                with pkgs; [
                   # 32-bit libraries for NDK compatibility
                   zlib
                 ];
-                runScript = "bash";
-                profile = ''
-                  export ANDROID_HOME="${androidSdk}/share/android-sdk"
-                  export ANDROID_SDK_ROOT="$ANDROID_HOME"
-                  export JAVA_HOME="${pkgs.jdk17.home}"
-                '';
-              };
-            in
+              runScript = "bash";
+              profile = ''
+                export ANDROID_HOME="${androidSdk}/share/android-sdk"
+                export ANDROID_SDK_ROOT="$ANDROID_HOME"
+                export JAVA_HOME="${pkgs.jdk17.home}"
+              '';
+            };
+          in
             pkgs.stdenv.mkDerivation (finalAttrs: {
               pname = "alicia-android";
               version = "0.1.0";
@@ -151,7 +232,7 @@
                   # Extract host and port from MITM_CACHE_ADDRESS
                   PROXY_HOST="''${MITM_CACHE_ADDRESS%:*}"
                   PROXY_PORT="''${MITM_CACHE_ADDRESS##*:}"
-                  
+
                   export GRADLE_OPTS="
                     -Dhttp.proxyHost=$PROXY_HOST
                     -Dhttp.proxyPort=$PROXY_PORT
@@ -187,43 +268,43 @@
                 if [ -d "${alicia-android-deps}" ] && [ "$(ls -A ${alicia-android-deps})" ]; then
                   # Replace repository URLs in settings.gradle.kts with local mitmCache paths
                   cat > settings.gradle.kts << EOF
-pluginManagement {
-    repositories {
-        maven { url = uri("${alicia-android-deps}/https/dl.google.com/dl/android/maven2") }
-        maven { url = uri("${alicia-android-deps}/https/repo.maven.apache.org/maven2") }
-        maven { url = uri("${alicia-android-deps}/https/plugins.gradle.org/m2") }
-    }
-}
+                pluginManagement {
+                    repositories {
+                        maven { url = uri("${alicia-android-deps}/https/dl.google.com/dl/android/maven2") }
+                        maven { url = uri("${alicia-android-deps}/https/repo.maven.apache.org/maven2") }
+                        maven { url = uri("${alicia-android-deps}/https/plugins.gradle.org/m2") }
+                    }
+                }
 
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        maven { url = uri("${alicia-android-deps}/https/dl.google.com/dl/android/maven2") }
-        maven { url = uri("${alicia-android-deps}/https/repo.maven.apache.org/maven2") }
-        maven { url = uri("${alicia-android-deps}/https/jitpack.io") }
-    }
-}
+                dependencyResolutionManagement {
+                    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                    repositories {
+                        maven { url = uri("${alicia-android-deps}/https/dl.google.com/dl/android/maven2") }
+                        maven { url = uri("${alicia-android-deps}/https/repo.maven.apache.org/maven2") }
+                        maven { url = uri("${alicia-android-deps}/https/jitpack.io") }
+                    }
+                }
 
-rootProject.name = "Alicia"
+                rootProject.name = "Alicia"
 
-include(":app")
+                include(":app")
 
-// Core modules
-include(":core:common")
-include(":core:data")
-include(":core:domain")
-include(":core:network")
-include(":core:database")
+                // Core modules
+                include(":core:common")
+                include(":core:data")
+                include(":core:domain")
+                include(":core:network")
+                include(":core:database")
 
-// Feature modules
-include(":feature:assistant")
-include(":feature:conversations")
-include(":feature:settings")
+                // Feature modules
+                include(":feature:assistant")
+                include(":feature:conversations")
+                include(":feature:settings")
 
-// Service modules
-include(":service:voice")
-include(":service:hotkey")
-EOF
+                // Service modules
+                include(":service:voice")
+                include(":service:hotkey")
+                EOF
                 fi
 
                 # Build inside FHS environment
@@ -274,7 +355,7 @@ EOF
           docs = pkgs.stdenv.mkDerivation {
             name = "alicia-docs";
             src = ./.;
-            buildInputs = with pkgs; [ mdbook mdbook-mermaid ];
+            buildInputs = with pkgs; [mdbook mdbook-mermaid];
             buildPhase = ''
               # Set up mdbook-mermaid assets
               mkdir -p docs/bin/assets
@@ -293,7 +374,7 @@ EOF
           frontend-tests = pkgs.buildNpmPackage {
             name = "alicia-frontend-tests";
             src = ./frontend;
-            npmDepsHash = "sha256-fVhS0tAnWk/kW21nc9ItKh2OEfaPeLzBffdMTAkdi1E=";
+            npmDepsHash = "sha256-IrRFQB+6Pz3hPaCDXejyLoQvTMZ9sWe573EVyoeoIks=";
 
             buildPhase = ''
               export HOME=$TMPDIR
@@ -305,6 +386,9 @@ EOF
               echo "Frontend tests passed" > $out/result
             '';
           };
+
+          # VAD dependencies for frontend development
+          inherit vad-dependencies;
         };
 
         # Test derivations
@@ -317,8 +401,8 @@ EOF
             modules = ./gomod2nix.toml;
 
             # CGO dependencies for opus audio codec
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-            buildInputs = with pkgs; [ libopus opusfile ];
+            nativeBuildInputs = with pkgs; [pkg-config];
+            buildInputs = with pkgs; [libopus opusfile];
 
             # Run tests for packages that don't require external dependencies
             # Packages with compilation errors from outdated mocks are excluded until fixed
@@ -357,7 +441,7 @@ EOF
           frontend-tests = pkgs.buildNpmPackage {
             name = "alicia-frontend-tests";
             src = ./frontend;
-            npmDepsHash = "sha256-fVhS0tAnWk/kW21nc9ItKh2OEfaPeLzBffdMTAkdi1E=";
+            npmDepsHash = "sha256-IrRFQB+6Pz3hPaCDXejyLoQvTMZ9sWe573EVyoeoIks=";
 
             buildPhase = ''
               export HOME=$TMPDIR
@@ -374,6 +458,12 @@ EOF
           e2e = import ./e2e-test/nix {
             inherit pkgs lib;
             self = self;
+          };
+
+          # LLM integration test: speaches (STT/TTS) + ollama (LLM)
+          llm-test = import ./llm-test/nix {
+            inherit pkgs lib;
+            inherit speaches nix-hug;
           };
         };
 
@@ -397,16 +487,26 @@ EOF
           buildInputs = with pkgs; [
             nodejs_22
           ];
+          shellHook = ''
+            mkdir -p frontend/public/models
+            mkdir -p frontend/public/onnx
+
+            ln -sf ${vad-dependencies}/models/* frontend/public/models/
+            ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
+            ln -sf ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm frontend/public/sql-wasm.wasm
+
+            echo "VAD dependencies linked to frontend/public/"
+          '';
         };
 
         # Android development shell with FHS environment for AAPT2 compatibility
         # Use: nix develop .#android -c android-fhs-env
         # Or for CI: nix develop .#android --command android-fhs-env -c './gradlew ...'
-        devShells.android =
-          let
-            androidFHSEnv = pkgs.buildFHSEnv {
-              name = "android-fhs-env";
-              targetPkgs = pkgs: with pkgs; [
+        devShells.android = let
+          androidFHSEnv = pkgs.buildFHSEnv {
+            name = "android-fhs-env";
+            targetPkgs = pkgs:
+              with pkgs; [
                 androidSdk
                 jdk17
                 gradle
@@ -426,17 +526,17 @@ EOF
                 bash
                 git
               ];
-              multiPkgs = pkgs: with pkgs; [ zlib ];
-              profile = ''
-                export ANDROID_HOME="${androidSdk}/share/android-sdk"
-                export ANDROID_SDK_ROOT="$ANDROID_HOME"
-                export JAVA_HOME="${pkgs.jdk17.home}"
-              '';
-              runScript = "bash";
-            };
-          in
+            multiPkgs = pkgs: with pkgs; [zlib];
+            profile = ''
+              export ANDROID_HOME="${androidSdk}/share/android-sdk"
+              export ANDROID_SDK_ROOT="$ANDROID_HOME"
+              export JAVA_HOME="${pkgs.jdk17.home}"
+            '';
+            runScript = "bash";
+          };
+        in
           pkgs.mkShell {
-            buildInputs = [ androidFHSEnv ];
+            buildInputs = [androidFHSEnv];
             shellHook = ''
               echo "Android FHS environment available."
               echo "Run: android-fhs-env -c './gradlew assembleDebug'"
@@ -444,41 +544,43 @@ EOF
           };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = (with pkgs; [
-            # Go development tools
-            go
-            gopls
-            delve
-            go-tools
+          buildInputs =
+            (with pkgs; [
+              # Go development tools
+              go
+              gopls
+              delve
+              go-tools
 
-            # C compiler and build tools (required for CGO)
-            gcc
-            pkg-config
-            libopus
-            opusfile
-            libogg
+              # C compiler and build tools (required for CGO)
+              gcc
+              pkg-config
+              libopus
+              opusfile
+              libogg
 
-            # Database tools
-            postgresWithVector
-            pgcli
+              # Database tools
+              postgresWithVector
+              pgcli
 
-            # Code generation
-            sqlc
+              # Code generation
+              sqlc
 
-            # Frontend development
-            nodejs_22
+              # Frontend development
+              nodejs_22
 
-            # Documentation
-            mdbook
-            mdbook-mermaid
+              # Documentation
+              mdbook
+              mdbook-mermaid
 
-            # Android development (androidSdk configured in shellHook)
-            jdk17
-            gradle
-          ]) ++ [
-            # gomod2nix from flake input
-            gomod2nix.packages.${system}.default
-          ];
+              # Android development (androidSdk configured in shellHook)
+              jdk17
+              gradle
+            ])
+            ++ [
+              # gomod2nix from flake input
+              gomod2nix.packages.${system}.default
+            ];
 
           shellHook = ''
             # Set up Android SDK environment
@@ -533,6 +635,12 @@ EOF
             ln -sf ${pkgs.mdbookMermaidFiles}/share/mdbook-mermaid/mermaid.min.js docs/bin/assets/mermaid.min.js
             ln -sf ${pkgs.mdbookMermaidFiles}/share/mdbook-mermaid/mermaid-init.js docs/bin/assets/mermaid-init.js
 
+            # Set up VAD dependencies for frontend
+            mkdir -p frontend/public/models
+            mkdir -p frontend/public/onnx
+            ln -sf ${vad-dependencies}/models/* frontend/public/models/
+            ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
+
             # Generate Android gradle wrapper if missing
             if [ -d "android" ] && [ ! -f "android/gradlew" ]; then
               echo "Generating gradle wrapper..."
@@ -543,11 +651,11 @@ EOF
             if [ -d "android" ] && [ ! -f "android/deps.json" ]; then
               echo "Generating deps.json placeholder..."
               cat > android/deps.json << 'DEPS'
-{
- "!comment": "This is a nixpkgs Gradle dependency lockfile. For more details, refer to the Gradle section in the nixpkgs manual.",
- "!version": 1
-}
-DEPS
+            {
+             "!comment": "This is a nixpkgs Gradle dependency lockfile. For more details, refer to the Gradle section in the nixpkgs manual.",
+             "!version": 1
+            }
+            DEPS
             fi
 
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

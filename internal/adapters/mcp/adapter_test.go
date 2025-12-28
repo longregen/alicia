@@ -320,6 +320,36 @@ func (m *mockIDGenerator) GenerateMCPServerID() string {
 	return "amcp_test"
 }
 
+func (m *mockIDGenerator) GenerateVoteID() string {
+	m.counter++
+	return "av_test"
+}
+
+func (m *mockIDGenerator) GenerateNoteID() string {
+	m.counter++
+	return "an_test"
+}
+
+func (m *mockIDGenerator) GenerateSessionStatsID() string {
+	m.counter++
+	return "ass_test"
+}
+
+func (m *mockIDGenerator) GenerateOptimizationRunID() string {
+	m.counter++
+	return "aor_test"
+}
+
+func (m *mockIDGenerator) GeneratePromptCandidateID() string {
+	m.counter++
+	return "apc_test"
+}
+
+func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
+	m.counter++
+	return "ape_test"
+}
+
 // Helper to create a pre-initialized mock client
 func createMockClient(tools []Tool, callResult *ToolsCallResult, callErr error) *Client {
 	transport := newMockTransport()

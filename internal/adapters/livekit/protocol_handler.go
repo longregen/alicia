@@ -27,6 +27,19 @@ type AgentSender interface {
 	SendAudio(ctx context.Context, audio []byte, format string) error
 }
 
+// ProtocolHandlerInterface defines the interface for protocol handling
+// This allows for mocking in tests while maintaining type safety
+type ProtocolHandlerInterface interface {
+	HandleConfiguration(ctx context.Context, config *protocol.Configuration) error
+	SendEnvelope(ctx context.Context, envelope *protocol.Envelope) error
+	SendAudio(ctx context.Context, audio []byte, format string) error
+	SendToolUseRequest(ctx context.Context, toolUse *models.ToolUse) error
+	SendToolUseResult(ctx context.Context, toolUse *models.ToolUse) error
+	SendAcknowledgement(ctx context.Context, ackedStanzaID int32, success bool) error
+	SendError(ctx context.Context, code int32, message string, recoverable bool) error
+	GetToolUseRepo() ports.ToolUseRepository
+}
+
 // ProtocolHandler handles protocol messages with reconnection semantics
 type ProtocolHandler struct {
 	agent              AgentSender
@@ -265,6 +278,21 @@ func (h *ProtocolHandler) SendEnvelope(ctx context.Context, envelope *protocol.E
 	}
 
 	return h.agent.SendData(ctx, data)
+}
+
+// GetToolUseRepo returns the tool use repository
+func (h *ProtocolHandler) GetToolUseRepo() ports.ToolUseRepository {
+	return h.toolUseRepo
+}
+
+// SendAcknowledgement sends an Acknowledgement message (exported for interface)
+func (h *ProtocolHandler) SendAcknowledgement(ctx context.Context, ackedStanzaID int32, success bool) error {
+	return h.sendAcknowledgement(ctx, ackedStanzaID, success)
+}
+
+// SendError sends an ErrorMessage (exported for interface)
+func (h *ProtocolHandler) SendError(ctx context.Context, code int32, message string, recoverable bool) error {
+	return h.sendError(ctx, code, message, recoverable)
 }
 
 // sendAcknowledgement sends an Acknowledgement message

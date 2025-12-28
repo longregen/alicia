@@ -186,3 +186,158 @@ type AssistantSentence struct {
 	IsFinal        bool   `msgpack:"isFinal,omitempty" json:"isFinal,omitempty"`
 	Audio          []byte `msgpack:"audio,omitempty" json:"audio,omitempty"`
 }
+
+// Feedback (Type 20) represents a vote message sent from client to server
+type Feedback struct {
+	ID             string `msgpack:"id" json:"id"`
+	ConversationID string `msgpack:"conversationId" json:"conversationId"`
+	MessageID      string `msgpack:"messageId" json:"messageId"`
+	TargetType     string `msgpack:"targetType" json:"targetType"` // message, tool_use, memory, reasoning
+	TargetID       string `msgpack:"targetId" json:"targetId"`
+	Vote           string `msgpack:"vote" json:"vote"` // up, down, critical, remove
+	QuickFeedback  string `msgpack:"quickFeedback,omitempty" json:"quickFeedback,omitempty"`
+	Note           string `msgpack:"note,omitempty" json:"note,omitempty"`
+	Timestamp      int64  `msgpack:"timestamp" json:"timestamp"`
+}
+
+// FeedbackAggregates contains aggregated vote counts
+type FeedbackAggregates struct {
+	Upvotes      int            `msgpack:"upvotes" json:"upvotes"`
+	Downvotes    int            `msgpack:"downvotes" json:"downvotes"`
+	SpecialVotes map[string]int `msgpack:"specialVotes,omitempty" json:"specialVotes,omitempty"`
+}
+
+// FeedbackConfirmation (Type 21) represents server confirmation with aggregates
+type FeedbackConfirmation struct {
+	FeedbackID string             `msgpack:"feedbackId" json:"feedbackId"`
+	TargetType string             `msgpack:"targetType" json:"targetType"`
+	TargetID   string             `msgpack:"targetId" json:"targetId"`
+	Aggregates FeedbackAggregates `msgpack:"aggregates" json:"aggregates"`
+	UserVote   string             `msgpack:"userVote" json:"userVote"` // up, down, critical, or empty
+}
+
+// UserNote (Type 22) represents a note message
+type UserNote struct {
+	ID        string `msgpack:"id" json:"id"`
+	MessageID string `msgpack:"messageId" json:"messageId"`
+	Content   string `msgpack:"content" json:"content"`
+	Category  string `msgpack:"category" json:"category"` // improvement, correction, context, general
+	Action    string `msgpack:"action" json:"action"`     // create, update, delete
+	Timestamp int64  `msgpack:"timestamp" json:"timestamp"`
+}
+
+// NoteConfirmation (Type 23) represents note confirmation
+type NoteConfirmation struct {
+	NoteID    string `msgpack:"noteId" json:"noteId"`
+	MessageID string `msgpack:"messageId" json:"messageId"`
+	Success   bool   `msgpack:"success" json:"success"`
+}
+
+// MemoryData contains the memory content and metadata
+type MemoryData struct {
+	Content  string `msgpack:"content" json:"content"`
+	Category string `msgpack:"category" json:"category"`
+	Pinned   bool   `msgpack:"pinned" json:"pinned"`
+}
+
+// MemoryAction (Type 24) represents memory CRUD actions
+type MemoryAction struct {
+	ID        string      `msgpack:"id" json:"id"`
+	Action    string      `msgpack:"action" json:"action"` // create, update, delete, pin, archive
+	Memory    *MemoryData `msgpack:"memory,omitempty" json:"memory,omitempty"`
+	Timestamp int64       `msgpack:"timestamp" json:"timestamp"`
+}
+
+// MemoryConfirmation (Type 25) represents memory confirmation
+type MemoryConfirmation struct {
+	MemoryID string `msgpack:"memoryId" json:"memoryId"`
+	Action   string `msgpack:"action" json:"action"`
+	Success  bool   `msgpack:"success" json:"success"`
+}
+
+// ConnectionInfo contains connection status information
+type ConnectionInfo struct {
+	Status  string `msgpack:"status" json:"status"` // connected, connecting, disconnected, reconnecting
+	Latency int    `msgpack:"latency" json:"latency"`
+}
+
+// ModelInfo contains model configuration information
+type ModelInfo struct {
+	Name     string `msgpack:"name" json:"name"`
+	Provider string `msgpack:"provider" json:"provider"`
+}
+
+// MCPServerInfo contains MCP server status information
+type MCPServerInfo struct {
+	Name   string `msgpack:"name" json:"name"`
+	Status string `msgpack:"status" json:"status"` // connected, disconnected, error
+}
+
+// ServerInfo (Type 26) represents server info broadcast
+type ServerInfo struct {
+	Connection ConnectionInfo  `msgpack:"connection" json:"connection"`
+	Model      ModelInfo       `msgpack:"model" json:"model"`
+	MCPServers []MCPServerInfo `msgpack:"mcpServers" json:"mcpServers"`
+}
+
+// SessionStats (Type 27) represents session statistics
+type SessionStats struct {
+	MessageCount    int `msgpack:"messageCount" json:"messageCount"`
+	ToolCallCount   int `msgpack:"toolCallCount" json:"toolCallCount"`
+	MemoriesUsed    int `msgpack:"memoriesUsed" json:"memoriesUsed"`
+	SessionDuration int `msgpack:"sessionDuration" json:"sessionDuration"`
+}
+
+// DimensionWeights defines weights for GEPA optimization dimensions
+type DimensionWeights struct {
+	SuccessRate    float64 `msgpack:"successRate" json:"successRate"`
+	Quality        float64 `msgpack:"quality" json:"quality"`
+	Efficiency     float64 `msgpack:"efficiency" json:"efficiency"`
+	Robustness     float64 `msgpack:"robustness" json:"robustness"`
+	Generalization float64 `msgpack:"generalization" json:"generalization"`
+	Diversity      float64 `msgpack:"diversity" json:"diversity"`
+	Innovation     float64 `msgpack:"innovation" json:"innovation"`
+}
+
+// DimensionScores holds per-dimension performance metrics
+type DimensionScores struct {
+	SuccessRate    float64 `msgpack:"successRate" json:"successRate"`
+	Quality        float64 `msgpack:"quality" json:"quality"`
+	Efficiency     float64 `msgpack:"efficiency" json:"efficiency"`
+	Robustness     float64 `msgpack:"robustness" json:"robustness"`
+	Generalization float64 `msgpack:"generalization" json:"generalization"`
+	Diversity      float64 `msgpack:"diversity" json:"diversity"`
+	Innovation     float64 `msgpack:"innovation" json:"innovation"`
+}
+
+// DimensionPreference (Type 29) represents user dimension weight preferences
+type DimensionPreference struct {
+	ConversationID string           `msgpack:"conversationId" json:"conversationId"`
+	Weights        DimensionWeights `msgpack:"weights" json:"weights"`
+	Preset         string           `msgpack:"preset,omitempty" json:"preset,omitempty"` // accuracy, speed, reliable, creative, balanced
+	Timestamp      int64            `msgpack:"timestamp" json:"timestamp"`
+}
+
+// EliteSelect (Type 30) represents user selection of an elite solution
+type EliteSelect struct {
+	ConversationID string `msgpack:"conversationId" json:"conversationId"`
+	EliteID        string `msgpack:"eliteId" json:"eliteId"`
+	Timestamp      int64  `msgpack:"timestamp" json:"timestamp"`
+}
+
+// EliteSummary contains summary information about an elite solution
+type EliteSummary struct {
+	ID          string          `msgpack:"id" json:"id"`
+	Label       string          `msgpack:"label" json:"label"`             // "High Accuracy", "Fast", "Balanced"
+	Scores      DimensionScores `msgpack:"scores" json:"scores"`           // Per-dimension performance
+	Description string          `msgpack:"description" json:"description"` // Auto-generated summary
+	BestFor     string          `msgpack:"bestFor" json:"bestFor"`         // "Complex questions", "Active coding"
+}
+
+// EliteOptions (Type 31) represents available elite solutions from server
+type EliteOptions struct {
+	ConversationID string         `msgpack:"conversationId" json:"conversationId"`
+	Elites         []EliteSummary `msgpack:"elites" json:"elites"`
+	CurrentEliteID string         `msgpack:"currentEliteId" json:"currentEliteId"`
+	Timestamp      int64          `msgpack:"timestamp" json:"timestamp"`
+}

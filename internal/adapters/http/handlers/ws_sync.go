@@ -31,14 +31,28 @@ func NewWebSocketSyncHandler(
 	messageRepo ports.MessageRepository,
 	idGen ports.IDGenerator,
 	broadcaster *WebSocketBroadcaster,
+	allowedOrigins []string,
 ) *WebSocketSyncHandler {
+	// Pre-build a map for faster origin lookups
+	allowedOriginsMap := make(map[string]bool)
+	for _, origin := range allowedOrigins {
+		allowedOriginsMap[origin] = true
+	}
+
 	return &WebSocketSyncHandler{
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				// TODO: Implement proper CORS origin checking
-				return true
+				origin := r.Header.Get("Origin")
+
+				// If no origin header is present (e.g., same-origin request), allow
+				if origin == "" {
+					return true
+				}
+
+				// Check if origin is in allowed list
+				return allowedOriginsMap[origin]
 			},
 		},
 		conversationRepo: conversationRepo,
@@ -212,7 +226,7 @@ func (h *WebSocketSyncHandler) processSyncRequest(ctx context.Context, conversat
 
 	return &dto.SyncResponse{
 		SyncedMessages: syncedMessages,
-		SyncedAt:       time.Now(),
+		SyncedAt:       time.Now().Format(time.RFC3339),
 	}
 }
 

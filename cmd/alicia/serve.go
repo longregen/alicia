@@ -116,6 +116,10 @@ func runServer(ctx context.Context) error {
 	memoryRepo := postgres.NewMemoryRepository(pool)
 	memoryUsageRepo := postgres.NewMemoryUsageRepository(pool)
 	mcpRepo := postgres.NewMCPServerRepository(pool)
+	noteRepo := postgres.NewNoteRepository(pool)
+	voteRepo := postgres.NewVoteRepository(pool)
+	sessionStatsRepo := postgres.NewSessionStatsRepository(pool)
+	optimizationRepo := postgres.NewOptimizationRepository(pool)
 
 	// Initialize ID generator
 	idGen := id.New()
@@ -158,6 +162,15 @@ func runServer(ctx context.Context) error {
 		)
 		log.Println("Memory service initialized")
 	}
+
+	// Initialize optimization service
+	optimizationService := services.NewOptimizationService(
+		optimizationRepo,
+		llmService,
+		idGen,
+		services.DefaultOptimizationConfig(),
+	)
+	log.Println("Optimization service initialized")
 
 	// Register built-in tools
 	if err := builtin.RegisterAllBuiltinTools(ctx, toolService, memoryRepo, embeddingClient); err != nil {
@@ -220,7 +233,25 @@ func runServer(ctx context.Context) error {
 	}
 
 	// Create HTTP server
-	server := http.NewServer(cfg, conversationRepo, messageRepo, liveKitService, idGen, pool, llmClient, asrAdapter, ttsAdapter, embeddingClient, mcpAdapter, generateResponseUseCase)
+	server := http.NewServer(
+		cfg,
+		conversationRepo,
+		messageRepo,
+		noteRepo,
+		voteRepo,
+		sessionStatsRepo,
+		memoryService,
+		optimizationService,
+		liveKitService,
+		idGen,
+		pool,
+		llmClient,
+		asrAdapter,
+		ttsAdapter,
+		embeddingClient,
+		mcpAdapter,
+		generateResponseUseCase,
+	)
 
 	// Set up graceful shutdown
 	serverCtx, serverCancel := context.WithCancel(context.Background())

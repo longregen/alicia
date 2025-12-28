@@ -36,9 +36,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_launcher_foreground"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Alicia">
 
@@ -85,7 +85,7 @@
         <!-- Quick Settings Tile -->
         <service
             android:name="org.localforge.alicia.service.hotkey.AliciaTileService"
-            android:icon="@drawable/ic_launcher_foreground"
+            android:icon="@mipmap/ic_launcher"
             android:label="@string/tile_label"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true"

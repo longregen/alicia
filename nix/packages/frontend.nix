@@ -16,6 +16,7 @@ pkgs.buildNpmPackage {
   installPhase = ''
     mkdir -p $out
     cp -r dist/* $out/
+    cp ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm $out/
   '';
 
   meta = {

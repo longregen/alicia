@@ -15,11 +15,18 @@ type MessageDispatcher interface {
 
 // DefaultMessageDispatcher implements MessageDispatcher
 type DefaultMessageDispatcher struct {
-	protocolHandler           *ProtocolHandler
+	protocolHandler           ProtocolHandlerInterface
 	handleToolUseCase         ports.HandleToolUseCase
 	generateResponseUseCase   ports.GenerateResponseUseCase
 	processUserMessageUseCase ports.ProcessUserMessageUseCase
+	conversationRepo          ports.ConversationRepository
 	messageRepo               ports.MessageRepository
+	toolUseRepo               ports.ToolUseRepository
+	memoryUsageRepo           ports.MemoryUsageRepository
+	voteRepo                  ports.VoteRepository
+	noteRepo                  ports.NoteRepository
+	memoryService             ports.MemoryService
+	optimizationService       ports.OptimizationService
 	conversationID            string
 	asrService                ports.ASRService
 	ttsService                ports.TTSService
@@ -29,11 +36,18 @@ type DefaultMessageDispatcher struct {
 
 // NewDefaultMessageDispatcher creates a new message dispatcher
 func NewDefaultMessageDispatcher(
-	protocolHandler *ProtocolHandler,
+	protocolHandler ProtocolHandlerInterface,
 	handleToolUseCase ports.HandleToolUseCase,
 	generateResponseUseCase ports.GenerateResponseUseCase,
 	processUserMessageUseCase ports.ProcessUserMessageUseCase,
+	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
+	toolUseRepo ports.ToolUseRepository,
+	memoryUsageRepo ports.MemoryUsageRepository,
+	voteRepo ports.VoteRepository,
+	noteRepo ports.NoteRepository,
+	memoryService ports.MemoryService,
+	optimizationService ports.OptimizationService,
 	conversationID string,
 	asrService ports.ASRService,
 	ttsService ports.TTSService,
@@ -45,7 +59,14 @@ func NewDefaultMessageDispatcher(
 		handleToolUseCase:         handleToolUseCase,
 		generateResponseUseCase:   generateResponseUseCase,
 		processUserMessageUseCase: processUserMessageUseCase,
+		conversationRepo:          conversationRepo,
 		messageRepo:               messageRepo,
+		toolUseRepo:               toolUseRepo,
+		memoryUsageRepo:           memoryUsageRepo,
+		voteRepo:                  voteRepo,
+		noteRepo:                  noteRepo,
+		memoryService:             memoryService,
+		optimizationService:       optimizationService,
 		conversationID:            conversationID,
 		asrService:                asrService,
 		ttsService:                ttsService,
@@ -97,6 +118,25 @@ func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope
 	case protocol.TypeCommentary:
 		return d.handleCommentary(ctx, envelope)
 
+	// Feedback protocol types (20-27) - Client→Server messages
+	case protocol.TypeFeedback:
+		return d.handleFeedback(ctx, envelope)
+
+	case protocol.TypeUserNote:
+		return d.handleUserNote(ctx, envelope)
+
+	case protocol.TypeMemoryAction:
+		return d.handleMemoryAction(ctx, envelope)
+
+	case protocol.TypeDimensionPreference:
+		return d.handleDimensionPreference(ctx, envelope)
+
+	case protocol.TypeEliteSelect:
+		return d.handleEliteSelect(ctx, envelope)
+
+	// TypeFeedbackConfirmation (21), TypeNoteConfirmation (23), TypeMemoryConfirmation (25),
+	// TypeServerInfo (26), TypeSessionStats (27), TypeEliteOptions (31) are Server→Client only
+
 	default:
 		log.Printf("Unhandled message type: %v", envelope.Type)
 		return nil // Silently ignore unknown message types
@@ -105,5 +145,5 @@ func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope
 
 // sendError sends an error message via the protocol handler
 func (d *DefaultMessageDispatcher) sendError(ctx context.Context, code int32, message string, recoverable bool) error {
-	return d.protocolHandler.sendError(ctx, code, message, recoverable)
+	return d.protocolHandler.SendError(ctx, code, message, recoverable)
 }

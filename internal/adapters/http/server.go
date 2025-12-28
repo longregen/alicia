@@ -26,6 +26,11 @@ type Server struct {
 	httpServer              *http.Server
 	conversationRepo        ports.ConversationRepository
 	messageRepo             ports.MessageRepository
+	noteRepo                ports.NoteRepository
+	voteRepo                ports.VoteRepository
+	sessionStatsRepo        ports.SessionStatsRepository
+	memoryService           ports.MemoryService
+	optimizationService     ports.OptimizationService
 	liveKitService          ports.LiveKitService
 	idGen                   ports.IDGenerator
 	db                      *pgxpool.Pool
@@ -43,6 +48,11 @@ func NewServer(
 	cfg *config.Config,
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
+	noteRepo ports.NoteRepository,
+	voteRepo ports.VoteRepository,
+	sessionStatsRepo ports.SessionStatsRepository,
+	memoryService ports.MemoryService,
+	optimizationService ports.OptimizationService,
 	liveKitService ports.LiveKitService,
 	idGen ports.IDGenerator,
 	db *pgxpool.Pool,
@@ -57,6 +67,11 @@ func NewServer(
 		config:                  cfg,
 		conversationRepo:        conversationRepo,
 		messageRepo:             messageRepo,
+		noteRepo:                noteRepo,
+		voteRepo:                voteRepo,
+		sessionStatsRepo:        sessionStatsRepo,
+		memoryService:           memoryService,
+		optimizationService:     optimizationService,
 		liveKitService:          liveKitService,
 		idGen:                   idGen,
 		db:                      db,
@@ -128,7 +143,7 @@ func (s *Server) setupRouter() {
 		r.Get("/conversations/{id}/sync/status", syncHandler.GetSyncStatus)
 
 		// WebSocket endpoint for MessagePack sync
-		wsHandler := handlers.NewWebSocketSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster)
+		wsHandler := handlers.NewWebSocketSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster, s.config.Server.CORSOrigins)
 		r.Get("/conversations/{id}/sync/ws", wsHandler.Handle)
 
 		// SSE endpoint for real-time events
@@ -145,6 +160,72 @@ func (s *Server) setupRouter() {
 			r.Post("/mcp/servers", mcpHandler.AddServer)
 			r.Delete("/mcp/servers/{name}", mcpHandler.RemoveServer)
 			r.Get("/mcp/tools", mcpHandler.ListTools)
+		}
+
+		// Voting endpoints
+		voteHandler := handlers.NewVoteHandler(s.voteRepo, s.idGen)
+		// Message voting
+		r.Post("/messages/{id}/vote", voteHandler.VoteOnMessage)
+		r.Delete("/messages/{id}/vote", voteHandler.RemoveMessageVote)
+		r.Get("/messages/{id}/votes", voteHandler.GetMessageVotes)
+		// Tool use voting
+		r.Post("/tool-uses/{id}/vote", voteHandler.VoteOnToolUse)
+		r.Delete("/tool-uses/{id}/vote", voteHandler.RemoveToolUseVote)
+		r.Get("/tool-uses/{id}/votes", voteHandler.GetToolUseVotes)
+		r.Post("/tool-uses/{id}/quick-feedback", voteHandler.ToolUseQuickFeedback)
+		// Memory voting
+		r.Post("/memories/{id}/vote", voteHandler.VoteOnMemory)
+		r.Delete("/memories/{id}/vote", voteHandler.RemoveMemoryVote)
+		r.Get("/memories/{id}/votes", voteHandler.GetMemoryVotes)
+		r.Post("/memories/{id}/irrelevance-reason", voteHandler.MemoryIrrelevanceReason)
+		// Reasoning voting
+		r.Post("/reasoning/{id}/vote", voteHandler.VoteOnReasoning)
+		r.Delete("/reasoning/{id}/vote", voteHandler.RemoveReasoningVote)
+		r.Get("/reasoning/{id}/votes", voteHandler.GetReasoningVotes)
+		r.Post("/reasoning/{id}/issue", voteHandler.ReasoningIssue)
+
+		// Note endpoints
+		noteHandler := handlers.NewNoteHandler(s.noteRepo, s.idGen)
+		r.Post("/messages/{id}/notes", noteHandler.CreateMessageNote)
+		r.Get("/messages/{id}/notes", noteHandler.GetMessageNotes)
+		r.Post("/tool-uses/{id}/notes", noteHandler.CreateToolUseNote)
+		r.Post("/reasoning/{id}/notes", noteHandler.CreateReasoningNote)
+		r.Put("/notes/{id}", noteHandler.UpdateNote)
+		r.Delete("/notes/{id}", noteHandler.DeleteNote)
+
+		// Memory management endpoints (only if memory service is available)
+		if s.memoryService != nil {
+			memoryHandler := handlers.NewMemoryHandler(s.memoryService)
+			r.Post("/memories", memoryHandler.CreateMemory)
+			r.Get("/memories", memoryHandler.ListMemories)
+			r.Post("/memories/search", memoryHandler.SearchMemories)
+			r.Get("/memories/by-tags", memoryHandler.GetByTags)
+			r.Get("/memories/{id}", memoryHandler.GetMemory)
+			r.Put("/memories/{id}", memoryHandler.UpdateMemory)
+			r.Delete("/memories/{id}", memoryHandler.DeleteMemory)
+			r.Post("/memories/{id}/tags", memoryHandler.AddTag)
+			r.Delete("/memories/{id}/tags/{tag}", memoryHandler.RemoveTag)
+			r.Put("/memories/{id}/importance", memoryHandler.SetImportance)
+			r.Post("/memories/{id}/pin", memoryHandler.PinMemory)
+			r.Post("/memories/{id}/archive", memoryHandler.ArchiveMemory)
+		}
+
+		// Server info and stats endpoints
+		serverInfoHandler := handlers.NewServerInfoHandler(s.config, s.conversationRepo, s.messageRepo, s.mcpAdapter)
+		r.Get("/server/info", serverInfoHandler.GetServerInfo)
+		r.Get("/server/stats", serverInfoHandler.GetGlobalStats)
+		r.Get("/conversations/{id}/stats", serverInfoHandler.GetSessionStats)
+
+		// Optimization endpoints (only if optimization service is available)
+		if s.optimizationService != nil {
+			optHandler := handlers.NewOptimizationHandler(s.optimizationService)
+			r.Post("/optimizations", optHandler.CreateOptimization)
+			r.Get("/optimizations", optHandler.ListOptimizations)
+			r.Get("/optimizations/{id}", optHandler.GetOptimization)
+			r.Get("/optimizations/{id}/candidates", optHandler.GetCandidates)
+			r.Get("/optimizations/{id}/best", optHandler.GetBestCandidate)
+			r.Get("/optimizations/{id}/program", optHandler.GetOptimizedProgram)
+			r.Get("/optimizations/candidates/{id}/evaluations", optHandler.GetEvaluations)
 		}
 	})
 

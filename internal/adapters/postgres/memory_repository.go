@@ -54,9 +54,9 @@ func (r *MemoryRepository) Create(ctx context.Context, memory *models.Memory) er
 	query := `
 		INSERT INTO alicia_memory (
 			id, content, embeddings, embeddings_info, importance, confidence,
-			user_rating, created_by, source_type, source_info, tags, created_at, updated_at
+			user_rating, created_by, source_type, source_info, tags, pinned, archived, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 		)`
 
 	_, err = r.conn(ctx).Exec(ctx, query,
@@ -71,6 +71,8 @@ func (r *MemoryRepository) Create(ctx context.Context, memory *models.Memory) er
 		nullString(memory.SourceType),
 		sourceInfo,
 		memory.Tags,
+		memory.Pinned,
+		memory.Archived,
 		memory.CreatedAt,
 		memory.UpdatedAt,
 	)
@@ -84,7 +86,7 @@ func (r *MemoryRepository) GetByID(ctx context.Context, id string) (*models.Memo
 
 	query := `
 		SELECT id, content, embeddings, embeddings_info, importance, confidence,
-			   user_rating, created_by, source_type, source_info, tags, created_at, updated_at, deleted_at
+			   user_rating, created_by, source_type, source_info, tags, pinned, archived, created_at, updated_at, deleted_at
 		FROM alicia_memory
 		WHERE id = $1 AND deleted_at IS NULL`
 
@@ -130,7 +132,9 @@ func (r *MemoryRepository) Update(ctx context.Context, memory *models.Memory) er
 			source_type = $9,
 			source_info = $10,
 			tags = $11,
-			updated_at = $12
+			pinned = $12,
+			archived = $13,
+			updated_at = $14
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	_, err = r.conn(ctx).Exec(ctx, query,
@@ -145,6 +149,8 @@ func (r *MemoryRepository) Update(ctx context.Context, memory *models.Memory) er
 		nullString(memory.SourceType),
 		sourceInfo,
 		memory.Tags,
+		memory.Pinned,
+		memory.Archived,
 		memory.UpdatedAt,
 	)
 
@@ -187,7 +193,7 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 	if opts.IncludeScores {
 		query = `
 			SELECT id, content, embeddings, embeddings_info, importance, confidence,
-				   user_rating, created_by, source_type, source_info, tags, created_at, updated_at, deleted_at,
+				   user_rating, created_by, source_type, source_info, tags, pinned, archived, created_at, updated_at, deleted_at,
 				   1 - (embeddings <=> $1) as similarity
 			FROM alicia_memory
 			WHERE deleted_at IS NULL AND embeddings IS NOT NULL`
@@ -203,7 +209,7 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 	} else {
 		query = `
 			SELECT id, content, embeddings, embeddings_info, importance, confidence,
-				   user_rating, created_by, source_type, source_info, tags, created_at, updated_at, deleted_at
+				   user_rating, created_by, source_type, source_info, tags, pinned, archived, created_at, updated_at, deleted_at
 			FROM alicia_memory
 			WHERE deleted_at IS NULL AND embeddings IS NOT NULL`
 		args = []interface{}{vector}
@@ -246,6 +252,8 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 				&sourceType,
 				&sourceInfo,
 				&m.Tags,
+				&m.Pinned,
+				&m.Archived,
 				&m.CreatedAt,
 				&m.UpdatedAt,
 				&m.DeletedAt,
@@ -264,6 +272,8 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 				&sourceType,
 				&sourceInfo,
 				&m.Tags,
+				&m.Pinned,
+				&m.Archived,
 				&m.CreatedAt,
 				&m.UpdatedAt,
 				&m.DeletedAt,
@@ -323,7 +333,7 @@ func (r *MemoryRepository) GetByTags(ctx context.Context, tags []string, limit i
 
 	query := `
 		SELECT id, content, embeddings, embeddings_info, importance, confidence,
-			   user_rating, created_by, source_type, source_info, tags, created_at, updated_at, deleted_at
+			   user_rating, created_by, source_type, source_info, tags, pinned, archived, created_at, updated_at, deleted_at
 		FROM alicia_memory
 		WHERE deleted_at IS NULL AND tags && $1
 		ORDER BY importance DESC, created_at DESC
@@ -357,6 +367,8 @@ func (r *MemoryRepository) scanMemory(row pgx.Row) (*models.Memory, error) {
 		&sourceType,
 		&sourceInfo,
 		&m.Tags,
+		&m.Pinned,
+		&m.Archived,
 		&m.CreatedAt,
 		&m.UpdatedAt,
 		&m.DeletedAt,
@@ -429,6 +441,8 @@ func (r *MemoryRepository) scanMemories(rows pgx.Rows) ([]*models.Memory, error)
 			&sourceType,
 			&sourceInfo,
 			&m.Tags,
+			&m.Pinned,
+			&m.Archived,
 			&m.CreatedAt,
 			&m.UpdatedAt,
 			&m.DeletedAt,
@@ -474,4 +488,34 @@ func (r *MemoryRepository) scanMemories(rows pgx.Rows) ([]*models.Memory, error)
 	}
 
 	return memories, rows.Err()
+}
+
+// Pin sets the pinned status of a memory
+func (r *MemoryRepository) Pin(ctx context.Context, id string, pinned bool) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `
+		UPDATE alicia_memory
+		SET pinned = $2,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	_, err := r.conn(ctx).Exec(ctx, query, id, pinned)
+	return err
+}
+
+// Archive sets the archived status of a memory
+func (r *MemoryRepository) Archive(ctx context.Context, id string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `
+		UPDATE alicia_memory
+		SET archived = TRUE,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	_, err := r.conn(ctx).Exec(ctx, query, id)
+	return err
 }

@@ -21,6 +21,19 @@ export enum MessageType {
   // WebSocket sync message types
   SyncRequest = 17,
   SyncResponse = 18,
+  // Feedback protocol message types
+  Feedback = 20,
+  FeedbackConfirmation = 21,
+  UserNote = 22,
+  NoteConfirmation = 23,
+  MemoryAction = 24,
+  MemoryConfirmation = 25,
+  ServerInfo = 26,
+  SessionStats = 27,
+  // Dimension optimization message types
+  DimensionPreference = 29,
+  EliteSelect = 30,
+  EliteOptions = 31,
 }
 
 export enum Severity {
@@ -183,6 +196,157 @@ export interface AssistantSentence {
   text: string;
   isFinal?: boolean;
   audio?: Uint8Array;
+}
+
+export type FeedbackTargetType = 'message' | 'tool_use' | 'memory' | 'reasoning';
+export type VoteType = 'up' | 'down' | 'critical' | 'remove';
+
+export interface Feedback {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  targetType: FeedbackTargetType;
+  targetId: string;
+  vote: VoteType;
+  quickFeedback?: string;
+  note?: string;
+  timestamp: number;
+}
+
+export interface FeedbackAggregates {
+  upvotes: number;
+  downvotes: number;
+  specialVotes?: Record<string, number>;
+}
+
+export interface FeedbackConfirmation {
+  feedbackId: string;
+  targetType: FeedbackTargetType;
+  targetId: string;
+  aggregates: FeedbackAggregates;
+  userVote: 'up' | 'down' | 'critical' | null;
+}
+
+export type NoteCategory = 'improvement' | 'correction' | 'context' | 'general';
+export type NoteAction = 'create' | 'update' | 'delete';
+
+export interface UserNote {
+  id: string;
+  messageId: string;
+  content: string;
+  category: NoteCategory;
+  action: NoteAction;
+  timestamp: number;
+}
+
+export interface NoteConfirmation {
+  noteId: string;
+  messageId: string;
+  success: boolean;
+}
+
+export type MemoryCategory = 'preference' | 'fact' | 'context' | 'instruction';
+export type MemoryActionType = 'create' | 'update' | 'delete' | 'pin' | 'archive';
+
+export interface MemoryData {
+  content: string;
+  category: MemoryCategory;
+  pinned?: boolean;
+}
+
+export interface MemoryAction {
+  id: string;
+  action: MemoryActionType;
+  memory?: MemoryData;
+  timestamp: number;
+}
+
+export interface MemoryConfirmation {
+  memoryId: string;
+  action: MemoryActionType;
+  success: boolean;
+}
+
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
+
+export interface ConnectionInfo {
+  status: ConnectionStatus;
+  latency: number;
+}
+
+export interface ModelInfo {
+  name: string;
+  provider: string;
+}
+
+export type MCPServerStatus = 'connected' | 'disconnected' | 'error';
+
+export interface MCPServerInfo {
+  name: string;
+  status: MCPServerStatus;
+}
+
+export interface ServerInfo {
+  connection: ConnectionInfo;
+  model: ModelInfo;
+  mcpServers: MCPServerInfo[];
+}
+
+export interface SessionStats {
+  messageCount: number;
+  toolCallCount: number;
+  memoriesUsed: number;
+  sessionDuration: number;
+}
+
+// Dimension optimization types (Types 29-31)
+
+export interface DimensionWeights {
+  successRate: number;
+  quality: number;
+  efficiency: number;
+  robustness: number;
+  generalization: number;
+  diversity: number;
+  innovation: number;
+}
+
+export interface DimensionScores {
+  successRate: number;
+  quality: number;
+  efficiency: number;
+  robustness: number;
+  generalization: number;
+  diversity: number;
+  innovation: number;
+}
+
+export interface DimensionPreference {
+  conversationId: string;
+  weights: DimensionWeights;
+  preset?: 'accuracy' | 'speed' | 'reliable' | 'creative' | 'balanced';
+  timestamp: number;
+}
+
+export interface EliteSelect {
+  conversationId: string;
+  eliteId: string;
+  timestamp: number;
+}
+
+export interface EliteSummary {
+  id: string;
+  label: string;
+  scores: DimensionScores;
+  description: string;
+  bestFor: string;
+}
+
+export interface EliteOptions {
+  conversationId: string;
+  elites: EliteSummary[];
+  currentEliteId: string;
+  timestamp: number;
 }
 
 // Common features

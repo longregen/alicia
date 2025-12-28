@@ -38,6 +38,28 @@ const (
 	TypeCommentary MessageType = 15
 	// TypeAssistantSentence (16) - Streaming response chunk
 	TypeAssistantSentence MessageType = 16
+	// TypeFeedback (20) - Vote message sent from client to server
+	TypeFeedback MessageType = 20
+	// TypeFeedbackConfirmation (21) - Server confirmation with aggregates
+	TypeFeedbackConfirmation MessageType = 21
+	// TypeUserNote (22) - Note message
+	TypeUserNote MessageType = 22
+	// TypeNoteConfirmation (23) - Note confirmation
+	TypeNoteConfirmation MessageType = 23
+	// TypeMemoryAction (24) - Memory CRUD actions
+	TypeMemoryAction MessageType = 24
+	// TypeMemoryConfirmation (25) - Memory confirmation
+	TypeMemoryConfirmation MessageType = 25
+	// TypeServerInfo (26) - Server info broadcast
+	TypeServerInfo MessageType = 26
+	// TypeSessionStats (27) - Session statistics
+	TypeSessionStats MessageType = 27
+	// TypeDimensionPreference (29) - User adjusts dimension weights
+	TypeDimensionPreference MessageType = 29
+	// TypeEliteSelect (30) - User selects a specific elite solution
+	TypeEliteSelect MessageType = 30
+	// TypeEliteOptions (31) - Server sends available elite solutions
+	TypeEliteOptions MessageType = 31
 )
 
 // String returns the string representation of the message type
@@ -75,6 +97,28 @@ func (t MessageType) String() string {
 		return "Commentary"
 	case TypeAssistantSentence:
 		return "AssistantSentence"
+	case TypeFeedback:
+		return "Feedback"
+	case TypeFeedbackConfirmation:
+		return "FeedbackConfirmation"
+	case TypeUserNote:
+		return "UserNote"
+	case TypeNoteConfirmation:
+		return "NoteConfirmation"
+	case TypeMemoryAction:
+		return "MemoryAction"
+	case TypeMemoryConfirmation:
+		return "MemoryConfirmation"
+	case TypeServerInfo:
+		return "ServerInfo"
+	case TypeSessionStats:
+		return "SessionStats"
+	case TypeDimensionPreference:
+		return "DimensionPreference"
+	case TypeEliteSelect:
+		return "EliteSelect"
+	case TypeEliteOptions:
+		return "EliteOptions"
 	default:
 		return "Unknown"
 	}

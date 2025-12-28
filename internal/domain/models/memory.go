@@ -32,6 +32,8 @@ type Memory struct {
 	SourceType     string          `json:"source_type,omitempty"`
 	SourceInfo     *SourceInfo     `json:"source_info,omitempty"`
 	Tags           []string        `json:"tags,omitempty"`
+	Pinned         bool            `json:"pinned"`
+	Archived       bool            `json:"archived"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 	DeletedAt      *time.Time      `json:"deleted_at,omitempty"`

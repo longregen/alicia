@@ -80,6 +80,30 @@ func (m *mockIDGenerator) GenerateMCPServerID() string {
 	return "amcp_test"
 }
 
+func (m *mockIDGenerator) GenerateVoteID() string {
+	return "av_test"
+}
+
+func (m *mockIDGenerator) GenerateNoteID() string {
+	return "an_test"
+}
+
+func (m *mockIDGenerator) GenerateSessionStatsID() string {
+	return "ass_test"
+}
+
+func (m *mockIDGenerator) GenerateOptimizationRunID() string {
+	return "aor_test"
+}
+
+func (m *mockIDGenerator) GeneratePromptCandidateID() string {
+	return "apc_test"
+}
+
+func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
+	return "ape_test"
+}
+
 type mockTransactionManager struct{}
 
 func (m *mockTransactionManager) WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error {

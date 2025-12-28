@@ -1,5 +1,5 @@
 import { pack, unpack } from 'msgpackr';
-import { Envelope, MessageType, UserMessage, Configuration, ControlStop, ControlVariation, VariationType } from '../types/protocol';
+import { Envelope, MessageType, UserMessage, Configuration, ControlStop, ControlVariation, VariationType, DimensionPreference, DimensionWeights, EliteSelect } from '../types/protocol';
 
 /**
  * Protocol service for encoding and decoding MessagePack messages
@@ -115,6 +115,50 @@ export class ProtocolService {
       stanzaId: this.nextStanzaId(),
       conversationId,
       type: MessageType.ControlVariation,
+      body,
+    };
+  }
+
+  /**
+   * Create a DimensionPreference envelope
+   */
+  createDimensionPreference(
+    conversationId: string,
+    weights: DimensionWeights,
+    preset?: string
+  ): Envelope {
+    const body: DimensionPreference = {
+      conversationId,
+      weights,
+      preset: preset as 'accuracy' | 'speed' | 'reliable' | 'creative' | 'balanced' | undefined,
+      timestamp: Date.now(),
+    };
+
+    return {
+      stanzaId: this.nextStanzaId(),
+      conversationId,
+      type: MessageType.DimensionPreference,
+      body,
+    };
+  }
+
+  /**
+   * Create an EliteSelect envelope
+   */
+  createEliteSelect(
+    conversationId: string,
+    eliteId: string
+  ): Envelope {
+    const body: EliteSelect = {
+      conversationId,
+      eliteId,
+      timestamp: Date.now(),
+    };
+
+    return {
+      stanzaId: this.nextStanzaId(),
+      conversationId,
+      type: MessageType.EliteSelect,
       body,
     };
   }

@@ -20,7 +20,29 @@ func (d *DefaultMessageDispatcher) handleConfiguration(ctx context.Context, enve
 		return fmt.Errorf("invalid Configuration message type")
 	}
 
-	return d.protocolHandler.HandleConfiguration(ctx, config)
+	if err := d.protocolHandler.HandleConfiguration(ctx, config); err != nil {
+		return err
+	}
+
+	// After successful configuration, send server info and session stats to the client
+	// These provide the frontend with initial state about the server connection
+	if err := d.SendServerInfo(ctx); err != nil {
+		log.Printf("Failed to send ServerInfo after configuration: %v", err)
+		// Non-fatal - continue even if this fails
+	}
+
+	if err := d.SendSessionStats(ctx); err != nil {
+		log.Printf("Failed to send SessionStats after configuration: %v", err)
+		// Non-fatal - continue even if this fails
+	}
+
+	// Send available elite solutions (if any exist from optimization runs)
+	if err := d.SendEliteOptions(ctx); err != nil {
+		log.Printf("Failed to send EliteOptions after configuration: %v", err)
+		// Non-fatal - continue even if this fails
+	}
+
+	return nil
 }
 
 // handleUserMessage processes user text messages
@@ -280,7 +302,7 @@ func (d *DefaultMessageDispatcher) processStreamingResponse(
 		// Send ToolCall messages if present
 		if chunk.ToolCall != nil && chunk.ToolUseID != "" {
 			// Get the ToolUse from the database to access full details
-			toolUse, err := d.protocolHandler.toolUseRepo.GetByID(ctx, chunk.ToolUseID)
+			toolUse, err := d.protocolHandler.GetToolUseRepo().GetByID(ctx, chunk.ToolUseID)
 			if err != nil {
 				log.Printf("Failed to get tool use %s: %v", chunk.ToolUseID, err)
 				continue
@@ -557,7 +579,7 @@ func (d *DefaultMessageDispatcher) handleControlStop(ctx context.Context, envelo
 	}
 
 	// Send acknowledgement
-	return d.protocolHandler.sendAcknowledgement(ctx, envelope.StanzaID, true)
+	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
 // handleControlVariation processes variation control messages
@@ -796,7 +818,7 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 	}
 
 	// Send acknowledgement
-	return d.protocolHandler.sendAcknowledgement(ctx, envelope.StanzaID, true)
+	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
 // handleEdit updates an existing message with new content
@@ -845,7 +867,7 @@ func (d *DefaultMessageDispatcher) handleEdit(ctx context.Context, envelope *pro
 	log.Printf("Sent updated message to client: %s", targetMessage.ID)
 
 	// Send acknowledgement
-	return d.protocolHandler.sendAcknowledgement(ctx, envelope.StanzaID, true)
+	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
 // handleContinue extends an existing message
@@ -929,7 +951,7 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 	}
 
 	// Send acknowledgement
-	return d.protocolHandler.sendAcknowledgement(ctx, envelope.StanzaID, true)
+	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
 // sendMemoryTraces sends MemoryTrace protocol messages for each retrieved memory
@@ -1001,14 +1023,37 @@ func (d *DefaultMessageDispatcher) handleToolUseResult(ctx context.Context, enve
 			true)
 	}
 
-	// TODO: Store the tool result and potentially trigger continuation of response generation
-	// For now, we just log the result
+	// Fetch the ToolUse from the repository
+	toolUse, err := d.toolUseRepo.GetByID(ctx, result.RequestID)
+	if err != nil {
+		return d.sendError(ctx, protocol.ErrCodeInternalError,
+			fmt.Sprintf("Failed to find tool use with ID %s: %v", result.RequestID, err),
+			true)
+	}
+
+	// Update the ToolUse with the result
 	if result.Success {
+		toolUse.Complete(result.Result)
 		log.Printf("Tool execution succeeded for request %s", result.RequestID)
 	} else {
+		errorMsg := result.ErrorMessage
+		if result.ErrorCode != "" {
+			errorMsg = fmt.Sprintf("%s: %s", result.ErrorCode, result.ErrorMessage)
+		}
+		toolUse.Fail(errorMsg)
 		log.Printf("Tool execution failed for request %s: %s - %s",
 			result.RequestID, result.ErrorCode, result.ErrorMessage)
 	}
+
+	// Persist the updated ToolUse
+	if err := d.toolUseRepo.Update(ctx, toolUse); err != nil {
+		log.Printf("Failed to update tool use %s: %v", result.RequestID, err)
+		return d.sendError(ctx, protocol.ErrCodeInternalError,
+			fmt.Sprintf("Failed to store tool result: %v", err),
+			true)
+	}
+
+	log.Printf("Stored tool result for %s (status: %s)", result.RequestID, toolUse.Status)
 
 	return nil
 }
@@ -1050,4 +1095,431 @@ func (d *DefaultMessageDispatcher) handleCommentary(ctx context.Context, envelop
 	// They can be logged for debugging but don't require action
 	// In the future, they could be stored for analysis or displayed to users
 	return nil
+}
+
+// handleFeedback processes Feedback messages (votes on messages, tools, memories, reasoning)
+func (d *DefaultMessageDispatcher) handleFeedback(ctx context.Context, envelope *protocol.Envelope) error {
+	feedback, ok := envelope.Body.(*protocol.Feedback)
+	if !ok {
+		_ = d.sendError(ctx, protocol.ErrCodeMalformedData, "Invalid Feedback message", true)
+		return fmt.Errorf("invalid Feedback message type")
+	}
+
+	log.Printf("Received feedback: targetType=%s, targetID=%s, vote=%s",
+		feedback.TargetType, feedback.TargetID, feedback.Vote)
+
+	// Check if voteRepo is available
+	if d.voteRepo == nil {
+		log.Printf("Warning: voteRepo not available, cannot process feedback")
+		return d.sendFeedbackConfirmation(ctx, feedback, nil)
+	}
+
+	// Map protocol vote string to model value
+	var voteValue int
+	switch feedback.Vote {
+	case "up":
+		voteValue = models.VoteValueUp
+	case "down":
+		voteValue = models.VoteValueDown
+	case "remove":
+		// Handle vote removal
+		if err := d.voteRepo.Delete(ctx, feedback.TargetType, feedback.TargetID); err != nil {
+			log.Printf("Failed to remove vote: %v", err)
+		}
+		return d.sendFeedbackConfirmation(ctx, feedback, nil)
+	default:
+		// For special votes like "critical", treat as downvote with metadata
+		voteValue = models.VoteValueDown
+	}
+
+	// Create the vote
+	vote := models.NewVote(
+		d.idGenerator.GenerateVoteID(),
+		feedback.TargetType,
+		feedback.TargetID,
+		feedback.MessageID,
+		voteValue,
+	)
+
+	// Save the vote
+	if err := d.voteRepo.Create(ctx, vote); err != nil {
+		log.Printf("Failed to create vote: %v", err)
+		// Don't fail the whole request, just log the error
+	}
+
+	// Get updated aggregates for confirmation
+	aggregates, err := d.voteRepo.GetAggregates(ctx, feedback.TargetType, feedback.TargetID)
+	if err != nil {
+		log.Printf("Failed to get vote aggregates: %v", err)
+		// Still send confirmation with zero aggregates
+	}
+
+	return d.sendFeedbackConfirmation(ctx, feedback, aggregates)
+}
+
+// sendFeedbackConfirmation sends a FeedbackConfirmation message back to the client
+func (d *DefaultMessageDispatcher) sendFeedbackConfirmation(ctx context.Context, feedback *protocol.Feedback, aggregates *models.VoteAggregates) error {
+	confirmation := &protocol.FeedbackConfirmation{
+		FeedbackID: feedback.ID,
+		TargetType: feedback.TargetType,
+		TargetID:   feedback.TargetID,
+		UserVote:   feedback.Vote,
+		Aggregates: protocol.FeedbackAggregates{
+			Upvotes:   0,
+			Downvotes: 0,
+		},
+	}
+
+	if aggregates != nil {
+		confirmation.Aggregates.Upvotes = aggregates.Upvotes
+		confirmation.Aggregates.Downvotes = aggregates.Downvotes
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: d.conversationID,
+		Type:           protocol.TypeFeedbackConfirmation,
+		Body:           confirmation,
+	}
+
+	return d.protocolHandler.SendEnvelope(ctx, envelope)
+}
+
+// handleUserNote processes UserNote messages (create, update, delete notes)
+func (d *DefaultMessageDispatcher) handleUserNote(ctx context.Context, envelope *protocol.Envelope) error {
+	note, ok := envelope.Body.(*protocol.UserNote)
+	if !ok {
+		_ = d.sendError(ctx, protocol.ErrCodeMalformedData, "Invalid UserNote message", true)
+		return fmt.Errorf("invalid UserNote message type")
+	}
+
+	log.Printf("Received user note: messageID=%s, action=%s, category=%s",
+		note.MessageID, note.Action, note.Category)
+
+	// Check if noteRepo is available
+	if d.noteRepo == nil {
+		log.Printf("Warning: noteRepo not available, cannot process user note")
+		return d.sendNoteConfirmation(ctx, note, false)
+	}
+
+	var success bool
+	var noteID string
+
+	switch note.Action {
+	case "create":
+		noteID = d.idGenerator.GenerateNoteID()
+		category := note.Category
+		if category == "" {
+			category = models.NoteCategoryGeneral
+		}
+		modelNote := models.NewNote(noteID, note.MessageID, note.Content, category)
+		if err := d.noteRepo.Create(ctx, modelNote); err != nil {
+			log.Printf("Failed to create note: %v", err)
+		} else {
+			success = true
+		}
+	case "update":
+		noteID = note.ID
+		if err := d.noteRepo.Update(ctx, note.ID, note.Content); err != nil {
+			log.Printf("Failed to update note: %v", err)
+		} else {
+			success = true
+		}
+	case "delete":
+		noteID = note.ID
+		if err := d.noteRepo.Delete(ctx, note.ID); err != nil {
+			log.Printf("Failed to delete note: %v", err)
+		} else {
+			success = true
+		}
+	default:
+		log.Printf("Unknown note action: %s", note.Action)
+	}
+
+	return d.sendNoteConfirmation(ctx, &protocol.UserNote{ID: noteID, MessageID: note.MessageID}, success)
+}
+
+// sendNoteConfirmation sends a NoteConfirmation message back to the client
+func (d *DefaultMessageDispatcher) sendNoteConfirmation(ctx context.Context, note *protocol.UserNote, success bool) error {
+	confirmation := &protocol.NoteConfirmation{
+		NoteID:    note.ID,
+		MessageID: note.MessageID,
+		Success:   success,
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: d.conversationID,
+		Type:           protocol.TypeNoteConfirmation,
+		Body:           confirmation,
+	}
+
+	return d.protocolHandler.SendEnvelope(ctx, envelope)
+}
+
+// handleMemoryAction processes MemoryAction messages (create, update, delete, pin, archive memories)
+func (d *DefaultMessageDispatcher) handleMemoryAction(ctx context.Context, envelope *protocol.Envelope) error {
+	memAction, ok := envelope.Body.(*protocol.MemoryAction)
+	if !ok {
+		_ = d.sendError(ctx, protocol.ErrCodeMalformedData, "Invalid MemoryAction message", true)
+		return fmt.Errorf("invalid MemoryAction message type")
+	}
+
+	log.Printf("Received memory action: id=%s, action=%s", memAction.ID, memAction.Action)
+
+	// Check if memoryService is available
+	if d.memoryService == nil {
+		log.Printf("Warning: memoryService not available, cannot process memory action")
+		return d.sendMemoryConfirmation(ctx, memAction.ID, memAction.Action, false)
+	}
+
+	var success bool
+	memoryID := memAction.ID
+
+	switch memAction.Action {
+	case "create":
+		if memAction.Memory != nil {
+			memory, err := d.memoryService.CreateWithEmbeddings(ctx, memAction.Memory.Content)
+			if err != nil {
+				log.Printf("Failed to create memory: %v", err)
+			} else {
+				memoryID = memory.ID
+				success = true
+			}
+		}
+	case "update":
+		memory, err := d.memoryService.GetByID(ctx, memAction.ID)
+		if err != nil {
+			log.Printf("Failed to get memory for update: %v", err)
+		} else if memAction.Memory != nil {
+			memory.Content = memAction.Memory.Content
+			if err := d.memoryService.Update(ctx, memory); err != nil {
+				log.Printf("Failed to update memory: %v", err)
+			} else {
+				success = true
+			}
+		}
+	case "delete":
+		if err := d.memoryService.Delete(ctx, memAction.ID); err != nil {
+			log.Printf("Failed to delete memory: %v", err)
+		} else {
+			success = true
+		}
+	case "pin":
+		// Set high importance for pinned memories
+		if _, err := d.memoryService.SetImportance(ctx, memAction.ID, 1.0); err != nil {
+			log.Printf("Failed to pin memory: %v", err)
+		} else {
+			success = true
+		}
+	case "archive":
+		// Set low importance for archived memories
+		if _, err := d.memoryService.SetImportance(ctx, memAction.ID, 0.1); err != nil {
+			log.Printf("Failed to archive memory: %v", err)
+		} else {
+			success = true
+		}
+	default:
+		log.Printf("Unknown memory action: %s", memAction.Action)
+	}
+
+	return d.sendMemoryConfirmation(ctx, memoryID, memAction.Action, success)
+}
+
+// sendMemoryConfirmation sends a MemoryConfirmation message back to the client
+func (d *DefaultMessageDispatcher) sendMemoryConfirmation(ctx context.Context, memoryID, action string, success bool) error {
+	confirmation := &protocol.MemoryConfirmation{
+		MemoryID: memoryID,
+		Action:   action,
+		Success:  success,
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: d.conversationID,
+		Type:           protocol.TypeMemoryConfirmation,
+		Body:           confirmation,
+	}
+
+	return d.protocolHandler.SendEnvelope(ctx, envelope)
+}
+
+// handleDimensionPreference processes DimensionPreference messages (adjust optimization weights)
+func (d *DefaultMessageDispatcher) handleDimensionPreference(ctx context.Context, envelope *protocol.Envelope) error {
+	pref, ok := envelope.Body.(*protocol.DimensionPreference)
+	if !ok {
+		_ = d.sendError(ctx, protocol.ErrCodeMalformedData, "Invalid DimensionPreference message", true)
+		return fmt.Errorf("invalid DimensionPreference message type")
+	}
+
+	log.Printf("Received dimension preference: conversationID=%s, preset=%s",
+		pref.ConversationID, pref.Preset)
+
+	// Validate conversation ID
+	if pref.ConversationID != d.conversationID {
+		return d.sendError(ctx, protocol.ErrCodeConversationNotFound,
+			fmt.Sprintf("Conversation ID mismatch: expected %s, got %s", d.conversationID, pref.ConversationID),
+			true)
+	}
+
+	// Check if optimizationService is available
+	if d.optimizationService == nil {
+		log.Printf("Warning: optimizationService not available, cannot process dimension preference")
+		return nil
+	}
+
+	// Convert protocol weights to map for interface compatibility
+	weights := map[string]float64{
+		"successRate":    pref.Weights.SuccessRate,
+		"quality":        pref.Weights.Quality,
+		"efficiency":     pref.Weights.Efficiency,
+		"robustness":     pref.Weights.Robustness,
+		"generalization": pref.Weights.Generalization,
+		"diversity":      pref.Weights.Diversity,
+		"innovation":     pref.Weights.Innovation,
+	}
+
+	// Apply the dimension weights to the optimization service
+	d.optimizationService.SetDimensionWeights(weights)
+
+	log.Printf("Applied dimension weights: successRate=%.2f, quality=%.2f, efficiency=%.2f",
+		pref.Weights.SuccessRate, pref.Weights.Quality, pref.Weights.Efficiency)
+
+	return nil
+}
+
+// handleEliteSelect processes EliteSelect messages (select an elite solution)
+func (d *DefaultMessageDispatcher) handleEliteSelect(ctx context.Context, envelope *protocol.Envelope) error {
+	selection, ok := envelope.Body.(*protocol.EliteSelect)
+	if !ok {
+		_ = d.sendError(ctx, protocol.ErrCodeMalformedData, "Invalid EliteSelect message", true)
+		return fmt.Errorf("invalid EliteSelect message type")
+	}
+
+	log.Printf("Received elite selection: conversationID=%s, eliteID=%s",
+		selection.ConversationID, selection.EliteID)
+
+	// Validate conversation ID
+	if selection.ConversationID != d.conversationID {
+		return d.sendError(ctx, protocol.ErrCodeConversationNotFound,
+			fmt.Sprintf("Conversation ID mismatch: expected %s, got %s", d.conversationID, selection.ConversationID),
+			true)
+	}
+
+	// Validate elite ID is provided
+	if selection.EliteID == "" {
+		return d.sendError(ctx, protocol.ErrCodeMalformedData,
+			"EliteID is required for elite selection", true)
+	}
+
+	// For now, just log the selection
+	// In the future, this could:
+	// - Update the active elite solution for the conversation
+	// - Apply the elite's dimension weights
+	// - Store the selection for tracking user preferences
+	log.Printf("User selected elite solution: %s", selection.EliteID)
+
+	return nil
+}
+
+// SendServerInfo sends server information to the client
+// This should be called on initial connection and periodically for status updates
+func (d *DefaultMessageDispatcher) SendServerInfo(ctx context.Context) error {
+	serverInfo := &protocol.ServerInfo{
+		Connection: protocol.ConnectionInfo{
+			Status:  "connected",
+			Latency: 0, // Will be updated with actual latency when available
+		},
+		Model: protocol.ModelInfo{
+			Name:     "claude-3-5-sonnet", // Default model name
+			Provider: "anthropic",
+		},
+		MCPServers: []protocol.MCPServerInfo{},
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: d.conversationID,
+		Type:           protocol.TypeServerInfo,
+		Body:           serverInfo,
+	}
+
+	return d.protocolHandler.SendEnvelope(ctx, envelope)
+}
+
+// SendSessionStats sends session statistics to the client
+func (d *DefaultMessageDispatcher) SendSessionStats(ctx context.Context) error {
+	// Get message count for this conversation
+	var messageCount int
+	if d.messageRepo != nil {
+		messages, err := d.messageRepo.GetByConversation(ctx, d.conversationID)
+		if err == nil {
+			messageCount = len(messages)
+		}
+	}
+
+	// Get tool call count by querying all messages and their tool uses
+	var toolCallCount int
+	if d.messageRepo != nil && d.toolUseRepo != nil {
+		messages, err := d.messageRepo.GetByConversation(ctx, d.conversationID)
+		if err == nil {
+			for _, msg := range messages {
+				toolUses, err := d.toolUseRepo.GetByMessage(ctx, msg.ID)
+				if err == nil {
+					toolCallCount += len(toolUses)
+				}
+			}
+		}
+	}
+
+	// Get memory usage count for this conversation
+	var memoriesUsed int
+	if d.memoryUsageRepo != nil {
+		memoryUsages, err := d.memoryUsageRepo.GetByConversation(ctx, d.conversationID)
+		if err == nil {
+			memoriesUsed = len(memoryUsages)
+		}
+	}
+
+	// Calculate session duration from conversation creation time
+	var sessionDuration int
+	if d.conversationRepo != nil {
+		conversation, err := d.conversationRepo.GetByID(ctx, d.conversationID)
+		if err == nil {
+			sessionDuration = int(time.Since(conversation.CreatedAt).Milliseconds())
+		}
+	}
+
+	stats := &protocol.SessionStats{
+		MessageCount:    messageCount,
+		ToolCallCount:   toolCallCount,
+		MemoriesUsed:    memoriesUsed,
+		SessionDuration: sessionDuration,
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: d.conversationID,
+		Type:           protocol.TypeSessionStats,
+		Body:           stats,
+	}
+
+	return d.protocolHandler.SendEnvelope(ctx, envelope)
+}
+
+// SendEliteOptions sends available elite solutions to the client
+func (d *DefaultMessageDispatcher) SendEliteOptions(ctx context.Context) error {
+	// Elite solutions are populated when optimization runs complete
+	// For now, send an empty list - UI will show "no elites available" state
+	// When optimization service has completed runs, this can be enhanced
+	// to query the most recent optimization run and extract its elites
+	eliteOptions := &protocol.EliteOptions{
+		ConversationID: d.conversationID,
+		Elites:         []protocol.EliteSummary{},
+		CurrentEliteID: "", // Will be set when user selects one
+		Timestamp:      time.Now().UnixMilli(),
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: d.conversationID,
+		Type:           protocol.TypeEliteOptions,
+		Body:           eliteOptions,
+	}
+
+	return d.protocolHandler.SendEnvelope(ctx, envelope)
 }

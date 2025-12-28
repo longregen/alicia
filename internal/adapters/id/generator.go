@@ -69,3 +69,27 @@ func (g *Generator) GenerateMCPServerID() string {
 func (g *Generator) GenerateLiveKitRoomName() string {
 	return g.generate("room")
 }
+
+func (g *Generator) GenerateVoteID() string {
+	return g.generate("av")
+}
+
+func (g *Generator) GenerateNoteID() string {
+	return g.generate("an")
+}
+
+func (g *Generator) GenerateSessionStatsID() string {
+	return g.generate("ass")
+}
+
+func (g *Generator) GenerateOptimizationRunID() string {
+	return g.generate("aor")
+}
+
+func (g *Generator) GeneratePromptCandidateID() string {
+	return g.generate("apc")
+}
+
+func (g *Generator) GeneratePromptEvaluationID() string {
+	return g.generate("ape")
+}

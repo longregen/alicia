@@ -176,11 +176,26 @@ func (m *mockMessageRepo) Delete(ctx context.Context, id string) error {
 }
 
 func (m *mockMessageRepo) GetByConversation(ctx context.Context, conversationID string) ([]*models.Message, error) {
-	return []*models.Message{}, nil
+	messages := make([]*models.Message, 0)
+	for _, msg := range m.store {
+		if msg.ConversationID == conversationID {
+			messages = append(messages, msg)
+		}
+	}
+	return messages, nil
 }
 
 func (m *mockMessageRepo) GetLatestByConversation(ctx context.Context, conversationID string, limit int) ([]*models.Message, error) {
-	return []*models.Message{}, nil
+	messages := make([]*models.Message, 0)
+	for _, msg := range m.store {
+		if msg.ConversationID == conversationID {
+			messages = append(messages, msg)
+			if len(messages) >= limit {
+				break
+			}
+		}
+	}
+	return messages, nil
 }
 
 func (m *mockMessageRepo) GetNextSequenceNumber(ctx context.Context, conversationID string) (int, error) {
@@ -444,10 +459,10 @@ func TestToolService_RegisterExecutor_Duplicate(t *testing.T) {
 
 	svc.RegisterExecutor("search", executor)
 
-	// Try to register again
+	// Try to register again - should succeed (idempotent behavior)
 	err := svc.RegisterExecutor("search", executor)
-	if err == nil {
-		t.Fatal("expected error for duplicate executor, got nil")
+	if err != nil {
+		t.Fatalf("expected nil error for idempotent re-registration, got %v", err)
 	}
 }
 

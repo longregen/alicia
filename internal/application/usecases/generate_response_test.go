@@ -704,6 +704,10 @@ func (m *mockMemoryService) SetConfidence(ctx context.Context, memoryID string, 
 	return nil, nil
 }
 
+func (m *mockMemoryService) SetUserRating(ctx context.Context, id string, rating int) (*models.Memory, error) {
+	return nil, nil
+}
+
 func (m *mockMemoryService) AddTag(ctx context.Context, memoryID, tag string) (*models.Memory, error) {
 	return nil, nil
 }
@@ -725,6 +729,14 @@ func (m *mockMemoryService) Delete(ctx context.Context, id string) error {
 }
 
 func (m *mockMemoryService) RegenerateEmbeddings(ctx context.Context, id string) (*models.Memory, error) {
+	return nil, nil
+}
+
+func (m *mockMemoryService) Pin(ctx context.Context, id string, pinned bool) (*models.Memory, error) {
+	return nil, nil
+}
+
+func (m *mockMemoryService) Archive(ctx context.Context, id string) (*models.Memory, error) {
 	return nil, nil
 }
 
@@ -793,6 +805,30 @@ func (m *mockIDGenerator) GenerateMetaID() string {
 
 func (m *mockIDGenerator) GenerateMCPServerID() string {
 	return "amcp_test1"
+}
+
+func (m *mockIDGenerator) GenerateVoteID() string {
+	return "av_test1"
+}
+
+func (m *mockIDGenerator) GenerateNoteID() string {
+	return "an_test1"
+}
+
+func (m *mockIDGenerator) GenerateSessionStatsID() string {
+	return "ass_test1"
+}
+
+func (m *mockIDGenerator) GenerateOptimizationRunID() string {
+	return "aor_test1"
+}
+
+func (m *mockIDGenerator) GeneratePromptCandidateID() string {
+	return "apc_test1"
+}
+
+func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
+	return "ape_test1"
 }
 
 type mockTransactionManager struct{}

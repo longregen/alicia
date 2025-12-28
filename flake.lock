@@ -116,6 +116,29 @@
         "type": "github"
       }
     },
+    "nix-hug": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1751568768,
+        "narHash": "sha256-rCl8zYFkMHka+I4SjnSLy3xF+swnLG800B5beNJBtdM=",
+        "owner": "longregen",
+        "repo": "nix-hug",
+        "rev": "384b0cc868f42acf5898d5120bef655faebb9fd6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "longregen",
+        "repo": "nix-hug",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1755864489,
@@ -153,7 +176,35 @@
         "android-nixpkgs": "android-nixpkgs",
         "flake-utils": "flake-utils_2",
         "gomod2nix": "gomod2nix",
-        "nixpkgs": "nixpkgs_2"
+        "nix-hug": "nix-hug",
+        "nixpkgs": "nixpkgs_2",
+        "speaches": "speaches"
+      }
+    },
+    "speaches": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nix-hug": [
+          "nix-hug"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1760705921,
+        "narHash": "sha256-O4DjqbUd2FzUoZWPbWizNvsywyp2ehZg5bvB+cpN/JQ=",
+        "owner": "longregen",
+        "repo": "speaches",
+        "rev": "2e1058b16c4f889edafec2aff568c977b501b716",
+        "type": "github"
+      },
+      "original": {
+        "owner": "longregen",
+        "repo": "speaches",
+        "type": "github"
       }
     },
     "systems": {

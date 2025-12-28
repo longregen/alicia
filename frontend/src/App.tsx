@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatWindow } from './components/ChatWindow';
+import ChatWindowBridge from './components/organisms/ChatWindowBridge';
 import { Settings } from './components/Settings';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { useDatabase } from './hooks/useDatabase';
 import { MessageProvider } from './contexts/MessageContext';
 import { ConfigProvider } from './contexts/ConfigContext';
-import { Conversation } from './types/models';
 import { storage } from './utils/storage';
 
 interface AppContentProps {
@@ -29,11 +28,7 @@ function AppContent({
     error: conversationsError,
     createConversation,
     deleteConversation,
-    updateConversation,
   } = useConversations();
-
-  // Get the current conversation object
-  const currentConversation = conversations.find(c => c.id === selectedConversationId) || null;
 
   // useMessages depends on MessageContext, so it must be called inside MessageProvider
   const {
@@ -42,9 +37,6 @@ function AppContent({
     error: messagesError,
     sending,
     sendMessage,
-    // Sync state
-    isSyncing,
-    lastSyncTime,
     syncError,
   } = useMessages(selectedConversationId);
 
@@ -73,11 +65,6 @@ function AppContent({
     await sendMessage(content);
   };
 
-  const handleConversationUpdate = (updatedConversation: Conversation) => {
-    // Update the conversation in the local state
-    updateConversation(updatedConversation);
-  };
-
   return (
     <div className="app">
       {conversationsError && (
@@ -97,22 +84,19 @@ function AppContent({
         loading={conversationsLoading}
       />
 
-      <ChatWindow
+      <ChatWindowBridge
         messages={messages}
         loading={messagesLoading}
         sending={sending}
         onSendMessage={handleSendMessage}
         conversationId={selectedConversationId}
-        conversation={currentConversation}
-        onConversationUpdate={handleConversationUpdate}
-        isSyncing={isSyncing}
-        lastSyncTime={lastSyncTime}
         syncError={syncError}
       />
 
       <Settings
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        conversationId={selectedConversationId}
       />
     </div>
   );

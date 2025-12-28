@@ -238,14 +238,52 @@ func (m *mockIDGenerator) GenerateMetaID() string {
 	return fmt.Sprintf("amt_%d", id)
 }
 
+func (m *mockIDGenerator) GenerateMCPServerID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("amcp_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateVoteID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("av_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateNoteID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("an_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateSessionStatsID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("ass_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateOptimizationRunID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("aor_%d", id)
+}
+
+func (m *mockIDGenerator) GeneratePromptCandidateID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("apc_%d", id)
+}
+
+func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("ape_%d", id)
+}
+
 func (m *mockIDGenerator) GenerateLiveKitRoomName() string {
 	id := m.counter
 	m.counter++
 	return fmt.Sprintf("room_%d", id)
-}
-
-func (m *mockIDGenerator) GenerateMCPServerID() string {
-	return "amcp_test"
 }
 
 // TestSessionStartNew tests creating a new conversation session

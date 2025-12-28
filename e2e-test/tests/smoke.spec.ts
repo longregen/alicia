@@ -258,8 +258,7 @@ test.describe('Alicia Smoke Test', () => {
     // This prevents test timeout from cleanup blocking the main test assertions
   });
 
-  // TODO: Offline mode test is flaky in NixOS VM environment - needs investigation
-  test.skip('09 - Error handling - offline mode', async ({ page, sidebar, chat, artifacts }) => {
+  test('09 - Error handling - offline mode', async ({ page, sidebar, chat, artifacts }) => {
     await page.goto('/');
 
     const id = await sidebar.createConversation();
@@ -270,16 +269,26 @@ test.describe('Alicia Smoke Test', () => {
 
     await artifacts.screenshot('09a-online-message-sent');
 
-    // Now go offline
+    // Now go offline - intercept all network requests to ensure offline state
     await page.context().setOffline(true);
+
+    // Wait for offline state to propagate and verify by checking navigator.onLine
+    await page.waitForFunction(() => !navigator.onLine, { timeout: 5000 });
+
+    // Additional wait to ensure all pending network operations have failed
+    await page.waitForTimeout(1000);
 
     // Try to send a message while offline - this should fail or show an error
     await chat.sendMessage('Offline test message');
-    await page.waitForTimeout(1000);
+
+    // Wait longer for error state to appear
+    await page.waitForTimeout(2000);
 
     await artifacts.screenshot('09b-offline-attempt');
 
     // Check for error indicator (sync error or error banner)
+    // In offline mode, the message may appear in the UI (optimistic update)
+    // but the error indicator should show up or network requests should fail
     const errorIndicator = page.locator('.error-banner, .sync-error, .error-notification');
     const hasError = await errorIndicator.count() > 0;
     if (hasError) {
@@ -288,6 +297,11 @@ test.describe('Alicia Smoke Test', () => {
 
     // Go back online
     await page.context().setOffline(false);
+
+    // Wait for online state to propagate and verify
+    await page.waitForFunction(() => navigator.onLine, { timeout: 5000 });
+
+    // Wait for network to stabilize and reconnections to complete
     await page.waitForTimeout(3000);
 
     await artifacts.screenshot('09d-back-online');
@@ -297,9 +311,18 @@ test.describe('Alicia Smoke Test', () => {
       page.locator('.message-bubble:has-text("Online test message")')
     ).toBeVisible();
 
-    // Wait a bit more for network to stabilize before delete
-    await page.waitForTimeout(1000);
-    await sidebar.deleteConversation(id);
+    // Wait for network to fully stabilize before attempting delete
+    await page.waitForTimeout(2000);
+
+    // Delete conversation with retry logic for network stability
+    try {
+      await sidebar.deleteConversation(id);
+    } catch (error) {
+      // If delete fails, wait a bit longer and retry once
+      console.log('First delete attempt failed, retrying after network stabilization');
+      await page.waitForTimeout(2000);
+      await sidebar.deleteConversation(id);
+    }
   });
 
   test('10 - Error handling - invalid input', async ({ page, sidebar, artifacts }) => {

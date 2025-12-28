@@ -19,10 +19,20 @@ import {
   Commentary,
   StartAnswer,
   VariationType,
-  AudioChunk
+  AudioChunk,
+  FeedbackConfirmation,
+  NoteConfirmation,
+  MemoryConfirmation,
+  ServerInfo,
+  SessionStats,
+  EliteOptions,
 } from '../types/protocol';
 import { useMessageContext } from '../contexts/MessageContext';
 import { Message } from '../types/models';
+import { useFeedbackStore, VotableType, VoteType } from '../stores/feedbackStore';
+import { useServerInfoStore } from '../stores/serverInfoStore';
+import { useDimensionStore } from '../stores/dimensionStore';
+import { setMessageSender } from '../adapters/protocolAdapter';
 
 export interface LiveKitMessage {
   envelope: Envelope;
@@ -264,6 +274,100 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           // Control variations can be handled by the UI layer if needed
           break;
         }
+
+        // Feedback protocol message types (20-27)
+        case MessageType.FeedbackConfirmation: {
+          const confirmation = envelope.body as FeedbackConfirmation;
+          // Update the local vote state with server-confirmed data
+          const targetType = confirmation.targetType as VotableType;
+          const voteValue = confirmation.userVote as VoteType | null;
+          const feedbackStore = useFeedbackStore.getState();
+
+          // Update user's vote
+          if (voteValue) {
+            feedbackStore.addVote(targetType, confirmation.targetId, voteValue);
+          } else {
+            feedbackStore.removeVote(targetType, confirmation.targetId);
+          }
+
+          // Update server aggregates
+          if (confirmation.aggregates) {
+            feedbackStore.setAggregates(targetType, confirmation.targetId, {
+              upvotes: confirmation.aggregates.upvotes,
+              downvotes: confirmation.aggregates.downvotes,
+              special: confirmation.aggregates.specialVotes,
+            });
+          }
+          break;
+        }
+
+        case MessageType.NoteConfirmation: {
+          const confirmation = envelope.body as NoteConfirmation;
+          // Note confirmations are informational - the note was already added locally
+          // If it failed, we could remove the local note, but for now just log
+          if (!confirmation.success) {
+            console.warn('Note creation failed for message:', confirmation.messageId);
+          }
+          break;
+        }
+
+        case MessageType.MemoryConfirmation: {
+          const confirmation = envelope.body as MemoryConfirmation;
+          // Memory confirmations are informational
+          if (!confirmation.success) {
+            console.warn('Memory action failed:', confirmation.action, confirmation.memoryId);
+          }
+          break;
+        }
+
+        case MessageType.ServerInfo: {
+          const serverInfo = envelope.body as ServerInfo;
+          const serverStore = useServerInfoStore.getState();
+
+          // Update connection info
+          serverStore.setConnectionStatus(
+            serverInfo.connection.status as 'connected' | 'connecting' | 'disconnected' | 'reconnecting'
+          );
+          serverStore.setLatency(serverInfo.connection.latency);
+
+          // Update model info
+          serverStore.setModelInfo({
+            name: serverInfo.model.name,
+            provider: serverInfo.model.provider,
+          });
+
+          // Update MCP servers
+          serverStore.setMCPServers(
+            serverInfo.mcpServers.map((s) => ({
+              name: s.name,
+              status: s.status as 'connected' | 'disconnected' | 'error',
+            }))
+          );
+          break;
+        }
+
+        case MessageType.SessionStats: {
+          const stats = envelope.body as SessionStats;
+          useServerInfoStore.getState().setSessionStats({
+            messageCount: stats.messageCount,
+            toolCallCount: stats.toolCallCount,
+            memoriesUsed: stats.memoriesUsed,
+            sessionDuration: stats.sessionDuration,
+          });
+          break;
+        }
+
+        // Dimension optimization message types (29-31)
+        case MessageType.EliteOptions: {
+          // Server broadcasts available elite solutions from Pareto archive
+          const eliteOptions = envelope.body as EliteOptions;
+          const dimensionStore = useDimensionStore.getState();
+          dimensionStore.updateElites(eliteOptions.elites, eliteOptions.currentEliteId);
+          break;
+        }
+
+        // Note: DimensionPreference (29) and EliteSelect (30) are client -> server only
+        // The server doesn't send these back; instead it responds with EliteOptions (31)
       }
     } catch (err) {
       console.error('Failed to decode message:', err);
@@ -303,6 +407,13 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
         setConnectionState('connected');
         setError(null);
 
+        // Wire up the message sender for the protocol adapter
+        // This allows components to send messages (DimensionPreference, EliteSelect, etc.)
+        setMessageSender((envelope: Envelope) => {
+          const data = protocolRef.current.encode(envelope);
+          newRoom.localParticipant.publishData(data, { reliable: true });
+        });
+
         // Send configuration message (initial connection)
         const configEnvelope = protocolRef.current.createConfiguration(
           conversationId,
@@ -316,6 +427,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       newRoom.on(RoomEvent.Disconnected, () => {
         setConnected(false);
         setConnectionState('disconnected');
+        // Clear the message sender when disconnected
+        setMessageSender(null);
       });
 
       newRoom.on(RoomEvent.Reconnecting, () => {
@@ -327,6 +440,12 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
         setConnected(true);
         setConnectionState('connected');
         setError(null);
+
+        // Re-wire the message sender after reconnection
+        setMessageSender((envelope: Envelope) => {
+          const data = protocolRef.current.encode(envelope);
+          newRoom.localParticipant.publishData(data, { reliable: true });
+        });
 
         // Send Configuration with lastSequenceSeen to trigger message replay
         const configEnvelope = protocolRef.current.createConfiguration(
@@ -381,6 +500,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       setLastSeenStanzaId(0);
       messageContextRef.current.clearStreamingSentences();
       messageContextRef.current.clearTranscription();
+      // Clear the message sender
+      setMessageSender(null);
     }
   }, [room]);
 

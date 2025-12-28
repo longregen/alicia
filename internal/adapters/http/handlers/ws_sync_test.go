@@ -18,8 +18,9 @@ func TestNewWebSocketSyncHandler(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	if handler == nil {
 		t.Fatal("expected handler to be created")
@@ -43,8 +44,9 @@ func TestWebSocketSyncHandler_Handle_NoUserID(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	req := httptest.NewRequest("GET", "/api/v1/conversations/conv_123/ws", nil)
 	rr := httptest.NewRecorder()
@@ -66,8 +68,9 @@ func TestWebSocketSyncHandler_Handle_ConversationNotFound(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	req := httptest.NewRequest("GET", "/api/v1/conversations/nonexistent/ws", nil)
 	rr := httptest.NewRecorder()
@@ -89,8 +92,9 @@ func TestWebSocketSyncHandler_Handle_InactiveConversation(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	// Create an archived conversation
 	conv := models.NewConversation("conv_123", "test-user", "Test Conversation")
@@ -117,8 +121,9 @@ func TestWebSocketSyncHandler_ProcessMessage_Success(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	// Create test conversation
 	conv := models.NewConversation("conv_123", "test-user", "Test Conversation")
@@ -154,8 +159,9 @@ func TestWebSocketSyncHandler_ProcessMessage_MissingLocalID(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	ctx := context.Background()
 	msgReq := dto.SyncMessageRequest{
@@ -187,8 +193,9 @@ func TestWebSocketSyncHandler_ProcessMessage_MissingRole(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	ctx := context.Background()
 	msgReq := dto.SyncMessageRequest{
@@ -220,8 +227,9 @@ func TestWebSocketSyncHandler_ProcessMessage_DuplicateWithSameContent(t *testing
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	// Create existing message
 	existingMsg := models.NewLocalMessage("local_123", "conv_123", 1, models.MessageRoleUser, "Hello, world!")
@@ -255,8 +263,9 @@ func TestWebSocketSyncHandler_ProcessMessage_DuplicateWithDifferentContent(t *te
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	// Create existing message
 	existingMsg := models.NewLocalMessage("local_123", "conv_123", 1, models.MessageRoleUser, "Original content")
@@ -296,8 +305,9 @@ func TestWebSocketSyncHandler_ProcessSyncRequest(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	ctx := context.Background()
 	syncReq := &dto.SyncRequest{
@@ -327,7 +337,7 @@ func TestWebSocketSyncHandler_ProcessSyncRequest(t *testing.T) {
 	if len(response.SyncedMessages) != 2 {
 		t.Errorf("expected 2 synced messages, got %d", len(response.SyncedMessages))
 	}
-	if response.SyncedAt.IsZero() {
+	if response.SyncedAt == "" {
 		t.Error("expected SyncedAt to be set")
 	}
 }
@@ -337,8 +347,9 @@ func TestWebSocketSyncHandler_ProcessSyncRequest_WithErrors(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	ctx := context.Background()
 	syncReq := &dto.SyncRequest{
@@ -417,8 +428,9 @@ func TestWebSocketSyncHandler_TimestampParsing(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	ctx := context.Background()
 
@@ -448,8 +460,9 @@ func TestWebSocketSyncHandler_TimestampParsing_InvalidFormat(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000"}
 
-	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster)
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
 
 	ctx := context.Background()
 
@@ -471,6 +484,57 @@ func TestWebSocketSyncHandler_TimestampParsing_InvalidFormat(t *testing.T) {
 	// Should still succeed (with current time as fallback)
 	if syncedMsg.Status != "synced" {
 		t.Errorf("expected status 'synced', got '%s'", syncedMsg.Status)
+	}
+}
+
+func TestWebSocketSyncHandler_OriginChecking(t *testing.T) {
+	conversationRepo := newMockConversationRepo()
+	messageRepo := newMockMessageRepo()
+	idGen := newMockIDGenerator()
+	broadcaster := NewWebSocketBroadcaster()
+	allowedOrigins := []string{"http://localhost:3000", "https://app.example.com"}
+
+	handler := NewWebSocketSyncHandler(conversationRepo, messageRepo, idGen, broadcaster, allowedOrigins)
+
+	tests := []struct {
+		name           string
+		origin         string
+		expectedResult bool
+	}{
+		{
+			name:           "allowed origin localhost",
+			origin:         "http://localhost:3000",
+			expectedResult: true,
+		},
+		{
+			name:           "allowed origin app.example.com",
+			origin:         "https://app.example.com",
+			expectedResult: true,
+		},
+		{
+			name:           "disallowed origin",
+			origin:         "http://evil.com",
+			expectedResult: false,
+		},
+		{
+			name:           "no origin header (same-origin)",
+			origin:         "",
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/api/v1/conversations/conv_123/sync/ws", nil)
+			if tt.origin != "" {
+				req.Header.Set("Origin", tt.origin)
+			}
+
+			result := handler.upgrader.CheckOrigin(req)
+			if result != tt.expectedResult {
+				t.Errorf("CheckOrigin() = %v, want %v for origin %s", result, tt.expectedResult, tt.origin)
+			}
+		})
 	}
 }
 

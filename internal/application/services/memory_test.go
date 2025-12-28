@@ -131,6 +131,28 @@ func (m *mockMemoryRepo) GetByTags(ctx context.Context, tags []string, limit int
 	return memories, nil
 }
 
+func (m *mockMemoryRepo) Pin(ctx context.Context, id string, pinned bool) error {
+	mem, ok := m.store[id]
+	if !ok {
+		return errNotFound
+	}
+	mem.Pinned = pinned
+	mem.UpdatedAt = time.Now()
+	m.store[id] = mem
+	return nil
+}
+
+func (m *mockMemoryRepo) Archive(ctx context.Context, id string) error {
+	mem, ok := m.store[id]
+	if !ok {
+		return errNotFound
+	}
+	mem.Archived = true
+	mem.UpdatedAt = time.Now()
+	m.store[id] = mem
+	return nil
+}
+
 type mockMemoryUsageRepo struct {
 	store map[string]*models.MemoryUsage
 }

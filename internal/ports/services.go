@@ -199,6 +199,7 @@ type MemoryService interface {
 
 	// Memory retrieval
 	GetByID(ctx context.Context, id string) (*models.Memory, error)
+	GetByTags(ctx context.Context, tags []string, limit int) ([]*models.Memory, error)
 
 	// Memory search - returns memories with similarity scores
 	Search(ctx context.Context, query string, limit int) ([]*models.Memory, error)
@@ -217,6 +218,68 @@ type MemoryService interface {
 	Update(ctx context.Context, memory *models.Memory) error
 	Delete(ctx context.Context, id string) error
 	SetImportance(ctx context.Context, id string, importance float32) (*models.Memory, error)
+	SetConfidence(ctx context.Context, id string, confidence float32) (*models.Memory, error)
+	SetUserRating(ctx context.Context, id string, rating int) (*models.Memory, error)
 	AddTag(ctx context.Context, id, tag string) (*models.Memory, error)
 	RemoveTag(ctx context.Context, id, tag string) (*models.Memory, error)
+	RegenerateEmbeddings(ctx context.Context, id string) (*models.Memory, error)
+	Pin(ctx context.Context, id string, pinned bool) (*models.Memory, error)
+	Archive(ctx context.Context, id string) (*models.Memory, error)
+}
+
+// OptimizationService defines the interface for prompt optimization
+type OptimizationService interface {
+	// Run management
+	StartOptimizationRun(ctx context.Context, name, promptType, baselinePrompt string) (*models.OptimizationRun, error)
+	GetOptimizationRun(ctx context.Context, id string) (*models.OptimizationRun, error)
+	ListOptimizationRuns(ctx context.Context, opts ListOptimizationRunsOptions) ([]*models.OptimizationRun, error)
+	CompleteRun(ctx context.Context, runID string, bestScore float64) error
+	FailRun(ctx context.Context, runID string, reason string) error
+	UpdateProgress(ctx context.Context, runID string, iteration int, currentScore float64) error
+
+	// Candidate management
+	AddCandidate(ctx context.Context, runID, promptText string, iteration int) (*models.PromptCandidate, error)
+	GetCandidates(ctx context.Context, runID string) ([]*models.PromptCandidate, error)
+	GetBestCandidate(ctx context.Context, runID string) (*models.PromptCandidate, error)
+
+	// Evaluation management
+	RecordEvaluation(ctx context.Context, candidateID, runID, input, output string, score float64, success bool, latencyMs int64) (*models.PromptEvaluation, error)
+	GetEvaluations(ctx context.Context, candidateID string) ([]*models.PromptEvaluation, error)
+
+	// Optimized program retrieval
+	GetOptimizedProgram(ctx context.Context, runID string) (*OptimizedProgram, error)
+
+	// Dimension weight management - uses map for decoupling from prompt package
+	SetDimensionWeights(weights map[string]float64)
+	GetDimensionWeights() map[string]float64
+}
+
+// OptimizedProgram represents the result of an optimization run
+type OptimizedProgram struct {
+	RunID       string
+	BestPrompt  string
+	BestScore   float64
+	Iterations  int
+	CompletedAt string
+	Elites      []EliteSolution // Pareto-optimal solutions
+}
+
+// EliteSolution represents an elite solution from the Pareto archive
+type EliteSolution struct {
+	ID          string
+	Label       string
+	Description string
+	BestFor     string
+	Scores      EliteDimensionScores
+}
+
+// EliteDimensionScores holds per-dimension performance metrics for an elite
+type EliteDimensionScores struct {
+	SuccessRate    float64
+	Quality        float64
+	Efficiency     float64
+	Robustness     float64
+	Generalization float64
+	Diversity      float64
+	Innovation     float64
 }
