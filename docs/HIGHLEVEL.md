@@ -23,9 +23,9 @@ Alicia transforms how you interact with AI through voice, providing a fluid, hum
 
 ### Planned Features 🚧
 
-- **Multi-user Conversations**: Support for multiple participants in a single conversation
-- **Video/Screen Sharing**: Visual context through screen sharing
-- **Enhanced Memory Consolidation**: Automatic summarization and consolidation of memories
+- **Silero VAD (Voice Activity Detection)**: Automatic speech detection in the web frontend using Silero VAD, eliminating the need for push-to-talk buttons
+- **Debugging & Evals**: Prompt optimization for messages, tool use, and memory
+- **Personal Knowledge Integration**: Full integration with personal knowledge database systems
 
 ## Architecture
 

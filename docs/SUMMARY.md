@@ -13,7 +13,6 @@
 # Operations
 
 - [Deployment](DEPLOYMENT.md)
-- [Security & CORS](SECURITY_CORS.md)
 - [Offline Sync](OFFLINE_SYNC.md)
 
 # Protocol Specification
