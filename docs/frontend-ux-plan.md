@@ -1681,6 +1681,318 @@ func SetupRoutes(r chi.Router, handlers *Handlers) {
 
 The feedback collected through this UX system serves as the foundation for automatic prompt improvement via DSPy and GEPA optimization. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for full details.
 
+### GEPA's 7 Optimization Dimensions
+
+GEPA optimizes prompts across seven distinct dimensions. The frontend exposes these dimensions through intuitive user-facing labels:
+
+| Dimension | User-Facing Label | Icon | Description |
+|-----------|-------------------|------|-------------|
+| Success Rate | Accuracy | ✓ | How often responses are correct |
+| Quality | Quality | ★ | Overall output quality and coherence |
+| Efficiency | Speed | ⚡ | Response speed and token efficiency |
+| Robustness | Reliability | 🛡️ | Consistency across different inputs |
+| Generalization | Adaptability | 🔄 | Handling new/unseen scenarios |
+| Diversity | Creativity | 🎨 | Variety in problem-solving approaches |
+| Innovation | Novelty | 💡 | Novel and inventive solutions |
+
+### Dimension-Aware Feedback Panel
+
+The feedback panel includes dimension-specific quick feedback options:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ How can we improve?                                        [×]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│ Quick Feedback:                                                  │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐             │
+│ │ ⚡ Too  │ │ ✓ Wrong │ │ 🛡️ Incon-│ │ 🎨 Same old │             │
+│ │  slow   │ │ answer  │ │  sistent│ │   approach  │             │
+│ └─────────┘ └─────────┘ └─────────┘ └─────────────┘             │
+│ ┌───────────┐ ┌─────────────┐ ┌──────────────┐                  │
+│ │ 🔄 Doesn't│ │ ★ Missing   │ │ 💡 Not       │                  │
+│ │  fit case │ │   context   │ │   innovative │                  │
+│ └───────────┘ └─────────────┘ └──────────────┘                  │
+│                                                                  │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Add details (optional)...                                   │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│                                         [Cancel] [Submit]        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Pivot Mode: Dimension Weight Presets
+
+Users can quickly switch between optimization presets using "Pivot Mode":
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ⚙️ Response Style                                          [▼]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│ Presets:                                                         │
+│ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐         │
+│ │ ✓ Accurate│ │ ⚡ Fast   │ │ 🛡️ Reliable│ │ 🎨 Creative│         │
+│ │  Focus    │ │           │ │           │ │           │         │
+│ └───────────┘ └───────────┘ └───────────┘ └───────────┘         │
+│ ┌───────────┐                                                    │
+│ │ ⚖️ Balanced│ ← Current                                        │
+│ └───────────┘                                                    │
+│                                                                  │
+│ Custom weights:                                     [Advanced ▼] │
+│ ┌───────────────────────────────────────────────────────────┐   │
+│ │ ✓ Accuracy      ████████████████░░░░  80%                 │   │
+│ │ ★ Quality       ████████████░░░░░░░░  60%                 │   │
+│ │ ⚡ Speed         ████████░░░░░░░░░░░░  40%                 │   │
+│ │ 🛡️ Reliability   ████████████░░░░░░░░  60%                 │   │
+│ │ 🔄 Adaptability  ██████░░░░░░░░░░░░░░  30%                 │   │
+│ │ 🎨 Creativity    ████░░░░░░░░░░░░░░░░  20%                 │   │
+│ │ 💡 Novelty       ██░░░░░░░░░░░░░░░░░░  10%                 │   │
+│ └───────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│                                   [Reset to Balanced] [Apply]    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Component: `PivotModeSelector.tsx`
+
+```typescript
+// frontend/src/components/molecules/PivotModeSelector.tsx
+
+interface DimensionWeights {
+  successRate: number;    // 0-1
+  quality: number;
+  efficiency: number;
+  robustness: number;
+  generalization: number;
+  diversity: number;
+  innovation: number;
+}
+
+interface PivotPreset {
+  id: string;
+  label: string;
+  icon: string;
+  weights: DimensionWeights;
+  description: string;
+}
+
+const PIVOT_PRESETS: PivotPreset[] = [
+  {
+    id: 'accurate',
+    label: 'Accurate',
+    icon: '✓',
+    weights: { successRate: 0.4, quality: 0.25, efficiency: 0.1, robustness: 0.1, generalization: 0.1, diversity: 0.03, innovation: 0.02 },
+    description: 'Prioritize correct answers over speed',
+  },
+  {
+    id: 'fast',
+    label: 'Fast',
+    icon: '⚡',
+    weights: { successRate: 0.2, quality: 0.15, efficiency: 0.35, robustness: 0.15, generalization: 0.1, diversity: 0.03, innovation: 0.02 },
+    description: 'Quick responses with reasonable accuracy',
+  },
+  {
+    id: 'reliable',
+    label: 'Reliable',
+    icon: '🛡️',
+    weights: { successRate: 0.25, quality: 0.2, efficiency: 0.1, robustness: 0.3, generalization: 0.1, diversity: 0.03, innovation: 0.02 },
+    description: 'Consistent results across different inputs',
+  },
+  {
+    id: 'creative',
+    label: 'Creative',
+    icon: '🎨',
+    weights: { successRate: 0.15, quality: 0.2, efficiency: 0.1, robustness: 0.1, generalization: 0.1, diversity: 0.2, innovation: 0.15 },
+    description: 'Novel approaches and varied solutions',
+  },
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    icon: '⚖️',
+    weights: { successRate: 0.25, quality: 0.2, efficiency: 0.15, robustness: 0.15, generalization: 0.1, diversity: 0.1, innovation: 0.05 },
+    description: 'Equal emphasis on all dimensions',
+  },
+];
+
+interface PivotModeSelectorProps {
+  currentPreset: string;
+  customWeights?: DimensionWeights;
+  onPresetChange: (presetId: string) => void;
+  onCustomWeightsChange: (weights: DimensionWeights) => void;
+  showAdvanced?: boolean;
+}
+```
+
+### Elite Solution Selector
+
+When multiple optimized prompts are available in the Pareto archive, users can switch between them:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🏆 Elite Solutions                                         [▼]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│ Available optimized configurations:                              │
+│                                                                  │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ ⭐ High Accuracy (current)                                  │ │
+│ │ ────────────────────────────────────────────────────────── │ │
+│ │ ✓ 95%  ★ 88%  ⚡ 72%  🛡️ 85%                               │ │
+│ │ Best for: Complex questions requiring precise answers       │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ ⚡ Speed Optimized                                    [Use] │ │
+│ │ ────────────────────────────────────────────────────────── │ │
+│ │ ✓ 82%  ★ 80%  ⚡ 95%  🛡️ 78%                               │ │
+│ │ Best for: Quick responses during active coding              │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ 🎨 Creative Mode                                      [Use] │ │
+│ │ ────────────────────────────────────────────────────────── │ │
+│ │ ✓ 78%  ★ 85%  ⚡ 70%  🛡️ 72%  🎨 92%  💡 88%               │ │
+│ │ Best for: Brainstorming and exploring alternatives          │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Component: `EliteSolutionSelector.tsx`
+
+```typescript
+// frontend/src/components/molecules/EliteSolutionSelector.tsx
+
+interface DimensionScores {
+  successRate: number;
+  quality: number;
+  efficiency: number;
+  robustness: number;
+  generalization: number;
+  diversity: number;
+  innovation: number;
+}
+
+interface EliteSolution {
+  id: string;
+  label: string;
+  icon: string;
+  scores: DimensionScores;
+  description: string;
+  bestFor: string;
+  isActive: boolean;
+}
+
+interface EliteSolutionSelectorProps {
+  elites: EliteSolution[];
+  currentEliteId: string;
+  onSelectElite: (eliteId: string) => void;
+  loading?: boolean;
+}
+
+// Score visualization component
+interface DimensionScoreBarProps {
+  dimension: keyof DimensionScores;
+  score: number;  // 0-100
+  icon: string;
+  compact?: boolean;
+}
+```
+
+### Protocol Extensions for Dimensions
+
+```typescript
+// frontend/src/types/dimension-protocol.ts
+
+export enum DimensionEnvelopeType {
+  DimensionPreference = 29,
+  EliteSelect = 30,
+  EliteOptions = 31,
+}
+
+// User adjusts dimension weights
+export interface DimensionPreferenceMessage {
+  conversationId: string;
+  weights: DimensionWeights;
+  preset?: string;  // 'accuracy' | 'speed' | 'reliable' | 'creative' | 'balanced'
+  timestamp: number;
+}
+
+// User selects a specific elite solution
+export interface EliteSelectMessage {
+  conversationId: string;
+  eliteId: string;
+  timestamp: number;
+}
+
+// Server sends available elite solutions
+export interface EliteOptionsMessage {
+  conversationId: string;
+  elites: Array<{
+    id: string;
+    label: string;
+    scores: DimensionScores;
+    description: string;
+  }>;
+  currentEliteId: string;
+  timestamp: number;
+}
+```
+
+### Zustand Store for Dimensions
+
+```typescript
+// frontend/src/stores/dimensionStore.ts
+import { create } from 'zustand';
+
+interface DimensionStore {
+  // Current weights
+  weights: DimensionWeights;
+  presetId: string | null;
+
+  // Elite solutions
+  elites: EliteSolution[];
+  currentEliteId: string | null;
+
+  // Actions
+  setPreset: (presetId: string) => void;
+  setCustomWeights: (weights: DimensionWeights) => void;
+  selectElite: (eliteId: string) => void;
+  updateElites: (elites: EliteSolution[]) => void;
+}
+
+export const useDimensionStore = create<DimensionStore>((set, get) => ({
+  weights: PIVOT_PRESETS.find(p => p.id === 'balanced')!.weights,
+  presetId: 'balanced',
+  elites: [],
+  currentEliteId: null,
+
+  setPreset: (presetId) => {
+    const preset = PIVOT_PRESETS.find(p => p.id === presetId);
+    if (preset) {
+      set({ weights: preset.weights, presetId });
+      // Send to server via protocol
+    }
+  },
+
+  setCustomWeights: (weights) => {
+    set({ weights, presetId: null });
+    // Send to server via protocol
+  },
+
+  selectElite: (eliteId) => {
+    set({ currentEliteId: eliteId });
+    // Send to server via protocol
+  },
+
+  updateElites: (elites) => {
+    set({ elites });
+  },
+}));
+```
+
 ### Feedback Flow
 
 ```

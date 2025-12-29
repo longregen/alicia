@@ -48,6 +48,252 @@ GEPA (Genetic-Pareto) is DSPy's most advanced optimizer:
 7. Repeat until budget exhausted
 ```
 
+### The 7 Optimization Dimensions
+
+GEPA optimizes prompts across seven distinct dimensions, enabling fine-grained control over what aspects of performance to prioritize:
+
+| # | Dimension | Description | User-Facing Label |
+|---|-----------|-------------|-------------------|
+| 1 | **Success Rate** | How often the prompt produces correct results | "Accuracy" |
+| 2 | **Quality** | Overall output quality and coherence | "Quality" |
+| 3 | **Efficiency** | Speed and resource usage (tokens, latency) | "Speed" |
+| 4 | **Robustness** | Performance stability across diverse inputs | "Reliability" |
+| 5 | **Generalization** | How well it handles new/unseen cases | "Adaptability" |
+| 6 | **Diversity** | Variety in solution approaches | "Creativity" |
+| 7 | **Innovation** | Novel problem-solving strategies | "Novelty" |
+
+### Dimension Weights Configuration
+
+```go
+// internal/prompt/dimensions.go
+package prompt
+
+// DimensionWeights configures the relative importance of each optimization dimension
+type DimensionWeights struct {
+    SuccessRate     float64 `json:"successRate" yaml:"success_rate"`         // Default: 0.25
+    Quality         float64 `json:"quality" yaml:"quality"`                  // Default: 0.20
+    Efficiency      float64 `json:"efficiency" yaml:"efficiency"`            // Default: 0.15
+    Robustness      float64 `json:"robustness" yaml:"robustness"`            // Default: 0.15
+    Generalization  float64 `json:"generalization" yaml:"generalization"`    // Default: 0.10
+    Diversity       float64 `json:"diversity" yaml:"diversity"`              // Default: 0.10
+    Innovation      float64 `json:"innovation" yaml:"innovation"`            // Default: 0.05
+}
+
+// DefaultWeights returns balanced dimension weights
+func DefaultWeights() DimensionWeights {
+    return DimensionWeights{
+        SuccessRate:    0.25,
+        Quality:        0.20,
+        Efficiency:     0.15,
+        Robustness:     0.15,
+        Generalization: 0.10,
+        Diversity:      0.10,
+        Innovation:     0.05,
+    }
+}
+
+// Normalize ensures weights sum to 1.0
+func (w *DimensionWeights) Normalize() {
+    sum := w.SuccessRate + w.Quality + w.Efficiency + w.Robustness +
+           w.Generalization + w.Diversity + w.Innovation
+    if sum > 0 {
+        w.SuccessRate /= sum
+        w.Quality /= sum
+        w.Efficiency /= sum
+        w.Robustness /= sum
+        w.Generalization /= sum
+        w.Diversity /= sum
+        w.Innovation /= sum
+    }
+}
+```
+
+### Extended GEPAConfig with Dimensions
+
+```go
+// internal/config/config.go additions
+
+type GEPAConfig struct {
+    DefaultBudget           string           `yaml:"default_budget"`
+    NumThreads              int              `yaml:"num_threads"`
+    ReflectionMinibatchSize int              `yaml:"reflection_minibatch_size"`
+    SkipPerfectScore        bool             `yaml:"skip_perfect_score"`
+    UseMerge                bool             `yaml:"use_merge"`
+
+    // Dimension configuration
+    DimensionWeights        DimensionWeights `yaml:"dimension_weights"`
+    EnableDimensionTracking bool             `yaml:"enable_dimension_tracking"`
+    ParetoArchiveSize       int              `yaml:"pareto_archive_size"`  // Max elite solutions to maintain
+}
+```
+
+### Pareto Archive of Elite Solutions
+
+GEPA maintains a **Pareto Archive** - a collection of non-dominated solutions that represent different trade-offs across the 7 dimensions:
+
+```go
+// internal/prompt/pareto.go
+package prompt
+
+// EliteSolution represents one optimized prompt in the Pareto archive
+type EliteSolution struct {
+    ID           string                 `json:"id"`
+    Instructions string                 `json:"instructions"`
+    Demos        []Example              `json:"demos"`
+    Scores       DimensionScores        `json:"scores"`
+    Generation   int                    `json:"generation"`
+    CreatedAt    time.Time              `json:"createdAt"`
+}
+
+// DimensionScores holds per-dimension performance metrics
+type DimensionScores struct {
+    SuccessRate    float64 `json:"successRate"`
+    Quality        float64 `json:"quality"`
+    Efficiency     float64 `json:"efficiency"`
+    Robustness     float64 `json:"robustness"`
+    Generalization float64 `json:"generalization"`
+    Diversity      float64 `json:"diversity"`
+    Innovation     float64 `json:"innovation"`
+}
+
+// ParetoArchive manages the collection of elite solutions
+type ParetoArchive struct {
+    Solutions   []*EliteSolution
+    MaxSize     int
+    mu          sync.RWMutex
+}
+
+// Add inserts a solution if it's non-dominated
+func (p *ParetoArchive) Add(solution *EliteSolution) bool {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+
+    // Check if solution is dominated by any existing solution
+    for _, existing := range p.Solutions {
+        if dominates(existing.Scores, solution.Scores) {
+            return false // Dominated, don't add
+        }
+    }
+
+    // Remove any solutions dominated by the new one
+    p.Solutions = filterNonDominated(p.Solutions, solution.Scores)
+
+    // Add new solution
+    p.Solutions = append(p.Solutions, solution)
+
+    // Enforce max size using crowding distance
+    if len(p.Solutions) > p.MaxSize {
+        p.Solutions = pruneByDiversity(p.Solutions, p.MaxSize)
+    }
+
+    return true
+}
+
+// SelectByWeights returns the best solution for given dimension weights
+func (p *ParetoArchive) SelectByWeights(weights DimensionWeights) *EliteSolution {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+
+    var best *EliteSolution
+    bestScore := -1.0
+
+    for _, sol := range p.Solutions {
+        score := weightedScore(sol.Scores, weights)
+        if score > bestScore {
+            bestScore = score
+            best = sol
+        }
+    }
+
+    return best
+}
+```
+
+### User Feedback to Dimension Mapping
+
+User feedback from the frontend UI maps directly to optimization dimensions:
+
+| User Feedback | Primary Dimension | Secondary Dimension |
+|---------------|-------------------|---------------------|
+| "Great answer!" (👍) | Quality | Success Rate |
+| "Wrong answer" (👎) | Success Rate | - |
+| "Too slow" | Efficiency | - |
+| "Inconsistent results" | Robustness | - |
+| "Doesn't work for my case" | Generalization | - |
+| "Same old approach" | Diversity | Innovation |
+| "Too verbose" | Efficiency | Quality |
+| "Missing context" | Quality | Robustness |
+| Tool: "Wrong tool" | Success Rate | Quality |
+| Tool: "Unnecessary call" | Efficiency | - |
+| Memory: "Not relevant" | Quality | Generalization |
+| Memory: "Critical" | Success Rate | Robustness |
+
+```go
+// internal/prompt/feedback_mapping.go
+package prompt
+
+// MapFeedbackToDimensions converts user feedback to dimension adjustments
+func MapFeedbackToDimensions(feedback FeedbackType) DimensionAdjustment {
+    switch feedback {
+    case FeedbackTooSlow:
+        return DimensionAdjustment{
+            Efficiency: +0.1,
+            Quality:    -0.05,
+        }
+    case FeedbackInconsistent:
+        return DimensionAdjustment{
+            Robustness: +0.1,
+        }
+    case FeedbackSameApproach:
+        return DimensionAdjustment{
+            Diversity:  +0.1,
+            Innovation: +0.05,
+        }
+    // ... other mappings
+    default:
+        return DimensionAdjustment{}
+    }
+}
+```
+
+### Protocol Messages for Dimension Communication
+
+New protocol message types for dimension-aware optimization:
+
+```go
+// Protocol message types 29-31
+
+// DimensionPreference (29): User adjusts dimension weights
+type DimensionPreferenceMessage struct {
+    ConversationID string           `json:"conversationId"`
+    Weights        DimensionWeights `json:"weights"`
+    Preset         string           `json:"preset,omitempty"` // "accuracy", "speed", "balanced", etc.
+    Timestamp      int64            `json:"timestamp"`
+}
+
+// EliteSelect (30): User selects a specific elite solution
+type EliteSelectMessage struct {
+    ConversationID string `json:"conversationId"`
+    EliteID        string `json:"eliteId"`
+    Timestamp      int64  `json:"timestamp"`
+}
+
+// EliteOptions (31): Server sends available elite solutions
+type EliteOptionsMessage struct {
+    ConversationID string           `json:"conversationId"`
+    Elites         []EliteSummary   `json:"elites"`
+    CurrentEliteID string           `json:"currentEliteId"`
+    Timestamp      int64            `json:"timestamp"`
+}
+
+type EliteSummary struct {
+    ID          string          `json:"id"`
+    Label       string          `json:"label"`       // "High Accuracy", "Fast", "Balanced"
+    Scores      DimensionScores `json:"scores"`
+    Description string          `json:"description"` // Auto-generated summary
+}
+```
+
 ## dspy-go Library Status
 
 **Repository**: https://github.com/XiaoConstantine/dspy-go
