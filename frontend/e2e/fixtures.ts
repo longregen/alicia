@@ -24,30 +24,6 @@ const mockConfigResponse = {
   },
 };
 
-// Mock config response for e2e tests
-const mockConfigResponse = {
-  livekit_url: 'ws://localhost:7880',
-  tts_enabled: true,
-  asr_enabled: true,
-  tts: {
-    endpoint: '/v1/audio/speech',
-    model: 'kokoro',
-    default_voice: 'af_sarah',
-    default_speed: 1.0,
-    speed_min: 0.5,
-    speed_max: 2.0,
-    speed_step: 0.1,
-    voices: [
-      { id: 'af_sarah', name: 'Sarah', category: 'American Female' },
-      { id: 'am_adam', name: 'Adam', category: 'American Male' },
-      { id: 'af_nicole', name: 'Nicole', category: 'American Female' },
-      { id: 'am_michael', name: 'Michael', category: 'American Male' },
-      { id: 'bf_emma', name: 'Emma', category: 'British Female' },
-      { id: 'bm_george', name: 'George', category: 'British Male' },
-    ],
-  },
-};
-
 export interface ConversationHelpers {
   createConversation(): Promise<string>;
   sendMessage(conversationId: string, message: string): Promise<void>;
