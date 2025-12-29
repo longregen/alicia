@@ -24,6 +24,41 @@ const mockConfigResponse = {
   },
 };
 
+// Mock state for conversations and messages (per-test isolation)
+interface MockConversation {
+  id: string;
+  title: string;
+  status: string;
+  last_client_stanza_id: number;
+  last_server_stanza_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MockMessage {
+  id: string;
+  conversation_id: string;
+  sequence_number: number;
+  role: string;
+  contents: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MockMCPServer {
+  name: string;
+  command: string;
+  args: string[];
+  status: string;
+  tools: { name: string; description: string }[];
+}
+
+interface MockState {
+  conversations: Map<string, MockConversation>;
+  messages: Map<string, MockMessage[]>;
+  mcpServers: Map<string, MockMCPServer>;
+}
+
 export interface ConversationHelpers {
   createConversation(): Promise<string>;
   sendMessage(conversationId: string, message: string): Promise<void>;
@@ -64,14 +99,256 @@ type TestFixtures = {
   voiceHelpers: VoiceHelpers;
 };
 
+// Helper function to create a fresh mock state for each test
+function createMockState(): MockState {
+  return {
+    conversations: new Map(),
+    messages: new Map(),
+    mcpServers: new Map(),
+  };
+}
+
 const test = base.extend<TestFixtures>({
   page: async ({ page }, use) => {
-    // Intercept /api/v1/config requests before each test
+    // Create isolated mock state for this test
+    const mockState = createMockState();
+    let messageCounter = 0;
+
+    // Intercept /api/v1/config requests
     await page.route('**/api/v1/config', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(mockConfigResponse),
+      });
+    });
+
+    // GET /api/v1/conversations - list all conversations
+    await page.route('**/api/v1/conversations', async (route, request) => {
+      if (request.method() === 'GET') {
+        const conversations = Array.from(mockState.conversations.values());
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ conversations }),
+        });
+      } else if (request.method() === 'POST') {
+        // Create a new conversation
+        const body = request.postDataJSON() || {};
+        const id = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        const now = new Date().toISOString();
+        const conversation: MockConversation = {
+          id,
+          title: body.title || 'New Conversation',
+          status: 'active',
+          last_client_stanza_id: 0,
+          last_server_stanza_id: 0,
+          created_at: now,
+          updated_at: now,
+        };
+        mockState.conversations.set(id, conversation);
+        mockState.messages.set(id, []);
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify(conversation),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Routes for specific conversation operations
+    await page.route('**/api/v1/conversations/*', async (route, request) => {
+      const url = request.url();
+      const method = request.method();
+
+      // Extract conversation ID from URL
+      const conversationIdMatch = url.match(/\/conversations\/([^/]+)/);
+      if (!conversationIdMatch) {
+        await route.fulfill({ status: 404, body: 'Not found' });
+        return;
+      }
+      const conversationId = conversationIdMatch[1];
+
+      // Handle messages endpoint
+      if (url.includes('/messages')) {
+        if (method === 'GET') {
+          const messages = mockState.messages.get(conversationId) || [];
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ messages }),
+          });
+        } else if (method === 'POST') {
+          const body = request.postDataJSON() || {};
+          const now = new Date().toISOString();
+          messageCounter++;
+          const message: MockMessage = {
+            id: body.local_id || `msg-${Date.now()}-${messageCounter}`,
+            conversation_id: conversationId,
+            sequence_number: messageCounter,
+            role: 'user',
+            contents: body.contents || '',
+            created_at: now,
+            updated_at: now,
+          };
+          const messages = mockState.messages.get(conversationId) || [];
+          messages.push(message);
+          mockState.messages.set(conversationId, messages);
+
+          // Simulate assistant response after a short delay
+          setTimeout(() => {
+            const assistantMessage: MockMessage = {
+              id: `msg-${Date.now()}-assistant`,
+              conversation_id: conversationId,
+              sequence_number: ++messageCounter,
+              role: 'assistant',
+              contents: 'This is a mock assistant response for testing purposes.',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            messages.push(assistantMessage);
+          }, 100);
+
+          await route.fulfill({
+            status: 201,
+            contentType: 'application/json',
+            body: JSON.stringify(message),
+          });
+        } else {
+          await route.continue();
+        }
+        return;
+      }
+
+      // Handle token endpoint
+      if (url.includes('/token')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ token: 'mock-livekit-token' }),
+        });
+        return;
+      }
+
+      // Handle sync endpoints
+      if (url.includes('/sync')) {
+        if (url.includes('/status')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ status: 'synced', last_sync: new Date().toISOString() }),
+          });
+        } else {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ success: true }),
+          });
+        }
+        return;
+      }
+
+      // Handle events endpoint (SSE)
+      if (url.includes('/events')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body: '',
+        });
+        return;
+      }
+
+      // Handle conversation CRUD
+      if (method === 'GET') {
+        const conversation = mockState.conversations.get(conversationId);
+        if (conversation) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(conversation),
+          });
+        } else {
+          await route.fulfill({ status: 404, body: 'Not found' });
+        }
+      } else if (method === 'DELETE') {
+        mockState.conversations.delete(conversationId);
+        mockState.messages.delete(conversationId);
+        await route.fulfill({ status: 204 });
+      } else if (method === 'PATCH') {
+        const conversation = mockState.conversations.get(conversationId);
+        if (conversation) {
+          const body = request.postDataJSON() || {};
+          Object.assign(conversation, body, { updated_at: new Date().toISOString() });
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(conversation),
+          });
+        } else {
+          await route.fulfill({ status: 404, body: 'Not found' });
+        }
+      } else {
+        await route.continue();
+      }
+    });
+
+    // MCP servers endpoint
+    await page.route('**/api/v1/mcp/servers', async (route, request) => {
+      if (request.method() === 'GET') {
+        const servers = Array.from(mockState.mcpServers.values());
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ servers }),
+        });
+      } else if (request.method() === 'POST') {
+        const body = request.postDataJSON() || {};
+        const server: MockMCPServer = {
+          name: body.name,
+          command: body.command,
+          args: body.args || [],
+          status: 'connected',
+          tools: [
+            { name: 'read_file', description: 'Read a file' },
+            { name: 'write_file', description: 'Write a file' },
+            { name: 'list_directory', description: 'List directory contents' },
+          ],
+        };
+        mockState.mcpServers.set(body.name, server);
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify(server),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // MCP server delete endpoint
+    await page.route('**/api/v1/mcp/servers/*', async (route, request) => {
+      if (request.method() === 'DELETE') {
+        const url = request.url();
+        const serverName = decodeURIComponent(url.split('/').pop() || '');
+        mockState.mcpServers.delete(serverName);
+        await route.fulfill({ status: 204 });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // MCP tools endpoint
+    await page.route('**/api/v1/mcp/tools', async (route) => {
+      const allTools: Record<string, { name: string; description: string }[]> = {};
+      mockState.mcpServers.forEach((server) => {
+        allTools[server.name] = server.tools;
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tools: allTools }),
       });
     });
 
