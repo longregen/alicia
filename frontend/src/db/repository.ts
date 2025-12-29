@@ -164,12 +164,27 @@ export const messageRepository = {
   },
 
   upsert(message: Message): void {
-    const existing = this.findById(message.id);
-    if (existing) {
+    // First check by primary id
+    const existingById = this.findById(message.id);
+    if (existingById) {
       this.update(message.id, message);
-    } else {
-      this.insert(message);
+      return;
     }
+
+    // Check if this server message already exists via an optimistic update
+    // (optimistic messages store server_id after REST API response)
+    const existingByServerId = this.findByServerId(message.id);
+    if (existingByServerId) {
+      // Update existing optimistic message with server data, keeping local id as primary key
+      this.update(existingByServerId.id, {
+        ...message,
+        server_id: message.id,
+      });
+      return;
+    }
+
+    // No existing message found, insert new
+    this.insert(message);
   },
 
   incrementRetryCount(id: string): void {
