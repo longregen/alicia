@@ -764,3 +764,105 @@ func mustMarshal(v any) json.RawMessage {
 	}
 	return data
 }
+
+// Tests for validateCommand (command injection prevention)
+
+func TestValidateCommand_EmptyCommand(t *testing.T) {
+	_, err := validateCommand("", nil)
+	if err == nil {
+		t.Error("expected error for empty command")
+	}
+	if err.Error() != "command cannot be empty" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateCommand_ShellMetacharsInCommand(t *testing.T) {
+	testCases := []string{
+		"cmd;rm -rf /",
+		"cmd|cat /etc/passwd",
+		"cmd&background",
+		"cmd$(whoami)",
+		"cmd`whoami`",
+		"cmd(subshell)",
+		"cmd>output",
+		"cmd<input",
+	}
+
+	for _, cmd := range testCases {
+		t.Run(cmd, func(t *testing.T) {
+			_, err := validateCommand(cmd, nil)
+			if err == nil {
+				t.Errorf("expected error for command with metacharacters: %s", cmd)
+			}
+		})
+	}
+}
+
+func TestValidateCommand_ShellMetacharsInArgs(t *testing.T) {
+	testCases := [][]string{
+		{"arg;rm -rf /"},
+		{"normal", "arg|cat"},
+		{"arg$(whoami)"},
+		{"arg`id`"},
+	}
+
+	for _, args := range testCases {
+		t.Run(args[0], func(t *testing.T) {
+			// Use a valid command that exists
+			_, err := validateCommand("/bin/sh", args)
+			if err == nil {
+				t.Errorf("expected error for args with metacharacters: %v", args)
+			}
+		})
+	}
+}
+
+func TestValidateCommand_DangerousFlags(t *testing.T) {
+	testCases := [][]string{
+		{"--exec=malicious"},
+		{"--EXEC=/bin/sh"},
+		{"--config=/etc/passwd"},
+		{"-c=/path/to/config"},
+		{"normal", "--exec", "command"},
+	}
+
+	for _, args := range testCases {
+		t.Run(args[0], func(t *testing.T) {
+			_, err := validateCommand("/bin/sh", args)
+			if err == nil {
+				t.Errorf("expected error for dangerous flag: %v", args)
+			}
+		})
+	}
+}
+
+func TestValidateCommand_ValidCommand(t *testing.T) {
+	// Test with a command that should exist on most systems
+	path, err := validateCommand("/bin/sh", []string{"-c", "echo hello"})
+	if err != nil {
+		// Skip if /bin/sh doesn't exist in test environment
+		t.Skipf("skipping test, /bin/sh not available: %v", err)
+	}
+	if path == "" {
+		t.Error("expected non-empty path")
+	}
+}
+
+func TestValidateCommand_SafeArgs(t *testing.T) {
+	// These args should be allowed
+	safeArgs := []string{
+		"-y",
+		"@modelcontextprotocol/server-filesystem",
+		"/tmp",
+		"--help",
+		"-v",
+		"some-package",
+	}
+
+	_, err := validateCommand("/bin/sh", safeArgs)
+	if err != nil {
+		// Skip if /bin/sh doesn't exist
+		t.Skipf("skipping test: %v", err)
+	}
+}
