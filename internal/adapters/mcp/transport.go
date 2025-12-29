@@ -42,6 +42,7 @@ type StdioTransport struct {
 	receiveCh chan Message
 	closeCh   chan struct{}
 	closeOnce sync.Once
+	wg        sync.WaitGroup // tracks goroutines that send on receiveCh
 	mu        sync.RWMutex
 	connected bool
 }
@@ -139,6 +140,7 @@ func NewStdioTransport(command string, args []string, env []string) (*StdioTrans
 	transport.mu.Unlock()
 
 	// Start reading from stdout
+	transport.wg.Add(1)
 	go transport.readLoop()
 
 	// Start reading from stderr (for logging)
@@ -207,6 +209,9 @@ func (t *StdioTransport) Close() error {
 			t.stderr.Close()
 		}
 
+		// Wait for readLoop to finish before closing receiveCh
+		// This prevents the data race between sending and closing
+		t.wg.Wait()
 		close(t.receiveCh)
 	})
 	return err
@@ -221,6 +226,7 @@ func (t *StdioTransport) IsConnected() bool {
 
 // readLoop reads messages from stdout
 func (t *StdioTransport) readLoop() {
+	defer t.wg.Done()
 	scanner := bufio.NewScanner(t.stdout)
 	// Set a larger buffer size for scanner to handle large messages
 	buf := make([]byte, 0, 64*1024)
