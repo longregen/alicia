@@ -794,7 +794,6 @@ The collapsed state shows aggregate feedback with visual indicators:
 ## Implementation Phases
 
 ### Phase 1: Foundation (Atoms & Core Infrastructure)
-**Priority: Critical**
 
 1. **Create Atomic Components**
    - [ ] IconButton, PrimaryButton, GhostButton
@@ -816,13 +815,12 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] Add `memories` table with full CRUD
    - [ ] Add `session_stats` table
 
-4. **Create React Contexts**
-   - [ ] `FeedbackContext`: Votes, notes state
-   - [ ] `MemoryContext`: Memory management state
-   - [ ] `ServerInfoContext`: Server information state
+4. **Create Zustand Stores**
+   - [ ] `feedbackStore`: Votes, notes state
+   - [ ] `memoryStore`: Global memory management state
+   - [ ] `serverInfoStore`: Server information state
 
 ### Phase 2: Granular Voting System
-**Priority: High**
 
 1. **Core Voting Components**
    - [ ] VoteControl (unified component)
@@ -850,7 +848,6 @@ The collapsed state shows aggregate feedback with visual indicators:
 
 5. **Hooks**
    - [ ] `useFeedback()`: Unified feedback state and actions
-   - [ ] `useOptimisticFeedback()`: Optimistic UI updates
    - [ ] `useFeedbackAggregates()`: Compute summary indicators
 
 6. **Integration**
@@ -861,7 +858,6 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] Add to sync system
 
 ### Phase 3: Notes System
-**Priority: High**
 
 1. **Components**
    - [ ] InlineNoteEditor molecule
@@ -879,7 +875,6 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] Wire up protocol handlers
 
 ### Phase 4: Memory Management
-**Priority: High**
 
 1. **Components**
    - [ ] MemoryCard molecule
@@ -890,7 +885,7 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] InlineMemoryTrace (for messages)
 
 2. **Hooks**
-   - [ ] `useMemories()`: Memory CRUD
+   - [ ] `useMemories()`: Memory CRUD (global scope)
    - [ ] `useMemorySearch()`: Search/filter
    - [ ] `useMemoryFeedback()`: Rate memory relevance
 
@@ -900,7 +895,6 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] Create memory creation flow
 
 ### Phase 5: Server Information Panel
-**Priority: Medium**
 
 1. **Components**
    - [ ] ConnectionStatus molecule
@@ -919,7 +913,6 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] Real-time updates from protocol
 
 ### Phase 6: Enhanced Message Bubble
-**Priority: Medium**
 
 1. **Refactor MessageBubble**
    - [ ] Integrate VoteControl
@@ -935,7 +928,6 @@ The collapsed state shows aggregate feedback with visual indicators:
    - [ ] Copy feedback
 
 ### Phase 7: Polish & Accessibility
-**Priority: Medium**
 
 1. **Accessibility**
    - [ ] ARIA labels for all interactive elements
@@ -951,53 +943,48 @@ The collapsed state shows aggregate feedback with visual indicators:
 3. **Performance**
    - [ ] Virtualized lists for notes/memories
    - [ ] Lazy loading for collapsed sections
-   - [ ] Optimistic updates everywhere
 
 ---
 
-## API Endpoints Needed (Backend)
+## API Endpoints (Backend)
 
 ```
-# Unified Feedback (Granular Voting)
-POST   /api/v1/feedback                    # Submit feedback (any target type)
-DELETE /api/v1/feedback/{id}               # Remove feedback
-GET    /api/v1/messages/{id}/feedback      # All feedback for a message
-
-# Specific feedback targets
+# Message Voting
 POST   /api/v1/messages/{id}/vote          # Vote on message
+DELETE /api/v1/messages/{id}/vote          # Remove vote
+GET    /api/v1/messages/{id}/votes         # Get votes for message
+
+# Tool Use Voting
 POST   /api/v1/tool-uses/{id}/vote         # Vote on tool use
-POST   /api/v1/memories/{id}/relevance     # Vote on memory relevance in context
-POST   /api/v1/reasoning/{id}/vote         # Vote on reasoning step
-
-# Quick feedback
+DELETE /api/v1/tool-uses/{id}/vote         # Remove vote
 POST   /api/v1/tool-uses/{id}/quick-feedback    # Wrong tool, wrong params, etc.
+
+# Memory Voting
+POST   /api/v1/memories/{id}/vote          # Vote on memory relevance
+DELETE /api/v1/memories/{id}/vote          # Remove vote
 POST   /api/v1/memories/{id}/irrelevance-reason # Why wasn't this relevant
-POST   /api/v1/reasoning/{id}/issue             # Reasoning issue type
 
-# Batch feedback (for efficiency)
-POST   /api/v1/messages/{id}/batch-feedback     # Submit multiple votes at once
-
-# Feedback aggregates
-GET    /api/v1/messages/{id}/feedback-summary   # Aggregated feedback for message
-GET    /api/v1/conversations/{id}/feedback-stats # Conversation-wide stats
+# Reasoning Voting
+POST   /api/v1/reasoning/{id}/vote         # Vote on reasoning step
+DELETE /api/v1/reasoning/{id}/vote         # Remove vote
+POST   /api/v1/reasoning/{id}/issue        # Reasoning issue type
 
 # Notes
-POST   /api/v1/messages/{id}/notes         # Add note
+POST   /api/v1/messages/{id}/notes         # Add note to message
 GET    /api/v1/messages/{id}/notes         # Get notes for message
 PUT    /api/v1/notes/{id}                  # Update note
 DELETE /api/v1/notes/{id}                  # Delete note
-GET    /api/v1/conversations/{id}/notes    # All notes in conversation
 POST   /api/v1/tool-uses/{id}/notes        # Add note to tool use
 POST   /api/v1/reasoning/{id}/notes        # Add note to reasoning step
 
-# Memories
-POST   /api/v1/conversations/{id}/memories # Create memory
-GET    /api/v1/conversations/{id}/memories # List memories
+# Memories (Global Scope)
+POST   /api/v1/memories                    # Create memory
+GET    /api/v1/memories                    # List all memories
+GET    /api/v1/memories/{id}               # Get single memory
 PUT    /api/v1/memories/{id}               # Update memory
 DELETE /api/v1/memories/{id}               # Delete memory
 POST   /api/v1/memories/{id}/pin           # Pin/unpin memory
 POST   /api/v1/memories/{id}/archive       # Archive memory
-POST   /api/v1/memories/{id}/suggest-update # Suggest update to memory content
 
 # Server Info
 GET    /api/v1/server/info                 # Server configuration
@@ -1054,32 +1041,639 @@ enum EnvelopeType {
 
 ---
 
-## Success Metrics
+## State Management (Zustand)
 
-1. **Engagement**
-   - % of messages with votes
-   - Average notes per conversation
-   - Memory creation rate
+Use Zustand for lightweight, performant state management instead of React Context.
 
-2. **Quality**
-   - Positive vote ratio over time
-   - Note categories distribution
-   - Memory relevance scores
+### Feedback Store
 
-3. **Technical**
-   - Vote latency < 100ms
-   - Note sync < 500ms
-   - Memory search < 200ms
+```typescript
+// frontend/src/stores/feedbackStore.ts
+import { create } from 'zustand';
+
+interface Vote {
+  id: string;
+  targetType: 'message' | 'tool_use' | 'memory' | 'reasoning';
+  targetId: string;
+  vote: 'up' | 'down' | 'critical';
+  quickFeedback?: string;
+  timestamp: number;
+}
+
+interface FeedbackStore {
+  votes: Map<string, Vote>;
+
+  // Actions
+  addVote: (targetType: Vote['targetType'], targetId: string, vote: Vote['vote']) => void;
+  removeVote: (targetType: Vote['targetType'], targetId: string) => void;
+  getVote: (targetType: Vote['targetType'], targetId: string) => Vote | undefined;
+
+  // Aggregates
+  getVoteCounts: (targetType: Vote['targetType'], targetId: string) => { up: number; down: number };
+}
+
+export const useFeedbackStore = create<FeedbackStore>((set, get) => ({
+  votes: new Map(),
+
+  addVote: (targetType, targetId, vote) => {
+    const key = `${targetType}:${targetId}`;
+    set((state) => {
+      const newVotes = new Map(state.votes);
+      newVotes.set(key, {
+        id: crypto.randomUUID(),
+        targetType,
+        targetId,
+        vote,
+        timestamp: Date.now(),
+      });
+      return { votes: newVotes };
+    });
+  },
+
+  removeVote: (targetType, targetId) => {
+    const key = `${targetType}:${targetId}`;
+    set((state) => {
+      const newVotes = new Map(state.votes);
+      newVotes.delete(key);
+      return { votes: newVotes };
+    });
+  },
+
+  getVote: (targetType, targetId) => {
+    const key = `${targetType}:${targetId}`;
+    return get().votes.get(key);
+  },
+
+  getVoteCounts: (targetType, targetId) => {
+    // For single-user, just return current vote state
+    const vote = get().getVote(targetType, targetId);
+    return {
+      up: vote?.vote === 'up' ? 1 : 0,
+      down: vote?.vote === 'down' ? 1 : 0,
+    };
+  },
+}));
+```
+
+### Memory Store (Global Scope)
+
+```typescript
+// frontend/src/stores/memoryStore.ts
+import { create } from 'zustand';
+
+interface Memory {
+  id: string;
+  content: string;
+  category: 'preference' | 'fact' | 'context' | 'instruction';
+  pinned: boolean;
+  archived: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface MemoryStore {
+  memories: Memory[];
+
+  // Actions
+  createMemory: (memory: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateMemory: (id: string, updates: Partial<Memory>) => void;
+  deleteMemory: (id: string) => void;
+  pinMemory: (id: string, pinned: boolean) => void;
+  archiveMemory: (id: string) => void;
+
+  // Queries
+  searchMemories: (query: string) => Memory[];
+  getPinnedMemories: () => Memory[];
+}
+
+export const useMemoryStore = create<MemoryStore>((set, get) => ({
+  memories: [],
+
+  createMemory: (memory) => {
+    const now = Date.now();
+    set((state) => ({
+      memories: [...state.memories, {
+        ...memory,
+        id: crypto.randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+      }],
+    }));
+  },
+
+  updateMemory: (id, updates) => {
+    set((state) => ({
+      memories: state.memories.map((m) =>
+        m.id === id ? { ...m, ...updates, updatedAt: Date.now() } : m
+      ),
+    }));
+  },
+
+  deleteMemory: (id) => {
+    set((state) => ({
+      memories: state.memories.filter((m) => m.id !== id),
+    }));
+  },
+
+  pinMemory: (id, pinned) => {
+    get().updateMemory(id, { pinned });
+  },
+
+  archiveMemory: (id) => {
+    get().updateMemory(id, { archived: true });
+  },
+
+  searchMemories: (query) => {
+    const q = query.toLowerCase();
+    return get().memories.filter((m) =>
+      !m.archived && m.content.toLowerCase().includes(q)
+    );
+  },
+
+  getPinnedMemories: () => {
+    return get().memories.filter((m) => m.pinned && !m.archived);
+  },
+}));
+```
+
+### Notes Store
+
+```typescript
+// frontend/src/stores/notesStore.ts
+import { create } from 'zustand';
+
+interface UserNote {
+  id: string;
+  messageId: string;
+  content: string;
+  category: 'improvement' | 'correction' | 'context' | 'general';
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface NotesStore {
+  notes: Map<string, UserNote[]>; // messageId -> notes
+
+  addNote: (messageId: string, content: string, category: UserNote['category']) => void;
+  updateNote: (noteId: string, content: string) => void;
+  deleteNote: (noteId: string) => void;
+  getNotesForMessage: (messageId: string) => UserNote[];
+}
+
+export const useNotesStore = create<NotesStore>((set, get) => ({
+  notes: new Map(),
+
+  addNote: (messageId, content, category) => {
+    const now = Date.now();
+    const note: UserNote = {
+      id: crypto.randomUUID(),
+      messageId,
+      content,
+      category,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    set((state) => {
+      const newNotes = new Map(state.notes);
+      const existing = newNotes.get(messageId) || [];
+      newNotes.set(messageId, [...existing, note]);
+      return { notes: newNotes };
+    });
+  },
+
+  updateNote: (noteId, content) => {
+    set((state) => {
+      const newNotes = new Map(state.notes);
+      for (const [messageId, notes] of newNotes) {
+        const updated = notes.map((n) =>
+          n.id === noteId ? { ...n, content, updatedAt: Date.now() } : n
+        );
+        newNotes.set(messageId, updated);
+      }
+      return { notes: newNotes };
+    });
+  },
+
+  deleteNote: (noteId) => {
+    set((state) => {
+      const newNotes = new Map(state.notes);
+      for (const [messageId, notes] of newNotes) {
+        newNotes.set(messageId, notes.filter((n) => n.id !== noteId));
+      }
+      return { notes: newNotes };
+    });
+  },
+
+  getNotesForMessage: (messageId) => {
+    return get().notes.get(messageId) || [];
+  },
+}));
+```
 
 ---
 
-## Open Questions
+## Feedback Visibility (Modifier Key)
 
-1. Should votes be visible to other users (if multi-user)?
-2. Should notes be private or shared?
-3. Memory scope: conversation vs global?
-4. Should we show aggregate feedback to users?
-5. Rate limiting for votes/notes?
+Votes and notes are hidden by default to keep the UI clean. Hold **Alt** (or **Cmd** on Mac) to reveal feedback controls.
+
+### Implementation
+
+```typescript
+// frontend/src/hooks/useFeedbackVisibility.ts
+import { useState, useEffect } from 'react';
+
+export function useFeedbackVisibility() {
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey || e.metaKey) {
+        setShowFeedback(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (!e.altKey && !e.metaKey) {
+        setShowFeedback(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  return showFeedback;
+}
+```
+
+### Usage in Components
+
+```tsx
+// In MessageBubble.tsx
+import { useFeedbackVisibility } from '../hooks/useFeedbackVisibility';
+
+function MessageBubble({ message }: Props) {
+  const showFeedback = useFeedbackVisibility();
+
+  return (
+    <div className="message-bubble">
+      <div className="message-content">{message.content}</div>
+
+      {showFeedback && (
+        <div className="feedback-controls">
+          <VoteControl targetType="message" targetId={message.id} />
+          <NoteButton messageId={message.id} />
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Visual Indicator
+
+```tsx
+// Show a subtle hint that feedback mode is active
+{showFeedback && (
+  <div className="feedback-mode-indicator">
+    Press Alt/Cmd to show feedback controls
+  </div>
+)}
+```
+
+---
+
+## Protocol Files
+
+### Frontend Protocol Types
+
+```typescript
+// frontend/src/types/feedback-protocol.ts
+
+export enum FeedbackEnvelopeType {
+  Feedback = 20,
+  FeedbackConfirmation = 21,
+  UserNote = 22,
+  NoteConfirmation = 23,
+  MemoryAction = 24,
+  MemoryConfirmation = 25,
+  ServerInfo = 26,
+  SessionStats = 27,
+}
+
+// Vote message sent from client to server
+export interface FeedbackMessage {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  targetType: 'message' | 'tool_use' | 'memory' | 'reasoning';
+  targetId: string;
+  vote: 'up' | 'down' | 'critical' | 'remove';
+  quickFeedback?: string;
+  note?: string;
+  timestamp: number;
+}
+
+// Server confirmation with aggregate counts
+export interface FeedbackConfirmation {
+  feedbackId: string;
+  targetType: string;
+  targetId: string;
+  aggregates: {
+    upvotes: number;
+    downvotes: number;
+    specialVotes?: Record<string, number>;
+  };
+  userVote: 'up' | 'down' | 'critical' | null;
+}
+
+// Note message
+export interface UserNoteMessage {
+  id: string;
+  messageId: string;
+  content: string;
+  category: 'improvement' | 'correction' | 'context' | 'general';
+  action: 'create' | 'update' | 'delete';
+  timestamp: number;
+}
+
+// Note confirmation
+export interface NoteConfirmation {
+  noteId: string;
+  messageId: string;
+  success: boolean;
+}
+
+// Memory action (global scope)
+export interface MemoryActionMessage {
+  id: string;
+  action: 'create' | 'update' | 'delete' | 'pin' | 'archive';
+  memory?: {
+    content: string;
+    category: 'preference' | 'fact' | 'context' | 'instruction';
+    pinned?: boolean;
+  };
+  timestamp: number;
+}
+
+// Memory confirmation
+export interface MemoryConfirmation {
+  memoryId: string;
+  action: string;
+  success: boolean;
+}
+
+// Server info broadcast
+export interface ServerInfoMessage {
+  connection: {
+    status: 'connected' | 'connecting' | 'disconnected';
+    latency: number;
+  };
+  model: {
+    name: string;
+    provider: string;
+  };
+  mcpServers: Array<{
+    name: string;
+    status: 'connected' | 'disconnected' | 'error';
+  }>;
+}
+
+// Session statistics
+export interface SessionStatsMessage {
+  messageCount: number;
+  toolCallCount: number;
+  memoriesUsed: number;
+  sessionDuration: number;
+}
+```
+
+---
+
+## Backend Planning
+
+### Go Handler Specifications
+
+```go
+// internal/adapters/http/handlers/votes.go
+package handlers
+
+import (
+    "net/http"
+    "github.com/go-chi/chi/v5"
+)
+
+type VoteHandler struct {
+    voteService ports.VoteService
+}
+
+// POST /api/v1/messages/{id}/vote
+func (h *VoteHandler) VoteOnMessage(w http.ResponseWriter, r *http.Request) {
+    messageID := chi.URLParam(r, "id")
+    var req struct {
+        Vote          string  `json:"vote"` // "up", "down", "critical"
+        QuickFeedback *string `json:"quickFeedback,omitempty"`
+    }
+    // Decode, validate, save
+}
+
+// POST /api/v1/tool-uses/{id}/vote
+func (h *VoteHandler) VoteOnToolUse(w http.ResponseWriter, r *http.Request) {
+    toolUseID := chi.URLParam(r, "id")
+    // Similar implementation
+}
+
+// POST /api/v1/memories/{id}/vote
+func (h *VoteHandler) VoteOnMemory(w http.ResponseWriter, r *http.Request) {
+    memoryID := chi.URLParam(r, "id")
+    // Similar implementation
+}
+
+// POST /api/v1/reasoning/{id}/vote
+func (h *VoteHandler) VoteOnReasoning(w http.ResponseWriter, r *http.Request) {
+    reasoningID := chi.URLParam(r, "id")
+    // Similar implementation
+}
+```
+
+```go
+// internal/adapters/http/handlers/notes.go
+package handlers
+
+type NoteHandler struct {
+    noteService ports.NoteService
+}
+
+// POST /api/v1/messages/{id}/notes
+func (h *NoteHandler) CreateNote(w http.ResponseWriter, r *http.Request) {
+    messageID := chi.URLParam(r, "id")
+    var req struct {
+        Content  string `json:"content"`
+        Category string `json:"category"`
+    }
+    // Create note
+}
+
+// PUT /api/v1/notes/{id}
+func (h *NoteHandler) UpdateNote(w http.ResponseWriter, r *http.Request) {
+    noteID := chi.URLParam(r, "id")
+    // Update note
+}
+
+// DELETE /api/v1/notes/{id}
+func (h *NoteHandler) DeleteNote(w http.ResponseWriter, r *http.Request) {
+    noteID := chi.URLParam(r, "id")
+    // Delete note
+}
+```
+
+```go
+// internal/adapters/http/handlers/memories.go
+package handlers
+
+type MemoryHandler struct {
+    memoryService ports.MemoryService
+}
+
+// POST /api/v1/memories (global scope)
+func (h *MemoryHandler) CreateMemory(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Content  string `json:"content"`
+        Category string `json:"category"`
+    }
+    // Create memory
+}
+
+// GET /api/v1/memories
+func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
+    // Return all memories (with pagination)
+}
+
+// PUT /api/v1/memories/{id}
+func (h *MemoryHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) {
+    memoryID := chi.URLParam(r, "id")
+    // Update memory
+}
+
+// DELETE /api/v1/memories/{id}
+func (h *MemoryHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
+    memoryID := chi.URLParam(r, "id")
+    // Delete memory
+}
+
+// POST /api/v1/memories/{id}/pin
+func (h *MemoryHandler) PinMemory(w http.ResponseWriter, r *http.Request) {
+    memoryID := chi.URLParam(r, "id")
+    // Toggle pin status
+}
+```
+
+### LiveKit Protocol Handlers
+
+```go
+// internal/adapters/livekit/feedback_handlers.go
+package livekit
+
+import (
+    "context"
+)
+
+// HandleFeedback processes vote messages from clients
+func (h *ProtocolHandler) HandleFeedback(ctx context.Context, msg *FeedbackMessage) error {
+    // 1. Validate vote
+    // 2. Store in database
+    // 3. Send confirmation back to client
+    confirmation := &FeedbackConfirmation{
+        FeedbackID: msg.ID,
+        TargetType: msg.TargetType,
+        TargetID:   msg.TargetID,
+        UserVote:   msg.Vote,
+    }
+    return h.sendMessage(ctx, FeedbackConfirmation, confirmation)
+}
+
+// HandleUserNote processes note messages from clients
+func (h *ProtocolHandler) HandleUserNote(ctx context.Context, msg *UserNoteMessage) error {
+    switch msg.Action {
+    case "create":
+        return h.noteService.Create(ctx, msg)
+    case "update":
+        return h.noteService.Update(ctx, msg.ID, msg.Content)
+    case "delete":
+        return h.noteService.Delete(ctx, msg.ID)
+    }
+    return nil
+}
+
+// HandleMemoryAction processes memory CRUD from clients
+func (h *ProtocolHandler) HandleMemoryAction(ctx context.Context, msg *MemoryActionMessage) error {
+    switch msg.Action {
+    case "create":
+        return h.memoryService.Create(ctx, msg.Memory)
+    case "update":
+        return h.memoryService.Update(ctx, msg.ID, msg.Memory)
+    case "delete":
+        return h.memoryService.Delete(ctx, msg.ID)
+    case "pin":
+        return h.memoryService.Pin(ctx, msg.ID)
+    case "archive":
+        return h.memoryService.Archive(ctx, msg.ID)
+    }
+    return nil
+}
+```
+
+### Router Setup
+
+```go
+// internal/adapters/http/router.go
+func SetupRoutes(r chi.Router, handlers *Handlers) {
+    r.Route("/api/v1", func(r chi.Router) {
+        // Message voting
+        r.Post("/messages/{id}/vote", handlers.Vote.VoteOnMessage)
+        r.Delete("/messages/{id}/vote", handlers.Vote.RemoveMessageVote)
+        r.Get("/messages/{id}/votes", handlers.Vote.GetMessageVotes)
+
+        // Tool use voting
+        r.Post("/tool-uses/{id}/vote", handlers.Vote.VoteOnToolUse)
+        r.Delete("/tool-uses/{id}/vote", handlers.Vote.RemoveToolUseVote)
+        r.Post("/tool-uses/{id}/quick-feedback", handlers.Vote.ToolUseQuickFeedback)
+
+        // Memory voting
+        r.Post("/memories/{id}/vote", handlers.Vote.VoteOnMemory)
+        r.Delete("/memories/{id}/vote", handlers.Vote.RemoveMemoryVote)
+
+        // Reasoning voting
+        r.Post("/reasoning/{id}/vote", handlers.Vote.VoteOnReasoning)
+        r.Delete("/reasoning/{id}/vote", handlers.Vote.RemoveReasoningVote)
+
+        // Notes
+        r.Post("/messages/{id}/notes", handlers.Note.CreateNote)
+        r.Get("/messages/{id}/notes", handlers.Note.GetNotesForMessage)
+        r.Put("/notes/{id}", handlers.Note.UpdateNote)
+        r.Delete("/notes/{id}", handlers.Note.DeleteNote)
+
+        // Memories (global scope)
+        r.Post("/memories", handlers.Memory.CreateMemory)
+        r.Get("/memories", handlers.Memory.ListMemories)
+        r.Get("/memories/{id}", handlers.Memory.GetMemory)
+        r.Put("/memories/{id}", handlers.Memory.UpdateMemory)
+        r.Delete("/memories/{id}", handlers.Memory.DeleteMemory)
+        r.Post("/memories/{id}/pin", handlers.Memory.PinMemory)
+        r.Post("/memories/{id}/archive", handlers.Memory.ArchiveMemory)
+
+        // Server info
+        r.Get("/server/info", handlers.Server.GetInfo)
+        r.Get("/session/stats", handlers.Server.GetSessionStats)
+    })
+}
+```
 
 ---
 

@@ -48,29 +48,133 @@ GEPA (Genetic-Pareto) is DSPy's most advanced optimizer:
 7. Repeat until budget exhausted
 ```
 
-## Existing Go Implementations
-
-### dspy-go (Recommended Foundation)
+## dspy-go Library Status
 
 **Repository**: https://github.com/XiaoConstantine/dspy-go
 
-Already implements:
-- ✅ Core signatures and modules
-- ✅ GEPA optimizer
-- ✅ MIPRO optimizer
-- ✅ BootstrapFewShot
-- ✅ Multi-provider LLM support
-- ✅ Structured outputs
+| Metric | Value |
+|--------|-------|
+| Stars | 140 |
+| Forks | 9 |
+| Commits | 411 |
+| License | MIT |
 
-### LangChainGo
+### Implemented Features
 
-**Repository**: https://github.com/tmc/langchaingo
+- ✅ **GEPA optimizer** - State-of-the-art reflective evolution
+- ✅ **MIPRO optimizer** - Joint instruction + example optimization
+- ✅ **SIMBA optimizer** - Additional optimization strategy
+- ✅ **BootstrapFewShot** - Generate demonstrations
+- ✅ **Core modules** - Predict, ChainOfThought, ReAct, MultiChainComparison, Refine, Parallel
+- ✅ **Multi-provider LLM** - Anthropic Claude, Google Gemini, OpenAI, Ollama
+- ✅ **Structured outputs** - Via `.WithStructuredOutput()`
+- ✅ **Multimodal** - Vision support
+- ✅ **Tool integration** - MCP server support
+- ✅ **Dataset management** - GSM8K, HotPotQA
+- ✅ **CLI tool** - Interactive optimizer testing
 
-Provides:
-- Unified LLM interface (OpenAI, Anthropic, etc.)
-- Embeddings and vector stores
-- Chains and agents
-- Already used by many Go projects
+The library appears actively maintained with comprehensive documentation.
+
+## Initial Prompts (Baseline)
+
+Before GEPA optimization, we need hand-written baseline prompts that GEPA will improve upon. These are the starting points:
+
+### Conversation Response Prompt
+
+```go
+// internal/prompt/baselines/conversation.go
+package baselines
+
+var ConversationResponsePrompt = `You are Alicia, a helpful AI assistant with memory capabilities.
+
+You have access to:
+- Conversation context from this session
+- Relevant memories from past interactions
+- Tools for file operations, web search, and more
+
+Guidelines:
+1. Be conversational and natural in your responses
+2. Reference relevant memories when they add value
+3. Use tools when the user's request requires external information
+4. Be concise but thorough
+
+Context: {{.Context}}
+Memories: {{.Memories}}
+User Message: {{.UserMessage}}
+
+Respond helpfully to the user's message.`
+```
+
+### Tool Selection Prompt
+
+```go
+var ToolSelectionPrompt = `Given the user's intent and available tools, decide which tool (if any) to use.
+
+User Intent: {{.UserIntent}}
+Conversation Context: {{.Context}}
+
+Available Tools:
+{{range .Tools}}
+- {{.Name}}: {{.Description}}
+  Parameters: {{.Parameters}}
+{{end}}
+
+If a tool is needed, respond with:
+TOOL: <tool_name>
+ARGUMENTS: <json arguments>
+REASONING: <why this tool>
+
+If no tool is needed, respond with:
+TOOL: none
+REASONING: <why no tool is needed>`
+```
+
+### Memory Extraction Prompt
+
+```go
+var MemoryExtractionPrompt = `Extract key facts from this conversation that should be remembered for future interactions.
+
+Conversation:
+{{.Conversation}}
+
+Extract facts that are:
+- Personal preferences (e.g., "prefers TypeScript", "works on React projects")
+- Project context (e.g., "building an e-commerce app", "using PostgreSQL")
+- Instructions (e.g., "always use async/await", "prefers concise responses")
+
+Format each fact as a single sentence. Rate importance 1-5 (5 = always remember).
+
+FACTS:
+1. [fact] (importance: X)
+2. [fact] (importance: X)
+...`
+```
+
+### Tool Result Formatting Prompt
+
+```go
+var ToolResultFormatterPrompt = `Format this tool result for optimal LLM consumption.
+
+Tool: {{.ToolName}}
+Raw Result: {{.RawResult}}
+User Context: {{.UserContext}}
+
+Guidelines:
+- Extract the most relevant information for the user's query
+- Summarize verbose output while preserving key details
+- Highlight actionable items
+- Format for readability
+
+Formatted Result:`
+```
+
+These baseline prompts will be optimized by GEPA to improve:
+- Response quality and helpfulness
+- Tool selection accuracy
+- Memory extraction precision
+- Result formatting clarity
+
+---
 
 ## Implementation Strategy
 
@@ -1146,11 +1250,18 @@ CREATE UNIQUE INDEX idx_optimized_signature ON optimized_programs(signature_name
 
 ## Configuration
 
+### Multi-LLM Configuration
+
+GEPA requires two LLM configurations:
+- **Student Model**: The model being optimized (executes tasks)
+- **Reflection Model**: Strong model for analyzing failures and proposing improvements
+
 ```yaml
 # config.yaml additions
 prompt_optimization:
   enabled: true
 
+  # GEPA optimizer settings
   gepa:
     default_budget: "medium"  # light, medium, heavy
     num_threads: 8
@@ -1158,17 +1269,97 @@ prompt_optimization:
     skip_perfect_score: true
     use_merge: true
 
+  # Reflection model (strong model for GEPA analysis)
   reflection_model:
     provider: "anthropic"
     model: "claude-3-5-sonnet-20241022"
+    api_key: "${ANTHROPIC_API_KEY}"
+    # Optional: custom endpoint for self-hosted models
+    # base_url: "https://api.anthropic.com"
 
+  # Student model (model being optimized)
   student_model:
     provider: "openai"
     model: "gpt-4o-mini"
+    api_key: "${OPENAI_API_KEY}"
+    # Optional: custom endpoint
+    # base_url: "https://api.openai.com/v1"
 
   storage:
     type: "postgres"
     cache_optimized_programs: true
+```
+
+### Go Configuration Struct
+
+```go
+// internal/config/config.go additions
+
+type PromptOptimizationConfig struct {
+    Enabled         bool             `yaml:"enabled"`
+    GEPA            GEPAConfig       `yaml:"gepa"`
+    ReflectionModel LLMProviderConfig `yaml:"reflection_model"`
+    StudentModel    LLMProviderConfig `yaml:"student_model"`
+    Storage         StorageConfig    `yaml:"storage"`
+}
+
+type GEPAConfig struct {
+    DefaultBudget           string `yaml:"default_budget"`
+    NumThreads              int    `yaml:"num_threads"`
+    ReflectionMinibatchSize int    `yaml:"reflection_minibatch_size"`
+    SkipPerfectScore        bool   `yaml:"skip_perfect_score"`
+    UseMerge                bool   `yaml:"use_merge"`
+}
+
+type LLMProviderConfig struct {
+    Provider string `yaml:"provider"` // "openai", "anthropic", "google", "ollama"
+    Model    string `yaml:"model"`
+    APIKey   string `yaml:"api_key"`
+    BaseURL  string `yaml:"base_url,omitempty"`
+}
+
+type StorageConfig struct {
+    Type                   string `yaml:"type"`
+    CacheOptimizedPrograms bool   `yaml:"cache_optimized_programs"`
+}
+```
+
+### LLM Provider Factory
+
+```go
+// internal/prompt/llm_factory.go
+package prompt
+
+import (
+    "github.com/XiaoConstantine/dspy-go/llms"
+)
+
+func NewLLMFromConfig(cfg LLMProviderConfig) (llms.LLM, error) {
+    switch cfg.Provider {
+    case "openai":
+        return llms.NewOpenAI(
+            llms.WithModel(cfg.Model),
+            llms.WithAPIKey(cfg.APIKey),
+        )
+    case "anthropic":
+        return llms.NewAnthropic(
+            llms.WithModel(cfg.Model),
+            llms.WithAPIKey(cfg.APIKey),
+        )
+    case "google":
+        return llms.NewGoogle(
+            llms.WithModel(cfg.Model),
+            llms.WithAPIKey(cfg.APIKey),
+        )
+    case "ollama":
+        return llms.NewOllama(
+            llms.WithModel(cfg.Model),
+            llms.WithBaseURL(cfg.BaseURL),
+        )
+    default:
+        return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
+    }
+}
 ```
 
 ## Use Cases for Alicia
