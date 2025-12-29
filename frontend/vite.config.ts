@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import tailwindcss from '@tailwindcss/vite'
 
 // Versions from package.json for cache-busting
 const vendorVersions: Record<string, string> = {
@@ -14,6 +15,7 @@ const vendorVersions: Record<string, string> = {
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     {
       name: 'serve-sql-wasm',
       configureServer(server) {

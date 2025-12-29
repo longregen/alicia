@@ -1,6 +1,7 @@
 import { afterEach, vi, beforeEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import 'fake-indexeddb/auto';
 
 // Make React.act available globally for @testing-library/react
 declare global {
