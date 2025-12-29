@@ -60,16 +60,29 @@ atoms/
 
 molecules/
 ├── VoteControl/
-│   └── VoteControl.tsx       # Thumbs up/down with count
+│   ├── VoteControl.tsx       # Unified voting component (all target types)
+│   ├── VoteButton.tsx        # Single vote button with animation
+│   ├── VoteCount.tsx         # Animated count display
+│   └── QuickFeedback.tsx     # Quick feedback chip selector
+├── ToolFeedback/
+│   ├── ToolUseVoting.tsx     # Vote on tool usage decisions
+│   ├── ToolUseCard.tsx       # Enhanced tool display with voting
+│   └── ToolFeedbackChips.tsx # Wrong tool, wrong params, etc.
+├── MemoryFeedback/
+│   ├── MemoryVoting.tsx      # Vote on memory relevance
+│   ├── MemoryCard.tsx        # Single memory with voting
+│   ├── MemoryActions.tsx     # Pin, delete, edit actions
+│   ├── MissingMemory.tsx     # "Add memory for next time" prompt
+│   └── IrrelevanceReason.tsx # Why wasn't this relevant?
+├── ReasoningFeedback/
+│   ├── ReasoningVoting.tsx   # Vote on reasoning steps
+│   ├── ReasoningStep.tsx     # Single step with voting
+│   ├── ReasoningChain.tsx    # Full chain with summary
+│   └── ReasoningIssues.tsx   # Issue type selector
 ├── NoteEditor/
 │   └── InlineNoteEditor.tsx  # Add/edit notes inline
-├── MemoryCard/
-│   ├── MemoryCard.tsx        # Single memory display
-│   └── MemoryActions.tsx     # Pin, delete, edit actions
 ├── FeedbackPanel/
 │   └── MessageFeedback.tsx   # Vote + note combined
-├── ReasoningTrace/
-│   └── ReasoningStep.tsx     # Single reasoning step
 └── ServerInfo/
     ├── ConnectionStatus.tsx  # Server connection details
     ├── SyncStatus.tsx        # Sync state indicator
@@ -94,9 +107,24 @@ organisms/
 
 ## Feature Specifications
 
-### 1. Response Voting System
+### 1. Granular Voting System
 
-#### UX Design
+The voting system provides feedback at multiple levels of AI decision-making, enabling fine-grained improvement signals.
+
+#### Votable Elements
+
+| Element | Purpose | Feedback Value |
+|---------|---------|----------------|
+| **Message** | Overall response quality | General satisfaction |
+| **Tool Use** | Was the right tool used correctly? | Tool selection & parameter tuning |
+| **Memory Selection** | Was this memory relevant? | Memory retrieval improvement |
+| **Reasoning Step** | Was this reasoning helpful? | Reasoning chain optimization |
+
+---
+
+#### 1.1 Message-Level Voting
+
+##### UX Design
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Assistant Message                                       │
@@ -109,42 +137,328 @@ organisms/
 └─────────────────────────────────────────────────────────┘
 ```
 
-#### Component: `VoteControl.tsx`
+---
+
+#### 1.2 Tool Use Voting
+
+##### UX Design
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔧 Tools Used                                      [▼]   │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 📁 read_file                                    ✓   │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ Path: src/components/Button.tsx                     │ │
+│ │ Result: 45 lines read                               │ │
+│ │                                                     │ │
+│ │ Was this tool use helpful?                          │ │
+│ │ [👍 Good choice] [👎 Wrong tool] [📝 Note]          │ │
+│ │                                                     │ │
+│ │ Quick feedback:                                     │ │
+│ │ [Should have used different file]                   │ │
+│ │ [Parameters were wrong]                             │ │
+│ │ [Unnecessary tool call]                             │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 🔍 grep                                         ✓   │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ Pattern: "useState"                                 │ │
+│ │ Result: 12 matches                                  │ │
+│ │                                                     │ │
+│ │ [👍 3] [👎 0] [📝 1 note]                           │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+##### Component: `ToolUseVoting.tsx`
 ```typescript
-interface VoteControlProps {
+interface ToolUseFeedback {
+  id: string;
+  toolUseId: string;
   messageId: string;
-  upvotes: number;
-  downvotes: number;
-  userVote: 'up' | 'down' | null;
+  vote: 'up' | 'down' | null;
+  quickFeedback?: 'wrong_tool' | 'wrong_params' | 'unnecessary' | 'missing_context';
+  note?: string;
+  timestamp: number;
+}
+
+interface ToolUseVotingProps {
+  toolUseId: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  result: unknown;
+  status: 'running' | 'success' | 'failed';
+  feedback: ToolUseFeedback | null;
   onVote: (vote: 'up' | 'down') => void;
-  disabled?: boolean;
+  onQuickFeedback: (type: ToolUseFeedback['quickFeedback']) => void;
+  onAddNote: (note: string) => void;
 }
 ```
 
-#### Interactions
-- Click thumbs up/down to vote
-- Click again to remove vote
-- Clicking opposite thumb switches vote
-- Visual feedback: filled icon = voted, outline = not voted
-- Animate count change
-- Show tooltip with breakdown on hover
+##### Quick Feedback Options for Tools
+- **Wrong tool**: "A different tool would have been better"
+- **Wrong parameters**: "Right tool, wrong arguments"
+- **Unnecessary**: "This tool call wasn't needed"
+- **Missing context**: "Needed more context before calling"
+- **Perfect**: "Exactly the right choice"
 
-#### Protocol Extension Needed
+---
+
+#### 1.3 Memory Selection Voting
+
+##### UX Design
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🧠 Retrieved Memories                              [▼]   │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ "User prefers TypeScript over JavaScript"          │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ Relevance: 95%  •  Used 12 times  •  📌 Pinned     │ │
+│ │                                                     │ │
+│ │ Was this memory relevant to your question?          │ │
+│ │ [👍 Relevant] [👎 Not relevant] [🎯 Critical]       │ │
+│ │                                                     │ │
+│ │ [Edit memory] [Unpin]                               │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ "User works on React projects"                      │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ Relevance: 67%  •  Used 5 times                     │ │
+│ │                                                     │ │
+│ │ [👍 2] [👎 1] [🎯 0]                                │ │
+│ │                                                     │ │
+│ │ Why wasn't this relevant?                           │ │
+│ │ [Outdated info] [Wrong context] [Too generic]       │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ ➕ Missing memory?                                  │ │
+│ │ "Was there context I should have remembered?"       │ │
+│ │ [Add memory for next time...]                       │ │
+│ └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+##### Component: `MemoryVoting.tsx`
 ```typescript
-// New envelope type
-MessageVote (20): {
+interface MemoryFeedback {
+  id: string;
+  memoryId: string;
   messageId: string;
+  relevance: 'relevant' | 'not_relevant' | 'critical';
+  irrelevanceReason?: 'outdated' | 'wrong_context' | 'too_generic' | 'incorrect';
+  shouldUpdate?: string; // Suggested update to memory
+  timestamp: number;
+}
+
+interface MemoryVotingProps {
+  memoryId: string;
+  content: string;
+  relevanceScore: number;
+  usageCount: number;
+  pinned: boolean;
+  feedback: MemoryFeedback | null;
+  aggregateFeedback: {
+    relevant: number;
+    notRelevant: number;
+    critical: number;
+  };
+  onVote: (relevance: MemoryFeedback['relevance']) => void;
+  onIrrelevanceReason: (reason: MemoryFeedback['irrelevanceReason']) => void;
+  onSuggestUpdate: (suggestion: string) => void;
+  onEdit: () => void;
+  onPin: (pinned: boolean) => void;
+}
+```
+
+##### Memory Voting Options
+- **Relevant** (👍): Memory was helpful for this response
+- **Not relevant** (👎): Memory shouldn't have been retrieved
+- **Critical** (🎯): This memory was essential - always use it
+
+##### Irrelevance Reasons
+- **Outdated**: Information is no longer accurate
+- **Wrong context**: Doesn't apply to this situation
+- **Too generic**: Not specific enough to be useful
+- **Incorrect**: The memory contains wrong information
+
+---
+
+#### 1.4 Reasoning Step Voting
+
+##### UX Design
+```
+┌─────────────────────────────────────────────────────────┐
+│ 💭 Reasoning Process                               [▼]   │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Step 1: Understanding the request                   │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ "The user wants to refactor the Button component    │ │
+│ │ to use TypeScript generics for better type safety"  │ │
+│ │                                                     │ │
+│ │ [👍 Correct understanding] [👎 Misunderstood]       │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Step 2: Analyzing current implementation            │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ "Looking at the existing Button.tsx, I see it uses  │ │
+│ │ React.FC with inline prop types..."                 │ │
+│ │                                                     │ │
+│ │ [👍 1] [👎 0]                                       │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ Step 3: Planning the refactor                       │ │
+│ │ ─────────────────────────────────────────────────── │ │
+│ │ "I'll create a generic ButtonProps<T> interface..." │ │
+│ │                                                     │ │
+│ │ Was this reasoning step helpful?                    │ │
+│ │ [👍 Good logic] [👎 Flawed reasoning] [📝 Note]     │ │
+│ │                                                     │ │
+│ │ What was wrong?                                     │ │
+│ │ [Incorrect assumption] [Missed consideration]       │ │
+│ │ [Overcomplicated] [Wrong direction]                 │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                          │
+│ Overall Reasoning Quality                                │
+│ ────────────────────────                                │
+│ Steps: 3  •  👍 2  •  👎 0                               │
+│ [Rate overall reasoning chain...]                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+##### Component: `ReasoningVoting.tsx`
+```typescript
+interface ReasoningFeedback {
+  id: string;
+  reasoningStepId: string;
+  messageId: string;
+  stepNumber: number;
+  vote: 'up' | 'down' | null;
+  issue?: 'incorrect_assumption' | 'missed_consideration' | 'overcomplicated' | 'wrong_direction';
+  note?: string;
+  timestamp: number;
+}
+
+interface ReasoningVotingProps {
+  stepId: string;
+  stepNumber: number;
+  content: string;
+  feedback: ReasoningFeedback | null;
+  onVote: (vote: 'up' | 'down') => void;
+  onIssue: (issue: ReasoningFeedback['issue']) => void;
+  onAddNote: (note: string) => void;
+}
+
+interface ReasoningChainSummaryProps {
+  messageId: string;
+  steps: Array<{
+    id: string;
+    content: string;
+    feedback: ReasoningFeedback | null;
+  }>;
+  overallRating: number | null; // 1-5 stars
+  onRateOverall: (rating: number) => void;
+}
+```
+
+##### Reasoning Issues
+- **Incorrect assumption**: Started from a wrong premise
+- **Missed consideration**: Didn't account for something important
+- **Overcomplicated**: Made it harder than necessary
+- **Wrong direction**: Went down an unproductive path
+
+---
+
+#### Unified Vote Control Component
+
+##### Component: `VoteControl.tsx`
+```typescript
+type VotableType = 'message' | 'tool_use' | 'memory' | 'reasoning';
+
+interface VoteControlProps {
+  // Identification
+  targetType: VotableType;
+  targetId: string;
+  messageId: string;
+
+  // State
+  upvotes: number;
+  downvotes: number;
+  userVote: 'up' | 'down' | null;
+
+  // Type-specific props
+  specialVote?: 'critical'; // For memories
+  quickFeedbackOptions?: QuickFeedbackOption[];
+
+  // Callbacks
+  onVote: (vote: 'up' | 'down') => void;
+  onSpecialVote?: (vote: string) => void;
+  onQuickFeedback?: (feedback: string) => void;
+  onAddNote?: () => void;
+
+  // Display
+  size?: 'sm' | 'md' | 'lg';
+  showCounts?: boolean;
+  showNote?: boolean;
+  disabled?: boolean;
+}
+
+interface QuickFeedbackOption {
+  id: string;
+  label: string;
+  icon?: string;
+}
+```
+
+---
+
+#### Protocol Extensions for Granular Voting
+
+```typescript
+// Unified feedback envelope
+Feedback (20): {
+  id: string;
   conversationId: string;
-  vote: 'up' | 'down' | 'remove';
+  messageId: string;
+  targetType: 'message' | 'tool_use' | 'memory' | 'reasoning';
+  targetId: string;
+  vote: 'up' | 'down' | 'critical' | 'remove';
+  quickFeedback?: string;
+  note?: string;
   timestamp: number;
 }
 
 // Server response
-VoteConfirmation (21): {
+FeedbackConfirmation (21): {
+  feedbackId: string;
+  targetType: string;
+  targetId: string;
+  aggregates: {
+    upvotes: number;
+    downvotes: number;
+    specialVotes?: Record<string, number>;
+  };
+  userVote: 'up' | 'down' | 'critical' | null;
+}
+
+// Batch feedback for multiple items
+BatchFeedback (28): {
+  conversationId: string;
   messageId: string;
-  upvotes: number;
-  downvotes: number;
-  userVote: 'up' | 'down' | null;
+  items: Array<{
+    targetType: string;
+    targetId: string;
+    vote: string;
+    quickFeedback?: string;
+  }>;
+  timestamp: number;
 }
 ```
 
@@ -390,7 +704,7 @@ interface ServerInfo {
 
 ### 5. Enhanced Message Bubble
 
-#### Complete UX Design
+#### Complete UX Design with Granular Voting
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ 🤖 Assistant                                   12:34 PM │
@@ -405,22 +719,74 @@ interface ServerInfo {
 │ ```                                                      │
 │                                                          │
 ├─────────────────────────────────────────────────────────┤
-│ 🔧 Tools Used                                      [▼]   │
-│   └─ read_file: src/index.ts ✓                          │
+│ 🔧 Tools Used (2)                                  [▼]   │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 📁 read_file: src/index.ts                     ✓   │ │
+│ │ [👍 Good] [👎 Wrong] [Unnecessary] [Wrong params]   │ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ 🔍 grep: "useState" in src/                    ✓   │ │
+│ │ [👍 2] [👎 0]                            [📝 Note]  │ │
+│ └─────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │ 🧠 Memories (2)                                    [▼]   │
-│   ├─ "User prefers TypeScript" (95%)                    │
-│   └─ "Working on Node.js project" (87%)                 │
-├─────────────────────────────────────────────────────────┤
-│ 💭 Reasoning                                       [▼]   │
-│   └─ 3 reasoning steps                                  │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
 │ ┌─────────────────────────────────────────────────────┐ │
-│ │ 👍 12  │ 👎 2  │ 📝 2 notes │ [Regenerate] │ [⋮]   │ │
+│ │ "User prefers TypeScript" (95%) 📌                  │ │
+│ │ [👍 Relevant] [👎 Not relevant] [🎯 Critical]       │ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ "Working on Node.js project" (87%)                  │ │
+│ │ [👍 1] [👎 0] [🎯 0]                     [Edit]     │ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ ➕ Missing memory? [Add for next time...]           │ │
 │ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│ 💭 Reasoning (3 steps)                             [▼]   │
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 1. Understanding request          [👍] [👎]        │ │
+│ │ 2. Analyzing implementation       [👍 1] [👎 0]    │ │
+│ │ 3. Planning the solution          [👍] [👎]        │ │
+│ ├─────────────────────────────────────────────────────┤ │
+│ │ Overall reasoning: ⭐⭐⭐⭐☆ (4/5)                  │ │
+│ └─────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────┤
 │                                                          │
+│ 📝 Notes (1)                                       [+]   │
+│ └─ "Consider using async/await pattern" - 2h ago        │
+│                                                          │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────┐ │
+│ │ 👍 12  │ 👎 2  │ [Regenerate] │ [Copy] │ [⋮]       │ │
+│ └─────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
+```
+
+#### Collapsed State (Default)
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🤖 Assistant                                   12:34 PM │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│ Here's the TypeScript implementation you requested...    │
+│                                                          │
+│ ```typescript                                            │
+│ function example(): void { ... }                         │
+│ ```                                                      │
+│                                                          │
+├─────────────────────────────────────────────────────────┤
+│ 🔧 2 tools  │  🧠 2 memories  │  💭 3 steps        [▼]   │
+├─────────────────────────────────────────────────────────┤
+│ 👍 12  │ 👎 2  │ 📝 1  │ [Regenerate] │ [⋮]              │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Feedback Summary Indicators
+The collapsed state shows aggregate feedback with visual indicators:
+- Green dot: Mostly positive feedback
+- Yellow dot: Mixed feedback
+- Red dot: Mostly negative feedback
+- Number badges show counts
+
+```
+🔧 2 tools 🟢  │  🧠 2 memories 🟡  │  💭 3 steps 🟢
 ```
 
 ---
@@ -455,19 +821,42 @@ interface ServerInfo {
    - [ ] `MemoryContext`: Memory management state
    - [ ] `ServerInfoContext`: Server information state
 
-### Phase 2: Voting System
+### Phase 2: Granular Voting System
 **Priority: High**
 
-1. **Components**
-   - [ ] VoteControl molecule
-   - [ ] VoteAnimation (micro-interaction)
+1. **Core Voting Components**
+   - [ ] VoteControl (unified component)
+   - [ ] VoteButton with animations
+   - [ ] VoteCount with animated transitions
+   - [ ] QuickFeedback chip selector
 
-2. **Hooks**
-   - [ ] `useVoting()`: Vote state and actions
-   - [ ] `useOptimisticVote()`: Optimistic UI updates
+2. **Tool Use Voting**
+   - [ ] ToolUseVoting molecule
+   - [ ] ToolUseCard with integrated voting
+   - [ ] ToolFeedbackChips (wrong tool, wrong params, etc.)
 
-3. **Integration**
-   - [ ] Add VoteControl to MessageBubble
+3. **Memory Voting**
+   - [ ] MemoryVoting molecule
+   - [ ] MemoryCard with relevance voting
+   - [ ] IrrelevanceReason selector
+   - [ ] MissingMemory prompt ("Add for next time")
+
+4. **Reasoning Voting**
+   - [ ] ReasoningVoting molecule
+   - [ ] ReasoningStep with voting
+   - [ ] ReasoningChain with summary
+   - [ ] ReasoningIssues selector
+   - [ ] Overall reasoning rating (5-star)
+
+5. **Hooks**
+   - [ ] `useFeedback()`: Unified feedback state and actions
+   - [ ] `useOptimisticFeedback()`: Optimistic UI updates
+   - [ ] `useFeedbackAggregates()`: Compute summary indicators
+
+6. **Integration**
+   - [ ] Integrate voting into ToolUsageDisplay
+   - [ ] Integrate voting into ProtocolDisplay (memories)
+   - [ ] Integrate voting into ReasoningSteps
    - [ ] Wire up protocol handlers
    - [ ] Add to sync system
 
@@ -569,10 +958,28 @@ interface ServerInfo {
 ## API Endpoints Needed (Backend)
 
 ```
-# Voting
+# Unified Feedback (Granular Voting)
+POST   /api/v1/feedback                    # Submit feedback (any target type)
+DELETE /api/v1/feedback/{id}               # Remove feedback
+GET    /api/v1/messages/{id}/feedback      # All feedback for a message
+
+# Specific feedback targets
 POST   /api/v1/messages/{id}/vote          # Vote on message
-DELETE /api/v1/messages/{id}/vote          # Remove vote
-GET    /api/v1/messages/{id}/votes         # Get vote counts
+POST   /api/v1/tool-uses/{id}/vote         # Vote on tool use
+POST   /api/v1/memories/{id}/relevance     # Vote on memory relevance in context
+POST   /api/v1/reasoning/{id}/vote         # Vote on reasoning step
+
+# Quick feedback
+POST   /api/v1/tool-uses/{id}/quick-feedback    # Wrong tool, wrong params, etc.
+POST   /api/v1/memories/{id}/irrelevance-reason # Why wasn't this relevant
+POST   /api/v1/reasoning/{id}/issue             # Reasoning issue type
+
+# Batch feedback (for efficiency)
+POST   /api/v1/messages/{id}/batch-feedback     # Submit multiple votes at once
+
+# Feedback aggregates
+GET    /api/v1/messages/{id}/feedback-summary   # Aggregated feedback for message
+GET    /api/v1/conversations/{id}/feedback-stats # Conversation-wide stats
 
 # Notes
 POST   /api/v1/messages/{id}/notes         # Add note
@@ -580,6 +987,8 @@ GET    /api/v1/messages/{id}/notes         # Get notes for message
 PUT    /api/v1/notes/{id}                  # Update note
 DELETE /api/v1/notes/{id}                  # Delete note
 GET    /api/v1/conversations/{id}/notes    # All notes in conversation
+POST   /api/v1/tool-uses/{id}/notes        # Add note to tool use
+POST   /api/v1/reasoning/{id}/notes        # Add note to reasoning step
 
 # Memories
 POST   /api/v1/conversations/{id}/memories # Create memory
@@ -588,7 +997,7 @@ PUT    /api/v1/memories/{id}               # Update memory
 DELETE /api/v1/memories/{id}               # Delete memory
 POST   /api/v1/memories/{id}/pin           # Pin/unpin memory
 POST   /api/v1/memories/{id}/archive       # Archive memory
-POST   /api/v1/memories/{id}/feedback      # Rate memory relevance
+POST   /api/v1/memories/{id}/suggest-update # Suggest update to memory content
 
 # Server Info
 GET    /api/v1/server/info                 # Server configuration
