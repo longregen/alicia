@@ -171,11 +171,22 @@ export const messageRepository = {
       return;
     }
 
+    // Check by local_id if server echoes it back
+    if (message.local_id) {
+      const existingByLocalId = this.findByLocalId(message.local_id);
+      if (existingByLocalId) {
+        this.update(existingByLocalId.id, {
+          ...message,
+          server_id: message.id,
+        });
+        return;
+      }
+    }
+
     // Check if this server message already exists via an optimistic update
     // (optimistic messages store server_id after REST API response)
     const existingByServerId = this.findByServerId(message.id);
     if (existingByServerId) {
-      // Update existing optimistic message with server data, keeping local id as primary key
       this.update(existingByServerId.id, {
         ...message,
         server_id: message.id,
