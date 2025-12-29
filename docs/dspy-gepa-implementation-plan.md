@@ -1122,8 +1122,9 @@ Expected Answer: %v
 Actual Response: %v
 
 Provide a score from 0.0 to 1.0 and explain your reasoning.
-Format: SCORE: X.X
-REASONING: ...`,
+Format: 
+REASONING: ...
+SCORE: X.X`,
         m.criteria,
         gold.Inputs["question"],
         gold.Outputs["answer"],
