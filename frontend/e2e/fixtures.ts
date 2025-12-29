@@ -1,4 +1,5 @@
 import { test as base, expect } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 // Mock config response for e2e tests
 const mockConfigResponse = {
@@ -23,6 +24,265 @@ const mockConfigResponse = {
     ],
   },
 };
+
+// In-memory storage for mock data
+interface MockConversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: MockMessage[];
+}
+
+interface MockMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+interface MockMCPServer {
+  name: string;
+  transport: string;
+  command: string;
+  args: string[];
+  status: 'Connected' | 'Error' | 'Disconnected';
+  tools: MockTool[];
+}
+
+interface MockTool {
+  name: string;
+  description: string;
+}
+
+// Create mock data storage per page context
+function createMockStorage() {
+  const conversations: Map<string, MockConversation> = new Map();
+  const mcpServers: Map<string, MockMCPServer> = new Map();
+
+  return { conversations, mcpServers };
+}
+
+// Setup all API mocks for a page
+async function setupApiMocks(page: Page) {
+  const storage = createMockStorage();
+
+  // Mock /api/v1/config
+  await page.route('**/api/v1/config', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockConfigResponse),
+    });
+  });
+
+  // Mock GET /api/v1/conversations
+  await page.route('**/api/v1/conversations', async (route: Route) => {
+    if (route.request().method() === 'GET') {
+      const conversationsList = Array.from(storage.conversations.values()).map(c => ({
+        id: c.id,
+        title: c.title,
+        created_at: c.created_at,
+        updated_at: c.updated_at,
+      }));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(conversationsList),
+      });
+    } else if (route.request().method() === 'POST') {
+      const id = `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const now = new Date().toISOString();
+      const conversation: MockConversation = {
+        id,
+        title: 'New Conversation',
+        created_at: now,
+        updated_at: now,
+        messages: [],
+      };
+      storage.conversations.set(id, conversation);
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id, title: conversation.title, created_at: now, updated_at: now }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+
+  // Mock GET/DELETE /api/v1/conversations/:id
+  await page.route(/\/api\/v1\/conversations\/[^/]+$/, async (route: Route) => {
+    const url = route.request().url();
+    const match = url.match(/\/api\/v1\/conversations\/([^/?]+)/);
+    const conversationId = match?.[1];
+
+    if (route.request().method() === 'GET' && conversationId) {
+      const conversation = storage.conversations.get(conversationId);
+      if (conversation) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(conversation),
+        });
+      } else {
+        await route.fulfill({ status: 404, body: 'Not found' });
+      }
+    } else if (route.request().method() === 'DELETE' && conversationId) {
+      storage.conversations.delete(conversationId);
+      await route.fulfill({ status: 204 });
+    } else {
+      await route.continue();
+    }
+  });
+
+  // Mock GET/POST /api/v1/conversations/:id/messages
+  await page.route(/\/api\/v1\/conversations\/[^/]+\/messages/, async (route: Route) => {
+    const url = route.request().url();
+    const match = url.match(/\/api\/v1\/conversations\/([^/]+)\/messages/);
+    const conversationId = match?.[1];
+
+    if (!conversationId) {
+      await route.continue();
+      return;
+    }
+
+    const conversation = storage.conversations.get(conversationId);
+
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(conversation?.messages || []),
+      });
+    } else if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const now = new Date().toISOString();
+
+      const userMessage: MockMessage = {
+        id: messageId,
+        conversation_id: conversationId,
+        role: 'user',
+        content: body?.content || '',
+        created_at: now,
+      };
+
+      if (conversation) {
+        conversation.messages.push(userMessage);
+        conversation.updated_at = now;
+
+        // Simulate assistant response after a short delay
+        const assistantId = `msg-${Date.now() + 1}-${Math.random().toString(36).substr(2, 9)}`;
+        const assistantMessage: MockMessage = {
+          id: assistantId,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: 'This is a mock response from the assistant.',
+          created_at: new Date(Date.now() + 100).toISOString(),
+        };
+        conversation.messages.push(assistantMessage);
+      }
+
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(userMessage),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+
+  // Mock MCP servers endpoints
+  await page.route('**/api/v1/mcp/servers', async (route: Route) => {
+    if (route.request().method() === 'GET') {
+      const serversList = Array.from(storage.mcpServers.values());
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(serversList),
+      });
+    } else if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      const server: MockMCPServer = {
+        name: body?.name || 'Unknown',
+        transport: 'stdio',
+        command: body?.command || '',
+        args: body?.args ? body.args.split(',').map((a: string) => a.trim()) : [],
+        status: body?.command?.includes('/invalid') ? 'Error' : 'Connected',
+        tools: [
+          { name: 'read_file', description: 'Read a file from the filesystem' },
+          { name: 'write_file', description: 'Write a file to the filesystem' },
+          { name: 'list_directory', description: 'List directory contents' },
+        ],
+      };
+      storage.mcpServers.set(server.name, server);
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(server),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+
+  // Mock DELETE /api/v1/mcp/servers/:name
+  await page.route(/\/api\/v1\/mcp\/servers\/[^/]+/, async (route: Route) => {
+    if (route.request().method() === 'DELETE') {
+      const url = route.request().url();
+      const match = url.match(/\/api\/v1\/mcp\/servers\/([^/?]+)/);
+      const serverName = match?.[1];
+      if (serverName) {
+        storage.mcpServers.delete(decodeURIComponent(serverName));
+      }
+      await route.fulfill({ status: 204 });
+    } else {
+      await route.continue();
+    }
+  });
+
+  // Mock WebSocket sync endpoint - just let it fail gracefully
+  await page.route(/\/api\/v1\/conversations\/[^/]+\/sync\/ws/, async (route: Route) => {
+    // WebSocket upgrades can't be mocked directly, return 101 or let it fail
+    await route.fulfill({ status: 200, body: '' });
+  });
+
+  // Mock chat completion endpoint
+  await page.route('**/api/v1/chat/completions', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: `chatcmpl-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        choices: [{
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: 'This is a mock response from the assistant.',
+          },
+          finish_reason: 'stop',
+        }],
+      }),
+    });
+  });
+
+  // Mock audio/speech endpoint
+  await page.route('**/v1/audio/speech', async (route: Route) => {
+    // Return empty audio data
+    await route.fulfill({
+      status: 200,
+      contentType: 'audio/mpeg',
+      body: Buffer.from([]),
+    });
+  });
+
+  return storage;
+}
 
 export interface ConversationHelpers {
   createConversation(): Promise<string>;
@@ -66,14 +326,8 @@ type TestFixtures = {
 
 const test = base.extend<TestFixtures>({
   page: async ({ page }, use) => {
-    // Intercept /api/v1/config requests before each test
-    await page.route('**/api/v1/config', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(mockConfigResponse),
-      });
-    });
+    // Setup all API mocks before each test
+    await setupApiMocks(page);
 
     await use(page);
   },
