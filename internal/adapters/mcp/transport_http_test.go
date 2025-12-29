@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -77,9 +78,9 @@ func TestValidateURL(t *testing.T) {
 		shouldError bool
 		errorMsg    string
 	}{
-		// Invalid URLs
-		{"empty URL", "", true, "URL must have a hostname"},
-		{"invalid URL", "not-a-url", true, "URL must have a hostname"},
+		// Invalid URLs - these fail on scheme check first (no scheme = empty scheme)
+		{"empty URL", "", true, "unsupported URL scheme"},
+		{"invalid URL", "not-a-url", true, "unsupported URL scheme"},
 
 		// Disallowed schemes
 		{"file scheme", "file:///etc/passwd", true, "unsupported URL scheme"},
@@ -106,7 +107,7 @@ func TestValidateURL(t *testing.T) {
 			if tt.shouldError {
 				if err == nil {
 					t.Errorf("validateURL(%q) should have returned an error", tt.url)
-				} else if tt.errorMsg != "" && !contains(err.Error(), tt.errorMsg) {
+				} else if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("validateURL(%q) error = %q, expected to contain %q", tt.url, err.Error(), tt.errorMsg)
 				}
 			} else {
@@ -179,14 +180,4 @@ func TestNewHTTPSSETransport_URLValidation(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to check if a string contains a substring
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
