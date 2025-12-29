@@ -135,6 +135,14 @@ export function useWebSocketSync(
           break;
         }
 
+        // Also check by local_id if present (another way to detect same message)
+        if (message.local_id) {
+          const existingByLocalId = messageRepository.findByLocalId(message.local_id);
+          if (existingByLocalId) {
+            break;
+          }
+        }
+
         // Also check by the message ID itself (in case it was already inserted)
         const existingById = messageRepository.findById(message.id);
         if (existingById) {
