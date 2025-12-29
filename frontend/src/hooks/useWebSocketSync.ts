@@ -4,6 +4,7 @@ import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
 import { Envelope, MessageType } from '../types/protocol';
 import { SyncRequest, SyncResponse, MessageResponse, messageResponseToMessage } from '../types/sync';
+import { handleProtocolMessage } from '../adapters/protocolAdapter';
 
 /**
  * Adapter to convert backend DTO to Envelope format.
@@ -30,12 +31,78 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
       type: MessageType.AssistantMessage, // Could be user or assistant
       body: data,
     };
-  } else if ('messageId' in dto || 'acknowledgedStanzaId' in dto) {
+  } else if ('acknowledgedStanzaId' in dto) {
     // Acknowledgement DTO (camelCase wire format)
     return {
       stanzaId: 0,
       conversationId,
       type: MessageType.Acknowledgement,
+      body: data,
+    };
+  }
+  // Protocol streaming messages
+  else if ('id' in dto && 'conversationId' in dto && 'previousId' in dto && ('answerType' in dto || 'plannedSentenceCount' in dto)) {
+    // StartAnswer: has id, conversationId, previousId, optionally answerType/plannedSentenceCount
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.StartAnswer,
+      body: data,
+    };
+  } else if ('conversationId' in dto && 'sequence' in dto && 'text' in dto && 'previousId' in dto) {
+    // AssistantSentence: has conversationId, sequence, text, previousId
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.AssistantSentence,
+      body: data,
+    };
+  } else if ('id' in dto && 'messageId' in dto && 'toolName' in dto && 'parameters' in dto) {
+    // ToolUseRequest: has id, messageId, toolName, parameters
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.ToolUseRequest,
+      body: data,
+    };
+  } else if ('requestId' in dto && 'success' in dto) {
+    // ToolUseResult: has requestId, success
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.ToolUseResult,
+      body: data,
+    };
+  } else if ('messageId' in dto && 'sequence' in dto && 'content' in dto && !('text' in dto)) {
+    // ReasoningStep: has messageId, sequence, content (but not text like AssistantSentence)
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.ReasoningStep,
+      body: data,
+    };
+  } else if ('format' in dto && 'sequence' in dto && 'durationMs' in dto) {
+    // AudioChunk: has format, sequence, durationMs
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.AudioChunk,
+      body: data,
+    };
+  } else if ('text' in dto && 'final' in dto && typeof (dto as Record<string, unknown>).final === 'boolean') {
+    // Transcription: has text, final (boolean)
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.Transcription,
+      body: data,
+    };
+  } else if ('memoryId' in dto && 'messageId' in dto && 'content' in dto && 'relevance' in dto) {
+    // MemoryTrace: has memoryId, messageId, content, relevance
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.MemoryTrace,
       body: data,
     };
   }
@@ -163,6 +230,18 @@ export function useWebSocketSync(
         console.log('Message acknowledged:', envelope.body);
         break;
       }
+
+      // Protocol streaming messages - route to protocol adapter
+      case MessageType.StartAnswer:
+      case MessageType.AssistantSentence:
+      case MessageType.ToolUseRequest:
+      case MessageType.ToolUseResult:
+      case MessageType.ReasoningStep:
+      case MessageType.AudioChunk:
+      case MessageType.Transcription:
+      case MessageType.MemoryTrace:
+        handleProtocolMessage(envelope);
+        break;
 
       default:
         console.warn('Unknown envelope type:', envelope.type);

@@ -12,6 +12,15 @@ export default defineConfig({
   reporter: 'html',
   timeout: 30000,
 
+  /* Screenshot and visual regression settings */
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.05, // Allow 5% pixel difference
+      threshold: 0.2, // Color difference threshold
+    },
+  },
+
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
