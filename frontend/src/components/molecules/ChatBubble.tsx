@@ -227,8 +227,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     status: tool.status
   }));
 
+  // Determine role-based class for e2e testing
+  const roleClass = type === MESSAGE_TYPES.USER ? 'user' : type === MESSAGE_TYPES.ASSISTANT ? 'assistant' : 'system';
+
   return (
-    <div className={cls(CSS.flex, CSS.flexCol, CSS.gap2, className)}>
+    <div className={cls('message-bubble', roleClass, CSS.flex, CSS.flexCol, CSS.gap2, className)}>
       {/* Streaming status badge */}
       {state === MESSAGE_STATES.STREAMING && type === MESSAGE_TYPES.ASSISTANT && (
         <div className={cls(
