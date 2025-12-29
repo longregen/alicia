@@ -65,9 +65,16 @@ func isPrivateIP(ip net.IP) bool {
 		return true
 	}
 
-	// Check for IPv4-mapped IPv6 addresses that wrap private IPs
-	if ip4 := ip.To4(); ip4 != nil {
-		return isPrivateIP(ip4)
+	// Check for IPv4-mapped IPv6 addresses (e.g., ::ffff:192.168.1.1)
+	// Only check if this is a 16-byte IPv6 address to avoid infinite recursion
+	if len(ip) == net.IPv6len {
+		if ip4 := ip.To4(); ip4 != nil {
+			// This is an IPv4-mapped IPv6 address, check the IPv4 part
+			// The standard library methods above already handle this correctly,
+			// but we explicitly check to be safe
+			return ip4.IsLoopback() || ip4.IsPrivate() || ip4.IsLinkLocalUnicast() ||
+				ip4.IsLinkLocalMulticast() || ip4.IsUnspecified() || ip4.IsMulticast()
+		}
 	}
 
 	return false
