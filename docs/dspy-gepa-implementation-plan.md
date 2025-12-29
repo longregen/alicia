@@ -337,7 +337,553 @@ func (s *OptimizationService) OptimizeSignature(
 }
 ```
 
-### Phase 3: Memory-Aware Optimization (Week 5-6)
+### Phase 3: Tool Usage Optimization (Week 5-6)
+
+GEPA has built-in support for tool optimization via `enable_tool_optimization`. This phase focuses on optimizing the entire tool lifecycle.
+
+#### 3.1 Tool Optimization Targets
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Tool Usage Optimization                       │
+├─────────────────────────────────────────────────────────────────┤
+│  1. Tool Descriptions    → Better LLM understanding of when     │
+│  2. Tool Arguments       → Improved argument generation         │
+│  3. Tool Selection       → Smarter tool choice decisions        │
+│  4. Result Formatting    → Optimized output for LLM consumption │
+│  5. Result Summarization → Condensing verbose tool outputs      │
+│  6. Error Recovery       → Better handling of tool failures     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.2 Optimizable Tool Definition
+
+```go
+// internal/prompt/tool_optimization.go
+package prompt
+
+import (
+    "context"
+    "alicia/internal/domain/models"
+)
+
+// OptimizableTool wraps a tool with optimizable components
+type OptimizableTool struct {
+    BaseTool       *models.Tool
+
+    // Optimizable fields
+    Description    string            // Optimized description for LLM
+    Schema         map[string]any    // Optimized parameter schema
+    ResultTemplate string            // Template for formatting results
+    Examples       []ToolExample     // Few-shot examples
+
+    // Metadata
+    Version        int
+    OptimizedAt    time.Time
+}
+
+// ToolExample demonstrates correct tool usage
+type ToolExample struct {
+    UserIntent   string         // What the user wanted
+    Arguments    map[string]any // Correct arguments
+    RawResult    any            // Raw tool output
+    FormattedResult string      // Optimized formatted result
+    Explanation  string         // Why this was the right choice
+}
+
+// ToolOptimizationSignature defines what we're optimizing
+var ToolDescriptionSignature = MustParseSignature(
+    "tool_name, current_description, usage_examples, failure_cases -> optimized_description",
+)
+
+var ToolResultFormatterSignature = MustParseSignature(
+    "tool_name, raw_result, user_context -> formatted_result",
+)
+
+var ToolSelectionSignature = MustParseSignature(
+    "user_intent, conversation_context, available_tools: list[Tool] -> selected_tool, arguments, reasoning",
+)
+```
+
+#### 3.3 Tool Description Optimizer
+
+```go
+// internal/application/services/tool_optimization.go
+package services
+
+import (
+    "context"
+    "alicia/internal/prompt"
+    "alicia/internal/ports"
+)
+
+type ToolOptimizationService struct {
+    toolService     ports.ToolService
+    toolUseRepo     ports.ToolUseRepository
+    optService      *OptimizationService
+    llmService      ports.LLMService
+}
+
+// OptimizeToolDescriptions improves tool descriptions based on usage patterns
+func (s *ToolOptimizationService) OptimizeToolDescriptions(
+    ctx context.Context,
+    config GEPAConfig,
+) error {
+    tools, err := s.toolService.ListEnabled(ctx)
+    if err != nil {
+        return err
+    }
+
+    for _, tool := range tools {
+        // Gather usage data
+        usageData, err := s.gatherToolUsageData(ctx, tool.Name)
+        if err != nil {
+            continue
+        }
+
+        // Create training examples from successful uses
+        trainset := s.createDescriptionTrainset(usageData)
+        valset := s.createDescriptionValset(usageData)
+
+        // Optimize description
+        optimized, err := s.optService.OptimizeSignature(
+            ctx,
+            prompt.ToolDescriptionSignature,
+            trainset,
+            valset,
+            &ToolDescriptionMetric{},
+            config,
+        )
+        if err != nil {
+            continue
+        }
+
+        // Update tool with optimized description
+        newDescription := optimized.GetOutput("optimized_description")
+        s.toolService.UpdateDescription(ctx, tool.ID, newDescription)
+    }
+
+    return nil
+}
+
+// gatherToolUsageData collects historical tool usage for analysis
+func (s *ToolOptimizationService) gatherToolUsageData(
+    ctx context.Context,
+    toolName string,
+) (*ToolUsageData, error) {
+    uses, err := s.toolUseRepo.GetByToolName(ctx, toolName, 1000)
+    if err != nil {
+        return nil, err
+    }
+
+    return &ToolUsageData{
+        ToolName:      toolName,
+        SuccessfulUses: filterSuccessful(uses),
+        FailedUses:     filterFailed(uses),
+        CommonPatterns: extractPatterns(uses),
+    }, nil
+}
+```
+
+#### 3.4 Tool Result Formatter Optimization
+
+```go
+// internal/prompt/tool_result_formatter.go
+package prompt
+
+import (
+    "context"
+    "encoding/json"
+)
+
+// OptimizedResultFormatter formats tool results for optimal LLM consumption
+type OptimizedResultFormatter struct {
+    formatters map[string]*ToolFormatter // per-tool formatters
+    defaultFormatter *ToolFormatter
+}
+
+type ToolFormatter struct {
+    Template       string           // Go template for formatting
+    MaxLength      int              // Truncation limit
+    SummarizeAt    int              // When to trigger summarization
+    SummaryPrompt  string           // Prompt for summarization
+    KeyFields      []string         // Important fields to preserve
+}
+
+// Format applies optimized formatting to tool results
+func (f *OptimizedResultFormatter) Format(
+    ctx context.Context,
+    toolName string,
+    result any,
+    userContext string,
+) (string, error) {
+    formatter, ok := f.formatters[toolName]
+    if !ok {
+        formatter = f.defaultFormatter
+    }
+
+    // Convert result to structured format
+    resultJSON, err := json.Marshal(result)
+    if err != nil {
+        return fmt.Sprintf("%v", result), nil
+    }
+
+    // Check if summarization is needed
+    if len(resultJSON) > formatter.SummarizeAt {
+        return f.summarize(ctx, toolName, result, userContext, formatter)
+    }
+
+    // Apply template formatting
+    return f.applyTemplate(formatter.Template, result)
+}
+
+// summarize uses LLM to condense verbose tool output
+func (f *OptimizedResultFormatter) summarize(
+    ctx context.Context,
+    toolName string,
+    result any,
+    userContext string,
+    formatter *ToolFormatter,
+) (string, error) {
+    // Extract key fields first
+    keyData := extractKeyFields(result, formatter.KeyFields)
+
+    // Summarize remaining content
+    prompt := fmt.Sprintf(formatter.SummaryPrompt, toolName, result, userContext)
+    summary, err := f.llm.Generate(ctx, prompt)
+    if err != nil {
+        return fmt.Sprintf("%v", keyData), nil
+    }
+
+    return fmt.Sprintf("Key data: %v\nSummary: %s", keyData, summary), nil
+}
+```
+
+#### 3.5 Tool Selection Module with GEPA
+
+```go
+// internal/prompt/tool_selection.go
+package prompt
+
+import (
+    "context"
+    "github.com/XiaoConstantine/dspy-go/modules"
+)
+
+// ToolSelectionModule decides which tool to use and with what arguments
+type ToolSelectionModule struct {
+    *modules.ChainOfThought
+    availableTools []*models.Tool
+}
+
+func NewToolSelectionModule(tools []*models.Tool) *ToolSelectionModule {
+    sig := MustParseSignature(`
+        user_intent: str,
+        conversation_context: str,
+        available_tools: list[ToolInfo]
+        ->
+        should_use_tool: bool,
+        selected_tool: str,
+        arguments: dict,
+        reasoning: str
+    `)
+
+    return &ToolSelectionModule{
+        ChainOfThought: modules.NewChainOfThought(sig),
+        availableTools: tools,
+    }
+}
+
+func (m *ToolSelectionModule) Forward(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+    // Inject tool information
+    inputs["available_tools"] = m.formatToolsForLLM()
+
+    // Use ChainOfThought for reasoning
+    outputs, err := m.ChainOfThought.Forward(ctx, inputs)
+    if err != nil {
+        return nil, err
+    }
+
+    // Validate selected tool exists
+    if selectedTool, ok := outputs["selected_tool"].(string); ok {
+        if !m.toolExists(selectedTool) {
+            outputs["should_use_tool"] = false
+            outputs["reasoning"] = "Selected tool not available"
+        }
+    }
+
+    return outputs, nil
+}
+
+func (m *ToolSelectionModule) formatToolsForLLM() []map[string]any {
+    var tools []map[string]any
+    for _, t := range m.availableTools {
+        tools = append(tools, map[string]any{
+            "name":        t.Name,
+            "description": t.Description,
+            "parameters":  t.Schema,
+        })
+    }
+    return tools
+}
+```
+
+#### 3.6 Tool Usage Metrics
+
+```go
+// internal/prompt/tool_metrics.go
+package prompt
+
+// ToolDescriptionMetric evaluates if optimized descriptions improve tool selection
+type ToolDescriptionMetric struct {
+    llmService ports.LLMService
+}
+
+func (m *ToolDescriptionMetric) Score(
+    ctx context.Context,
+    gold, pred Example,
+    trace *Trace,
+) (ScoreWithFeedback, error) {
+    // Evaluate: Does the LLM correctly understand when to use this tool?
+    testCases := gold.Inputs["test_cases"].([]ToolTestCase)
+
+    var correct int
+    var feedback strings.Builder
+
+    for _, tc := range testCases {
+        // Ask LLM if it would use this tool for the given intent
+        wouldUse := m.askLLMAboutToolUsage(ctx, pred.Outputs["description"].(string), tc.UserIntent)
+
+        if wouldUse == tc.ShouldUseTool {
+            correct++
+        } else {
+            feedback.WriteString(fmt.Sprintf(
+                "- Intent '%s': expected %v, got %v\n",
+                tc.UserIntent, tc.ShouldUseTool, wouldUse,
+            ))
+        }
+    }
+
+    score := float64(correct) / float64(len(testCases))
+    return ScoreWithFeedback{Score: score, Feedback: feedback.String()}, nil
+}
+
+// ToolResultMetric evaluates if formatted results lead to better responses
+type ToolResultMetric struct {
+    llmService ports.LLMService
+}
+
+func (m *ToolResultMetric) Score(
+    ctx context.Context,
+    gold, pred Example,
+    trace *Trace,
+) (ScoreWithFeedback, error) {
+    formattedResult := pred.Outputs["formatted_result"].(string)
+    userIntent := gold.Inputs["user_intent"].(string)
+    expectedAnswer := gold.Outputs["expected_answer"].(string)
+
+    // Test: Can LLM produce correct answer from formatted result?
+    testPrompt := fmt.Sprintf(`
+Based on this tool result, answer the user's question.
+
+User Question: %s
+Tool Result: %s
+
+Provide a direct answer.`,
+        userIntent, formattedResult,
+    )
+
+    response, err := m.llmService.Chat(ctx, []ports.LLMMessage{
+        {Role: "user", Content: testPrompt},
+    })
+    if err != nil {
+        return ScoreWithFeedback{Score: 0, Feedback: err.Error()}, nil
+    }
+
+    // Compare response quality
+    similarity := semanticSimilarity(response.Content, expectedAnswer)
+    feedback := fmt.Sprintf(
+        "Expected: %s\nGot: %s\nSimilarity: %.2f",
+        expectedAnswer, response.Content, similarity,
+    )
+
+    return ScoreWithFeedback{Score: similarity, Feedback: feedback}, nil
+}
+
+// ToolArgumentMetric evaluates argument generation quality
+type ToolArgumentMetric struct{}
+
+func (m *ToolArgumentMetric) Score(
+    ctx context.Context,
+    gold, pred Example,
+    trace *Trace,
+) (ScoreWithFeedback, error) {
+    expectedArgs := gold.Outputs["arguments"].(map[string]any)
+    actualArgs := pred.Outputs["arguments"].(map[string]any)
+
+    // Check required fields
+    schema := gold.Inputs["schema"].(map[string]any)
+    required := schema["required"].([]string)
+
+    var missingFields []string
+    var wrongValues []string
+
+    for _, field := range required {
+        if _, ok := actualArgs[field]; !ok {
+            missingFields = append(missingFields, field)
+        }
+    }
+
+    // Check value correctness
+    for key, expectedVal := range expectedArgs {
+        if actualVal, ok := actualArgs[key]; ok {
+            if !valuesEqual(expectedVal, actualVal) {
+                wrongValues = append(wrongValues, fmt.Sprintf(
+                    "%s: expected %v, got %v", key, expectedVal, actualVal,
+                ))
+            }
+        }
+    }
+
+    // Calculate score
+    totalFields := len(expectedArgs)
+    correctFields := totalFields - len(missingFields) - len(wrongValues)
+    score := float64(correctFields) / float64(totalFields)
+
+    feedback := fmt.Sprintf(
+        "Missing: %v\nWrong values: %v",
+        missingFields, wrongValues,
+    )
+
+    return ScoreWithFeedback{Score: score, Feedback: feedback}, nil
+}
+```
+
+#### 3.7 Integrated Tool Optimization Pipeline
+
+```go
+// internal/application/services/tool_optimization_pipeline.go
+package services
+
+// ToolOptimizationPipeline runs comprehensive tool optimization
+type ToolOptimizationPipeline struct {
+    toolOptService  *ToolOptimizationService
+    optService      *OptimizationService
+    toolService     ports.ToolService
+}
+
+// RunFullOptimization optimizes all aspects of tool usage
+func (p *ToolOptimizationPipeline) RunFullOptimization(
+    ctx context.Context,
+    config GEPAConfig,
+) (*ToolOptimizationReport, error) {
+    report := &ToolOptimizationReport{
+        StartedAt: time.Now(),
+    }
+
+    // 1. Optimize tool descriptions
+    descResults, err := p.optimizeDescriptions(ctx, config)
+    report.DescriptionResults = descResults
+
+    // 2. Optimize result formatters
+    formatResults, err := p.optimizeResultFormatters(ctx, config)
+    report.FormatterResults = formatResults
+
+    // 3. Optimize tool selection module
+    selectionResults, err := p.optimizeToolSelection(ctx, config)
+    report.SelectionResults = selectionResults
+
+    // 4. Optimize argument generation
+    argResults, err := p.optimizeArgumentGeneration(ctx, config)
+    report.ArgumentResults = argResults
+
+    report.CompletedAt = time.Now()
+    return report, nil
+}
+
+// optimizeToolSelection creates an optimized tool selection module
+func (p *ToolOptimizationPipeline) optimizeToolSelection(
+    ctx context.Context,
+    config GEPAConfig,
+) (*SelectionOptimizationResult, error) {
+    tools, _ := p.toolService.ListEnabled(ctx)
+
+    // Create training data from historical tool uses
+    trainset := p.createToolSelectionTrainset(ctx)
+    valset := p.createToolSelectionValset(ctx)
+
+    // Create module
+    module := prompt.NewToolSelectionModule(tools)
+
+    // Optimize with GEPA - enable tool optimization flag
+    gepa := optimizers.NewGEPA(
+        &prompt.ToolSelectionMetric{},
+        optimizers.WithAuto(config.Budget),
+        optimizers.WithEnableToolOptimization(true), // Key flag!
+    )
+
+    optimized, err := gepa.Compile(ctx, module, trainset, valset)
+    if err != nil {
+        return nil, err
+    }
+
+    return &SelectionOptimizationResult{
+        OriginalAccuracy:   evalAccuracy(module, valset),
+        OptimizedAccuracy:  evalAccuracy(optimized, valset),
+        OptimizedModule:    optimized,
+    }, nil
+}
+```
+
+#### 3.8 Database Schema for Tool Optimization
+
+```sql
+-- Optimized tool configurations
+CREATE TABLE optimized_tools (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tool_id UUID NOT NULL REFERENCES alicia_tools(id),
+    optimized_description TEXT NOT NULL,
+    optimized_schema JSONB,
+    result_template TEXT,
+    examples JSONB,
+    version INT NOT NULL DEFAULT 1,
+    score FLOAT,
+    optimized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    active BOOLEAN DEFAULT false
+);
+
+CREATE INDEX idx_optimized_tools_active ON optimized_tools(tool_id, active);
+
+-- Tool result formatting rules (learned)
+CREATE TABLE tool_result_formatters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tool_name VARCHAR(255) NOT NULL,
+    template TEXT NOT NULL,
+    max_length INT DEFAULT 2000,
+    summarize_at INT DEFAULT 1000,
+    summary_prompt TEXT,
+    key_fields JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_formatters_tool ON tool_result_formatters(tool_name);
+
+-- Tool usage patterns (for learning)
+CREATE TABLE tool_usage_patterns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tool_name VARCHAR(255) NOT NULL,
+    user_intent_pattern TEXT NOT NULL,
+    success_rate FLOAT,
+    avg_result_quality FLOAT,
+    common_arguments JSONB,
+    sample_count INT DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_patterns_tool ON tool_usage_patterns(tool_name);
+```
+
+### Phase 4: Memory-Aware Optimization (Week 7-8)
 
 Leverage Alicia's existing memory system for in-context learning:
 
@@ -391,7 +937,7 @@ func (m *MemoryAwareModule) Forward(ctx context.Context, inputs map[string]any) 
 }
 ```
 
-### Phase 4: Evaluation & Metrics (Week 7-8)
+### Phase 5: Evaluation & Metrics (Week 9-10)
 
 ```go
 // internal/prompt/metrics.go
@@ -492,7 +1038,7 @@ REASONING: ...`,
 }
 ```
 
-### Phase 5: HTTP API & CLI (Week 9-10)
+### Phase 6: HTTP API & CLI (Week 11-12)
 
 ```go
 // internal/adapters/http/handlers/optimization.go
@@ -669,6 +1215,64 @@ metric := &prompt.RecallMetric{
 }
 ```
 
+### 4. Tool Description Optimization
+
+```go
+// Optimize tool descriptions for better LLM understanding
+pipeline := services.NewToolOptimizationPipeline(toolOptService, optService, toolService)
+
+report, _ := pipeline.RunFullOptimization(ctx, GEPAConfig{
+    Budget:     "medium",
+    NumThreads: 8,
+})
+
+// Report contains:
+// - Optimized descriptions per tool
+// - Result formatting improvements
+// - Tool selection accuracy before/after
+fmt.Printf("Tool selection accuracy: %.1f%% -> %.1f%%\n",
+    report.SelectionResults.OriginalAccuracy*100,
+    report.SelectionResults.OptimizedAccuracy*100,
+)
+```
+
+### 5. Tool Result Formatting Optimization
+
+```go
+// Optimize how tool results are presented to the LLM
+sig := prompt.MustParseSignature(
+    "tool_name, raw_result, user_context -> formatted_result, key_points: list[str]",
+)
+
+// Training data: (raw result, user question) -> (ideal formatted result, expected answer)
+trainset := loadToolResultExamples("data/tool_results_train.json")
+
+metric := &prompt.ToolResultMetric{
+    llmService: reflectionLLM,
+}
+
+// Result: Learn optimal formatting per tool type
+// - web_search: Extract titles, snippets, relevance
+// - calculator: Show expression and result clearly
+// - memory_query: Highlight relevant memories with context
+```
+
+### 6. Tool Argument Generation Optimization
+
+```go
+// Optimize how the LLM generates tool arguments
+sig := prompt.MustParseSignature(
+    "user_intent, tool_schema, conversation_context -> arguments: dict, validation_notes: str",
+)
+
+metric := &prompt.ToolArgumentMetric{}
+
+// Learns patterns like:
+// - "search for X" -> {"query": "X", "limit": 5}
+// - "calculate X + Y" -> {"expression": "X + Y"}
+// - "what did I say about X" -> {"query": "X", "limit": 3}
+```
+
 ## Testing Strategy
 
 ### Unit Tests
@@ -725,10 +1329,11 @@ func TestOptimizationServiceE2E(t *testing.T) {
 |-------|----------|-------------|
 | Phase 1 | 2 weeks | Core integration with dspy-go |
 | Phase 2 | 2 weeks | GEPA optimization service |
-| Phase 3 | 2 weeks | Memory-aware optimization |
-| Phase 4 | 2 weeks | Evaluation & metrics |
-| Phase 5 | 2 weeks | HTTP API & CLI |
-| **Total** | **10 weeks** | Full implementation |
+| Phase 3 | 2 weeks | Tool usage optimization (descriptions, results, selection) |
+| Phase 4 | 2 weeks | Memory-aware optimization |
+| Phase 5 | 2 weeks | Evaluation & metrics |
+| Phase 6 | 2 weeks | HTTP API & CLI |
+| **Total** | **12 weeks** | Full implementation |
 
 ## Risks & Mitigations
 
