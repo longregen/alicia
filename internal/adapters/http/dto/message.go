@@ -19,6 +19,8 @@ type MessageResponse struct {
 	PreviousID     string `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
 	Role           string `json:"role" msgpack:"role"`
 	Contents       string `json:"contents" msgpack:"contents"`
+	LocalID        string `json:"local_id,omitempty" msgpack:"localId,omitempty"`
+	ServerID       string `json:"server_id,omitempty" msgpack:"serverId,omitempty"`
 	CreatedAt      string `json:"created_at" msgpack:"createdAt"`
 	UpdatedAt      string `json:"updated_at" msgpack:"updatedAt"`
 }
@@ -38,6 +40,8 @@ func (r *MessageResponse) FromModel(msg *models.Message) *MessageResponse {
 		PreviousID:     msg.PreviousID,
 		Role:           string(msg.Role),
 		Contents:       msg.Contents,
+		LocalID:        msg.LocalID,
+		ServerID:       msg.ServerID,
 		CreatedAt:      msg.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      msg.UpdatedAt.Format(time.RFC3339),
 	}
