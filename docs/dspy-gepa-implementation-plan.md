@@ -74,7 +74,7 @@ Provides:
 
 ## Implementation Strategy
 
-### Phase 1: Core Integration (Week 1-2)
+### Phase 1: Core Integration
 
 #### 1.1 Add dspy-go Dependency
 
@@ -192,7 +192,7 @@ func (a *LLMServiceAdapter) Generate(ctx context.Context, prompt string, opts ..
 }
 ```
 
-### Phase 2: GEPA Optimization Service (Week 3-4)
+### Phase 2: GEPA Optimization Service
 
 #### 2.1 Define Optimization Repository
 
@@ -337,7 +337,7 @@ func (s *OptimizationService) OptimizeSignature(
 }
 ```
 
-### Phase 3: Tool Usage Optimization (Week 5-6)
+### Phase 3: Tool Usage Optimization
 
 GEPA has built-in support for tool optimization via `enable_tool_optimization`. This phase focuses on optimizing the entire tool lifecycle.
 
@@ -883,7 +883,7 @@ CREATE TABLE tool_usage_patterns (
 CREATE INDEX idx_patterns_tool ON tool_usage_patterns(tool_name);
 ```
 
-### Phase 4: Memory-Aware Optimization (Week 7-8)
+### Phase 4: Memory-Aware Optimization
 
 Leverage Alicia's existing memory system for in-context learning:
 
@@ -937,7 +937,7 @@ func (m *MemoryAwareModule) Forward(ctx context.Context, inputs map[string]any) 
 }
 ```
 
-### Phase 5: Evaluation & Metrics (Week 9-10)
+### Phase 5: Evaluation & Metrics
 
 ```go
 // internal/prompt/metrics.go
@@ -1038,7 +1038,7 @@ REASONING: ...`,
 }
 ```
 
-### Phase 6: HTTP API & CLI (Week 11-12)
+### Phase 6: HTTP API & CLI
 
 ```go
 // internal/adapters/http/handlers/optimization.go
@@ -1323,17 +1323,16 @@ func TestOptimizationServiceE2E(t *testing.T) {
 }
 ```
 
-## Estimated Effort
+## Implementation Phases Overview
 
-| Phase | Duration | Description |
-|-------|----------|-------------|
-| Phase 1 | 2 weeks | Core integration with dspy-go |
-| Phase 2 | 2 weeks | GEPA optimization service |
-| Phase 3 | 2 weeks | Tool usage optimization (descriptions, results, selection) |
-| Phase 4 | 2 weeks | Memory-aware optimization |
-| Phase 5 | 2 weeks | Evaluation & metrics |
-| Phase 6 | 2 weeks | HTTP API & CLI |
-| **Total** | **12 weeks** | Full implementation |
+| Phase | Description |
+|-------|-------------|
+| Phase 1 | Core integration with dspy-go |
+| Phase 2 | GEPA optimization service |
+| Phase 3 | Tool usage optimization (descriptions, results, selection) |
+| Phase 4 | Memory-aware optimization |
+| Phase 5 | Evaluation & metrics |
+| Phase 6 | HTTP API & CLI |
 
 ## Risks & Mitigations
 
@@ -1344,12 +1343,72 @@ func TestOptimizationServiceE2E(t *testing.T) {
 | LLM rate limits | Backoff/retry, batching, caching |
 | Complex metrics | Start simple, iterate based on needs |
 
+## Integration with Frontend UX
+
+This optimization system works in tandem with the [Frontend UX Enhancement Plan](frontend-ux-plan.md). User feedback collected through the frontend directly feeds into the optimization metrics:
+
+### Feedback Sources
+
+| Frontend Feature | Optimization Target |
+|-----------------|---------------------|
+| Message voting | Response quality metrics |
+| Tool use voting | Tool selection/parameter optimization |
+| Memory relevance voting | Memory retrieval scoring |
+| Reasoning step voting | Chain-of-thought optimization |
+| User notes | GEPA reflective feedback |
+
+### Feedback Integration Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend → Optimization Flow                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  User votes on response  ──→  Store in alicia_votes table       │
+│           │                                                      │
+│           ▼                                                      │
+│  FeedbackMetric.Score()  ──→  Uses vote as ground truth         │
+│           │                                                      │
+│           ▼                                                      │
+│  GEPA.Reflect()          ──→  Analyzes failures from feedback   │
+│           │                                                      │
+│           ▼                                                      │
+│  Optimized prompts       ──→  Deployed to production            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### User Notes as Reflective Feedback
+
+User notes from the frontend are particularly valuable for GEPA's reflective mutation:
+
+```go
+// Extract user notes for GEPA reflection
+func (s *OptimizationService) gatherFeedback(ctx context.Context, messageID string) (*GEPAFeedback, error) {
+    votes, _ := s.voteRepo.GetByMessage(ctx, messageID)
+    notes, _ := s.noteRepo.GetByMessage(ctx, messageID)
+
+    return &GEPAFeedback{
+        Score:    calculateScore(votes),
+        Feedback: combineNotes(notes), // Rich text for reflection
+    }, nil
+}
+```
+
 ## Next Steps
 
-1. **Immediate**: Add dspy-go dependency, create proof-of-concept
-2. **Week 1-2**: Implement Phase 1 (core integration)
-3. **Week 3-4**: Implement Phase 2 (GEPA service)
-4. **Ongoing**: Iterate based on evaluation results
+1. **Foundation**: Add dspy-go dependency, create proof-of-concept
+2. **Core Integration**: Implement Phase 1 (prompt abstraction layer)
+3. **GEPA Service**: Implement Phase 2 (optimization service)
+4. **Frontend Integration**: Connect UX feedback to optimization metrics
+5. **Iteration**: Continuously improve based on evaluation results
+
+## Related Documentation
+
+- [Frontend UX Enhancement Plan](frontend-ux-plan.md) - User feedback collection
+- [Architecture Overview](ARCHITECTURE.md) - System architecture
+- [Database Schema](DATABASE.md) - Storage for optimization data
+- [Protocol Specification](protocol/index.md) - Message format details
 
 ## References
 

@@ -1083,9 +1083,158 @@ enum EnvelopeType {
 
 ---
 
+## Integration with DSPy/GEPA Optimization
+
+The feedback collected through this UX system serves as the foundation for automatic prompt improvement via DSPy and GEPA optimization. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for full details.
+
+### Feedback Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      User Feedback Loop                          │
+├─────────────────────────────────────────────────────────────────┤
+│  User Actions           →    Stored Data     →    Optimization  │
+│  ─────────────────────────────────────────────────────────────  │
+│  Message upvote/downvote →  alicia_votes    →  Response quality │
+│  Tool use voting        →  tool_feedback    →  Tool selection   │
+│  Memory relevance vote  →  memory_feedback  →  Memory retrieval │
+│  Reasoning step vote    →  reasoning_votes  →  Chain-of-thought │
+│  User notes             →  alicia_notes     →  Instruction tuning│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### How Feedback Improves the System
+
+1. **Message Votes**: Positive votes on responses become training examples for GEPA's prompt optimization. Negative votes with notes trigger reflective analysis.
+
+2. **Tool Use Feedback**: Votes on tool calls improve tool descriptions and parameter generation. "Wrong tool" feedback helps the model learn when to use which tool.
+
+3. **Memory Relevance**: Voting on whether retrieved memories were helpful directly improves the memory retrieval system. Critical votes ensure important memories are always included.
+
+4. **Reasoning Votes**: Feedback on reasoning steps helps optimize chain-of-thought prompts and identify common reasoning failures.
+
+5. **User Notes**: Free-form notes provide rich feedback for GEPA's reflective mutation, enabling the system to understand why responses failed.
+
+---
+
+## Accessibility Considerations
+
+All feedback components must be fully accessible:
+
+### Keyboard Navigation
+- All voting buttons accessible via Tab key
+- Enter/Space to activate buttons
+- Arrow keys for quick feedback chips
+- Escape to close modals/menus
+
+### Screen Reader Support
+```tsx
+<VoteButton
+  aria-label={`Upvote this ${targetType}. Current count: ${upvotes}`}
+  aria-pressed={userVote === 'up'}
+  role="button"
+/>
+
+<MemoryCard
+  aria-label={`Memory: ${content}. Relevance score: ${relevanceScore}%. ${pinned ? 'Pinned.' : ''}`}
+/>
+```
+
+### Color Contrast
+- All text meets WCAG AA contrast ratios
+- Vote states indicated by both color AND icon changes
+- Status indicators use icons in addition to colors
+
+### Reduced Motion
+```css
+@media (prefers-reduced-motion: reduce) {
+  .vote-animation {
+    transition: none;
+  }
+  .count-animation {
+    animation: none;
+  }
+}
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+- Test each atom/molecule in isolation
+- Verify accessibility requirements
+- Test keyboard navigation
+- Mock API responses for feedback submission
+
+### Integration Tests
+- Test feedback flow from UI to database
+- Verify real-time sync across tabs/devices
+- Test offline feedback queueing
+
+### E2E Tests
+- Complete user flows for voting
+- Memory management workflows
+- Note creation and editing
+- Reconnection scenarios
+
+### Performance Tests
+- Vote latency under load (< 100ms)
+- Memory search response time (< 200ms)
+- UI responsiveness with 1000+ messages
+
+---
+
+## Mobile Support
+
+The feedback system is designed to work across all Alicia clients:
+
+### Web (Mobile Responsive)
+- Touch-friendly voting buttons (minimum 44x44px)
+- Swipe gestures for quick feedback
+- Collapsible sections for small screens
+- Bottom sheet modals for memory management
+
+### Android App Integration
+- Same protocol messages work via LiveKit
+- Native UI components matching Material Design 3
+- Haptic feedback on vote actions
+- Offline feedback queue with Room database
+
+### Component Sizing
+```css
+/* Mobile-first responsive design */
+.vote-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 12px;
+}
+
+@media (min-width: 768px) {
+  .vote-button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 8px;
+  }
+}
+```
+
+---
+
+## Related Documentation
+
+- [Architecture Overview](ARCHITECTURE.md) - System architecture and component interaction
+- [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) - How feedback improves the system
+- [Protocol Specification](protocol/index.md) - Message format details
+- [Database Schema](DATABASE.md) - Storage for votes, notes, and memories
+- [Offline Sync](OFFLINE_SYNC.md) - How feedback syncs across devices
+
+---
+
 ## Next Steps
 
 1. Review and approve this plan
-2. Design mockups for key components (Figma)
-3. Implement Phase 1 foundation
-4. Iterate based on user testing
+2. Design mockups for key components
+3. Implement Phase 1 foundation (atoms and core infrastructure)
+4. Integrate with DSPy/GEPA optimization pipeline
+5. Iterate based on user testing

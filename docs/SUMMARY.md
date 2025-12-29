@@ -10,6 +10,11 @@
 - [ID Scheme](ID_SCHEME.md)
 - [User Stories](USER_STORIES.md)
 
+# Development Roadmap
+
+- [Frontend UX Enhancement Plan](frontend-ux-plan.md)
+- [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md)
+
 # Operations
 
 - [Deployment](DEPLOYMENT.md)

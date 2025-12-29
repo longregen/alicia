@@ -23,9 +23,10 @@ Alicia transforms how you interact with AI through voice, providing a fluid, hum
 
 ### Planned Features 🚧
 
-- **Silero VAD (Voice Activity Detection)**: Automatic speech detection in the web frontend using Silero VAD, eliminating the need for push-to-talk buttons
-- **Debugging & Evals**: Prompt optimization for messages, tool use, and memory
-- **Personal Knowledge Integration**: Full integration with personal knowledge database systems
+- **Enhanced Frontend UX**: Comprehensive user feedback system with granular voting on messages, tool usage, memories, and reasoning steps. User notes, memory management, and server information panels. See the [Frontend UX Enhancement Plan](frontend-ux-plan.md) for full details.
+- **DSPy + GEPA Optimization**: Automatic prompt improvement using Stanford's DSPy framework and GEPA optimizer. Tool usage optimization, memory-aware learning, and continuous improvement from user feedback. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for architecture and implementation details.
+- **Silero VAD (Voice Activity Detection)**: Automatic speech detection in the web frontend using Silero VAD, eliminating the need for push-to-talk buttons.
+- **Personal Knowledge Integration**: Full integration with personal knowledge database systems.
 
 ## Architecture
 

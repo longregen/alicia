@@ -1093,6 +1093,26 @@ This section provides a clear overview of what is currently implemented versus w
 
 ### Future Enhancements 🚧
 
+#### Frontend UX Enhancements
+
+Comprehensive UI improvements to enable users to actively participate in improving AI responses. See the [Frontend UX Enhancement Plan](frontend-ux-plan.md) for complete specifications.
+
+Key features:
+- **Granular Voting System**: Vote on individual messages, tool uses, memory selections, and reasoning steps
+- **User Notes**: Annotate messages with improvement suggestions and corrections
+- **Memory Management**: Full CRUD interface for viewing, editing, and organizing memories
+- **Server Information Panel**: Real-time visibility into connection status, sync state, and model configuration
+
+#### DSPy + GEPA Prompt Optimization
+
+Integration of Stanford's DSPy framework with GEPA optimizer for automatic prompt improvement. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for architecture and implementation details.
+
+Key capabilities:
+- **Automatic Prompt Optimization**: Use GEPA's reflective mutation to evolve better prompts
+- **Tool Usage Optimization**: Improve tool descriptions, argument generation, and result formatting
+- **Memory-Aware Learning**: Leverage conversation memories as few-shot demonstrations
+- **Feedback Loop**: User votes and notes feed directly into optimization metrics
+
 #### Silero VAD (Voice Activity Detection)
 
 Planned integration of Silero VAD in the web frontend to automatically detect when users start and stop speaking, eliminating the need for push-to-talk buttons:
@@ -1101,15 +1121,6 @@ Planned integration of Silero VAD in the web frontend to automatically detect wh
 - Configurable sensitivity threshold
 - Automatic microphone activation on speech
 - Visual indicator showing when speech is detected
-
-#### Debugging, Evals & Prompt Optimization
-
-Planned tooling for improving message quality, tool use, and memory:
-
-- Evaluation framework for measuring response quality
-- Prompt optimization workflow
-- Debug views for tool execution traces
-- Memory retrieval quality metrics
 
 #### Personal Knowledge Integration
 
