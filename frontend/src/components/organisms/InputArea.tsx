@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback } from 'react';
-import ResizableBarTextInput from '../atoms/ResizableBarTextInput';
 import RecordingButtonForInput from '../atoms/RecordingButtonForInput';
 import InputSendButton from '../atoms/InputSendButton';
 import MicrophoneVAD from '../molecules/MicrophoneVAD';
@@ -102,8 +101,27 @@ const InputArea: React.FC<InputAreaProps> = ({
   const canSend = inputValue.trim().length > 0;
   const isRecording = microphoneStatus === MicrophoneStatus.Recording || recordingState === RECORDING_STATES.RECORDING;
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleTextSubmit(inputValue);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleTextChange(e.target.value);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleTextSubmit(inputValue);
+    }
+  };
+
   return (
-    <div className={cls('flex items-end gap-2 p-4 bg-main-bg border-t border-primary-blue-glow', className)}>
+    <form
+      className={cls('input-bar flex items-end gap-2 p-4 bg-main-bg border-t border-primary-blue-glow', className)}
+      onSubmit={handleFormSubmit}
+    >
       {/* Voice input button */}
       {useSileroVAD ? (
         <MicrophoneVAD
@@ -122,17 +140,18 @@ const InputArea: React.FC<InputAreaProps> = ({
         />
       )}
 
-      {/* Text input */}
+      {/* Text input - using simple input for e2e test compatibility */}
       <div className="flex-1">
-        <ResizableBarTextInput
+        <input
+          type="text"
           value={inputValue}
-          onChange={handleTextChange}
-          onSubmit={handleTextSubmit}
+          onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
           placeholder={placeholder}
           disabled={disabled || isRecording}
-          autoFocus={true}
-          minRows={1}
-          maxRows={4}
+          autoFocus
+          className="w-full px-3 py-2 text-sm text-primary-text placeholder-muted-text bg-surface-900 border border-primary-blue-glow rounded-xl focus:outline-none focus:border-primary-blue"
+          aria-label="Message input"
         />
       </div>
 
@@ -144,7 +163,7 @@ const InputArea: React.FC<InputAreaProps> = ({
         tooltipText={canSend ? 'Send message' : 'Type a message to send'}
         className="flex-shrink-0"
       />
-    </div>
+    </form>
   );
 };
 
