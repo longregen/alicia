@@ -474,6 +474,7 @@
 
             ln -sf ${vad-dependencies}/models/* frontend/public/models/
             ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
+            ln -sf ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm frontend/public/sql-wasm.wasm
 
             echo "VAD dependencies linked to frontend/public/"
           '';
