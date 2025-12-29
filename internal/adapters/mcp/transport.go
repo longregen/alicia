@@ -139,8 +139,10 @@ func NewStdioTransport(command string, args []string, env []string) (*StdioTrans
 	transport.connected = true
 	transport.mu.Unlock()
 
+	// Track goroutines that may send to receiveCh
+	transport.wg.Add(2) // readLoop and monitorProcess
+
 	// Start reading from stdout
-	transport.wg.Add(1)
 	go transport.readLoop()
 
 	// Start reading from stderr (for logging)
@@ -209,10 +211,12 @@ func (t *StdioTransport) Close() error {
 			t.stderr.Close()
 		}
 
-		// Wait for readLoop to finish before closing receiveCh
-		// This prevents the data race between sending and closing
-		t.wg.Wait()
-		close(t.receiveCh)
+		// Wait for all senders to finish, then close receiveCh
+		// Use a goroutine to avoid blocking Close() indefinitely
+		go func() {
+			t.wg.Wait()
+			close(t.receiveCh)
+		}()
 	})
 	return err
 }
@@ -227,6 +231,7 @@ func (t *StdioTransport) IsConnected() bool {
 // readLoop reads messages from stdout
 func (t *StdioTransport) readLoop() {
 	defer t.wg.Done()
+
 	scanner := bufio.NewScanner(t.stdout)
 	// Set a larger buffer size for scanner to handle large messages
 	buf := make([]byte, 0, 64*1024)
@@ -277,6 +282,8 @@ func (t *StdioTransport) readStderr() {
 
 // monitorProcess monitors the process and closes the transport if it exits
 func (t *StdioTransport) monitorProcess() {
+	defer t.wg.Done()
+
 	if err := t.cmd.Wait(); err != nil {
 		t.mu.Lock()
 		if t.connected {
