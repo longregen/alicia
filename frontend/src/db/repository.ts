@@ -175,8 +175,11 @@ export const messageRepository = {
     if (message.local_id) {
       const existingByLocalId = this.findByLocalId(message.local_id);
       if (existingByLocalId) {
-        this.update(existingByLocalId.id, {
+        // Replace optimistic message with server message (updates primary key to server id)
+        this.delete(existingByLocalId.id);
+        this.insert({
           ...message,
+          local_id: existingByLocalId.local_id,
           server_id: message.id,
         });
         return;
@@ -187,10 +190,8 @@ export const messageRepository = {
     // (optimistic messages store server_id after REST API response)
     const existingByServerId = this.findByServerId(message.id);
     if (existingByServerId) {
-      this.update(existingByServerId.id, {
-        ...message,
-        server_id: message.id,
-      });
+      // Already have this message with server id, just update
+      this.update(existingByServerId.id, message);
       return;
     }
 
