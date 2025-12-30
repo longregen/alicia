@@ -1143,3 +1143,11 @@ Key strengths:
 - **Extensible**: Easy to add new message types, tools, or AI models
 
 The modular design enables incremental development with early testing and validation of core functionality.
+
+## See Also
+
+- [Components](COMPONENTS.md) - Detailed component breakdown
+- [Database Schema](DATABASE.md) - Data model and schema
+- [Protocol Specification](protocol/index.md) - Binary protocol details
+- [Server Documentation](SERVER.md) - HTTP server implementation
+- [Agent Documentation](AGENT.md) - LiveKit agent implementation

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
-import { useConversationStore } from '../../stores/conversationStore';
+import { useConversationStore, selectSentences } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
@@ -24,7 +24,16 @@ export interface UserMessageProps {
 
 const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
-  const sentences = useConversationStore((state) => state.getMessageSentences(messageId));
+  const sentencesMap = useConversationStore(selectSentences);
+
+  // Memoize sentences to avoid creating new arrays on every render
+  const sentences = useMemo(() => {
+    if (!message) return [];
+    return message.sentenceIds
+      .map(id => sentencesMap[id])
+      .filter(Boolean)
+      .sort((a, b) => a.sequence - b.sequence);
+  }, [message, sentencesMap]);
 
   const audioManager = useAudioManager();
   const currentlyPlayingId = useAudioStore((state) => state.playback.currentlyPlayingId);
@@ -34,8 +43,11 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
   // Track audio state for each audio ref
   const [audioStates, setAudioStates] = useState<Record<string, AudioState>>({});
 
-  // Find sentences with audio - computed before hooks to maintain consistent hook order
-  const sentencesWithAudio = sentences.filter(s => s.audioRefId);
+  // Find sentences with audio - memoized to avoid new array on every render
+  const sentencesWithAudio = useMemo(
+    () => sentences.filter(s => s.audioRefId),
+    [sentences]
+  );
   const hasAudio = sentencesWithAudio.length > 0;
 
   // Update audio states based on playback - must be called unconditionally

@@ -15,16 +15,16 @@ import (
 
 // OptimizationProgressEvent represents a progress update during optimization
 type OptimizationProgressEvent struct {
-	Type           string                 `json:"type"`
-	RunID          string                 `json:"run_id"`
-	Iteration      int                    `json:"iteration"`
-	MaxIterations  int                    `json:"max_iterations"`
-	CurrentScore   float64                `json:"current_score"`
-	BestScore      float64                `json:"best_score"`
-	DimensionScores map[string]float64     `json:"dimension_scores,omitempty"`
-	Status         string                 `json:"status"`
-	Message        string                 `json:"message,omitempty"`
-	Timestamp      string                 `json:"timestamp"`
+	Type            string             `json:"type"`
+	RunID           string             `json:"run_id"`
+	Iteration       int                `json:"iteration"`
+	MaxIterations   int                `json:"max_iterations"`
+	CurrentScore    float64            `json:"current_score"`
+	BestScore       float64            `json:"best_score"`
+	DimensionScores map[string]float64 `json:"dimension_scores,omitempty"`
+	Status          string             `json:"status"`
+	Message         string             `json:"message,omitempty"`
+	Timestamp       string             `json:"timestamp"`
 }
 
 // OptimizationStreamHandler handles SSE streaming for optimization progress

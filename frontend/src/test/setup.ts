@@ -3,16 +3,43 @@ import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 
+// Store imports for cleanup
+import { useConversationStore } from '../stores/conversationStore';
+import { useFeedbackStore } from '../stores/feedbackStore';
+import { useMemoryStore } from '../stores/memoryStore';
+import { useNotesStore } from '../stores/notesStore';
+import { useConnectionStore } from '../stores/connectionStore';
+import { useAudioStore } from '../stores/audioStore';
+import { useDimensionStore } from '../stores/dimensionStore';
+import { useServerInfoStore } from '../stores/serverInfoStore';
+
 // Make React.act available globally for @testing-library/react
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+// Store original fetch to restore later
+const originalFetch = global.fetch;
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
+
+  // Restore original fetch
+  global.fetch = originalFetch;
+
+  // Reset all Zustand stores to prevent memory accumulation
+  useConversationStore.getState().clearConversation();
+  useFeedbackStore.getState().clearFeedback();
+  useMemoryStore.getState().clearMemories();
+  useNotesStore.getState().clearNotes();
+  useConnectionStore.getState().clearConnection();
+  useAudioStore.getState().clearAudioStore();
+  useDimensionStore.getState().resetToBalanced();
+  useServerInfoStore.getState().resetServerInfo();
 });
 
 // Mock window.matchMedia
@@ -55,11 +82,10 @@ const mockConfigResponse = {
 
 // Setup global fetch mock before each test
 beforeEach(() => {
-  const originalFetch = global.fetch;
-
-  // Mock fetch to intercept /api/v1/config calls
-  global.fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+  // Mock fetch to intercept API calls
+  global.fetch = vi.fn(async (input: RequestInfo | URL, _options?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
+
     // If this is a config endpoint request, return mock config
     if (url.includes('/api/v1/config')) {
       return {
@@ -71,10 +97,32 @@ beforeEach(() => {
       } as Response;
     }
 
-    // For other requests, use the original fetch if available
-    // or return a basic mock response
+    // Handle tool-uses votes endpoint (used by ComplexAddons)
+    if (url.includes('/api/v1/tool-uses/') && url.includes('/votes')) {
+      return {
+        ok: true,
+        json: async () => ({ upvotes: 0, downvotes: 0 }),
+        text: async () => JSON.stringify({ upvotes: 0, downvotes: 0 }),
+        status: 200,
+        statusText: 'OK',
+      } as Response;
+    }
+
+    // For relative URLs (starting with /), return a generic mock response
+    // since originalFetch doesn't work with relative URLs in tests
+    if (url.startsWith('/')) {
+      return {
+        ok: true,
+        json: async () => ({}),
+        text: async () => '',
+        status: 200,
+        statusText: 'OK',
+      } as Response;
+    }
+
+    // For absolute URLs, try original fetch if available
     if (originalFetch) {
-      return originalFetch(input, options);
+      return originalFetch(input, _options);
     }
 
     return {

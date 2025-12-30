@@ -11,9 +11,9 @@ import (
 
 // mockMemoryService implements ports.MemoryService for testing
 type mockMemoryService struct {
-	memories       []*models.Memory
-	searchResults  []*ports.MemorySearchResult
-	searchError    error
+	memories      []*models.Memory
+	searchResults []*ports.MemorySearchResult
+	searchError   error
 }
 
 func (m *mockMemoryService) Create(ctx context.Context, content string) (*models.Memory, error) {

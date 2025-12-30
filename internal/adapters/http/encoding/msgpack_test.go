@@ -9,9 +9,9 @@ import (
 
 func TestNegotiateContentType(t *testing.T) {
 	tests := []struct {
-		name           string
-		acceptHeader   string
-		expectedType   string
+		name         string
+		acceptHeader string
+		expectedType string
 	}{
 		{
 			name:         "Empty Accept header defaults to JSON",
@@ -72,10 +72,10 @@ func TestWriteMsgpack(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		data         interface{}
-		status       int
-		expectError  bool
+		name        string
+		data        interface{}
+		status      int
+		expectError bool
 	}{
 		{
 			name: "Encode simple struct",
@@ -96,8 +96,8 @@ func TestWriteMsgpack(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "Encode slice",
-			data: []string{"a", "b", "c"},
+			name:        "Encode slice",
+			data:        []string{"a", "b", "c"},
 			status:      http.StatusOK,
 			expectError: false,
 		},

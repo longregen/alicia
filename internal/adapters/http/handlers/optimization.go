@@ -22,8 +22,8 @@ func NewOptimizationHandler(optService ports.OptimizationService) *OptimizationH
 // CreateOptimizationRequest represents a request to start an optimization run
 type CreateOptimizationRequest struct {
 	Name           string `json:"name"`
-	PromptType     string `json:"prompt_type"`      // "conversation", "tool_selection", "memory_extraction"
-	BaselinePrompt string `json:"baseline_prompt"`  // Initial prompt to optimize
+	PromptType     string `json:"prompt_type"`     // "conversation", "tool_selection", "memory_extraction"
+	BaselinePrompt string `json:"baseline_prompt"` // Initial prompt to optimize
 }
 
 // OptimizationRunResponse represents an optimization run in API responses

@@ -2,8 +2,7 @@ package org.localforge.alicia.feature.settings.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon
 import androidx.compose.runtime.*
@@ -74,7 +73,7 @@ fun WakeWordSelector(
                         trailingIcon = {
                             if (id == selectedWakeWord) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    imageVector = AppIcons.Check,
                                     contentDescription = "Selected"
                                 )
                             }

@@ -3,9 +3,7 @@ package org.localforge.alicia.feature.settings.mcp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -31,7 +29,7 @@ fun MCPSettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = AppIcons.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -43,7 +41,7 @@ fun MCPSettingsScreen(
                 onClick = { showAddDialog = true }
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = AppIcons.Add,
                     contentDescription = "Add Server"
                 )
             }

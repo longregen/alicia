@@ -88,7 +88,7 @@ describe('useMessages', () => {
       expect(result.current.sending).toBe(false);
     });
 
-    it('should expose sync state from useSync', () => {
+    it('should expose sync state from useSync', async () => {
       vi.mocked(useSync).mockReturnValue({
         isSyncing: true,
         lastSyncTime: new Date('2024-01-01'),
@@ -98,6 +98,11 @@ describe('useMessages', () => {
       });
 
       const { result } = renderHook(() => useMessages('conv-1'));
+
+      // Wait for async effects to settle
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
 
       expect(result.current.isSyncing).toBe(true);
       expect(result.current.lastSyncTime).toEqual(new Date('2024-01-01'));
@@ -142,6 +147,11 @@ describe('useMessages', () => {
       // SQLite should be called immediately
       expect(messageRepository.findByConversation).toHaveBeenCalledWith('conv-1');
       expect(result.current.messages).toEqual(sqliteMessages);
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
     });
 
     it('should fetch messages from server after SQLite', async () => {
@@ -277,6 +287,11 @@ describe('useMessages', () => {
     it('should return false for empty content', async () => {
       const { result } = renderHook(() => useMessages('conv-1'));
 
+      // Wait for initial fetch to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
+
       const success = await result.current.sendMessage('');
 
       expect(success).toBe(false);
@@ -285,6 +300,11 @@ describe('useMessages', () => {
 
     it('should return false for whitespace-only content', async () => {
       const { result } = renderHook(() => useMessages('conv-1'));
+
+      // Wait for initial fetch to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
 
       const success = await result.current.sendMessage('   ');
 
@@ -521,7 +541,7 @@ describe('useMessages', () => {
   });
 
   describe('Sync Integration', () => {
-    it('should pass callbacks to useSync', () => {
+    it('should pass callbacks to useSync', async () => {
       renderHook(() => useMessages('conv-1'));
 
       expect(useSync).toHaveBeenCalledWith(
@@ -531,6 +551,11 @@ describe('useMessages', () => {
           onMessage: expect.any(Function),
         })
       );
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
     });
 
     it('should refresh messages when onSync callback is triggered', async () => {
@@ -591,10 +616,15 @@ describe('useMessages', () => {
   });
 
   describe('Manual Refresh', () => {
-    it('should expose refresh function', () => {
+    it('should expose refresh function', async () => {
       const { result } = renderHook(() => useMessages('conv-1'));
 
       expect(typeof result.current.refresh).toBe('function');
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
     });
 
     it('should refresh messages from SQLite when refresh is called', async () => {
@@ -672,12 +702,22 @@ describe('useMessages', () => {
       const { result } = renderHook(() => useMessages('conv-1'));
 
       expect(result.current.messages).toEqual(localMessages);
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
     });
   });
 
   describe('Callback Stability', () => {
     it('should have stable sendMessage reference', async () => {
       const { result, rerender } = renderHook(() => useMessages('conv-1'));
+
+      // Wait for initial fetch to complete
+      await waitFor(() => {
+        expect(api.getMessages).toHaveBeenCalled();
+      });
 
       const firstSendMessage = result.current.sendMessage;
 

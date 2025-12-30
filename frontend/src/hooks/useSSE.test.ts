@@ -49,6 +49,11 @@ describe('useSSE', () => {
     // @ts-expect-error - mocking global
     global.EventSource = MockEventSource;
     vi.useFakeTimers();
+
+    // Suppress console output during tests
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -150,8 +155,6 @@ describe('useSSE', () => {
     });
 
     it('handles connected event without error', () => {
-      const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
-
       renderHook(() => useSSE('conv-1'));
 
       act(() => {
@@ -162,13 +165,10 @@ describe('useSSE', () => {
         MockEventSource.instances[0].simulateMessage({ type: 'connected' });
       });
 
-      expect(consoleLog).toHaveBeenCalledWith('SSE: Connection confirmed');
-      consoleLog.mockRestore();
+      expect(console.log).toHaveBeenCalledWith('SSE: Connection confirmed');
     });
 
     it('logs warning for unknown event types', () => {
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       renderHook(() => useSSE('conv-1'));
 
       act(() => {
@@ -179,8 +179,7 @@ describe('useSSE', () => {
         MockEventSource.instances[0].simulateMessage({ type: 'unknown' });
       });
 
-      expect(consoleWarn).toHaveBeenCalledWith('SSE: Unknown event type:', 'unknown');
-      consoleWarn.mockRestore();
+      expect(console.warn).toHaveBeenCalledWith('SSE: Unknown event type:', 'unknown');
     });
   });
 
@@ -209,9 +208,6 @@ describe('useSSE', () => {
     });
 
     it('attempts reconnection with exponential backoff', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
       renderHook(() => useSSE('conv-1'));
 
       // First connection
@@ -234,9 +230,6 @@ describe('useSSE', () => {
     });
 
     it('clears error on successful reconnection', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
       const { result } = renderHook(() => useSSE('conv-1'));
 
       // Simulate error
@@ -281,9 +274,6 @@ describe('useSSE', () => {
     });
 
     it('reconnect resets backoff delay', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
       const { result } = renderHook(() => useSSE('conv-1'));
 
       // Simulate multiple errors to increase backoff
@@ -346,9 +336,6 @@ describe('useSSE', () => {
     });
 
     it('clears reconnect timeout on cleanup', () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
       const { unmount } = renderHook(() => useSSE('conv-1'));
 
       // Simulate error to trigger reconnect timeout

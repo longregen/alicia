@@ -115,6 +115,9 @@ func NewAgent(config *AgentConfig, callbacks ports.LiveKitAgentCallbacks) (*Agen
 		config.WorkQueueSize = 100
 	}
 
+	// Create cancellable context for lifecycle management
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &Agent{
 		config:       config,
 		callbacks:    callbacks,
@@ -124,6 +127,8 @@ func NewAgent(config *AgentConfig, callbacks ports.LiveKitAgentCallbacks) (*Agen
 		lastStanzaID: 0,
 		ackCheckDone: make(chan bool),
 		workerCount:  config.WorkerCount,
+		ctx:          ctx,
+		cancel:       cancel,
 	}, nil
 }
 
@@ -149,9 +154,6 @@ func (a *Agent) Connect(ctx context.Context, roomName string) error {
 	if a.callbacks == nil {
 		return fmt.Errorf("callbacks must be set before connecting")
 	}
-
-	// Create cancellable context for lifecycle management
-	a.ctx, a.cancel = context.WithCancel(context.Background())
 
 	// Connect to LiveKit room using API credentials.
 	// The SDK handles authentication internally when APIKey and APISecret are provided.

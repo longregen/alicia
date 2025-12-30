@@ -237,13 +237,25 @@ func (m *mockReasoningStepRepo) GetNextSequenceNumber(ctx context.Context, messa
 	return 0, nil
 }
 
-type mockToolUseRepo struct{}
+type mockToolUseRepo struct {
+	toolUses map[string]*models.ToolUse
+}
 
 func (m *mockToolUseRepo) Create(ctx context.Context, toolUse *models.ToolUse) error {
+	if m.toolUses == nil {
+		m.toolUses = make(map[string]*models.ToolUse)
+	}
+	m.toolUses[toolUse.ID] = toolUse
 	return nil
 }
 
 func (m *mockToolUseRepo) GetByID(ctx context.Context, id string) (*models.ToolUse, error) {
+	if m.toolUses == nil {
+		m.toolUses = make(map[string]*models.ToolUse)
+	}
+	if tu, ok := m.toolUses[id]; ok {
+		return tu, nil
+	}
 	return nil, errors.New("not found")
 }
 
@@ -252,6 +264,10 @@ func (m *mockToolUseRepo) GetByMessage(ctx context.Context, messageID string) ([
 }
 
 func (m *mockToolUseRepo) Update(ctx context.Context, toolUse *models.ToolUse) error {
+	if m.toolUses == nil {
+		m.toolUses = make(map[string]*models.ToolUse)
+	}
+	m.toolUses[toolUse.ID] = toolUse
 	return nil
 }
 
@@ -755,6 +771,10 @@ func createTestDispatcher() (*DefaultMessageDispatcher, *mockProtocolHandler, *m
 	}
 	conversationRepo.Create(context.Background(), conversation)
 
+	// Create a test tool use for the TypeToolUseResult test
+	testToolUse := models.NewToolUse("tu_1", "msg_1", "test_tool", 1, map[string]any{})
+	toolUseRepo.Create(context.Background(), testToolUse)
+
 	// Create a mock agent sender that always succeeds
 	mockSender := newMockAgentSender()
 
@@ -774,6 +794,7 @@ func createTestDispatcher() (*DefaultMessageDispatcher, *mockProtocolHandler, *m
 	dispatcher := &DefaultMessageDispatcher{
 		protocolHandler:           protocolHandler,
 		messageRepo:               messageRepo,
+		toolUseRepo:               toolUseRepo,
 		processUserMessageUseCase: processUserMessageUseCase,
 		generateResponseUseCase:   generateResponseUseCase,
 		handleToolUseCase:         handleToolUseCase,

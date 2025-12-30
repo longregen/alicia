@@ -242,3 +242,8 @@ CREATE INDEX idx_messages_sync_status ON alicia_messages(conversation_id, sync_s
 | Protocol | HTTP REST | LiveKit data channel |
 | ID Management | Local + Server IDs | Server IDs only |
 
+## See Also
+
+- [Database Schema](DATABASE.md) - Sync-related tables
+- [Protocol Specification](protocol/index.md) - Reconnection semantics
+

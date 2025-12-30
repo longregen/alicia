@@ -50,7 +50,6 @@ func (m *mockTTSService) SynthesizeStream(ctx context.Context, text string, opti
 	return ch, nil
 }
 
-
 func TestSynthesizeSpeech_NonStreaming(t *testing.T) {
 	audioRepo := newMockAudioRepo()
 	sentenceRepo := newMockSentenceRepo()
@@ -330,4 +329,3 @@ func TestSynthesizeSpeech_SynthesizeForMessageWithoutSentenceRepo(t *testing.T) 
 		t.Fatal("expected error when sentence repository unavailable, got nil")
 	}
 }
-

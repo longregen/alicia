@@ -15,11 +15,11 @@ import (
 
 // Mock VoteRepository
 type mockVoteRepo struct {
-	votes       map[string]*models.Vote
-	createErr   error
-	getErr      error
-	deleteErr   error
-	aggregates  *models.VoteAggregates
+	votes      map[string]*models.Vote
+	createErr  error
+	getErr     error
+	deleteErr  error
+	aggregates *models.VoteAggregates
 }
 
 func newMockVoteRepo() *mockVoteRepo {

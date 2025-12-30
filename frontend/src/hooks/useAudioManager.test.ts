@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useAudioManager } from './useAudioManager';
 import { useAudioStore } from '../stores/audioStore';
-import { createAudioRefId } from '../types/streaming';
+import { AudioRefId, createAudioRefId } from '../types/streaming';
 
 // Mock Audio element
 class MockAudioElement {
@@ -92,15 +92,20 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       // Should be able to store data after init
-      const id = await result.current.store(new ArrayBuffer(10));
-      expect(id).toBeDefined();
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(10));
+      });
+      expect(id!).toBeDefined();
     });
 
     it('should close database on unmount', async () => {
       const { result, unmount } = renderHook(() => useAudioManager());
 
       await waitForDbInit();
-      await result.current.store(new ArrayBuffer(10));
+      await act(async () => {
+        await result.current.store(new ArrayBuffer(10));
+      });
 
       unmount();
 
@@ -114,11 +119,14 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       const data = new ArrayBuffer(100);
-      const id = await result.current.store(data);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(data);
+      });
 
-      expect(id).toBeDefined();
-      expect(typeof id).toBe('string');
-      expect(id).toMatch(/^audio-\d+-[a-z0-9]+$/);
+      expect(id!).toBeDefined();
+      expect(typeof id!).toBe('string');
+      expect(id!).toMatch(/^audio-\d+-[a-z0-9]+$/);
     });
 
     it('should store Uint8Array (converted to ArrayBuffer)', async () => {
@@ -126,13 +134,19 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       const uint8Data = new Uint8Array([1, 2, 3, 4, 5]);
-      const id = await result.current.store(uint8Data);
+      let id: AudioRefId;
+      let retrieved: ArrayBuffer | null;
+      await act(async () => {
+        id = await result.current.store(uint8Data);
+      });
 
-      expect(id).toBeDefined();
+      expect(id!).toBeDefined();
 
       // Verify data can be retrieved
-      const retrieved = await result.current.retrieve(id);
-      expect(retrieved).not.toBeNull();
+      await act(async () => {
+        retrieved = await result.current.retrieve(id);
+      });
+      expect(retrieved!).not.toBeNull();
       expect(new Uint8Array(retrieved!)).toEqual(uint8Data);
     });
 
@@ -141,9 +155,12 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       const data = new ArrayBuffer(1024);
-      const id = await result.current.store(data, {
-        durationMs: 5000,
-        sampleRate: 44100,
+      let id!: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(data, {
+          durationMs: 5000,
+          sampleRate: 44100,
+        });
       });
 
       const metadata = result.current.getMetadata(id);
@@ -160,7 +177,10 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       const data = new ArrayBuffer(512);
-      const id = await result.current.store(data);
+      let id!: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(data);
+      });
 
       const metadata = result.current.getMetadata(id);
       expect(metadata?.durationMs).toBe(0);
@@ -183,11 +203,17 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       const originalData = new Uint8Array([10, 20, 30, 40, 50]);
-      const id = await result.current.store(originalData.buffer);
+      let id: AudioRefId;
+      let retrieved: ArrayBuffer | null;
+      await act(async () => {
+        id = await result.current.store(originalData.buffer);
+      });
 
-      const retrieved = await result.current.retrieve(id);
+      await act(async () => {
+        retrieved = await result.current.retrieve(id);
+      });
 
-      expect(retrieved).not.toBeNull();
+      expect(retrieved!).not.toBeNull();
       expect(new Uint8Array(retrieved!)).toEqual(originalData);
     });
 
@@ -196,9 +222,12 @@ describe('useAudioManager', () => {
       await waitForDbInit();
 
       const fakeId = createAudioRefId('non-existent-id');
-      const retrieved = await result.current.retrieve(fakeId);
+      let retrieved: ArrayBuffer | null;
+      await act(async () => {
+        retrieved = await result.current.retrieve(fakeId);
+      });
 
-      expect(retrieved).toBeNull();
+      expect(retrieved!).toBeNull();
     });
 
     it('should throw when database not initialized', async () => {
@@ -215,16 +244,28 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
+      let id: AudioRefId;
+      let retrieved: ArrayBuffer | null;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
 
       // Verify stored
-      expect(await result.current.retrieve(id)).not.toBeNull();
+      await act(async () => {
+        retrieved = await result.current.retrieve(id);
+      });
+      expect(retrieved!).not.toBeNull();
 
       // Delete
-      await result.current.delete(id);
+      await act(async () => {
+        await result.current.delete(id);
+      });
 
       // Verify deleted
-      expect(await result.current.retrieve(id)).toBeNull();
+      await act(async () => {
+        retrieved = await result.current.retrieve(id);
+      });
+      expect(retrieved!).toBeNull();
     });
 
     it('should not throw when deleting non-existent audio', async () => {
@@ -233,7 +274,9 @@ describe('useAudioManager', () => {
 
       const fakeId = createAudioRefId('non-existent');
 
-      await expect(result.current.delete(fakeId)).resolves.not.toThrow();
+      await act(async () => {
+        await expect(result.current.delete(fakeId)).resolves.not.toThrow();
+      });
     });
 
     it('should throw when database not initialized', async () => {
@@ -250,8 +293,13 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
       expect(mockAudioInstance?.play).toHaveBeenCalled();
       expect(URL.createObjectURL).toHaveBeenCalled();
@@ -261,12 +309,17 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
       const storeState = useAudioStore.getState();
       expect(storeState.playback.isPlaying).toBe(true);
-      expect(storeState.playback.currentlyPlayingId).toBe(id);
+      expect(storeState.playback.currentlyPlayingId).toBe(id!);
     });
 
     it('should apply volume from store', async () => {
@@ -275,8 +328,13 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
       expect(mockAudioInstance?.volume).toBe(0.5);
     });
@@ -287,8 +345,13 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
       expect(mockAudioInstance?.volume).toBe(0);
     });
@@ -297,59 +360,93 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id1 = await result.current.store(new ArrayBuffer(100));
-      const id2 = await result.current.store(new ArrayBuffer(100));
+      let id1: AudioRefId;
+      let id2: AudioRefId;
+      await act(async () => {
+        id1 = await result.current.store(new ArrayBuffer(100));
+        id2 = await result.current.store(new ArrayBuffer(100));
+      });
 
-      await result.current.play(id1);
+      await act(async () => {
+        await result.current.play(id1!);
+      });
       const firstInstance = mockAudioInstance;
 
-      await result.current.play(id2);
+      await act(async () => {
+        await result.current.play(id2!);
+      });
 
       expect(firstInstance?.pause).toHaveBeenCalled();
     });
 
     it('should throw when audio data not found', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
       const fakeId = createAudioRefId('non-existent');
 
-      await expect(result.current.play(fakeId)).rejects.toThrow('Audio data not found');
+      await act(async () => {
+        await expect(result.current.play(fakeId)).rejects.toThrow('Audio data not found');
+      });
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('should handle playback errors', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
+      let id!: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
 
-      // Make play() reject after instance is created
-      await result.current.play(id).catch(() => {});
+      // First play creates an Audio instance
+      await act(async () => {
+        await result.current.play(id);
+      });
 
-      // Reset for new test
-      useAudioStore.getState().clearAudioStore();
-      const id2 = await result.current.store(new ArrayBuffer(100));
-
-      // Now make play reject
+      // Now modify the mock to reject on next play
       mockAudioInstance!.play = vi.fn().mockRejectedValue(new Error('Playback failed'));
 
-      await expect(result.current.play(id2)).rejects.toThrow();
+      // Try playing again - should fail and update store
+      let playError: Error | undefined;
+      await act(async () => {
+        try {
+          await result.current.play(id);
+        } catch (err) {
+          playError = err as Error;
+        }
+      });
 
+      expect(playError).toBeDefined();
+      expect(playError!.message).toBe('Playback failed');
       // Store should be updated to stop playback
       expect(useAudioStore.getState().playback.isPlaying).toBe(false);
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('should update progress on timeupdate event', async () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
       // Simulate progress
       mockAudioInstance!.currentTime = 5;
       mockAudioInstance!.duration = 10;
-      mockAudioInstance!._triggerTimeUpdate();
+      act(() => {
+        mockAudioInstance!._triggerTimeUpdate();
+      });
 
       expect(useAudioStore.getState().playback.playbackProgress).toBe(0.5);
     });
@@ -358,26 +455,43 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
-      mockAudioInstance!._triggerEnded();
+      act(() => {
+        mockAudioInstance!._triggerEnded();
+      });
 
       expect(useAudioStore.getState().playback.isPlaying).toBe(false);
       expect(URL.revokeObjectURL).toHaveBeenCalled();
     });
 
     it('should cleanup on audio error', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
-      mockAudioInstance!._triggerError(new Event('error'));
+      act(() => {
+        mockAudioInstance!._triggerError(new Event('error'));
+      });
 
       expect(useAudioStore.getState().playback.isPlaying).toBe(false);
       expect(URL.revokeObjectURL).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('should throw when database not initialized', async () => {
@@ -394,10 +508,17 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
-      result.current.stop();
+      act(() => {
+        result.current.stop();
+      });
 
       expect(mockAudioInstance?.pause).toHaveBeenCalled();
       expect(mockAudioInstance?.currentTime).toBe(0);
@@ -407,10 +528,17 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
-      result.current.stop();
+      act(() => {
+        result.current.stop();
+      });
 
       const state = useAudioStore.getState();
       expect(state.playback.isPlaying).toBe(false);
@@ -429,15 +557,18 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(256), {
-        durationMs: 3000,
-        sampleRate: 22050,
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(256), {
+          durationMs: 3000,
+          sampleRate: 22050,
+        });
       });
 
-      const metadata = result.current.getMetadata(id);
+      const metadata = result.current.getMetadata(id!);
 
       expect(metadata).toEqual({
-        id,
+        id: id!,
         sizeBytes: 256,
         durationMs: 3000,
         sampleRate: 22050,
@@ -457,14 +588,18 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
 
       // Should not throw, just return early
-      await expect(result.current.cleanup()).resolves.not.toThrow();
+      await act(async () => {
+        await expect(result.current.cleanup()).resolves.not.toThrow();
+      });
     });
 
     it('should complete without error when database is empty', async () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      await expect(result.current.cleanup()).resolves.not.toThrow();
+      await act(async () => {
+        await expect(result.current.cleanup()).resolves.not.toThrow();
+      });
     });
   });
 
@@ -473,8 +608,13 @@ describe('useAudioManager', () => {
       const { result, unmount } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(100));
-      await result.current.play(id);
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(100));
+      });
+      await act(async () => {
+        await result.current.play(id!);
+      });
 
       unmount();
 
@@ -491,8 +631,11 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const id = await result.current.store(new ArrayBuffer(50));
-      expect(id).toBeDefined();
+      let id: AudioRefId;
+      await act(async () => {
+        id = await result.current.store(new ArrayBuffer(50));
+      });
+      expect(id!).toBeDefined();
     });
   });
 
@@ -501,14 +644,17 @@ describe('useAudioManager', () => {
       const { result } = renderHook(() => useAudioManager());
       await waitForDbInit();
 
-      const ids = await Promise.all([
-        result.current.store(new ArrayBuffer(100)),
-        result.current.store(new ArrayBuffer(200)),
-        result.current.store(new ArrayBuffer(300)),
-      ]);
+      let ids: AudioRefId[];
+      await act(async () => {
+        ids = await Promise.all([
+          result.current.store(new ArrayBuffer(100)),
+          result.current.store(new ArrayBuffer(200)),
+          result.current.store(new ArrayBuffer(300)),
+        ]);
+      });
 
-      expect(ids).toHaveLength(3);
-      expect(new Set(ids).size).toBe(3); // All unique IDs
+      expect(ids!).toHaveLength(3);
+      expect(new Set(ids!).size).toBe(3); // All unique IDs
     });
 
     it('should retrieve correct data for each stored audio', async () => {
@@ -518,11 +664,19 @@ describe('useAudioManager', () => {
       const data1 = new Uint8Array([1, 2, 3]);
       const data2 = new Uint8Array([4, 5, 6, 7]);
 
-      const id1 = await result.current.store(data1);
-      const id2 = await result.current.store(data2);
+      let id1: AudioRefId;
+      let id2: AudioRefId;
+      await act(async () => {
+        id1 = await result.current.store(data1);
+        id2 = await result.current.store(data2);
+      });
 
-      const retrieved1 = await result.current.retrieve(id1);
-      const retrieved2 = await result.current.retrieve(id2);
+      let retrieved1: ArrayBuffer | null;
+      let retrieved2: ArrayBuffer | null;
+      await act(async () => {
+        retrieved1 = await result.current.retrieve(id1!);
+        retrieved2 = await result.current.retrieve(id2!);
+      });
 
       expect(new Uint8Array(retrieved1!)).toEqual(data1);
       expect(new Uint8Array(retrieved2!)).toEqual(data2);

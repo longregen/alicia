@@ -28,15 +28,15 @@ func NewDeploymentService(
 
 // DeploymentStatus represents the deployment status of an optimized prompt
 type DeploymentStatus struct {
-	ID          string
-	RunID       string
-	PromptType  string
-	IsActive    bool
-	Prompt      string
-	Score       float64
-	Dimensions  map[string]float64
-	DeployedAt  string
-	DeployedBy  string
+	ID         string
+	RunID      string
+	PromptType string
+	IsActive   bool
+	Prompt     string
+	Score      float64
+	Dimensions map[string]float64
+	DeployedAt string
+	DeployedBy string
 }
 
 // DeployOptimizedPrompt deploys an optimized prompt to production

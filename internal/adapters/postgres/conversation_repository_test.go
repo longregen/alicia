@@ -604,8 +604,32 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 
 	ctx := context.Background()
 
-	// Delete test conversations (those with IDs starting with ac_test, ac_list, etc.)
+	// Delete test messages first (before conversations due to FK constraints)
 	_, err := pool.Exec(ctx, `
+		DELETE FROM alicia_messages
+		WHERE id LIKE 'msg_test%'
+		   OR id LIKE 'msg_incomplete%'
+		   OR id LIKE 'msg_conv%'
+		   OR id LIKE 'am_%'
+		   OR conversation_id LIKE 'ac_test%'
+		   OR conversation_id LIKE 'ac_list%'
+		   OR conversation_id LIKE 'ac_active%'
+		   OR conversation_id LIKE 'ac_archived%'
+		   OR conversation_id LIKE 'ac_lk%'
+		   OR conversation_id LIKE 'ac_stanza%'
+		   OR conversation_id LIKE 'ac_page%'
+		   OR conversation_id LIKE 'ac_update%'
+		   OR conversation_id LIKE 'ac_delete%'
+		   OR conversation_id LIKE 'ac_msg_%'
+		   OR conversation_id LIKE 'ac_user_%'
+		   OR conversation_id LIKE 'ac_tx_%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test messages: %v", err)
+	}
+
+	// Delete test conversations (those with IDs starting with ac_test, ac_list, etc.)
+	_, err = pool.Exec(ctx, `
 		DELETE FROM alicia_conversations
 		WHERE id LIKE 'ac_test%'
 		   OR id LIKE 'ac_list%'
@@ -621,6 +645,6 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 		   OR id LIKE 'ac_tx_%'
 	`)
 	if err != nil {
-		t.Logf("Warning: failed to clean up test data: %v", err)
+		t.Logf("Warning: failed to clean up test conversations: %v", err)
 	}
 }

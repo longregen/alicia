@@ -267,4 +267,3 @@ func (uc *SynthesizeSpeech) SynthesizeForMessage(ctx context.Context, messageID,
 
 	return audioRecords, nil
 }
-

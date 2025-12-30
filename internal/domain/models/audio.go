@@ -78,4 +78,3 @@ func (a *Audio) SetLiveKitTrack(trackSID string) {
 	a.LiveKitTrackSID = trackSID
 	a.UpdatedAt = time.Now()
 }
-

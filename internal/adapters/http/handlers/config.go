@@ -72,7 +72,7 @@ type PublicConfigResponse struct {
 func (h *ConfigHandler) GetPublicConfig(w http.ResponseWriter, r *http.Request) {
 	response := &PublicConfigResponse{
 		LiveKitURL: h.cfg.LiveKit.URL,
-		TTSEnabled: h.cfg.IsTTSConfigured(),
+		TTSEnabled: h.cfg.IsTTSConfigured() && h.ttsAdapter != nil,
 		ASREnabled: h.cfg.IsASRConfigured(),
 	}
 

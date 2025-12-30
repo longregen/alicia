@@ -26,11 +26,11 @@ func TestParseQA(t *testing.T) {
 	converter := NewMemoryConverter()
 
 	tests := []struct {
-		name        string
-		content     string
-		expectOK    bool
-		expectedQ   string
-		expectedA   string
+		name      string
+		content   string
+		expectOK  bool
+		expectedQ string
+		expectedA string
 	}{
 		{
 			name:      "basic Q&A",

@@ -368,6 +368,7 @@ describe('useLiveKit', () => {
 
   describe('error handling', () => {
     it('should handle connection errors', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       // Mock connect to fail
       vi.mocked(Room).mockImplementationOnce(function() {
         return {
@@ -391,9 +392,12 @@ describe('useLiveKit', () => {
         expect(result.current.error).toBe('Connection failed');
         expect(result.current.connectionState).toBe('disconnected');
       });
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('should handle message send errors', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const { result } = renderHook(() => useLiveKit('conv-123'), {
         wrapper: MessageProvider,
       });
@@ -425,6 +429,8 @@ describe('useLiveKit', () => {
       await waitFor(() => {
         expect(result.current.error).toContain('Send failed');
       });
+
+      consoleErrorSpy.mockRestore();
     });
   });
 

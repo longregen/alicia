@@ -15,12 +15,7 @@ import org.localforge.alicia.feature.assistant.components.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.Send
+import org.localforge.alicia.core.common.ui.AppIcons
 
 /**
  * Main assistant screen that provides both voice and text interaction with the AI assistant.
@@ -76,22 +71,22 @@ fun AssistantScreen(
                     IconButton(onClick = { viewModel.toggleInputMode() }) {
                         Icon(
                             imageVector = if (inputMode == InputMode.Voice) {
-                                Icons.Default.Keyboard
+                                AppIcons.Keyboard
                             } else {
-                                Icons.Default.Mic
+                                AppIcons.Mic
                             },
                             contentDescription = if (inputMode == InputMode.Voice) "Switch to Text" else "Switch to Voice"
                         )
                     }
                     IconButton(onClick = onNavigateToConversations) {
                         Icon(
-                            imageVector = Icons.Default.History,
+                            imageVector = AppIcons.History,
                             contentDescription = "Conversations"
                         )
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
-                            imageVector = Icons.Default.Settings,
+                            imageVector = AppIcons.Settings,
                             contentDescription = "Settings"
                         )
                     }
@@ -217,7 +212,7 @@ fun AssistantScreen(
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        imageVector = AppIcons.Send,
                                         contentDescription = "Send"
                                     )
                                 }

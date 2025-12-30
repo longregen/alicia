@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
 }
@@ -43,11 +44,20 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.17.0")
+
+    // Compose (for icons)
+    api(platform("androidx.compose:compose-bom:2025.12.01"))
+    api("androidx.compose.ui:ui")
+    api("androidx.compose.material:material-icons-core")
 
     // Logging
     api("com.jakewharton.timber:timber:5.0.1")

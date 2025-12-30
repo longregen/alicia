@@ -62,7 +62,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
       }
     }
@@ -84,12 +84,10 @@ export default defineConfig({
     env: {
       NODE_ENV: 'development',
     },
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    pool: 'threads',
+    maxWorkers: 4,
+    minWorkers: 1,
+    isolate: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

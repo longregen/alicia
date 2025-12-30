@@ -1,9 +1,7 @@
 package org.localforge.alicia.feature.settings.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,7 +32,7 @@ fun ConnectionStatusSetting(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = if (isConnected) Icons.Default.CheckCircle else Icons.Default.Error,
+                    imageVector = if (isConnected) AppIcons.CheckCircle else AppIcons.Error,
                     contentDescription = if (isConnected) "Connected" else "Disconnected",
                     tint = if (isConnected)
                         MaterialTheme.colorScheme.primary

@@ -194,7 +194,7 @@ func TestParetoArchiveGetBest(t *testing.T) {
 
 	best := archive.GetBest()
 	if best == nil {
-		t.Error("expected best solution, got nil")
+		t.Fatal("expected best solution, got nil")
 	}
 	if best.ID != "only" {
 		t.Errorf("expected 'only', got '%s'", best.ID)

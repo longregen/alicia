@@ -1,9 +1,7 @@
 package org.localforge.alicia.feature.assistant.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Stop
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,7 +55,7 @@ fun ResponseControls(
                 modifier = Modifier.padding(4.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Stop,
+                    imageVector = AppIcons.Stop,
                     contentDescription = "Stop",
                     modifier = Modifier.size(18.dp)
                 )
@@ -71,7 +69,7 @@ fun ResponseControls(
                 modifier = Modifier.padding(4.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
+                    imageVector = AppIcons.Refresh,
                     contentDescription = "Regenerate",
                     modifier = Modifier.size(18.dp)
                 )

@@ -4,10 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,7 +52,7 @@ fun MCPServerCard(
 
                 IconButton(onClick = { showDeleteDialog = true }) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = AppIcons.Delete,
                         contentDescription = "Delete server",
                         tint = MaterialTheme.colorScheme.error
                     )
@@ -98,7 +95,7 @@ fun MCPServerCard(
                     )
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(
-                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            imageVector = if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                             contentDescription = if (expanded) "Collapse" else "Expand"
                         )
                     }

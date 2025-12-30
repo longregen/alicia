@@ -380,4 +380,3 @@ func (s *AudioService) SetTranscription(ctx context.Context, audioID, transcript
 
 	return audio, nil
 }
-

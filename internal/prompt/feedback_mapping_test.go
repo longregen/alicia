@@ -212,11 +212,11 @@ func TestClamp(t *testing.T) {
 	tests := []struct {
 		value, min, max, expected float64
 	}{
-		{0.5, 0.0, 1.0, 0.5},   // within range
-		{-0.5, 0.0, 1.0, 0.0},  // below min
-		{1.5, 0.0, 1.0, 1.0},   // above max
-		{0.0, 0.0, 1.0, 0.0},   // at min
-		{1.0, 0.0, 1.0, 1.0},   // at max
+		{0.5, 0.0, 1.0, 0.5},  // within range
+		{-0.5, 0.0, 1.0, 0.0}, // below min
+		{1.5, 0.0, 1.0, 1.0},  // above max
+		{0.0, 0.0, 1.0, 0.0},  // at min
+		{1.0, 0.0, 1.0, 1.0},  // at max
 	}
 
 	for _, tt := range tests {

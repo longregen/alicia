@@ -33,14 +33,14 @@ type UpdateNoteRequest struct {
 
 // NoteResponse represents a note
 type NoteResponse struct {
-	ID        string `json:"id"`
-	MessageID string `json:"message_id,omitempty"`
-	TargetID  string `json:"target_id"`
+	ID         string `json:"id"`
+	MessageID  string `json:"message_id,omitempty"`
+	TargetID   string `json:"target_id"`
 	TargetType string `json:"target_type"` // "message", "tool_use", "reasoning"
-	Content   string `json:"content"`
-	Category  string `json:"category"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	Content    string `json:"content"`
+	Category   string `json:"category"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
 }
 
 // NoteListResponse represents a list of notes

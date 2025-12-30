@@ -53,9 +53,9 @@ func (m *MockIDGenerator) GenerateMCPServerID() string        { return m.nextID(
 func (m *MockIDGenerator) GenerateVoteID() string             { return m.nextID("vote") }
 func (m *MockIDGenerator) GenerateNoteID() string             { return m.nextID("note") }
 func (m *MockIDGenerator) GenerateSessionStatsID() string     { return m.nextID("stats") }
-func (m *MockIDGenerator) GenerateOptimizationRunID() string   { return m.nextID("opt") }
-func (m *MockIDGenerator) GeneratePromptCandidateID() string   { return m.nextID("cand") }
-func (m *MockIDGenerator) GeneratePromptEvaluationID() string  { return m.nextID("eval") }
+func (m *MockIDGenerator) GenerateOptimizationRunID() string  { return m.nextID("opt") }
+func (m *MockIDGenerator) GeneratePromptCandidateID() string  { return m.nextID("cand") }
+func (m *MockIDGenerator) GeneratePromptEvaluationID() string { return m.nextID("eval") }
 
 // MockVoteRepository is a mock vote repository for testing
 type MockVoteRepository struct {

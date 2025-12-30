@@ -255,12 +255,12 @@ func (m *MemoryAwareModule) updateDemonstrations(demos []core.Example) {
 
 // MemoryRelevanceScore calculates a combined score for memory relevance
 type MemoryRelevanceScore struct {
-	Memory           *models.Memory
-	SimilarityScore  float32
-	ImportanceScore  float32
-	RecencyScore     float32
-	CategoryMatch    bool
-	CombinedScore    float32
+	Memory          *models.Memory
+	SimilarityScore float32
+	ImportanceScore float32
+	RecencyScore    float32
+	CategoryMatch   bool
+	CombinedScore   float32
 }
 
 // RankMemoriesByRelevance ranks memories using multiple signals

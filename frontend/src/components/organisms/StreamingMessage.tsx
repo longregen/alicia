@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
-import { useConversationStore, selectCurrentStreamingMessage } from '../../stores/conversationStore';
+import { useConversationStore, selectCurrentStreamingMessage, selectSentences } from '../../stores/conversationStore';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import type { MessageAddon } from '../../types/components';
 
@@ -20,20 +20,23 @@ export interface StreamingMessageProps {
 
 const StreamingMessage: React.FC<StreamingMessageProps> = ({ className = '' }) => {
   const streamingMessage = useConversationStore(selectCurrentStreamingMessage);
-  const sentences = useConversationStore((state) =>
-    streamingMessage ? state.getMessageSentences(streamingMessage.id) : []
-  );
+  const sentencesMap = useConversationStore(selectSentences);
+
+  // Memoize sentences derivation to avoid creating new arrays on every render
+  const streamingText = useMemo(() => {
+    if (!streamingMessage) return '';
+
+    return streamingMessage.sentenceIds
+      .map(id => sentencesMap[id])
+      .filter(s => s && s.isComplete)
+      .sort((a, b) => a.sequence - b.sequence)
+      .map(s => s.content)
+      .join(' ');
+  }, [streamingMessage, sentencesMap]);
 
   if (!streamingMessage) {
     return null;
   }
-
-  // Combine all complete sentences for streaming display
-  const streamingText = sentences
-    .filter(s => s.isComplete)
-    .sort((a, b) => a.sequence - b.sequence)
-    .map(s => s.content)
-    .join(' ');
 
   // Build streaming status addon
   const addons: MessageAddon[] = [

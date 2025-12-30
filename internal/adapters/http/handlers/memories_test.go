@@ -24,9 +24,9 @@ type mockMemoryService struct {
 	addTagErr    error
 	removeTagErr error
 
-	memory     *models.Memory
-	memories   []*models.Memory
-	searchRes  []*ports.MemorySearchResult
+	memory    *models.Memory
+	memories  []*models.Memory
+	searchRes []*ports.MemorySearchResult
 }
 
 func (m *mockMemoryService) Create(ctx context.Context, content string) (*models.Memory, error) {

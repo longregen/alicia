@@ -5,9 +5,9 @@ import {
   selectMessages,
   selectCurrentStreamingMessage,
   selectMessage,
-  selectMessageSentences,
-  selectMessageToolCalls,
-  selectMessageMemoryTraces,
+  selectMessageSentenceIds,
+  selectMessageToolCallIds,
+  selectMessageMemoryTraceIds,
   selectToolCall,
   selectSentence,
   selectCurrentConversationId,
@@ -86,7 +86,7 @@ describe('useConversationStore', () => {
   });
 
   describe('selectMessages', () => {
-    it('returns messages sorted by createdAt', () => {
+    it('returns raw messages object for component-level sorting', () => {
       const store = useConversationStore.getState();
       const msg1 = createMockMessage('msg-1', new Date('2024-01-01T10:00:00'));
       const msg2 = createMockMessage('msg-2', new Date('2024-01-01T09:00:00'));
@@ -100,15 +100,16 @@ describe('useConversationStore', () => {
 
       const result = selectMessages(useConversationStore.getState());
 
-      expect(result).toHaveLength(3);
-      expect(result[0].id).toBe('msg-2');
-      expect(result[1].id).toBe('msg-1');
-      expect(result[2].id).toBe('msg-3');
+      // Returns raw object, not sorted array (sorting done in components via useMemo)
+      expect(Object.keys(result)).toHaveLength(3);
+      expect(result['msg-1']).toEqual(msg1);
+      expect(result['msg-2']).toEqual(msg2);
+      expect(result['msg-3']).toEqual(msg3);
     });
 
-    it('returns empty array when no messages', () => {
+    it('returns empty object when no messages', () => {
       const result = selectMessages(useConversationStore.getState());
-      expect(result).toEqual([]);
+      expect(result).toEqual({});
     });
   });
 
@@ -133,8 +134,8 @@ describe('useConversationStore', () => {
     });
   });
 
-  describe('selectMessageSentences', () => {
-    it('returns sentences for a message sorted by sequence', () => {
+  describe('selectMessageSentenceIds', () => {
+    it('returns sentence IDs for a message (in insertion order)', () => {
       const store = useConversationStore.getState();
       const message = createMockMessage('msg-1');
       const sentence1 = createMockSentence('sent-1', 'msg-1', 2);
@@ -148,25 +149,26 @@ describe('useConversationStore', () => {
         store.addSentence(sentence3);
       });
 
-      const selector = selectMessageSentences('msg-1' as any);
+      const selector = selectMessageSentenceIds('msg-1' as any);
       const result = selector(useConversationStore.getState());
 
+      // Returns IDs in insertion order - sorting is done by component using useMemo
       expect(result).toHaveLength(3);
-      expect(result[0].sequence).toBe(1);
-      expect(result[1].sequence).toBe(2);
-      expect(result[2].sequence).toBe(3);
+      expect(result).toContain('sent-1');
+      expect(result).toContain('sent-2');
+      expect(result).toContain('sent-3');
     });
 
     it('returns empty array for non-existent message', () => {
-      const selector = selectMessageSentences('non-existent' as any);
+      const selector = selectMessageSentenceIds('non-existent' as any);
       const result = selector(useConversationStore.getState());
 
       expect(result).toEqual([]);
     });
   });
 
-  describe('selectMessageToolCalls', () => {
-    it('returns tool calls for a message', () => {
+  describe('selectMessageToolCallIds', () => {
+    it('returns tool call IDs for a message', () => {
       const store = useConversationStore.getState();
       const message = createMockMessage('msg-1');
       const toolCall = createMockToolCall('tool-1', 'msg-1');
@@ -176,11 +178,11 @@ describe('useConversationStore', () => {
         store.addToolCall(toolCall);
       });
 
-      const selector = selectMessageToolCalls('msg-1' as any);
+      const selector = selectMessageToolCallIds('msg-1' as any);
       const result = selector(useConversationStore.getState());
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(toolCall);
+      expect(result[0]).toBe('tool-1');
     });
 
     it('returns empty array for message with no tool calls', () => {
@@ -191,15 +193,15 @@ describe('useConversationStore', () => {
         store.addMessage(message);
       });
 
-      const selector = selectMessageToolCalls('msg-1' as any);
+      const selector = selectMessageToolCallIds('msg-1' as any);
       const result = selector(useConversationStore.getState());
 
       expect(result).toEqual([]);
     });
   });
 
-  describe('selectMessageMemoryTraces', () => {
-    it('returns memory traces sorted by relevance (descending)', () => {
+  describe('selectMessageMemoryTraceIds', () => {
+    it('returns memory trace IDs for a message (in insertion order)', () => {
       const store = useConversationStore.getState();
       const message = createMockMessage('msg-1');
       const trace1 = createMockMemoryTrace('trace-1', 'msg-1', 0.5);
@@ -213,13 +215,14 @@ describe('useConversationStore', () => {
         store.addMemoryTrace(trace3);
       });
 
-      const selector = selectMessageMemoryTraces('msg-1' as any);
+      const selector = selectMessageMemoryTraceIds('msg-1' as any);
       const result = selector(useConversationStore.getState());
 
+      // Returns IDs in insertion order - sorting is done by component using useMemo
       expect(result).toHaveLength(3);
-      expect(result[0].relevance).toBe(0.9);
-      expect(result[1].relevance).toBe(0.7);
-      expect(result[2].relevance).toBe(0.5);
+      expect(result).toContain('trace-1');
+      expect(result).toContain('trace-2');
+      expect(result).toContain('trace-3');
     });
   });
 

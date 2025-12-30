@@ -478,16 +478,16 @@ func (s *OptimizationService) OptimizeSignature(
 		gepaConfig := &optimizers.GEPAConfig{
 			// Map MaxIterations to GEPA generations
 			// GEPA uses population-based evolution, so fewer generations are needed
-			MaxGenerations:    s.config.MaxIterations / 10, // ~10 iterations per generation
-			PopulationSize:    20,
-			MutationRate:      0.3,
-			CrossoverRate:     0.7,
-			ElitismRate:       0.1,
-			ReflectionFreq:    2,
-			ReflectionDepth:   3,
-			SelfCritiqueTemp:  0.7,
-			TournamentSize:    3,
-			SelectionStrategy: "adaptive_pareto", // Multi-objective Pareto selection
+			MaxGenerations:       s.config.MaxIterations / 10, // ~10 iterations per generation
+			PopulationSize:       20,
+			MutationRate:         0.3,
+			CrossoverRate:        0.7,
+			ElitismRate:          0.1,
+			ReflectionFreq:       2,
+			ReflectionDepth:      3,
+			SelfCritiqueTemp:     0.7,
+			TournamentSize:       3,
+			SelectionStrategy:    "adaptive_pareto", // Multi-objective Pareto selection
 			ConvergenceThreshold: 0.01,
 			StagnationLimit:      3,
 			EvaluationBatchSize:  s.config.MinibatchSize,
@@ -691,41 +691,6 @@ func calculateDimensionScores(scoreResult prompt.ScoreWithFeedback, expected, pr
 		Diversity:      diversity,
 		Innovation:     innovation,
 	}
-}
-
-// selectMinibatchByCoverage selects examples that need more coverage based on Pareto archive
-func selectMinibatchByCoverage(examples []prompt.Example, size int, archive *prompt.ParetoArchive) []prompt.Example {
-	if size >= len(examples) {
-		return examples
-	}
-
-	// Get the solution with highest coverage to identify well-solved examples
-	bestSolution := archive.SelectByCoverage()
-	if bestSolution == nil {
-		return selectMinibatch(examples, size)
-	}
-
-	// For now, use simple round-robin selection
-	// In production, this would prioritize examples with lower coverage
-	selected := make([]prompt.Example, size)
-	for i := 0; i < size; i++ {
-		selected[i] = examples[i%len(examples)]
-	}
-	return selected
-}
-
-// selectMinibatch randomly selects examples for a minibatch
-func selectMinibatch(examples []prompt.Example, size int) []prompt.Example {
-	if size >= len(examples) {
-		return examples
-	}
-
-	// Simple selection (in production, use GEPA's coverage-based selection)
-	selected := make([]prompt.Example, size)
-	for i := 0; i < size; i++ {
-		selected[i] = examples[i%len(examples)]
-	}
-	return selected
 }
 
 // OptimizeSignatureWithMemory runs GEPA optimization with memory-augmented few-shot learning

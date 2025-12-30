@@ -216,45 +216,6 @@ func (r *VoteRepository) GetAggregates(ctx context.Context, targetType string, t
 	return &aggregates, nil
 }
 
-// scanVote scans a single vote row
-func (r *VoteRepository) scanVote(row pgx.Row) (*models.Vote, error) {
-	var v models.Vote
-	var voteStr string
-	var messageID, quickFeedback, note sql.NullString
-
-	err := row.Scan(
-		&v.ID,
-		&v.TargetType,
-		&v.TargetID,
-		&messageID,
-		&voteStr,
-		&quickFeedback,
-		&note,
-		&v.CreatedAt,
-		&v.UpdatedAt,
-	)
-
-	if err != nil {
-		if checkNoRows(err) {
-			return nil, pgx.ErrNoRows
-		}
-		return nil, err
-	}
-
-	// Map database vote string to Vote.Value
-	if voteStr == "up" {
-		v.Value = models.VoteValueUp
-	} else if voteStr == "down" {
-		v.Value = models.VoteValueDown
-	}
-
-	v.MessageID = getString(messageID)
-	v.QuickFeedback = getString(quickFeedback)
-	v.Note = getString(note)
-
-	return &v, nil
-}
-
 func (r *VoteRepository) scanVotes(rows pgx.Rows) ([]*models.Vote, error) {
 	votes := make([]*models.Vote, 0)
 

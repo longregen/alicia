@@ -2,8 +2,7 @@ package org.localforge.alicia.feature.conversations.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -86,7 +85,7 @@ fun ConversationItem(
             // Delete button
             IconButton(onClick = onDeleteClick) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    imageVector = AppIcons.Delete,
                     contentDescription = "Delete",
                     tint = MaterialTheme.colorScheme.error
                 )

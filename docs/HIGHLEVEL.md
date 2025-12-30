@@ -127,3 +127,8 @@ Alicia runs entirely on standard consumer devices - no cloud services required. 
 | Protocol | MessagePack over LiveKit data channels |
 | AI/ML | Whisper (ASR), Qwen (LLM), Kokoro (TTS) |
 | Build | Nix Flakes, sqlc |
+
+## See Also
+
+- [Architecture Overview](ARCHITECTURE.md) - Technical details
+- [User Stories](USER_STORIES.md) - Feature requirements

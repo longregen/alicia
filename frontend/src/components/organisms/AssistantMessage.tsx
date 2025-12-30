@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
 import MemoryTraceAddon from '../atoms/MemoryTraceAddon';
 import FeedbackControls from '../atoms/FeedbackControls';
-import { useConversationStore } from '../../stores/conversationStore';
+import { useConversationStore, selectSentences } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -28,9 +28,33 @@ export interface AssistantMessageProps {
 
 const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
-  const toolCalls = useConversationStore((state) => state.getMessageToolCalls(messageId));
-  const memoryTraces = useConversationStore((state) => state.getMessageMemoryTraces(messageId));
-  const sentences = useConversationStore((state) => state.getMessageSentences(messageId));
+  const toolCallsMap = useConversationStore((state) => state.toolCalls);
+  const memoryTracesMap = useConversationStore((state) => state.memoryTraces);
+  const sentencesMap = useConversationStore(selectSentences);
+
+  // Memoize derived data to avoid creating new arrays on every render
+  const toolCalls = useMemo(() => {
+    if (!message) return [];
+    return message.toolCallIds
+      .map(id => toolCallsMap[id])
+      .filter(Boolean);
+  }, [message, toolCallsMap]);
+
+  const memoryTraces = useMemo(() => {
+    if (!message) return [];
+    return message.memoryTraceIds
+      .map(id => memoryTracesMap[id])
+      .filter(Boolean)
+      .sort((a, b) => b.relevance - a.relevance);
+  }, [message, memoryTracesMap]);
+
+  const sentences = useMemo(() => {
+    if (!message) return [];
+    return message.sentenceIds
+      .map(id => sentencesMap[id])
+      .filter(Boolean)
+      .sort((a, b) => a.sequence - b.sequence);
+  }, [message, sentencesMap]);
 
   const audioManager = useAudioManager();
   const currentlyPlayingId = useAudioStore((state) => state.playback.currentlyPlayingId);
@@ -48,8 +72,11 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
   // Track audio state for each audio ref
   const [audioStates, setAudioStates] = useState<Record<string, AudioState>>({});
 
-  // Find sentences with audio - computed before hooks to maintain consistent hook order
-  const sentencesWithAudio = sentences.filter(s => s.audioRefId);
+  // Find sentences with audio - memoized to avoid new array on every render
+  const sentencesWithAudio = useMemo(
+    () => sentences.filter(s => s.audioRefId),
+    [sentences]
+  );
 
   // Update audio states based on playback - must be called unconditionally
   useEffect(() => {

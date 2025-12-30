@@ -113,7 +113,8 @@ func (r *MessageRouter) OnDataReceived(ctx context.Context, msg *ports.DataChann
 	envelope, err := r.codec.Decode(msg.Data)
 	if err != nil {
 		log.Printf("Failed to decode message: %v", err)
-		return r.sendError(ctx, protocol.ErrCodeMalformedData, "Failed to decode message", true)
+		_ = r.sendError(ctx, protocol.ErrCodeMalformedData, "Failed to decode message", true)
+		return fmt.Errorf("failed to decode message: %w", err)
 	}
 
 	// Update client stanza ID for tracking reconnection

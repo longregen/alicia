@@ -13,6 +13,15 @@ schema = 3
   [mod."cel.dev/expr"]
     version = "v0.25.1"
     hash = "sha256-TEdMxFUPK7IZuCXMufwCkbN+ZZIXSQclljIybFZcByo="
+  [mod."github.com/XiaoConstantine/dspy-go"]
+    version = "v0.74.0"
+    hash = "sha256-CR0pNyp9lZyePXND3AwvTzfSK9z8aL3ITiMsXRBUYEA="
+  [mod."github.com/XiaoConstantine/mcp-go"]
+    version = "v0.3.1"
+    hash = "sha256-xSTKPUDpGK/zX8233YQ/ibFgi96RIqcitdh4g1eLIjk="
+  [mod."github.com/anthropics/anthropic-sdk-go"]
+    version = "v1.19.0"
+    hash = "sha256-ubYeau5XL0tx4c/79L58rzJGOdOWs9z6WQOtN6mpgxw="
   [mod."github.com/antlr4-go/antlr/v4"]
     version = "v4.13.1"
     hash = "sha256-beAuxHNRUuhzcSJUh/8ztVf1zCUiaT72fg2Jvx0AuNQ="
@@ -127,6 +136,9 @@ schema = 3
   [mod."github.com/nats-io/nuid"]
     version = "v1.0.1"
     hash = "sha256-7wddxVz3hnFg/Pf+61+MtQJJL/l8EaC8brHoNsmD64c="
+  [mod."github.com/pashagolub/pgxmock/v4"]
+    version = "v4.9.0"
+    hash = "sha256-VRJPDwi9Lec+R1bvni/gGlUxQc3N1mzXbiNGKAvYK40="
   [mod."github.com/pgvector/pgvector-go"]
     version = "v0.3.0"
     hash = "sha256-hXTFqDURkBvcxfzA4L4waIvQugmq5+pJ+V4ad7MRyDc="
@@ -196,6 +208,9 @@ schema = 3
   [mod."github.com/redis/go-redis/v9"]
     version = "v9.17.2"
     hash = "sha256-c33dDUnqlL5JoXMOiaqo8Ry5a5nmHlv3jHteVSpOLtg="
+  [mod."github.com/sourcegraph/conc"]
+    version = "v0.3.0"
+    hash = "sha256-mIdMs9MLAOBKf3/0quf1iI3v8uNWydy7ae5MFa+F2Ko="
   [mod."github.com/spf13/cobra"]
     version = "v1.10.2"
     hash = "sha256-nbRCTFiDCC2jKK7AHi79n7urYCMP5yDZnWtNVJrDi+k="
@@ -205,6 +220,18 @@ schema = 3
   [mod."github.com/stoewer/go-strcase"]
     version = "v1.3.1"
     hash = "sha256-yptboRvbZtX+OEdlTgJnrCT+bvaMgCJp5B9ifEaSfw0="
+  [mod."github.com/tidwall/gjson"]
+    version = "v1.18.0"
+    hash = "sha256-CO6hqDu8Y58Po6A01e5iTpwiUBQ5khUZsw7czaJHw0I="
+  [mod."github.com/tidwall/match"]
+    version = "v1.2.0"
+    hash = "sha256-O2wTU0SmNIEEOxfncl2BW2czgWeIW5vqR6+A7dtNtXI="
+  [mod."github.com/tidwall/pretty"]
+    version = "v1.2.1"
+    hash = "sha256-S0uTDDGD8qr415Ut7QinyXljCp0TkL4zOIrlJ+9OMl8="
+  [mod."github.com/tidwall/sjson"]
+    version = "v1.2.5"
+    hash = "sha256-OYGNolkmL7E1Qs2qrQ3IVpQp5gkcHNU/AB/z2O+Myps="
   [mod."github.com/twitchtv/twirp"]
     version = "v8.1.3+incompatible"
     hash = "sha256-j1h9YE3wl9h36DfPf92To1H/PwNk4CgerOARNO3HK1w="

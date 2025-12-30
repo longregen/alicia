@@ -6,9 +6,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Stop
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -46,7 +44,7 @@ fun AssistantButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+            imageVector = if (isListening) AppIcons.Stop else AppIcons.Mic,
             contentDescription = if (isListening) "Stop listening" else "Start listening",
             tint = Color.White,
             modifier = Modifier.size(32.dp)

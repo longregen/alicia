@@ -952,3 +952,9 @@ const votes = useFeedbackStore(state => state.votes);
 - `/home/usr/projects/alicia/docs/PHASE_6_INTEGRATION.md` - Phase 6 integration details
 - `/home/usr/projects/alicia/docs/COMPONENTS.md` - Backend component architecture
 - Storybook documentation at `http://localhost:6006`
+
+## See Also
+
+- [Protocol Specification](protocol/index.md) - Client-server protocol
+- [Android App](ANDROID.md) - Native mobile implementation
+- [Architecture Overview](ARCHITECTURE.md) - System context

@@ -2,13 +2,13 @@ package prompt
 
 // DimensionWeights configures the relative importance of each optimization dimension
 type DimensionWeights struct {
-	SuccessRate    float64 `json:"successRate" yaml:"success_rate"`       // Default: 0.25
-	Quality        float64 `json:"quality" yaml:"quality"`                // Default: 0.20
-	Efficiency     float64 `json:"efficiency" yaml:"efficiency"`          // Default: 0.15
-	Robustness     float64 `json:"robustness" yaml:"robustness"`          // Default: 0.15
-	Generalization float64 `json:"generalization" yaml:"generalization"`  // Default: 0.10
-	Diversity      float64 `json:"diversity" yaml:"diversity"`            // Default: 0.10
-	Innovation     float64 `json:"innovation" yaml:"innovation"`          // Default: 0.05
+	SuccessRate    float64 `json:"successRate" yaml:"success_rate"`      // Default: 0.25
+	Quality        float64 `json:"quality" yaml:"quality"`               // Default: 0.20
+	Efficiency     float64 `json:"efficiency" yaml:"efficiency"`         // Default: 0.15
+	Robustness     float64 `json:"robustness" yaml:"robustness"`         // Default: 0.15
+	Generalization float64 `json:"generalization" yaml:"generalization"` // Default: 0.10
+	Diversity      float64 `json:"diversity" yaml:"diversity"`           // Default: 0.10
+	Innovation     float64 `json:"innovation" yaml:"innovation"`         // Default: 0.05
 }
 
 // DefaultWeights returns balanced dimension weights

@@ -26,7 +26,7 @@ describe('useNotes', () => {
     vi.clearAllMocks();
   });
 
-  it('should initialize with empty notes', () => {
+  it('should initialize with empty notes', async () => {
     vi.mocked(api.getMessageNotes).mockResolvedValue({ notes: [], total: 0 });
 
     const { result } = renderHook(() => useNotes('message', 'msg-1'));
@@ -34,6 +34,11 @@ describe('useNotes', () => {
     expect(result.current.notes).toEqual([]);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBeNull();
+
+    // Wait for async effects to complete
+    await waitFor(() => {
+      expect(result.current.isFetching).toBe(false);
+    });
   });
 
   it('should fetch notes on mount for message target', async () => {
@@ -296,6 +301,7 @@ describe('useNotes', () => {
   });
 
   it('should handle API error during note creation', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Server error');
     vi.mocked(api.getMessageNotes).mockResolvedValue({ notes: [], total: 0 });
     vi.mocked(api.createMessageNote).mockRejectedValue(error);
@@ -312,9 +318,11 @@ describe('useNotes', () => {
 
     expect(result.current.error).toBe('Server error');
     expect(result.current.isLoading).toBe(false);
+    consoleErrorSpy.mockRestore();
   });
 
   it('should handle API error during note update', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Update failed');
     vi.mocked(api.getMessageNotes).mockResolvedValue({ notes: [], total: 0 });
     vi.mocked(api.updateNote).mockRejectedValue(error);
@@ -330,9 +338,11 @@ describe('useNotes', () => {
     });
 
     expect(result.current.error).toBe('Update failed');
+    consoleErrorSpy.mockRestore();
   });
 
   it('should handle API error during note deletion', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Delete failed');
     vi.mocked(api.getMessageNotes).mockResolvedValue({ notes: [], total: 0 });
     vi.mocked(api.deleteNote).mockRejectedValue(error);
@@ -348,6 +358,7 @@ describe('useNotes', () => {
     });
 
     expect(result.current.error).toBe('Delete failed');
+    consoleErrorSpy.mockRestore();
   });
 
   it('should silently handle fetch errors', async () => {

@@ -91,10 +91,7 @@ export class SileroVADManager {
           baseAssetPath: '/models/',
           onnxWASMBasePath: '/onnx/'
         };
-        console.log('VAD bundle configured');
       }
-
-      console.log('Silero VAD scripts loaded successfully');
     } catch (error) {
       console.error('Failed to load Silero VAD scripts:', error);
       throw error;
@@ -121,7 +118,6 @@ export class SileroVADManager {
       }
 
       // Initialize VAD with configuration
-      console.log('Creating MicVAD instance...');
 
       // The VAD config should be set globally
       const vadConfig = (window as Window & { VAD_CONFIG?: { baseAssetPath: string; onnxWASMBasePath: string } }).VAD_CONFIG || {
@@ -149,21 +145,17 @@ export class SileroVADManager {
         },
 
         onSpeechStart: () => {
-          console.log('Speech started');
           this.callbacks.onSpeechStart?.();
         },
 
         onSpeechEnd: (audio: Float32Array) => {
-          console.log('Speech ended');
           this.callbacks.onSpeechEnd?.(audio);
         },
 
         onVADMisfire: () => {
-          console.log('VAD misfire');
+          // Misfire detected - no action needed
         }
       });
-
-      console.log('MicVAD instance created:', this.vadInstance);
 
       // Don't start yet - the audio context will be initialized on first start()
       this.isInitialized = true;

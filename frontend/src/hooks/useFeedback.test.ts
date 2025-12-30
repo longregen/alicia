@@ -29,13 +29,20 @@ describe('useFeedback', () => {
     vi.clearAllMocks();
   });
 
-  it('should initialize with no vote and empty counts', () => {
+  it('should initialize with no vote and empty counts', async () => {
+    vi.mocked(api.getMessageVotes).mockResolvedValue({ target_id: 'msg-1', target_type: 'message', upvotes: 0, downvotes: 0, user_vote: null, special: {} });
+
     const { result } = renderHook(() => useFeedback('message', 'msg-1'));
 
     expect(result.current.currentVote).toBeNull();
     expect(result.current.counts).toEqual({ up: 0, down: 0, critical: 0 });
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toBeNull();
+
+    // Wait for async effects to complete
+    await waitFor(() => {
+      expect(result.current.loadingAggregates).toBe(false);
+    });
   });
 
   it('should fetch aggregates on mount for message target', async () => {
@@ -271,6 +278,7 @@ describe('useFeedback', () => {
   });
 
   it('should handle API error during vote', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Server error');
     vi.mocked(api.getMessageVotes).mockResolvedValue({ target_id: 'msg-1', target_type: 'message', upvotes: 0, downvotes: 0, user_vote: null, special: {} });
     vi.mocked(api.voteOnMessage).mockRejectedValue(error);
@@ -288,6 +296,7 @@ describe('useFeedback', () => {
     expect(result.current.error).toBe('Server error');
     expect(result.current.currentVote).toBeNull();
     expect(result.current.isLoading).toBe(false);
+    consoleErrorSpy.mockRestore();
   });
 
   it('should silently handle 404 when fetching aggregates', async () => {

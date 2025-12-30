@@ -607,3 +607,8 @@ func (m *CustomMetric) Score(
 - `/home/usr/projects/alicia/docs/PHASE_6_INTEGRATION.md` - Detailed Phase 6 integration guide
 - `/home/usr/projects/alicia/docs/DATABASE.md` - Database schema details
 - `/home/usr/projects/alicia/docs/ARCHITECTURE.md` - Overall system architecture
+
+## See Also
+
+- [GEPA Primer](GEPA_PRIMER.md) - Detailed GEPA algorithm explanation
+- [Database Schema](DATABASE.md) - Optimization tables

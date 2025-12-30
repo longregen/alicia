@@ -8,32 +8,6 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// Helper to create a protocol handler for testing
-func createTestProtocolHandler(conversationID string) (*ProtocolHandler, *mockConversationRepo, *mockMessageRepo) {
-	mockSender := newMockAgentSender()
-	conversationRepo := newMockConversationRepo()
-	messageRepo := newMockMessageRepo()
-	sentenceRepo := &mockSentenceRepo{}
-	reasoningStepRepo := &mockReasoningStepRepo{}
-	toolUseRepo := &mockToolUseRepo{}
-	memoryUsageRepo := &mockMemoryUsageRepo{}
-	commentaryRepo := &mockCommentaryRepo{}
-
-	protocolHandler := NewProtocolHandler(
-		mockSender,
-		conversationRepo,
-		messageRepo,
-		sentenceRepo,
-		reasoningStepRepo,
-		toolUseRepo,
-		memoryUsageRepo,
-		commentaryRepo,
-		conversationID,
-	)
-
-	return protocolHandler, conversationRepo, messageRepo
-}
-
 // TestNewMessageRouter tests message router creation
 func TestNewMessageRouter(t *testing.T) {
 	codec := NewCodec()

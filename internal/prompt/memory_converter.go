@@ -13,9 +13,9 @@ import (
 // MemoryConverter handles conversion of memories to DSPy demonstrations
 type MemoryConverter struct {
 	// Pattern matchers for different formats
-	qaPattern           *regexp.Regexp
-	inputOutputPattern  *regexp.Regexp
-	keyValuePattern     *regexp.Regexp
+	qaPattern          *regexp.Regexp
+	inputOutputPattern *regexp.Regexp
+	keyValuePattern    *regexp.Regexp
 }
 
 // NewMemoryConverter creates a new memory converter

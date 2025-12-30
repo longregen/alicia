@@ -204,6 +204,8 @@ describe('useMemories', () => {
   });
 
   it('should handle API error during create', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     vi.mocked(fetch)
       .mockResolvedValueOnce({
         ok: true,
@@ -241,9 +243,12 @@ describe('useMemories', () => {
 
     // The error state should also be set
     expect(result.current.error).toContain('Failed to create memory');
+
+    consoleErrorSpy.mockRestore();
   });
 
   it('should handle API error during fetch', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -257,6 +262,8 @@ describe('useMemories', () => {
 
     // Wait a bit to ensure error handling is complete
     await new Promise(resolve => setTimeout(resolve, 100));
+
+    consoleErrorSpy.mockRestore();
   });
 
   it('should filter memories by category', async () => {

@@ -196,7 +196,19 @@ Used only in `internal/adapters/livekit/audio_converter.go`.
 
 ## Documentation
 
-https://longregen.github.io/alicia
+Full documentation is available at https://longregen.github.io/alicia
+
+### Quick Links
+
+| Topic | Description |
+|-------|-------------|
+| [Architecture](docs/ARCHITECTURE.md) | System design and component overview |
+| [Components](docs/COMPONENTS.md) | Hexagonal architecture details |
+| [Protocol](docs/protocol/index.md) | MessagePack binary protocol specification |
+| [Database](docs/DATABASE.md) | Schema and data model |
+| [Deployment](docs/DEPLOYMENT.md) | NixOS deployment guide |
+| [Frontend](docs/FRONTEND_COMPONENTS.md) | React component architecture |
+| [GEPA](docs/GEPA_PRIMER.md) | Prompt optimization system |
 
 ## License
 

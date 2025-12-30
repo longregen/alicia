@@ -106,6 +106,11 @@ describe('useWebSocketSync', () => {
     global.WebSocket = MockWebSocket;
     vi.useFakeTimers();
 
+    // Suppress console output during tests
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
     // Mock location for URL construction
     Object.defineProperty(window, 'location', {
       value: {
@@ -550,8 +555,6 @@ describe('useWebSocketSync', () => {
     });
 
     it('logs warning when not connected', () => {
-      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       const { result } = renderHook(() => useWebSocketSync('conv-1'));
 
       // Don't open the connection
@@ -567,11 +570,9 @@ describe('useWebSocketSync', () => {
         result.current.send(envelope);
       });
 
-      expect(consoleWarn).toHaveBeenCalledWith(
+      expect(console.warn).toHaveBeenCalledWith(
         'WebSocket not connected, cannot send message'
       );
-
-      consoleWarn.mockRestore();
     });
   });
 
@@ -642,8 +643,6 @@ describe('useWebSocketSync', () => {
     });
 
     it('handles parse errors in onmessage gracefully', () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-
       renderHook(() => useWebSocketSync('conv-1'));
 
       act(() => {
@@ -655,19 +654,15 @@ describe('useWebSocketSync', () => {
         MockWebSocket.instances[0].simulateMessage(new ArrayBuffer(0));
       });
 
-      expect(consoleError).toHaveBeenCalledWith(
+      expect(console.error).toHaveBeenCalledWith(
         'Failed to parse WebSocket message:',
         expect.any(Error)
       );
-
-      consoleError.mockRestore();
     });
   });
 
   describe('Reconnection with Exponential Backoff', () => {
     it('attempts reconnect after unexpected close', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-
       renderHook(() => useWebSocketSync('conv-1'));
 
       act(() => {
@@ -689,8 +684,6 @@ describe('useWebSocketSync', () => {
     });
 
     it('uses exponential backoff with increasing delays', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-
       renderHook(() => useWebSocketSync('conv-1'));
 
       // First connection + close
@@ -723,8 +716,6 @@ describe('useWebSocketSync', () => {
     });
 
     it('resets backoff counter on successful connect', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-
       const { result } = renderHook(() => useWebSocketSync('conv-1'));
 
       // Connect and close multiple times to increase backoff
@@ -746,8 +737,6 @@ describe('useWebSocketSync', () => {
     });
 
     it('does not reconnect during intentional cleanup', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-
       const { unmount } = renderHook(() => useWebSocketSync('conv-1'));
 
       act(() => {
@@ -766,8 +755,6 @@ describe('useWebSocketSync', () => {
     });
 
     it('clears reconnect timeout on unmount', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-
       const { unmount } = renderHook(() => useWebSocketSync('conv-1'));
 
       act(() => {

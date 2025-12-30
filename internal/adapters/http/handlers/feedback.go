@@ -27,10 +27,10 @@ func NewFeedbackHandler(
 
 // SubmitFeedbackRequest represents a request to submit feedback for optimization
 type SubmitFeedbackRequest struct {
-	TargetType    string `json:"target_type"`     // "message", "tool_use", "memory", "reasoning"
+	TargetType    string `json:"target_type"` // "message", "tool_use", "memory", "reasoning"
 	TargetID      string `json:"target_id"`
-	Vote          string `json:"vote"`            // "up", "down", "critical"
-	QuickFeedback string `json:"quick_feedback"`  // Optional specific feedback
+	Vote          string `json:"vote"`           // "up", "down", "critical"
+	QuickFeedback string `json:"quick_feedback"` // Optional specific feedback
 }
 
 // DimensionWeightsResponse represents current dimension weights
@@ -88,13 +88,13 @@ func (h *FeedbackHandler) SubmitFeedback(w http.ResponseWriter, r *http.Request)
 	response := map[string]any{
 		"feedback_type": string(feedbackType),
 		"adjustment": map[string]float64{
-			"success_rate":    adjustment.SuccessRate,
-			"quality":         adjustment.Quality,
-			"efficiency":      adjustment.Efficiency,
-			"robustness":      adjustment.Robustness,
-			"generalization":  adjustment.Generalization,
-			"diversity":       adjustment.Diversity,
-			"innovation":      adjustment.Innovation,
+			"success_rate":   adjustment.SuccessRate,
+			"quality":        adjustment.Quality,
+			"efficiency":     adjustment.Efficiency,
+			"robustness":     adjustment.Robustness,
+			"generalization": adjustment.Generalization,
+			"diversity":      adjustment.Diversity,
+			"innovation":     adjustment.Innovation,
 		},
 		"new_weights": newWeights.ToMap(),
 	}

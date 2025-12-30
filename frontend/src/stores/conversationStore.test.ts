@@ -858,7 +858,7 @@ describe('conversationStore', () => {
   });
 
   describe('selectMessages utility selector', () => {
-    it('should return messages sorted by createdAt timestamp', () => {
+    it('should return raw messages object for component-level sorting', () => {
       const now = new Date();
       const message1: Message = {
         id: createMessageId('msg-1'),
@@ -884,28 +884,15 @@ describe('conversationStore', () => {
         memoryTraceIds: [],
       };
 
-      const message3: Message = {
-        id: createMessageId('msg-3'),
-        conversationId: createConversationId('conv-1'),
-        role: 'user',
-        content: 'Second',
-        status: MessageStatus.Complete,
-        createdAt: new Date(now.getTime() + 1000),
-        sentenceIds: [],
-        toolCallIds: [],
-        memoryTraceIds: [],
-      };
-
       useConversationStore.getState().addMessage(message1);
       useConversationStore.getState().addMessage(message2);
-      useConversationStore.getState().addMessage(message3);
 
       const messages = selectMessages(useConversationStore.getState());
 
-      expect(messages).toHaveLength(3);
-      expect(messages[0].content).toBe('First');
-      expect(messages[1].content).toBe('Second');
-      expect(messages[2].content).toBe('Third');
+      // Returns raw object, not sorted array (sorting done in components via useMemo)
+      expect(Object.keys(messages)).toHaveLength(2);
+      expect(messages[message1.id]).toEqual(message1);
+      expect(messages[message2.id]).toEqual(message2);
     });
   });
 

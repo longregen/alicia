@@ -5,19 +5,19 @@ type FeedbackType string
 
 const (
 	// Positive feedback
-	FeedbackGreatAnswer   FeedbackType = "great_answer"
-	FeedbackHelpful       FeedbackType = "helpful"
-	FeedbackPerfect       FeedbackType = "perfect"
+	FeedbackGreatAnswer FeedbackType = "great_answer"
+	FeedbackHelpful     FeedbackType = "helpful"
+	FeedbackPerfect     FeedbackType = "perfect"
 
 	// Negative feedback - general
-	FeedbackWrongAnswer   FeedbackType = "wrong_answer"
-	FeedbackNotHelpful    FeedbackType = "not_helpful"
+	FeedbackWrongAnswer    FeedbackType = "wrong_answer"
+	FeedbackNotHelpful     FeedbackType = "not_helpful"
 	FeedbackMissingContext FeedbackType = "missing_context"
-	FeedbackTooVerbose    FeedbackType = "too_verbose"
+	FeedbackTooVerbose     FeedbackType = "too_verbose"
 
 	// Performance feedback
-	FeedbackTooSlow       FeedbackType = "too_slow"
-	FeedbackInconsistent  FeedbackType = "inconsistent"
+	FeedbackTooSlow      FeedbackType = "too_slow"
+	FeedbackInconsistent FeedbackType = "inconsistent"
 
 	// Creativity feedback
 	FeedbackSameApproach  FeedbackType = "same_approach"
@@ -27,15 +27,15 @@ const (
 	FeedbackDoesntFitCase FeedbackType = "doesnt_fit_case"
 
 	// Tool-specific feedback
-	FeedbackWrongTool     FeedbackType = "wrong_tool"
-	FeedbackWrongParams   FeedbackType = "wrong_params"
-	FeedbackUnnecessary   FeedbackType = "unnecessary"
+	FeedbackWrongTool   FeedbackType = "wrong_tool"
+	FeedbackWrongParams FeedbackType = "wrong_params"
+	FeedbackUnnecessary FeedbackType = "unnecessary"
 
 	// Memory-specific feedback
-	FeedbackNotRelevant   FeedbackType = "not_relevant"
-	FeedbackCritical      FeedbackType = "critical"
-	FeedbackOutdated      FeedbackType = "outdated"
-	FeedbackTooGeneric    FeedbackType = "too_generic"
+	FeedbackNotRelevant FeedbackType = "not_relevant"
+	FeedbackCritical    FeedbackType = "critical"
+	FeedbackOutdated    FeedbackType = "outdated"
+	FeedbackTooGeneric  FeedbackType = "too_generic"
 
 	// Reasoning-specific feedback
 	FeedbackIncorrectAssumption FeedbackType = "incorrect_assumption"
@@ -186,13 +186,13 @@ func MapFeedbackToDimensions(feedback FeedbackType) DimensionAdjustment {
 // ApplyAdjustment applies a dimension adjustment to weights
 func ApplyAdjustment(weights DimensionWeights, adjustment DimensionAdjustment) DimensionWeights {
 	result := DimensionWeights{
-		SuccessRate:    clamp(weights.SuccessRate + adjustment.SuccessRate, 0.01, 0.5),
-		Quality:        clamp(weights.Quality + adjustment.Quality, 0.01, 0.5),
-		Efficiency:     clamp(weights.Efficiency + adjustment.Efficiency, 0.01, 0.5),
-		Robustness:     clamp(weights.Robustness + adjustment.Robustness, 0.01, 0.5),
-		Generalization: clamp(weights.Generalization + adjustment.Generalization, 0.01, 0.5),
-		Diversity:      clamp(weights.Diversity + adjustment.Diversity, 0.01, 0.5),
-		Innovation:     clamp(weights.Innovation + adjustment.Innovation, 0.01, 0.5),
+		SuccessRate:    clamp(weights.SuccessRate+adjustment.SuccessRate, 0.01, 0.5),
+		Quality:        clamp(weights.Quality+adjustment.Quality, 0.01, 0.5),
+		Efficiency:     clamp(weights.Efficiency+adjustment.Efficiency, 0.01, 0.5),
+		Robustness:     clamp(weights.Robustness+adjustment.Robustness, 0.01, 0.5),
+		Generalization: clamp(weights.Generalization+adjustment.Generalization, 0.01, 0.5),
+		Diversity:      clamp(weights.Diversity+adjustment.Diversity, 0.01, 0.5),
+		Innovation:     clamp(weights.Innovation+adjustment.Innovation, 0.01, 0.5),
 	}
 	result.Normalize()
 	return result
@@ -256,10 +256,10 @@ func QuickFeedbackToType(quickFeedback string) FeedbackType {
 		"incorrect":     FeedbackWrongAnswer,
 
 		// Reasoning feedback
-		"incorrect_assumption":  FeedbackIncorrectAssumption,
-		"missed_consideration":  FeedbackMissedConsideration,
-		"overcomplicated":       FeedbackOvercomplicated,
-		"wrong_direction":       FeedbackWrongDirection,
+		"incorrect_assumption": FeedbackIncorrectAssumption,
+		"missed_consideration": FeedbackMissedConsideration,
+		"overcomplicated":      FeedbackOvercomplicated,
+		"wrong_direction":      FeedbackWrongDirection,
 	}
 
 	if ft, ok := mapping[quickFeedback]; ok {

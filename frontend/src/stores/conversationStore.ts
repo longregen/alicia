@@ -188,10 +188,10 @@ export const useConversationStore = create<ConversationStore>()(
 );
 
 // Utility selectors for common patterns
-export const selectMessages = (state: ConversationStore) =>
-  Object.values(state.messages).sort((a, b) =>
-    a.createdAt.getTime() - b.createdAt.getTime()
-  );
+// Note: These return raw state references. Components should use useMemo or
+// Zustand's shallow comparison to avoid unnecessary re-renders.
+export const selectMessages = (state: ConversationStore) => state.messages;
+export const selectSentences = (state: ConversationStore) => state.sentences;
 
 export const selectCurrentStreamingMessage = (state: ConversationStore) =>
   state.currentStreamingMessageId

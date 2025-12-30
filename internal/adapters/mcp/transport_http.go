@@ -122,14 +122,14 @@ func validateURL(rawURL string) error {
 		"localhost.localdomain",
 		"local",
 		"internal",
-		"metadata",                    // Cloud metadata services
-		"metadata.google.internal",    // GCP metadata
-		"instance-data",               // AWS metadata alias
-		"169.254.169.254",             // AWS/GCP/Azure metadata IP
-		"metadata.azure.com",          // Azure metadata
-		"kubernetes",                  // Kubernetes services
-		"kubernetes.default",          // Kubernetes default service
-		"kubernetes.default.svc",      // Kubernetes default service
+		"metadata",                             // Cloud metadata services
+		"metadata.google.internal",             // GCP metadata
+		"instance-data",                        // AWS metadata alias
+		"169.254.169.254",                      // AWS/GCP/Azure metadata IP
+		"metadata.azure.com",                   // Azure metadata
+		"kubernetes",                           // Kubernetes services
+		"kubernetes.default",                   // Kubernetes default service
+		"kubernetes.default.svc",               // Kubernetes default service
 		"kubernetes.default.svc.cluster.local", // Kubernetes FQDN
 	}
 

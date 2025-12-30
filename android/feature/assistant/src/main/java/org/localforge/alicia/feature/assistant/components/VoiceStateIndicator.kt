@@ -5,9 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import org.localforge.alicia.core.common.ui.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -74,15 +72,15 @@ fun VoiceStateIndicator(
         ) {
             Icon(
                 imageVector = when (state) {
-                    VoiceState.IDLE -> Icons.Default.MicOff
-                    VoiceState.LISTENING_FOR_WAKE_WORD -> Icons.Default.Hearing
-                    VoiceState.ACTIVATED -> Icons.Default.Mic
-                    VoiceState.LISTENING -> Icons.Default.Mic
-                    VoiceState.PROCESSING -> Icons.Default.HourglassEmpty
-                    VoiceState.SPEAKING -> Icons.AutoMirrored.Filled.VolumeUp
-                    VoiceState.ERROR -> Icons.Default.Error
-                    VoiceState.CONNECTING -> Icons.Default.Sync
-                    VoiceState.DISCONNECTED -> Icons.Default.CloudOff
+                    VoiceState.IDLE -> AppIcons.MicOff
+                    VoiceState.LISTENING_FOR_WAKE_WORD -> AppIcons.Hearing
+                    VoiceState.ACTIVATED -> AppIcons.Mic
+                    VoiceState.LISTENING -> AppIcons.Mic
+                    VoiceState.PROCESSING -> AppIcons.HourglassEmpty
+                    VoiceState.SPEAKING -> AppIcons.VolumeUp
+                    VoiceState.ERROR -> AppIcons.Error
+                    VoiceState.CONNECTING -> AppIcons.Sync
+                    VoiceState.DISCONNECTED -> AppIcons.CloudOff
                 },
                 contentDescription = state.name,
                 tint = Color.White,

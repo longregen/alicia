@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import UserMessage from './UserMessage';
 import AssistantMessage from './AssistantMessage';
@@ -21,9 +21,15 @@ export interface MessageListProps {
 }
 
 const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
-  const messages = useConversationStore(selectMessages);
+  const messagesMap = useConversationStore(selectMessages);
   const currentStreamingMessageId = useConversationStore((state) => state.currentStreamingMessageId);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+
+  // Memoize sorted messages to avoid creating new arrays on every render
+  const messages = useMemo(
+    () => Object.values(messagesMap).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+    [messagesMap]
+  );
 
   // Auto-scroll to bottom when new messages arrive or streaming starts
   useEffect(() => {

@@ -51,4 +51,3 @@ func NewCommentary(id, conversationID, content string) *Commentary {
 		UpdatedAt:      now,
 	}
 }
-

@@ -1,4 +1,4 @@
-import { useConversationStore as useStore, selectMessages, selectCurrentStreamingMessage } from '../stores/conversationStore';
+import { useConversationStore as useStore, selectMessages, selectSentences, selectCurrentStreamingMessage } from '../stores/conversationStore';
 import type { MessageId, ToolCallId, SentenceId } from '../types/streaming';
 
 /**
@@ -12,20 +12,22 @@ import type { MessageId, ToolCallId, SentenceId } from '../types/streaming';
 export const useConversationStore = useStore;
 
 // Re-export utility selectors
-export { selectMessages, selectCurrentStreamingMessage };
+export { selectMessages, selectSentences, selectCurrentStreamingMessage };
 
 // Typed selector functions for common patterns
 export const selectMessage = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
   state.messages[messageId];
 
-export const selectMessageSentences = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
-  state.getMessageSentences(messageId);
+// IMPORTANT: These selectors return raw state references. Components using these
+// should compute derived data with useMemo to avoid infinite re-render loops.
+export const selectMessageSentenceIds = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
+  state.messages[messageId]?.sentenceIds ?? [];
 
-export const selectMessageToolCalls = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
-  state.getMessageToolCalls(messageId);
+export const selectMessageToolCallIds = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
+  state.messages[messageId]?.toolCallIds ?? [];
 
-export const selectMessageMemoryTraces = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
-  state.getMessageMemoryTraces(messageId);
+export const selectMessageMemoryTraceIds = (messageId: MessageId) => (state: ReturnType<typeof useStore.getState>) =>
+  state.messages[messageId]?.memoryTraceIds ?? [];
 
 export const selectToolCall = (toolCallId: ToolCallId) => (state: ReturnType<typeof useStore.getState>) =>
   state.toolCalls[toolCallId];

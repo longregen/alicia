@@ -394,7 +394,7 @@ describe('MemoryList', () => {
         />
       );
 
-      expect(screen.getByText(/just now|ago/)).toBeInTheDocument();
+      expect(screen.getAllByText(/just now|ago/).length).toBeGreaterThan(0);
     });
   });
 

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import ComplexAddons from './ComplexAddons';
 import type { MessageAddon } from '../../types/components';
@@ -331,13 +331,17 @@ describe('ComplexAddons', () => {
       expect(button).toBeInTheDocument();
 
       // Click to expand
-      fireEvent.click(button!);
+      await act(async () => {
+        fireEvent.click(button!);
+      });
 
       // Hover should not show tooltip
       fireEvent.mouseEnter(button!);
 
       // Wait a bit to ensure tooltip doesn't appear
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
 
       // Tooltip description should not be in a tooltip (it's in the expanded details)
       const tooltipDescriptions = screen.queryAllByText('Searches for relevant information');

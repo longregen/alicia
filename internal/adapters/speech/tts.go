@@ -52,7 +52,6 @@ type ttsRequest struct {
 	Speed          float32 `json:"speed,omitempty"`
 }
 
-
 func (t *TTSAdapter) Synthesize(ctx context.Context, text string, options *ports.TTSOptions) (*ports.TTSResult, error) {
 	var result *ports.TTSResult
 	err := t.breaker.Execute(func() error {
@@ -136,7 +135,6 @@ func (t *TTSAdapter) SynthesizeStream(ctx context.Context, text string, options 
 
 	return resultChan, nil
 }
-
 
 func (t *TTSAdapter) SetModel(model string) {
 	t.model = model

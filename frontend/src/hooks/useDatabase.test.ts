@@ -161,12 +161,17 @@ describe('useDatabase', () => {
     }, { timeout: 200 });
   });
 
-  it('should return consistent hook result structure', () => {
+  it('should return consistent hook result structure', async () => {
     const { result } = renderHook(() => useDatabase());
 
     expect(result.current).toHaveProperty('isReady');
     expect(result.current).toHaveProperty('error');
     expect(typeof result.current.isReady).toBe('boolean');
     expect(result.current.error === null || result.current.error instanceof Error).toBe(true);
+
+    // Wait for async effects to complete
+    await waitFor(() => {
+      expect(result.current.isReady).toBe(true);
+    });
   });
 });

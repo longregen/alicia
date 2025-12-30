@@ -1018,17 +1018,17 @@ func (d *DefaultMessageDispatcher) handleToolUseResult(ctx context.Context, enve
 
 	// Validate conversation ID
 	if result.ConversationID != d.conversationID {
-		return d.sendError(ctx, protocol.ErrCodeConversationNotFound,
-			fmt.Sprintf("Conversation ID mismatch: expected %s, got %s", d.conversationID, result.ConversationID),
-			true)
+		msg := fmt.Sprintf("Conversation ID mismatch: expected %s, got %s", d.conversationID, result.ConversationID)
+		_ = d.sendError(ctx, protocol.ErrCodeConversationNotFound, msg, true)
+		return fmt.Errorf("%s", msg)
 	}
 
 	// Fetch the ToolUse from the repository
 	toolUse, err := d.toolUseRepo.GetByID(ctx, result.RequestID)
-	if err != nil {
-		return d.sendError(ctx, protocol.ErrCodeInternalError,
-			fmt.Sprintf("Failed to find tool use with ID %s: %v", result.RequestID, err),
-			true)
+	if err != nil || toolUse == nil {
+		msg := fmt.Sprintf("Failed to find tool use with ID %s: %v", result.RequestID, err)
+		_ = d.sendError(ctx, protocol.ErrCodeInternalError, msg, true)
+		return fmt.Errorf("%s", msg)
 	}
 
 	// Update the ToolUse with the result

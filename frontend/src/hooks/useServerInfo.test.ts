@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useServerInfo, useConnectionStatus, useSessionStats } from './useServerInfo';
 import { useServerInfoStore } from '../stores/serverInfoStore';
@@ -211,13 +211,17 @@ describe('useServerInfo', () => {
     });
 
     it('should update when store state changes', () => {
-      useServerInfoStore.setState({ latency: 50 });
+      act(() => {
+        useServerInfoStore.setState({ latency: 50 });
+      });
 
       const { result, rerender } = renderHook(() => useServerInfo());
 
       expect(result.current.latency).toBe(50);
 
-      useServerInfoStore.setState({ latency: 100 });
+      act(() => {
+        useServerInfoStore.setState({ latency: 100 });
+      });
       rerender();
 
       expect(result.current.latency).toBe(100);
@@ -328,26 +332,30 @@ describe('useServerInfo', () => {
     });
 
     it('should update when stats change', () => {
-      useServerInfoStore.setState({
-        sessionStats: {
-          messageCount: 5,
-          toolCallCount: 2,
-          memoriesUsed: 0,
-          sessionDuration: 60,
-        },
+      act(() => {
+        useServerInfoStore.setState({
+          sessionStats: {
+            messageCount: 5,
+            toolCallCount: 2,
+            memoriesUsed: 0,
+            sessionDuration: 60,
+          },
+        });
       });
 
       const { result, rerender } = renderHook(() => useSessionStats());
 
       expect(result.current.messageCount).toBe(5);
 
-      useServerInfoStore.setState({
-        sessionStats: {
-          messageCount: 10,
-          toolCallCount: 5,
-          memoriesUsed: 0,
-          sessionDuration: 120,
-        },
+      act(() => {
+        useServerInfoStore.setState({
+          sessionStats: {
+            messageCount: 10,
+            toolCallCount: 5,
+            memoriesUsed: 0,
+            sessionDuration: 120,
+          },
+        });
       });
 
       rerender();

@@ -84,6 +84,11 @@ describe('SileroVADManager', () => {
     vi.clearAllMocks();
     mockScripts.clear();
 
+    // Suppress console output during tests
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
     callbacks = {
       onStatusChange: vi.fn(),
       onSpeechProbability: vi.fn(),
@@ -180,6 +185,8 @@ describe('SileroVADManager', () => {
 
     it('should handle script loading errors', async () => {
       vi.restoreAllMocks();
+      // Re-suppress console after restoreAllMocks
+      vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const origCreate = document.createElement.bind(document);
       vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
@@ -532,6 +539,8 @@ describe('SileroVADManager', () => {
     it('should handle network errors during script loading', async () => {
       clearWindowMocks();
       vi.restoreAllMocks();
+      // Re-suppress console after restoreAllMocks
+      vi.spyOn(console, 'error').mockImplementation(() => {});
 
       // Fresh mock that triggers onerror
       const origCreate = document.createElement.bind(document);

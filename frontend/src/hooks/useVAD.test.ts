@@ -84,6 +84,11 @@ describe('useVAD', () => {
     // Reset all mock implementations
     vi.clearAllMocks();
 
+    // Suppress console output during tests
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
     // Reset mock implementations to default behavior
     mockVADManager.initialize.mockResolvedValue(undefined);
     mockVADManager.start.mockResolvedValue(undefined);
@@ -482,14 +487,16 @@ describe('useVAD', () => {
         await result.current.startVAD();
       });
 
-      // These should not throw even without callbacks
-      expect(() => {
-        getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
-        getCapturedCallbacks()?.onSpeechProbability?.(0.5, false);
-        getCapturedCallbacks()?.onSpeechStart?.();
-        getCapturedCallbacks()?.onSpeechEnd?.(new Float32Array([0.1]));
-        getCapturedCallbacks()?.onError?.(new Error('test'));
-      }).not.toThrow();
+      // These should not throw even without callbacks - wrap in act() since they trigger state updates
+      await act(async () => {
+        expect(() => {
+          getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
+          getCapturedCallbacks()?.onSpeechProbability?.(0.5, false);
+          getCapturedCallbacks()?.onSpeechStart?.();
+          getCapturedCallbacks()?.onSpeechEnd?.(new Float32Array([0.1]));
+          getCapturedCallbacks()?.onError?.(new Error('test'));
+        }).not.toThrow();
+      });
     });
   });
 

@@ -2,23 +2,31 @@
 
 [Introduction](HIGHLEVEL.md)
 
+# Getting Started
+
+- [Quick Start](QUICKSTART.md)
+- [CLI Usage](CLI.md)
+
 # System Design
 
 - [Architecture Overview](ARCHITECTURE.md)
 - [Components](COMPONENTS.md)
 - [Database Schema](DATABASE.md)
 - [ID Scheme](ID_SCHEME.md)
-- [User Stories](USER_STORIES.md)
 
-# Development Roadmap
+# Platform Guides
 
-- [Frontend UX Enhancement Plan](frontend-ux-plan.md)
-- [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md)
+- [Go Server](SERVER.md)
+- [Go Agent](AGENT.md)
+- [React Frontend](FRONTEND_COMPONENTS.md)
+- [Android App](ANDROID.md)
 
-# Operations
+# Core Concepts
 
-- [Deployment](DEPLOYMENT.md)
-- [Offline Sync](OFFLINE_SYNC.md)
+- [Conversation Workflow](CONVERSATION_WORKFLOW.md)
+- [LiveKit Integration](LIVEKIT.md)
+- [Prompt Optimization (GEPA)](GEPA_PRIMER.md)
+- [Optimization System](OPTIMIZATION_SYSTEM.md)
 
 # Protocol Specification
 
@@ -47,3 +55,12 @@
 - [Database Alignment](protocol/06-database-alignment.md)
 - [Implementation Guidelines](protocol/07-implementation-guidelines.md)
 - [Example Sessions](protocol/08-example-sessions.md)
+
+# Operations
+
+- [Deployment](DEPLOYMENT.md)
+- [Offline Sync](OFFLINE_SYNC.md)
+
+# Reference
+
+- [User Stories](USER_STORIES.md)

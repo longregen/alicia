@@ -85,10 +85,15 @@ describe('ServerInfoPanel', () => {
   });
 
   describe('Loading State', () => {
-    it('shows loading spinner initially', () => {
+    it('shows loading spinner initially', async () => {
       render(<ServerInfoPanel />);
 
       expect(screen.getByText('Loading server info...')).toBeInTheDocument();
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(screen.getByText('Connected')).toBeInTheDocument();
+      });
     });
   });
 
@@ -244,20 +249,30 @@ describe('ServerInfoPanel', () => {
   });
 
   describe('Compact Mode', () => {
-    it('applies compact spacing', () => {
+    it('applies compact spacing', async () => {
       const { container } = render(<ServerInfoPanel compact={true} />);
 
       const sections = container.querySelectorAll('[class*="space-y"]');
       expect(sections.length).toBeGreaterThan(0);
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(screen.getByText('Connected')).toBeInTheDocument();
+      });
     });
   });
 
   describe('Custom ClassName', () => {
-    it('applies custom className', () => {
+    it('applies custom className', async () => {
       const { container } = render(<ServerInfoPanel className="custom-class" />);
 
       const rootElement = container.firstChild;
       expect(rootElement).toHaveClass('custom-class');
+
+      // Wait for async effects to complete
+      await waitFor(() => {
+        expect(screen.getByText('Connected')).toBeInTheDocument();
+      });
     });
   });
 
