@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { shallow } from 'zustand/shallow';
+import { useShallow } from 'zustand/react/shallow';
 import UserMessage from './UserMessage';
 import AssistantMessage from './AssistantMessage';
 import StreamingMessage from './StreamingMessage';
@@ -22,8 +22,8 @@ export interface MessageListProps {
 }
 
 const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
-  // Use shallow comparison to avoid infinite re-renders from array selectors
-  const messages = useConversationStore(selectMessages, shallow);
+  // selectMessages is already memoized in the store to avoid infinite re-renders
+  const messages = useConversationStore(useShallow(selectMessages));
   const currentStreamingMessageId = useConversationStore((state) => state.currentStreamingMessageId);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 

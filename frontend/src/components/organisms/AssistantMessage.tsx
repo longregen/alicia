@@ -2,12 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
 import MemoryTraceAddon from '../atoms/MemoryTraceAddon';
-import { shallow } from 'zustand/shallow';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
-import type { MessageId } from '../../types/streaming';
+import type { MessageId, MessageSentence, ToolCall, MemoryTrace } from '../../types/streaming';
 import type { MessageAddon, ToolData, AudioState } from '../../types/components';
 
 /**
@@ -27,10 +26,15 @@ export interface AssistantMessageProps {
 
 const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
-  // Use shallow comparison to avoid infinite re-renders from array selectors
-  const toolCalls = useConversationStore((state) => state.getMessageToolCalls(messageId), shallow);
-  const memoryTraces = useConversationStore((state) => state.getMessageMemoryTraces(messageId), shallow);
-  const sentences = useConversationStore((state) => state.getMessageSentences(messageId), shallow);
+  // Get store methods - these return arrays but we only use them when message exists
+  const getToolCalls = useConversationStore((state) => state.getMessageToolCalls);
+  const getMemoryTraces = useConversationStore((state) => state.getMessageMemoryTraces);
+  const getSentences = useConversationStore((state) => state.getMessageSentences);
+
+  // Call the methods to get current data (only used in render, not as dependencies)
+  const toolCalls: ToolCall[] = message ? getToolCalls(messageId) : [];
+  const memoryTraces: MemoryTrace[] = message ? getMemoryTraces(messageId) : [];
+  const sentences: MessageSentence[] = message ? getSentences(messageId) : [];
 
   const audioManager = useAudioManager();
   const currentlyPlayingId = useAudioStore((state) => state.playback.currentlyPlayingId);

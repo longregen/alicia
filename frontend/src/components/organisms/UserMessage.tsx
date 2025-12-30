@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
-import { shallow } from 'zustand/shallow';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
-import type { MessageId } from '../../types/streaming';
+import type { MessageId, MessageSentence } from '../../types/streaming';
 import type { MessageAddon, AudioState } from '../../types/components';
 
 /**
@@ -25,8 +24,10 @@ export interface UserMessageProps {
 
 const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
-  // Use shallow comparison to avoid infinite re-renders from array selector
-  const sentences = useConversationStore((state) => state.getMessageSentences(messageId), shallow);
+  const getSentences = useConversationStore((state) => state.getMessageSentences);
+
+  // Get sentences for this message
+  const sentences: MessageSentence[] = message ? getSentences(messageId) : [];
 
   const audioManager = useAudioManager();
   const currentlyPlayingId = useAudioStore((state) => state.playback.currentlyPlayingId);
@@ -36,8 +37,11 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
   // Track audio state for each audio ref
   const [audioStates, setAudioStates] = useState<Record<string, AudioState>>({});
 
-  // Find sentences with audio - computed before hooks to maintain consistent hook order
-  const sentencesWithAudio = sentences.filter(s => s.audioRefId);
+  // Memoize sentences with audio to avoid creating new arrays on each render
+  const sentencesWithAudio = useMemo(
+    () => sentences.filter((s) => s.audioRefId),
+    [sentences]
+  );
   const hasAudio = sentencesWithAudio.length > 0;
 
   // Update audio states based on playback - must be called unconditionally

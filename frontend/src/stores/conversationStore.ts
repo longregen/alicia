@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { shallow } from 'zustand/shallow';
 import {
   MessageId,
   SentenceId,

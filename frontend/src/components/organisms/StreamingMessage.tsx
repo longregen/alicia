@@ -1,12 +1,9 @@
 import React from 'react';
 import ChatBubble from '../molecules/ChatBubble';
-import { shallow } from 'zustand/shallow';
 import { useConversationStore, selectCurrentStreamingMessage } from '../../stores/conversationStore';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import type { MessageAddon } from '../../types/components';
-
-// Stable empty array to avoid infinite re-renders
-const EMPTY_SENTENCES: never[] = [];
+import type { MessageSentence } from '../../types/streaming';
 
 /**
  * StreamingMessage organism component.
@@ -24,21 +21,20 @@ export interface StreamingMessageProps {
 
 const StreamingMessage: React.FC<StreamingMessageProps> = ({ className = '' }) => {
   const streamingMessage = useConversationStore(selectCurrentStreamingMessage);
-  // Use shallow comparison to avoid infinite re-renders from array selector
-  const sentences = useConversationStore(
-    (state) => streamingMessage ? state.getMessageSentences(streamingMessage.id) : EMPTY_SENTENCES,
-    shallow
-  );
+  const getSentences = useConversationStore((state) => state.getMessageSentences);
 
   if (!streamingMessage) {
     return null;
   }
 
+  // Get sentences for the streaming message
+  const sentences: MessageSentence[] = getSentences(streamingMessage.id);
+
   // Combine all complete sentences for streaming display
   const streamingText = sentences
-    .filter(s => s.isComplete)
+    .filter((s) => s.isComplete)
     .sort((a, b) => a.sequence - b.sequence)
-    .map(s => s.content)
+    .map((s) => s.content)
     .join(' ');
 
   // Build streaming status addon
