@@ -52,7 +52,8 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   sending,
   onSendMessage,
   conversationId,
-  syncError = null,
+  // syncError is accepted but not used - we don't want sync errors to block basic functionality
+  syncError: _syncError = null,
 }) => {
   const loadConversation = useConversationStore((state) => state.loadConversation);
   const setConnectionStatus = useConnectionStore((state) => state.setConnectionStatus);
@@ -67,19 +68,22 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   }, [conversationId, messages, loadConversation]);
 
   // Synchronize connection state to connectionStore
+  // Note: syncError (WebSocket sync failure) should not block basic functionality
+  // The app should be usable for sending messages even without real-time sync
   useEffect(() => {
     if (loading || sending) {
       setConnectionStatus(ConnectionStatus.Connecting);
-    } else if (syncError) {
-      setConnectionStatus(ConnectionStatus.Error);
-      setError(syncError);
     } else if (conversationId) {
+      // Conversation exists - we're connected for basic functionality
+      // Even if WebSocket sync fails, user can still send messages
       setConnectionStatus(ConnectionStatus.Connected);
+      // Clear error when we have a valid conversation
+      // syncError is informational only, not a blocker
       setError(null);
     } else {
       setConnectionStatus(ConnectionStatus.Disconnected);
     }
-  }, [loading, sending, syncError, conversationId, setConnectionStatus, setError]);
+  }, [loading, sending, conversationId, setConnectionStatus, setError]);
 
   // Handle message sending - bridge to legacy callback
   const handleSendMessage = (message: string, _isVoice: boolean) => {

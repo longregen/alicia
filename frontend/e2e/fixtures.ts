@@ -83,10 +83,117 @@ async function setupApiMocks(page: Page, mockState: MockState) {
 
   // Mock sql.js database initialization by injecting a script before page load
   await page.addInitScript(() => {
-    // Mock the sql.js module to avoid loading the wasm file
+    // In-memory storage for the mock database
+    interface MockRow {
+      [key: string]: unknown;
+    }
+    interface MockTables {
+      messages: MockRow[];
+      conversations: MockRow[];
+      [key: string]: MockRow[];
+    }
+    const tables: MockTables = {
+      messages: [],
+      conversations: [],
+    };
+
+    // Simple SQL parser for common operations
     const mockDatabase = {
-      run: () => {},
-      exec: () => [],
+      run: (sql: string, params?: unknown[]) => {
+        const sqlLower = sql.toLowerCase().trim();
+
+        // Handle INSERT
+        if (sqlLower.startsWith('insert into messages')) {
+          const row: MockRow = {
+            id: params?.[0],
+            conversation_id: params?.[1],
+            sequence_number: params?.[2],
+            role: params?.[3],
+            contents: params?.[4],
+            local_id: params?.[5],
+            server_id: params?.[6],
+            sync_status: params?.[7],
+            retry_count: params?.[8],
+            created_at: params?.[9],
+            updated_at: params?.[10],
+          };
+          tables.messages.push(row);
+        } else if (sqlLower.startsWith('insert into conversations')) {
+          const row: MockRow = {
+            id: params?.[0],
+            title: params?.[1],
+            status: params?.[2],
+            created_at: params?.[3],
+            updated_at: params?.[4],
+          };
+          tables.conversations.push(row);
+        } else if (sqlLower.startsWith('update messages')) {
+          // Simple update - find by id (last param) and update fields
+          const id = params?.[params.length - 1];
+          const idx = tables.messages.findIndex(m => m.id === id);
+          if (idx >= 0) {
+            // Parse SET clause to determine which fields to update
+            if (sqlLower.includes('sync_status')) {
+              tables.messages[idx].sync_status = params?.[0];
+            }
+            if (sqlLower.includes('contents')) {
+              tables.messages[idx].contents = params?.[0];
+            }
+          }
+        } else if (sqlLower.startsWith('delete from messages')) {
+          const id = params?.[0];
+          const idx = tables.messages.findIndex(m => m.id === id);
+          if (idx >= 0) {
+            tables.messages.splice(idx, 1);
+          }
+        } else if (sqlLower.startsWith('create table')) {
+          // Ignore schema creation
+        }
+      },
+      exec: (sql: string, params?: unknown[]) => {
+        const sqlLower = sql.toLowerCase().trim();
+
+        // Handle SELECT from messages
+        if (sqlLower.includes('from messages') && sqlLower.includes('where conversation_id')) {
+          const conversationId = params?.[0];
+          const filtered = tables.messages.filter(m => m.conversation_id === conversationId);
+          if (filtered.length === 0) return [];
+          return [{
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
+            values: filtered.map(m => [
+              m.id, m.conversation_id, m.sequence_number, m.role, m.contents,
+              m.local_id, m.server_id, m.sync_status, m.retry_count,
+              m.created_at, m.updated_at
+            ])
+          }];
+        }
+
+        // Handle SELECT from messages by id
+        if (sqlLower.includes('from messages') && sqlLower.includes('where id')) {
+          const id = params?.[0];
+          const found = tables.messages.find(m => m.id === id);
+          if (!found) return [];
+          return [{
+            columns: ['id', 'conversation_id', 'sequence_number', 'role', 'contents', 'local_id', 'server_id', 'sync_status', 'retry_count', 'created_at', 'updated_at'],
+            values: [[
+              found.id, found.conversation_id, found.sequence_number, found.role, found.contents,
+              found.local_id, found.server_id, found.sync_status, found.retry_count,
+              found.created_at, found.updated_at
+            ]]
+          }];
+        }
+
+        // Handle SELECT from conversations
+        if (sqlLower.includes('from conversations')) {
+          if (tables.conversations.length === 0) return [];
+          return [{
+            columns: ['id', 'title', 'status', 'created_at', 'updated_at'],
+            values: tables.conversations.map(c => [c.id, c.title, c.status, c.created_at, c.updated_at])
+          }];
+        }
+
+        return [];
+      },
       export: () => new Uint8Array(),
       close: () => {},
     };
@@ -121,8 +228,9 @@ async function setupApiMocks(page: Page, mockState: MockState) {
     });
   });
 
-  // Mock GET/POST /api/v1/conversations
-  await page.route('**/api/v1/conversations', async (route: Route) => {
+  // Mock GET/POST /api/v1/conversations (exact path only, not sub-paths)
+  // Using regex to ensure we don't match /conversations/123/messages etc.
+  await page.route(/\/api\/v1\/conversations\/?$/, async (route: Route) => {
     if (route.request().method() === 'GET') {
       const conversationsList = Array.from(mockState.conversations.values()).map(c => ({
         id: c.id,
@@ -162,8 +270,8 @@ async function setupApiMocks(page: Page, mockState: MockState) {
     }
   });
 
-  // Routes for specific conversation operations
-  await page.route('**/api/v1/conversations/*', async (route: Route) => {
+  // Routes for specific conversation operations (use ** to match sub-paths like /messages)
+  await page.route('**/api/v1/conversations/**', async (route: Route) => {
     const request = route.request();
     const url = request.url();
     const method = request.method();
@@ -488,11 +596,8 @@ const test = base.extend<TestFixtures>({
       },
 
       async deleteConversation(conversationId: string) {
-        // Click the delete button for the conversation
+        // Click the delete button for the conversation (deletes immediately, no confirmation)
         await page.click(`[data-conversation-id="${conversationId}"] .delete-btn`);
-
-        // Confirm deletion if there's a confirmation dialog
-        await page.click('button:has-text("Delete")');
 
         // Wait for conversation to be removed
         await page.waitForSelector(`[data-conversation-id="${conversationId}"]`, {
