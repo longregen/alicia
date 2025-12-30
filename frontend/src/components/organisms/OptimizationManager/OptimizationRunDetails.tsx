@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../services/api';
 import { DimensionScoresChart } from './DimensionScoresChart';
 import { ParetoArchiveViewer } from './ParetoArchiveViewer';
@@ -16,7 +16,7 @@ interface OptimizationRun {
   max_iterations: number;
   dimension_weights?: Record<string, number>;
   best_dim_scores?: Record<string, number>;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
   started_at: string;
   completed_at?: string;
 }
@@ -44,12 +44,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
   const [error, setError] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<'overview' | 'candidates' | 'pareto'>('overview');
 
-  useEffect(() => {
-    loadRunDetails();
-    loadCandidates();
-  }, [runId]);
-
-  const loadRunDetails = async () => {
+  const loadRunDetails = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getOptimizationRun(runId);
@@ -60,16 +55,21 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
     } finally {
       setLoading(false);
     }
-  };
+  }, [runId]);
 
-  const loadCandidates = async () => {
+  const loadCandidates = useCallback(async () => {
     try {
       const data = await api.getOptimizationCandidates(runId);
       setCandidates(data);
     } catch (err) {
       console.error('Failed to load candidates:', err);
     }
-  };
+  }, [runId]);
+
+  useEffect(() => {
+    loadRunDetails();
+    loadCandidates();
+  }, [loadRunDetails, loadCandidates]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -226,7 +226,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
 
         {selectedTab === 'pareto' && (
           <div className="pareto-tab">
-            <ParetoArchiveViewer runId={runId} candidates={candidates} />
+            <ParetoArchiveViewer candidates={candidates} />
           </div>
         )}
       </div>

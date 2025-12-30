@@ -1,9 +1,10 @@
-name: Deploy Documentation
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
+      - 'frontend/**'
       - 'docs/**'
       - 'book.toml'
       - '.github/workflows/docs.yml'
@@ -23,7 +24,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Documentation
+    name: Build Site
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -37,9 +38,17 @@ jobs:
       - name: Setup Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b # v8
 
-      - name: Build documentation
+      - name: Build frontend and documentation
         run: |
-          nix build .#docs
+          nix build .#alicia-frontend -o frontend-dist
+          nix build .#docs -o docs-dist
+
+      - name: Combine artifacts
+        run: |
+          mkdir -p site
+          cp -r frontend-dist/* site/
+          mkdir -p site/docs
+          cp -r docs-dist/* site/docs/
 
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
@@ -47,7 +56,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
-          path: ./result
+          path: ./site
 
   deploy:
     name: Deploy to GitHub Pages

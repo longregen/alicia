@@ -12,11 +12,10 @@ interface PromptCandidate {
 }
 
 interface ParetoArchiveViewerProps {
-  runId: string;
   candidates: PromptCandidate[];
 }
 
-export function ParetoArchiveViewer({ runId, candidates }: ParetoArchiveViewerProps) {
+export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
   const [selectedDimensions, setSelectedDimensions] = useState<[string, string]>(['successRate', 'quality']);
 
   const dimensions = candidates.length > 0 && candidates[0].dimension_scores

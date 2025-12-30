@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../services/api';
 import './OptimizationManager.css';
 
@@ -24,11 +24,7 @@ export function OptimizationRunList({ onSelectRun }: OptimizationRunListProps) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
 
-  useEffect(() => {
-    loadRuns();
-  }, [filter]);
-
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
     try {
       setLoading(true);
       const params: Record<string, string> = {};
@@ -43,7 +39,11 @@ export function OptimizationRunList({ onSelectRun }: OptimizationRunListProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadRuns();
+  }, [loadRuns]);
 
   const getStatusBadge = (status: string) => {
     const statusClass = `status-badge status-${status.toLowerCase()}`;

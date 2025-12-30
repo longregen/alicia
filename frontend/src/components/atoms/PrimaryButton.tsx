@@ -6,9 +6,7 @@ import Button, { type ButtonProps } from './Button';
  * Pre-configured Button with primary variant.
  */
 
-export interface PrimaryButtonProps extends Omit<ButtonProps, 'variant'> {
-  // Inherits all ButtonProps except variant (always primary)
-}
+export type PrimaryButtonProps = Omit<ButtonProps, 'variant'>;
 
 const PrimaryButton: React.FC<PrimaryButtonProps> = (props) => {
   return <Button {...props} variant="primary" />;

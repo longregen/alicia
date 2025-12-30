@@ -438,27 +438,27 @@ export const api = {
   },
 
   // Optimization
-  async listOptimizationRuns(params?: Record<string, string>): Promise<any[]> {
+  async listOptimizationRuns(params?: Record<string, string>): Promise<OptimizationRun[]> {
     const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
     const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs${queryString}`);
-    const data = await handleResponse<{ runs: any[] }>(response);
+    const data = await handleResponse<{ runs: OptimizationRun[] }>(response);
     return data.runs || [];
   },
 
-  async getOptimizationRun(runId: string): Promise<any> {
+  async getOptimizationRun(runId: string): Promise<OptimizationRun> {
     const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}`);
-    return handleResponse<any>(response);
+    return handleResponse<OptimizationRun>(response);
   },
 
-  async getOptimizationCandidates(runId: string): Promise<any[]> {
+  async getOptimizationCandidates(runId: string): Promise<OptimizationCandidate[]> {
     const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}/candidates`);
-    const data = await handleResponse<{ candidates: any[] }>(response);
+    const data = await handleResponse<{ candidates: OptimizationCandidate[] }>(response);
     return data.candidates || [];
   },
 
-  async getOptimizationBestCandidate(runId: string): Promise<any> {
+  async getOptimizationBestCandidate(runId: string): Promise<OptimizationCandidate> {
     const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}/best`);
-    return handleResponse<any>(response);
+    return handleResponse<OptimizationCandidate>(response);
   },
 };
 
@@ -558,4 +558,33 @@ export interface MemoryResponse {
 export interface MemoryListResponse {
   memories: MemoryResponse[];
   total: number;
+}
+
+// Optimization types
+export interface OptimizationRun {
+  id: string;
+  name: string;
+  description?: string;
+  status: string;
+  prompt_type: string;
+  baseline_score?: number;
+  best_score: number;
+  iterations: number;
+  max_iterations: number;
+  dimension_weights?: Record<string, number>;
+  best_dim_scores?: Record<string, number>;
+  config?: Record<string, unknown>;
+  started_at: string;
+  completed_at?: string;
+}
+
+export interface OptimizationCandidate {
+  id: string;
+  iteration: number;
+  prompt_text: string;
+  score: number;
+  dimension_scores?: Record<string, number>;
+  evaluation_count: number;
+  success_count: number;
+  created_at: string;
 }

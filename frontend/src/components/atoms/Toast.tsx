@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { cls } from '../../utils/cls';
 import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, Variant } from '../../types/components';
@@ -42,6 +42,14 @@ const Toast: React.FC<ToastProps> = ({
     }
   }, [visible]);
 
+  const handleDismiss = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      onDismiss?.();
+    }, 200); // Match transition duration
+  }, [onDismiss]);
+
   useEffect(() => {
     if (isVisible && duration > 0) {
       const timer = setTimeout(() => {
@@ -50,15 +58,7 @@ const Toast: React.FC<ToastProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [isVisible, duration]);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onDismiss?.();
-    }, 200); // Match transition duration
-  };
+  }, [isVisible, duration, handleDismiss]);
 
   if (!isVisible) {
     return null;
