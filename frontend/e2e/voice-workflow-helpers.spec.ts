@@ -63,6 +63,9 @@ test.describe('Voice Workflow (Using Helpers)', () => {
   });
 
   test('should manage voice selector', async ({ page, voiceHelpers }) => {
+    // Voice selector is only available when voice mode is active
+    await voiceHelpers.activateVoiceMode();
+
     await voiceHelpers.openVoiceSelector();
     await expect(page.locator('.voice-selector-panel')).toBeVisible();
 

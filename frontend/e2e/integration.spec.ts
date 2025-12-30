@@ -40,13 +40,7 @@ test.describe('End-to-End Integration', () => {
     }
 
     // Close settings
-    const closeButton = page.locator('button[title="Close"], .close-btn, button:has-text("Close")');
-    if (await closeButton.isVisible()) {
-      await closeButton.click();
-    } else {
-      // Alternative: press Escape
-      await page.keyboard.press('Escape');
-    }
+    await mcpHelpers.closeSettings();
 
     // Step 2: Create conversation and send message
     const conversationId = await conversationHelpers.createConversation();
@@ -111,7 +105,7 @@ test.describe('End-to-End Integration', () => {
     await page.waitForTimeout(2000);
 
     // Close settings
-    await page.keyboard.press('Escape');
+    await mcpHelpers.closeSettings();
 
     // Create conversation
     const conversationId = await conversationHelpers.createConversation();

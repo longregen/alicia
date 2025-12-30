@@ -162,7 +162,8 @@ export function MCPSettings() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    const normalizedStatus = status?.toLowerCase() || '';
+    switch (normalizedStatus) {
       case 'connected':
         return <span className="status-badge status-connected">Connected</span>;
       case 'error':
@@ -191,7 +192,7 @@ export function MCPSettings() {
       )}
 
       {showAddForm && (
-        <form className="add-server-form" onSubmit={handleAddServer}>
+        <form className="add-server-form" onSubmit={handleAddServer} noValidate>
           <h3>Add MCP Server</h3>
 
           <div className="form-group">

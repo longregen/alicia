@@ -18,7 +18,8 @@ test.describe('MCP Settings', () => {
 
   test('should display empty state when no servers configured', async ({ page }) => {
     // Assuming fresh state with no servers
-    const emptyState = page.locator('.empty-state');
+    // Use more specific locator to avoid conflicts with sidebar's empty state
+    const emptyState = page.locator('.mcp-settings .empty-state');
 
     // Check if either empty state is shown or servers list is shown
     const hasServers = await page.locator('.servers-list .server-card').count() > 0;
@@ -116,10 +117,10 @@ test.describe('MCP Settings', () => {
   test('should validate required fields when adding server', async ({ page }) => {
     await page.click('button:has-text("Add Server")');
 
-    // Try to submit with empty fields
+    // Try to submit with empty fields (form uses noValidate, so JS validation handles it)
     await page.click('button[type="submit"]:has-text("Add Server")');
 
-    // Should show validation or error toast
+    // Should show validation error toast
     const toast = page.locator('.toast-error');
     await expect(toast).toBeVisible();
     await expect(toast).toContainText('required');

@@ -53,8 +53,8 @@ interface MockMCPServer {
   transport: string;
   command: string;
   args: string[];
-  status: 'Connected' | 'Error' | 'Disconnected';
-  tools: MockTool[];
+  status: 'connected' | 'error' | 'disconnected';
+  tools: string[];  // Array of tool names, not tool objects
 }
 
 interface MockTool {
@@ -118,6 +118,24 @@ async function setupApiMocks(page: Page, mockState: MockState) {
             updated_at: params?.[10],
           };
           tables.messages.push(row);
+
+          // Auto-generate assistant response for user messages (synchronously)
+          if (row.role === 'user') {
+            const assistantRow: MockRow = {
+              id: `assistant-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              conversation_id: row.conversation_id,
+              sequence_number: (row.sequence_number as number) + 1,
+              role: 'assistant',
+              contents: 'This is a mock assistant response for testing purposes.',
+              local_id: null,
+              server_id: `srv-${Date.now()}`,
+              sync_status: 'synced',
+              retry_count: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            tables.messages.push(assistantRow);
+          }
         } else if (sqlLower.startsWith('insert into conversations')) {
           const row: MockRow = {
             id: params?.[0],
@@ -435,12 +453,8 @@ async function setupApiMocks(page: Page, mockState: MockState) {
         transport: 'stdio',
         command: body.command,
         args: body.args ? (typeof body.args === 'string' ? body.args.split(',').map((a: string) => a.trim()) : body.args) : [],
-        status: body.command?.includes('/invalid') ? 'Error' : 'Connected',
-        tools: [
-          { name: 'read_file', description: 'Read a file from the filesystem' },
-          { name: 'write_file', description: 'Write a file to the filesystem' },
-          { name: 'list_directory', description: 'List directory contents' },
-        ],
+        status: body.command?.includes('/invalid') ? 'error' : 'connected',
+        tools: ['read_file', 'write_file', 'list_directory'],  // Array of tool names
       };
       mockState.mcpServers.set(body.name, server);
       await route.fulfill({
@@ -465,16 +479,25 @@ async function setupApiMocks(page: Page, mockState: MockState) {
     }
   });
 
-  // MCP tools endpoint
+  // MCP tools endpoint - returns all available tools
   await page.route('**/api/v1/mcp/tools', async (route: Route) => {
+    // Build tools by server name - the response format is Record<serverName, MCPTool[]>
     const allTools: Record<string, MockTool[]> = {};
     mockState.mcpServers.forEach((server) => {
-      allTools[server.name] = server.tools;
+      // Convert tool names to tool objects
+      const toolObjects: MockTool[] = server.tools.map(toolName => ({
+        name: toolName,
+        description: toolName === 'read_file' ? 'Read a file from the filesystem' :
+                     toolName === 'write_file' ? 'Write a file to the filesystem' :
+                     toolName === 'list_directory' ? 'List directory contents' :
+                     `Description for ${toolName}`,
+      }));
+      allTools[server.name] = toolObjects;
     });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ tools: allTools }),
+      body: JSON.stringify({ tools: allTools, total: Object.values(allTools).flat().length }),
     });
   });
 
@@ -520,6 +543,7 @@ export interface ConversationHelpers {
 
 export interface MCPHelpers {
   openSettings(): Promise<void>;
+  closeSettings(): Promise<void>;
   addServer(name: string, command: string, args?: string): Promise<void>;
   removeServer(name: string): Promise<void>;
   expandServerTools(serverName: string): Promise<void>;
@@ -623,6 +647,12 @@ const test = base.extend<TestFixtures>({
         await page.waitForSelector('.mcp-settings', { state: 'visible' });
       },
 
+      async closeSettings() {
+        const closeButton = page.locator('.settings-close-btn, button[title="Close settings"]');
+        await closeButton.click();
+        await page.waitForSelector('.settings-modal-overlay', { state: 'hidden', timeout: 5000 });
+      },
+
       async addServer(name: string, command: string, args?: string) {
         await page.click('button:has-text("Add Server")');
 
@@ -646,10 +676,11 @@ const test = base.extend<TestFixtures>({
 
       async removeServer(name: string) {
         const serverCard = page.locator(`.server-card:has-text("${name}")`);
-        await serverCard.locator('.remove-server-btn').click();
 
-        // Confirm removal
+        // Set up dialog handler BEFORE clicking (dialog appears synchronously after click)
         page.once('dialog', dialog => dialog.accept());
+
+        await serverCard.locator('.remove-server-btn').click();
 
         // Wait for server to be removed
         await page.waitForSelector(`.server-card:has-text("${name}")`, {
