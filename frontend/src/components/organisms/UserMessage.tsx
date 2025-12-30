@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
+import { shallow } from 'zustand/shallow';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
@@ -24,7 +25,8 @@ export interface UserMessageProps {
 
 const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
-  const sentences = useConversationStore((state) => state.getMessageSentences(messageId));
+  // Use shallow comparison to avoid infinite re-renders from array selector
+  const sentences = useConversationStore((state) => state.getMessageSentences(messageId), shallow);
 
   const audioManager = useAudioManager();
   const currentlyPlayingId = useAudioStore((state) => state.playback.currentlyPlayingId);

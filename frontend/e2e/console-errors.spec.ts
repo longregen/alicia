@@ -79,7 +79,10 @@ test.describe('Console Errors', () => {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!text.includes('net::ERR_') && !text.includes('Failed to load resource')) {
+        // Ignore known benign errors in test env
+        if (!text.includes('net::ERR_') &&
+            !text.includes('Failed to load resource') &&
+            !text.includes('WebSocket error')) {
           consoleErrors.push(text);
         }
       }

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { shallow } from 'zustand/shallow';
 import {
   MessageId,
   SentenceId,
@@ -187,11 +188,37 @@ export const useConversationStore = create<ConversationStore>()(
   }))
 );
 
-// Utility selectors for common patterns
-export const selectMessages = (state: ConversationStore) =>
-  Object.values(state.messages).sort((a, b) =>
-    a.createdAt.getTime() - b.createdAt.getTime()
-  );
+// Stable empty array to avoid creating new references
+const EMPTY_MESSAGES: Message[] = [];
+
+// Memoized selector for messages - caches the result to avoid infinite loops
+// with useSyncExternalStore (used by zustand)
+let cachedMessages: Message[] = EMPTY_MESSAGES;
+let cachedMessagesKey: string = '';
+
+export const selectMessages = (state: ConversationStore) => {
+  // Create a cache key based on the messages object identity
+  // When messages change, the object identity changes due to immer
+  const messagesEntries = Object.entries(state.messages);
+  const cacheKey = messagesEntries.map(([k]) => k).sort().join(',');
+
+  // Return cached result if messages haven't changed
+  if (cacheKey === cachedMessagesKey) {
+    return cachedMessages;
+  }
+
+  // Compute and cache new result
+  cachedMessagesKey = cacheKey;
+  if (messagesEntries.length === 0) {
+    cachedMessages = EMPTY_MESSAGES;
+  } else {
+    cachedMessages = Object.values(state.messages).sort((a, b) =>
+      a.createdAt.getTime() - b.createdAt.getTime()
+    );
+  }
+
+  return cachedMessages;
+};
 
 export const selectCurrentStreamingMessage = (state: ConversationStore) =>
   state.currentStreamingMessageId

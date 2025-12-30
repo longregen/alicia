@@ -1,8 +1,12 @@
 import React from 'react';
 import ChatBubble from '../molecules/ChatBubble';
+import { shallow } from 'zustand/shallow';
 import { useConversationStore, selectCurrentStreamingMessage } from '../../stores/conversationStore';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import type { MessageAddon } from '../../types/components';
+
+// Stable empty array to avoid infinite re-renders
+const EMPTY_SENTENCES: never[] = [];
 
 /**
  * StreamingMessage organism component.
@@ -20,8 +24,10 @@ export interface StreamingMessageProps {
 
 const StreamingMessage: React.FC<StreamingMessageProps> = ({ className = '' }) => {
   const streamingMessage = useConversationStore(selectCurrentStreamingMessage);
-  const sentences = useConversationStore((state) =>
-    streamingMessage ? state.getMessageSentences(streamingMessage.id) : []
+  // Use shallow comparison to avoid infinite re-renders from array selector
+  const sentences = useConversationStore(
+    (state) => streamingMessage ? state.getMessageSentences(streamingMessage.id) : EMPTY_SENTENCES,
+    shallow
   );
 
   if (!streamingMessage) {

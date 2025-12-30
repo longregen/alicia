@@ -1,16 +1,27 @@
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 
 const DB_NAME = 'alicia_messages';
 const DB_VERSION = 1;
 
 let db: Database | null = null;
 
+// Support for E2E test mocking - check for window mock before using real sql.js
+async function getSqlJs(): Promise<SqlJsStatic> {
+  // Check if there's a test mock available
+  const win = typeof window !== 'undefined' ? window as unknown as Record<string, unknown> : null;
+  if (win?.initSqlJs && typeof win.initSqlJs === 'function') {
+    return await (win.initSqlJs as () => Promise<SqlJsStatic>)();
+  }
+
+  return await initSqlJs({
+    locateFile: () => '/sql-wasm.wasm'
+  });
+}
+
 export async function initDatabase(): Promise<Database> {
   if (db) return db;
 
-  const SQL = await initSqlJs({
-    locateFile: () => '/sql-wasm.wasm'
-  });
+  const SQL = await getSqlJs();
 
   db = new SQL.Database();
 
@@ -112,9 +123,7 @@ export async function loadFromIndexedDB(): Promise<void> {
         if (getRequest.result && db) {
           try {
             // Load stored data into existing database
-            const SQL = await initSqlJs({
-              locateFile: () => '/sql-wasm.wasm'
-            });
+            const SQL = await getSqlJs();
             const loadedDb = new SQL.Database(getRequest.result);
             db = loadedDb;
           } catch (error) {

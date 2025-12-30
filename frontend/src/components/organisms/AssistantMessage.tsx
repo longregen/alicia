@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
 import MemoryTraceAddon from '../atoms/MemoryTraceAddon';
+import { shallow } from 'zustand/shallow';
 import { useConversationStore } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
@@ -26,9 +27,10 @@ export interface AssistantMessageProps {
 
 const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
-  const toolCalls = useConversationStore((state) => state.getMessageToolCalls(messageId));
-  const memoryTraces = useConversationStore((state) => state.getMessageMemoryTraces(messageId));
-  const sentences = useConversationStore((state) => state.getMessageSentences(messageId));
+  // Use shallow comparison to avoid infinite re-renders from array selectors
+  const toolCalls = useConversationStore((state) => state.getMessageToolCalls(messageId), shallow);
+  const memoryTraces = useConversationStore((state) => state.getMessageMemoryTraces(messageId), shallow);
+  const sentences = useConversationStore((state) => state.getMessageSentences(messageId), shallow);
 
   const audioManager = useAudioManager();
   const currentlyPlayingId = useAudioStore((state) => state.playback.currentlyPlayingId);
@@ -38,8 +40,11 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
   // Track audio state for each audio ref
   const [audioStates, setAudioStates] = useState<Record<string, AudioState>>({});
 
-  // Find sentences with audio - computed before hooks to maintain consistent hook order
-  const sentencesWithAudio = sentences.filter(s => s.audioRefId);
+  // Memoize sentences with audio to avoid infinite re-renders in useEffect
+  const sentencesWithAudio = useMemo(
+    () => sentences.filter(s => s.audioRefId),
+    [sentences]
+  );
 
   // Update audio states based on playback - must be called unconditionally
   useEffect(() => {
