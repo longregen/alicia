@@ -81,36 +81,8 @@ function createMockState(): MockState {
 async function setupApiMocks(page: Page, mockState: MockState) {
   let messageCounter = 0;
 
-  // Mock sql.js database initialization by injecting a script before page load
-  await page.addInitScript(() => {
-    // Mock the sql.js module to avoid loading the wasm file
-    const mockDatabase = {
-      run: () => {},
-      exec: () => [],
-      export: () => new Uint8Array(),
-      close: () => {},
-    };
-
-    // Override the dynamic import of sql.js
-    (window as unknown as Record<string, unknown>).__SQL_JS_MOCK__ = {
-      Database: function() { return mockDatabase; },
-    };
-
-    // Mock initSqlJs to return our mock
-    (window as unknown as Record<string, unknown>).initSqlJs = async () => {
-      return (window as unknown as Record<string, unknown>).__SQL_JS_MOCK__;
-    };
-  });
-
-  // Mock the sql-wasm.wasm file request
-  await page.route('**/sql-wasm.wasm', async (route: Route) => {
-    // Return empty response - the mock above will handle initialization
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/wasm',
-      body: Buffer.from([]),
-    });
-  });
+  // Note: sql.js WASM loads from Vite dev server - no mocking needed
+  // The real sql.js database is used for e2e tests
 
   // Mock /api/v1/config
   await page.route('**/api/v1/config', async (route: Route) => {
