@@ -4,6 +4,7 @@ import InputArea from './InputArea';
 import ResponseControls from './ResponseControls';
 import { useConnectionStore, ConnectionStatus } from '../../stores/connectionStore';
 import { useLiveKit } from '../../hooks/useLiveKit';
+import { useConfig } from '../../contexts/ConfigContext';
 import { cls } from '../../utils/cls';
 
 /**
@@ -42,9 +43,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   showControls = true,
   className = '',
 }) => {
+  const { config } = useConfig();
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceSelectorOpen, setVoiceSelectorOpen] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(config?.tts?.default_voice || 'af_sarah');
+  const [speed, setSpeed] = useState(config?.tts?.default_speed || 1.0);
   const connectionStatus = useConnectionStore((state) => state.status);
   const isConnected = connectionStatus === ConnectionStatus.Connected;
 
@@ -195,34 +199,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             )}
           </button>
 
-          {/* Voice selector toggle */}
-          <div className="relative">
-            <button
-              className="voice-selector-toggle flex items-center gap-2 px-3 py-2 text-sm text-muted-text hover:text-primary-text transition-colors"
-              aria-label="Select voice"
-              onClick={toggleVoiceSelector}
-              aria-expanded={voiceSelectorOpen}
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-              <span>Voice</span>
-            </button>
-
-            {/* Voice selector panel */}
-            {voiceSelectorOpen && (
-              <div className="voice-selector-panel absolute bottom-full left-0 mb-2 w-48 bg-surface-800 border border-primary-blue-glow rounded-lg shadow-lg p-2">
-                <div className="text-xs text-muted-text mb-2">Select Voice</div>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-surface-700 rounded">Sarah</button>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-surface-700 rounded">Adam</button>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-surface-700 rounded">Nicole</button>
-              </div>
-            )}
+          {/* Audio output indicator */}
+          <div className="audio-output flex items-center gap-2 text-sm text-muted-text">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+            </svg>
+            <span>Voice Output</span>
           </div>
         </div>
       )}
 
-      {/* Voice mode toggle button */}
+      {/* Voice mode toggle button and voice selector */}
       <div className="flex items-center justify-between p-2 border-t border-primary-blue-glow">
         <button
           className={cls(
@@ -240,13 +227,88 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </svg>
           <span className="text-sm font-medium">Voice Mode</span>
         </button>
+
+        {/* Voice selector toggle - always accessible */}
+        <div className="relative">
+          <button
+            className="voice-selector-toggle flex items-center gap-2 px-3 py-2 text-sm text-muted-text hover:text-primary-text transition-colors rounded-lg hover:bg-surface-700"
+            aria-label="Select voice"
+            onClick={toggleVoiceSelector}
+            aria-expanded={voiceSelectorOpen}
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            <span>Voice</span>
+          </button>
+
+          {/* Voice selector panel */}
+          {voiceSelectorOpen && (
+            <div className="voice-selector-panel absolute bottom-full right-0 mb-2 w-80 bg-surface-800 border border-primary-blue-glow rounded-lg shadow-lg">
+              {/* Header with close button */}
+              <div className="voice-selector-header flex justify-between items-center p-3 border-b border-primary-blue-glow">
+                <h3 className="text-sm font-semibold text-primary-text">Voice Settings</h3>
+                <button
+                  className="voice-selector-close w-6 h-6 flex items-center justify-center rounded hover:bg-surface-700 text-muted-text hover:text-primary-text transition-colors"
+                  onClick={toggleVoiceSelector}
+                  aria-label="Close voice selector"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="voice-selector-content p-4 space-y-4">
+                {/* Voice selection */}
+                <div className="voice-option-group">
+                  <label className="voice-label text-xs text-muted-text mb-2 block">Voice</label>
+                  <select
+                    className="voice-select w-full px-3 py-2 bg-surface-700 border border-primary-blue-glow rounded text-sm text-primary-text focus:outline-none focus:border-primary-blue"
+                    value={selectedVoice}
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                  >
+                    {config?.tts?.voices?.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name} ({voice.category})
+                      </option>
+                    )) || (
+                      <option value="af_sarah">Sarah (American Female)</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Speed control */}
+                <div className="voice-option-group">
+                  <label className="voice-label text-xs text-muted-text mb-2 block">
+                    Speed: {speed.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    className="speed-slider w-full"
+                    min={config?.tts?.speed_min || 0.5}
+                    max={config?.tts?.speed_max || 2.0}
+                    step={config?.tts?.speed_step || 0.1}
+                    value={speed}
+                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                  />
+                  <div className="speed-markers flex justify-between text-xs text-muted-text mt-1">
+                    <span>{config?.tts?.speed_min || 0.5}x</span>
+                    <span>{config?.tts?.speed_max || 2.0}x</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Input area */}
       <InputArea
         onSend={handleSendMessage}
         onPublishAudioTrack={(useSileroVAD || voiceModeActive) ? publishAudioTrack : undefined}
-        disabled={!isConnected || ((useSileroVAD || voiceModeActive) && !liveKitConnected)}
+        disabled={!isConnected}
         placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
         useSileroVAD={useSileroVAD || voiceModeActive}
       />
