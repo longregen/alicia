@@ -12,14 +12,15 @@ import (
 
 // Config holds all configuration for Alicia
 type Config struct {
-	LLM       LLMConfig       `json:"llm"`
-	LiveKit   LiveKitConfig   `json:"livekit"`
-	ASR       ASRConfig       `json:"asr"`
-	TTS       TTSConfig       `json:"tts"`
-	Embedding EmbeddingConfig `json:"embedding"`
-	Database  DatabaseConfig  `json:"database"`
-	Server    ServerConfig    `json:"server"`
-	MCP       MCPConfig       `json:"mcp"`
+	LLM          LLMConfig       `json:"llm"`
+	ReflectionLM LLMConfig       `json:"reflection_llm,omitempty"` // Optional: stronger LLM for GEPA reflection
+	LiveKit      LiveKitConfig   `json:"livekit"`
+	ASR          ASRConfig       `json:"asr"`
+	TTS          TTSConfig       `json:"tts"`
+	Embedding    EmbeddingConfig `json:"embedding"`
+	Database     DatabaseConfig  `json:"database"`
+	Server       ServerConfig    `json:"server"`
+	MCP          MCPConfig       `json:"mcp"`
 }
 
 // LLMConfig holds LLM API configuration (vLLM/LiteLLM)
@@ -223,6 +224,13 @@ func Load() (*Config, error) {
 	envInt("ALICIA_LLM_MAX_TOKENS", &cfg.LLM.MaxTokens)
 	envFloat("ALICIA_LLM_TEMPERATURE", &cfg.LLM.Temperature)
 
+	// Load Reflection LLM configuration from environment (optional)
+	envString("ALICIA_REFLECTION_LLM_URL", &cfg.ReflectionLM.URL)
+	envStringFromFile("ALICIA_REFLECTION_LLM_API_KEY", &cfg.ReflectionLM.APIKey)
+	envString("ALICIA_REFLECTION_LLM_MODEL", &cfg.ReflectionLM.Model)
+	envInt("ALICIA_REFLECTION_LLM_MAX_TOKENS", &cfg.ReflectionLM.MaxTokens)
+	envFloat("ALICIA_REFLECTION_LLM_TEMPERATURE", &cfg.ReflectionLM.Temperature)
+
 	// Load LiveKit configuration from environment
 	envString("ALICIA_LIVEKIT_URL", &cfg.LiveKit.URL)
 	envStringFromFile("ALICIA_LIVEKIT_API_KEY", &cfg.LiveKit.APIKey)
@@ -296,6 +304,11 @@ func (c *Config) IsTTSConfigured() bool {
 // IsEmbeddingConfigured returns true if embedding service is configured
 func (c *Config) IsEmbeddingConfigured() bool {
 	return c.Embedding.URL != ""
+}
+
+// IsReflectionLMConfigured returns true if a separate reflection LLM is configured
+func (c *Config) IsReflectionLMConfigured() bool {
+	return c.ReflectionLM.URL != "" && c.ReflectionLM.Model != ""
 }
 
 // isValidURL validates that a URL has proper format

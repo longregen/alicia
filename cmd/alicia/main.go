@@ -43,6 +43,7 @@ This CLI provides text-based interaction with Alicia.`,
 		configCmd(),
 		serveCmd(),
 		agentCmd(),
+		optimizeCmd(),
 		versionCmd(),
 	)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
 	"github.com/longregen/alicia/internal/adapters/mcp"
 	"github.com/longregen/alicia/internal/adapters/speech"
+	"github.com/longregen/alicia/internal/application/services"
 	"github.com/longregen/alicia/internal/config"
 	"github.com/longregen/alicia/internal/llm"
 	"github.com/longregen/alicia/internal/ports"
@@ -31,6 +32,7 @@ type Server struct {
 	sessionStatsRepo        ports.SessionStatsRepository
 	memoryService           ports.MemoryService
 	optimizationService     ports.OptimizationService
+	optimizationRepo        ports.PromptOptimizationRepository
 	liveKitService          ports.LiveKitService
 	idGen                   ports.IDGenerator
 	db                      *pgxpool.Pool
@@ -53,6 +55,7 @@ func NewServer(
 	sessionStatsRepo ports.SessionStatsRepository,
 	memoryService ports.MemoryService,
 	optimizationService ports.OptimizationService,
+	optimizationRepo ports.PromptOptimizationRepository,
 	liveKitService ports.LiveKitService,
 	idGen ports.IDGenerator,
 	db *pgxpool.Pool,
@@ -72,6 +75,7 @@ func NewServer(
 		sessionStatsRepo:        sessionStatsRepo,
 		memoryService:           memoryService,
 		optimizationService:     optimizationService,
+		optimizationRepo:        optimizationRepo,
 		liveKitService:          liveKitService,
 		idGen:                   idGen,
 		db:                      db,
@@ -226,6 +230,26 @@ func (s *Server) setupRouter() {
 			r.Get("/optimizations/{id}/best", optHandler.GetBestCandidate)
 			r.Get("/optimizations/{id}/program", optHandler.GetOptimizedProgram)
 			r.Get("/optimizations/candidates/{id}/evaluations", optHandler.GetEvaluations)
+
+			// Optimization progress streaming
+			if s.optimizationRepo != nil {
+				streamHandler := handlers.NewOptimizationStreamHandler(s.optimizationService, s.optimizationRepo)
+				r.Get("/optimizations/{id}/stream", streamHandler.StreamOptimizationProgress)
+			}
+
+			// Feedback integration endpoints
+			feedbackHandler := handlers.NewFeedbackHandler(s.voteRepo, s.optimizationService)
+			r.Post("/feedback", feedbackHandler.SubmitFeedback)
+			r.Get("/feedback/dimensions", feedbackHandler.GetDimensionWeights)
+			r.Put("/feedback/dimensions", feedbackHandler.UpdateDimensionWeights)
+
+			// Deployment endpoints (Phase 6)
+			deploymentService := services.NewDeploymentService(s.optimizationRepo, s.idGen)
+			deploymentHandler := handlers.NewDeploymentHandler(deploymentService)
+			r.Post("/deployments", deploymentHandler.DeployPrompt)
+			r.Get("/deployments/{prompt_type}/active", deploymentHandler.GetActiveDeployment)
+			r.Get("/deployments/{prompt_type}/history", deploymentHandler.ListDeploymentHistory)
+			r.Delete("/deployments/{run_id}", deploymentHandler.RollbackDeployment)
 		}
 	})
 

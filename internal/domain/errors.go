@@ -57,6 +57,7 @@ var (
 	ErrInvalidState = errors.New("invalid state transition")
 	ErrInvalidInput = errors.New("invalid input")
 	ErrDeleted      = errors.New("entity has been deleted")
+	ErrNotFound     = errors.New("resource not found")
 )
 
 // DomainError wraps a domain error with additional context

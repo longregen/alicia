@@ -436,6 +436,30 @@ export const api = {
     const response = await fetchWithErrorHandling(`${API_BASE}/conversations/${conversationId}/stats`);
     return handleResponse<SessionStatsResponse>(response);
   },
+
+  // Optimization
+  async listOptimizationRuns(params?: Record<string, string>): Promise<any[]> {
+    const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs${queryString}`);
+    const data = await handleResponse<{ runs: any[] }>(response);
+    return data.runs || [];
+  },
+
+  async getOptimizationRun(runId: string): Promise<any> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}`);
+    return handleResponse<any>(response);
+  },
+
+  async getOptimizationCandidates(runId: string): Promise<any[]> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}/candidates`);
+    const data = await handleResponse<{ candidates: any[] }>(response);
+    return data.candidates || [];
+  },
+
+  async getOptimizationBestCandidate(runId: string): Promise<any> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}/best`);
+    return handleResponse<any>(response);
+  },
 };
 
 // Feedback types

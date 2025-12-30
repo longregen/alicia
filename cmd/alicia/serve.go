@@ -242,6 +242,7 @@ func runServer(ctx context.Context) error {
 		sessionStatsRepo,
 		memoryService,
 		optimizationService,
+		optimizationRepo,
 		liveKitService,
 		idGen,
 		pool,

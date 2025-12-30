@@ -10,12 +10,27 @@ import (
 
 // LLMServiceAdapter adapts Alicia's LLMService to dspy-go's LLM interface
 type LLMServiceAdapter struct {
-	service ports.LLMService
+	service  ports.LLMService
+	modelID  string // Optional: custom model identifier
+	provider string // Optional: custom provider name
 }
 
 // NewLLMServiceAdapter creates a new LLM service adapter
 func NewLLMServiceAdapter(service ports.LLMService) *LLMServiceAdapter {
-	return &LLMServiceAdapter{service: service}
+	return &LLMServiceAdapter{
+		service:  service,
+		modelID:  "alicia-llm-service",
+		provider: "alicia",
+	}
+}
+
+// NewLLMServiceAdapterWithModel creates a new LLM service adapter with custom model/provider names
+func NewLLMServiceAdapterWithModel(service ports.LLMService, modelID, provider string) *LLMServiceAdapter {
+	return &LLMServiceAdapter{
+		service:  service,
+		modelID:  modelID,
+		provider: provider,
+	}
 }
 
 // Generate implements the dspy-go LLM interface
@@ -105,11 +120,17 @@ func (a *LLMServiceAdapter) StreamGenerateWithContent(ctx context.Context, conte
 
 // ProviderName returns the provider name
 func (a *LLMServiceAdapter) ProviderName() string {
+	if a.provider != "" {
+		return a.provider
+	}
 	return "alicia"
 }
 
 // ModelID returns the model identifier
 func (a *LLMServiceAdapter) ModelID() string {
+	if a.modelID != "" {
+		return a.modelID
+	}
 	return "alicia-llm-service"
 }
 

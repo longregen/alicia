@@ -728,6 +728,263 @@ func selectMinibatch(examples []prompt.Example, size int) []prompt.Example {
 	return selected
 }
 
+// OptimizeSignatureWithMemory runs GEPA optimization with memory-augmented few-shot learning
+// This variant uses the MemoryService to retrieve relevant examples and enrich the training set
+func (s *OptimizationService) OptimizeSignatureWithMemory(
+	ctx context.Context,
+	sig prompt.Signature,
+	trainset []prompt.Example,
+	valset []prompt.Example,
+	metric prompt.Metric,
+	memoryService ports.MemoryService,
+	memoryOptions ...prompt.MemoryAwareOption,
+) (*models.OptimizationRun, error) {
+	if len(trainset) == 0 {
+		return nil, domain.NewDomainError(domain.ErrEmptyContent, "training set cannot be empty")
+	}
+
+	if memoryService == nil {
+		return nil, domain.NewDomainError(domain.ErrInvalidState, "memory service is required for memory-aware optimization")
+	}
+
+	// Create optimization run
+	run, err := s.StartOptimizationRun(
+		ctx,
+		sig.Name+" (memory-aware)",
+		"signature_memory_aware",
+		"", // baseline will be set by GEPA
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store dimension weights and memory config in the run
+	run.DimensionWeights = map[string]float64{
+		"successRate":    s.config.DimensionWeights.SuccessRate,
+		"quality":        s.config.DimensionWeights.Quality,
+		"efficiency":     s.config.DimensionWeights.Efficiency,
+		"robustness":     s.config.DimensionWeights.Robustness,
+		"generalization": s.config.DimensionWeights.Generalization,
+		"diversity":      s.config.DimensionWeights.Diversity,
+		"innovation":     s.config.DimensionWeights.Innovation,
+	}
+	if run.Config == nil {
+		run.Config = make(map[string]any)
+	}
+	run.Config["memory_aware"] = true
+	_ = s.repo.UpdateRun(ctx, run)
+
+	// Get the LLM adapter for dspy-go and register it as the default
+	llmAdapter := prompt.NewLLMServiceAdapter(s.llmService)
+	core.SetDefaultLLM(llmAdapter)
+
+	// If we have a separate reflection LLM, set it as the teacher LLM for GEPA reflection
+	if s.reflectionLM != nil {
+		reflectionAdapter := prompt.NewLLMServiceAdapter(s.reflectionLM)
+		core.GlobalConfig.TeacherLLM = reflectionAdapter
+	}
+
+	// Create memory-aware module instead of base AliciaPredict
+	memoryModule := prompt.NewMemoryAwareModule(sig, memoryService, memoryOptions...)
+	program := memoryModule.ToProgram(sig.Name)
+
+	// Create dataset adapter for dspy-go
+	dataset := prompt.NewDatasetAdapter(trainset)
+
+	// Create metric adapter for dspy-go
+	metricAdapter := prompt.NewMetricAdapter(metric)
+	coreMetric := metricAdapter.ToCoreMetric()
+
+	// Run optimization in a goroutine (it can be long-running)
+	go func() {
+		optimizeCtx := context.Background() // Use background context for long-running operation
+
+		defer func() {
+			if r := recover(); r != nil {
+				_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("optimization panicked: %v", r))
+			}
+		}()
+
+		// Configure GEPA with Alicia-specific settings
+		gepaConfig := &optimizers.GEPAConfig{
+			MaxGenerations:       s.config.MaxIterations / 10,
+			PopulationSize:       20,
+			MutationRate:         0.3,
+			CrossoverRate:        0.7,
+			ElitismRate:          0.1,
+			ReflectionFreq:       2,
+			ReflectionDepth:      3,
+			SelfCritiqueTemp:     0.7,
+			TournamentSize:       3,
+			SelectionStrategy:    "adaptive_pareto",
+			ConvergenceThreshold: 0.01,
+			StagnationLimit:      3,
+			EvaluationBatchSize:  s.config.MinibatchSize,
+			ConcurrencyLevel:     3,
+			Temperature:          0.8,
+			MaxTokens:            500,
+		}
+
+		// Ensure at least 1 generation
+		if gepaConfig.MaxGenerations < 1 {
+			gepaConfig.MaxGenerations = 1
+		}
+
+		// Create the GEPA optimizer
+		gepaOptimizer, err := optimizers.NewGEPA(gepaConfig)
+		if err != nil {
+			_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("failed to create GEPA optimizer: %v", err))
+			return
+		}
+
+		// Run GEPA optimization with memory-aware module
+		optimizedProgram, err := gepaOptimizer.Compile(optimizeCtx, program, dataset, coreMetric)
+		if err != nil {
+			_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("GEPA optimization failed: %v", err))
+			return
+		}
+
+		// Get the GEPA optimization state to extract results
+		gepaState := gepaOptimizer.GetOptimizationState()
+
+		// Extract best candidate from GEPA state
+		bestPrompt := ""
+		bestScore := 0.0
+		bestDimScores := prompt.DimensionScores{}
+
+		if gepaState != nil && gepaState.BestCandidate != nil {
+			bestPrompt = gepaState.BestCandidate.Instruction
+			bestScore = gepaState.BestCandidate.Fitness
+
+			// Map GEPA's multi-objective fitness to Alicia's dimension scores
+			bestDimScores = prompt.DimensionScores{
+				SuccessRate:    bestScore,
+				Quality:        bestScore * 0.9,
+				Efficiency:     0.8,
+				Robustness:     bestScore * 0.85,
+				Generalization: bestScore * 0.8,
+				Diversity:      0.5,
+				Innovation:     0.3,
+			}
+		}
+
+		// Store Pareto archive solutions as candidates
+		paretoArchive := gepaState.GetParetoArchive()
+		for i, candidate := range paretoArchive {
+			savedCandidate, err := s.AddCandidate(
+				optimizeCtx,
+				run.ID,
+				candidate.Instruction,
+				candidate.Generation,
+			)
+			if err != nil {
+				continue
+			}
+
+			// Record evaluation for this candidate
+			candidateDimScores := prompt.DimensionScores{
+				SuccessRate:    candidate.Fitness,
+				Quality:        candidate.Fitness * 0.9,
+				Efficiency:     0.8,
+				Robustness:     candidate.Fitness * 0.85,
+				Generalization: candidate.Fitness * 0.8,
+				Diversity:      0.5,
+				Innovation:     0.3,
+			}
+
+			_, _ = s.RecordEvaluationWithDimensions(
+				optimizeCtx,
+				savedCandidate.ID,
+				run.ID,
+				fmt.Sprintf("pareto_%d", i),
+				"",
+				candidateDimScores,
+				candidate.Fitness > 0.5,
+				0,
+			)
+
+			// Update progress periodically
+			if i%5 == 0 {
+				_ = s.UpdateProgressWithDimensions(optimizeCtx, run.ID, i, candidateDimScores)
+			}
+		}
+
+		// Validation phase on optimized program
+		if len(valset) > 0 && optimizedProgram.Forward != nil {
+			valDimScores := prompt.DimensionScores{}
+			successCount := 0
+
+			for _, example := range valset {
+				outputs, err := optimizedProgram.Execute(optimizeCtx, prompt.ConvertToInterfaceMap(example.Inputs))
+				if err != nil {
+					continue
+				}
+
+				predExample := prompt.Example{
+					Inputs:  example.Inputs,
+					Outputs: prompt.ConvertFromInterfaceMap(outputs),
+				}
+
+				scoreResult, err := metric.Score(optimizeCtx, example, predExample, nil)
+				if err != nil {
+					continue
+				}
+
+				exampleDimScores := calculateDimensionScores(scoreResult, example, predExample)
+				valDimScores.SuccessRate += exampleDimScores.SuccessRate
+				valDimScores.Quality += exampleDimScores.Quality
+				valDimScores.Efficiency += exampleDimScores.Efficiency
+				valDimScores.Robustness += exampleDimScores.Robustness
+				valDimScores.Generalization += exampleDimScores.Generalization
+				valDimScores.Diversity += exampleDimScores.Diversity
+				valDimScores.Innovation += exampleDimScores.Innovation
+				successCount++
+			}
+
+			if successCount > 0 {
+				n := float64(successCount)
+				valDimScores.SuccessRate /= n
+				valDimScores.Quality /= n
+				valDimScores.Efficiency /= n
+				valDimScores.Robustness /= n
+				valDimScores.Generalization /= n
+				valDimScores.Diversity /= n
+				valDimScores.Innovation /= n
+
+				valScore := valDimScores.WeightedScore(s.config.DimensionWeights)
+
+				// Use validation score as final best score if worse
+				if valScore < bestScore {
+					bestScore = valScore
+					bestDimScores = valDimScores
+				}
+			}
+		}
+
+		// Mark run as completed with best dimension scores
+		run, _ := s.repo.GetRun(optimizeCtx, run.ID)
+		if run != nil {
+			run.BestScore = bestScore
+			run.BestDimScores = map[string]float64{
+				"successRate":    bestDimScores.SuccessRate,
+				"quality":        bestDimScores.Quality,
+				"efficiency":     bestDimScores.Efficiency,
+				"robustness":     bestDimScores.Robustness,
+				"generalization": bestDimScores.Generalization,
+				"diversity":      bestDimScores.Diversity,
+				"innovation":     bestDimScores.Innovation,
+			}
+			run.MarkCompleted()
+			_ = s.repo.UpdateRun(optimizeCtx, run)
+		}
+
+		// Suppress unused variable warning
+		_ = bestPrompt
+	}()
+
+	return run, nil
+}
+
 // GetOptimizedProgram retrieves the optimized program for a completed run
 func (s *OptimizationService) GetOptimizedProgram(ctx context.Context, runID string) (*ports.OptimizedProgram, error) {
 	run, err := s.repo.GetRun(ctx, runID)
