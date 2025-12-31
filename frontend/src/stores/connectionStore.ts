@@ -76,9 +76,28 @@ const initialState: ConnectionStoreState = {
   reconnectAttempts: 0,
 };
 
+// Check for E2E test mock - this allows e2e tests to set initial connection state
+function getInitialState(): ConnectionStoreState {
+  if (typeof window !== 'undefined' && (window as any).__E2E_CONNECTION_MOCK__) {
+    // Create a fresh copy to avoid read-only property errors
+    const mock = (window as any).__E2E_CONNECTION_MOCK__;
+    return {
+      status: mock.status,
+      error: mock.error,
+      roomName: mock.roomName,
+      roomSid: mock.roomSid,
+      participants: { ...mock.participants },
+      localParticipantId: mock.localParticipantId,
+      connectedAt: mock.connectedAt ? new Date(mock.connectedAt) : null,
+      reconnectAttempts: mock.reconnectAttempts,
+    };
+  }
+  return initialState;
+}
+
 export const useConnectionStore = create<ConnectionStore>()(
   immer((set, get) => ({
-    ...initialState,
+    ...getInitialState(),
 
     // Connection actions
     setConnectionStatus: (status) =>

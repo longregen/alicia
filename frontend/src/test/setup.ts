@@ -3,6 +3,10 @@ import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 
+// Clear VITE_API_URL to ensure tests use relative URLs
+// This prevents the global env from affecting unit tests
+delete import.meta.env.VITE_API_URL;
+
 // Store imports for cleanup
 import { useConversationStore } from '../stores/conversationStore';
 import { useFeedbackStore } from '../stores/feedbackStore';

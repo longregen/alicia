@@ -53,8 +53,9 @@ interface MockMCPServer {
   transport: string;
   command: string;
   args: string[];
-  status: 'Connected' | 'Error' | 'Disconnected';
-  tools: MockTool[];
+  status: 'connected' | 'error' | 'disconnected';
+  tools: string[]; // Array of tool names, not full tool objects
+  toolObjects?: MockTool[]; // Keep the full tool objects for the tools endpoint
 }
 
 interface MockTool {
@@ -81,36 +82,8 @@ function createMockState(): MockState {
 async function setupApiMocks(page: Page, mockState: MockState) {
   let messageCounter = 0;
 
-  // Mock sql.js database initialization by injecting a script before page load
-  await page.addInitScript(() => {
-    // Mock the sql.js module to avoid loading the wasm file
-    const mockDatabase = {
-      run: () => {},
-      exec: () => [],
-      export: () => new Uint8Array(),
-      close: () => {},
-    };
-
-    // Override the dynamic import of sql.js
-    (window as unknown as Record<string, unknown>).__SQL_JS_MOCK__ = {
-      Database: function() { return mockDatabase; },
-    };
-
-    // Mock initSqlJs to return our mock
-    (window as unknown as Record<string, unknown>).initSqlJs = async () => {
-      return (window as unknown as Record<string, unknown>).__SQL_JS_MOCK__;
-    };
-  });
-
-  // Mock the sql-wasm.wasm file request
-  await page.route('**/sql-wasm.wasm', async (route: Route) => {
-    // Return empty response - the mock above will handle initialization
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/wasm',
-      body: Buffer.from([]),
-    });
-  });
+  // Note: sql.js WASM loads from Vite dev server - no mocking needed
+  // The real sql.js database is used for e2e tests
 
   // Mock /api/v1/config
   await page.route('**/api/v1/config', async (route: Route) => {
@@ -322,17 +295,20 @@ async function setupApiMocks(page: Page, mockState: MockState) {
       });
     } else if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON() || {};
+      const toolObjects: MockTool[] = [
+        { name: 'read_file', description: 'Read a file from the filesystem' },
+        { name: 'write_file', description: 'Write a file to the filesystem' },
+        { name: 'list_directory', description: 'List directory contents' },
+      ];
+
       const server: MockMCPServer = {
         name: body.name,
         transport: 'stdio',
         command: body.command,
         args: body.args ? (typeof body.args === 'string' ? body.args.split(',').map((a: string) => a.trim()) : body.args) : [],
-        status: body.command?.includes('/invalid') ? 'Error' : 'Connected',
-        tools: [
-          { name: 'read_file', description: 'Read a file from the filesystem' },
-          { name: 'write_file', description: 'Write a file to the filesystem' },
-          { name: 'list_directory', description: 'List directory contents' },
-        ],
+        status: body.command?.includes('/invalid') ? 'error' : 'connected',
+        tools: toolObjects.map(t => t.name), // Store only tool names in the server
+        toolObjects: toolObjects, // Keep full objects for the tools endpoint
       };
       mockState.mcpServers.set(body.name, server);
       await route.fulfill({
@@ -361,7 +337,9 @@ async function setupApiMocks(page: Page, mockState: MockState) {
   await page.route('**/api/v1/mcp/tools', async (route: Route) => {
     const allTools: Record<string, MockTool[]> = {};
     mockState.mcpServers.forEach((server) => {
-      allTools[server.name] = server.tools;
+      if (server.toolObjects) {
+        allTools[server.name] = server.toolObjects;
+      }
     });
     await route.fulfill({
       status: 200,
@@ -451,16 +429,36 @@ const test = base.extend<TestFixtures>({
     // Setup all API mocks before each test
     await setupApiMocks(page, mockState);
 
+    // Mock the connectionStore to always be connected in tests
+    // This prevents the input field from being disabled with "Connecting..." placeholder
+    await page.addInitScript(() => {
+      // Override the connectionStore's initial state to be Connected
+      // This runs before the page loads, ensuring the store starts in the right state
+      (window as any).__E2E_CONNECTION_MOCK__ = {
+        status: 'connected',
+        error: null,
+        roomName: null,
+        roomSid: null,
+        participants: {},
+        localParticipantId: null,
+        connectedAt: new Date(),
+        reconnectAttempts: 0,
+      };
+    });
+
     await use(page);
   },
 
   conversationHelpers: async ({ page }, use) => {
     const helpers: ConversationHelpers = {
       async createConversation() {
-        await page.click('button:has-text("New Chat")');
+        await page.click('[data-testid="new-chat-btn"]');
 
         // Wait for conversation to be created and selected
         await page.waitForSelector('.chat-window', { state: 'visible' });
+
+        // Wait for conversation to be selected
+        await page.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
 
         // Get the conversation ID from the selected item
         const selectedConv = await page.locator('.conversation-item.selected').first();
@@ -477,24 +475,46 @@ const test = base.extend<TestFixtures>({
         // Make sure the conversation is selected
         await page.click(`[data-conversation-id="${conversationId}"]`);
 
+        // Wait for chat window to be visible
+        await page.waitForSelector('.chat-window', { state: 'visible' });
+
+        // Wait for input to be visible and enabled
+        const inputSelector = '.input-bar input[type="text"]';
+        await page.waitForSelector(inputSelector, { state: 'visible' });
+
+        // Wait for the input to be enabled (not disabled)
+        // Use a longer timeout for connection to be established
+        const input = page.locator(inputSelector);
+        await page.waitForFunction(
+          (selector) => {
+            const el = document.querySelector(selector) as HTMLInputElement;
+            return el && !el.disabled;
+          },
+          inputSelector,
+          { timeout: 15000 }
+        );
+
         // Type and send message
-        await page.fill('.input-bar input[type="text"]', message);
+        await input.fill(message);
         await page.click('.input-bar button[type="submit"]');
 
-        // Wait for message to appear in the list
-        await page.waitForSelector(`.message-bubble:has-text("${message}")`, {
-          timeout: 5000,
+        // Wait for the user message to appear in the list
+        await page.waitForSelector(`.message-bubble.user:has-text("${message}")`, {
+          timeout: 10000,
         });
+
+        // Note: We don't wait for assistant response because the frontend uses
+        // a local SQL.js database and the mocked assistant response may not appear
+        // in the UI (it's only in the mock API state, not the local DB)
       },
 
       async deleteConversation(conversationId: string) {
-        // Click the delete button for the conversation
-        await page.click(`[data-conversation-id="${conversationId}"] .delete-btn`);
+        // Click the delete button for the conversation using data-testid
+        const conversationItem = page.locator(`[data-conversation-id="${conversationId}"]`);
+        const deleteBtn = conversationItem.locator('[data-testid="delete-conversation-btn"]');
+        await deleteBtn.click();
 
-        // Confirm deletion if there's a confirmation dialog
-        await page.click('button:has-text("Delete")');
-
-        // Wait for conversation to be removed
+        // Wait for conversation to be removed from the DOM
         await page.waitForSelector(`[data-conversation-id="${conversationId}"]`, {
           state: 'hidden',
           timeout: 5000,
@@ -541,12 +561,17 @@ const test = base.extend<TestFixtures>({
 
       async removeServer(name: string) {
         const serverCard = page.locator(`.server-card:has-text("${name}")`);
-        await serverCard.locator('.remove-server-btn').click();
 
-        // Confirm removal
+        // Register dialog handler BEFORE clicking to catch the confirm dialog
         page.once('dialog', dialog => dialog.accept());
 
-        // Wait for server to be removed
+        // Click the remove button
+        await serverCard.locator('.remove-server-btn').click();
+
+        // Wait for success toast to appear
+        await page.waitForSelector('.toast-success', { timeout: 5000 });
+
+        // Wait for server to be removed from the list
         await page.waitForSelector(`.server-card:has-text("${name}")`, {
           state: 'hidden',
           timeout: 5000,
@@ -555,10 +580,19 @@ const test = base.extend<TestFixtures>({
 
       async expandServerTools(serverName: string) {
         const serverCard = page.locator(`.server-card:has-text("${serverName}")`);
-        await serverCard.locator('.tools-toggle').click();
+        const toolsToggle = serverCard.locator('.tools-toggle');
+
+        // Wait for the toggle button to be visible and enabled
+        await toolsToggle.waitFor({ state: 'visible' });
+
+        // Click to expand
+        await toolsToggle.click();
+
+        // Wait a bit for React state to update
+        await page.waitForTimeout(300);
 
         // Wait for tools list to be visible
-        await serverCard.locator('.tools-list').waitFor({ state: 'visible' });
+        await serverCard.locator('.tools-list').waitFor({ state: 'visible', timeout: 10000 });
       },
 
       async waitForServerStatus(serverName: string, status: 'Connected' | 'Error' | 'Disconnected') {

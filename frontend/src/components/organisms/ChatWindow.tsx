@@ -4,6 +4,7 @@ import InputArea from './InputArea';
 import ResponseControls from './ResponseControls';
 import { useConnectionStore, ConnectionStatus } from '../../stores/connectionStore';
 import { useLiveKit } from '../../hooks/useLiveKit';
+import { useConfig } from '../../contexts/ConfigContext';
 import { cls } from '../../utils/cls';
 
 /**
@@ -42,9 +43,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   showControls = true,
   className = '',
 }) => {
+  const { config } = useConfig();
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceSelectorOpen, setVoiceSelectorOpen] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(config?.tts?.default_voice || 'af_sarah');
+  const [speed, setSpeed] = useState(config?.tts?.default_speed || 1.0);
   const connectionStatus = useConnectionStore((state) => state.status);
   const isConnected = connectionStatus === ConnectionStatus.Connected;
 
@@ -108,13 +112,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   return (
-    <div className={cls('flex flex-col h-full bg-elevated', className)}>
+    <div className={cls('chat-window flex flex-col h-full bg-main-bg', className)}>
       {/* Connection status indicator - always visible when voice mode is active */}
       <div className={cls(
-        'flex items-center justify-center gap-2 px-4 py-2 border-b border',
+        'connection-status flex items-center justify-center gap-2 px-4 py-2 border-b',
         voiceModeActive
-          ? (liveKitConnected ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning')
-          : (!isConnected ? 'bg-warning-subtle text-warning' : 'hidden')
+          ? (liveKitConnected ? 'bg-green-500/20 text-green-500 border-green-500/50' : 'bg-warning/20 text-warning border-warning/50')
+          : (!isConnected ? 'bg-warning/20 text-warning border-warning/50' : 'hidden')
       )}>
         <svg className="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
           <path
@@ -138,7 +142,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* LiveKit error indicator (when using VAD) */}
       {(useSileroVAD || voiceModeActive) && liveKitError && (
-        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-error-subtle text-error border-b border-error">
+        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-error/20 text-error border-b border-error/50">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
@@ -166,9 +170,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Voice controls - visible when voice mode is active */}
       {voiceModeActive && (
-        <div className="flex items-center justify-center gap-4 p-4 border-t border">
+        <div className="voice-controls flex items-center justify-center gap-4 p-4 border-t border-primary-blue-glow">
           {/* Audio input indicator */}
-          <div className="flex items-center gap-2 text-sm text-muted">
+          <div className="audio-input flex items-center gap-2 text-sm text-muted-text">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
             </svg>
@@ -178,16 +182,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           {/* Record button */}
           <button
             className={cls(
-              'w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 border-2',
+              'record-btn w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200',
               isRecording
-                ? 'bg-error border-error text-on-emphasis animate-pulse-recording'
-                : 'bg-elevated border hover:border-accent hover:scale-105'
+                ? 'recording bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                : 'bg-primary-blue hover:bg-primary-blue-hover text-white'
             )}
             onClick={toggleRecording}
             aria-label={isRecording ? 'Stop recording' : 'Start recording'}
           >
             {isRecording ? (
-              <div className="w-4 h-4 bg-on-emphasis rounded-sm" />
+              <div className="w-4 h-4 bg-white rounded-sm" />
             ) : (
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
@@ -195,51 +199,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             )}
           </button>
 
-          {/* Voice selector toggle */}
-          <div className="relative">
-            <button
-              className="flex items-center gap-2 px-4 py-2 bg-surface border-2 border rounded-full text-sm font-medium hover:bg-sunken hover:border-accent transition-all"
-              aria-label="Select voice"
-              onClick={toggleVoiceSelector}
-              aria-expanded={voiceSelectorOpen}
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-              <span>Voice</span>
-            </button>
-
-            {/* Voice selector panel */}
-            {voiceSelectorOpen && (
-              <div className="absolute bottom-full left-0 mb-2 w-80 bg-elevated border rounded-lg shadow-lg p-2 animate-fade-in">
-                <div className="flex justify-between items-center p-3 pb-2 border-b border">
-                  <h3 className="text-base font-semibold text-default">Select Voice</h3>
-                  <button
-                    onClick={toggleVoiceSelector}
-                    className="btn-ghost w-6 h-6 flex items-center justify-center rounded text-muted hover:bg-surface text-xl"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="p-4 flex flex-col gap-2">
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-surface rounded transition-colors">Sarah</button>
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-surface rounded transition-colors">Adam</button>
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-surface rounded transition-colors">Nicole</button>
-                </div>
-              </div>
-            )}
+          {/* Audio output indicator */}
+          <div className="audio-output flex items-center gap-2 text-sm text-muted-text">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+            </svg>
+            <span>Voice Output</span>
           </div>
         </div>
       )}
 
-      {/* Voice mode toggle button */}
-      <div className="flex items-center justify-between p-2 border-t border">
+      {/* Voice mode toggle button and voice selector */}
+      <div className="flex items-center justify-between p-2 border-t border-primary-blue-glow">
         <button
           className={cls(
-            'flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200',
+            'voice-mode-toggle flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200',
             voiceModeActive
-              ? 'bg-accent text-on-emphasis'
-              : 'bg-surface text-muted hover:bg-sunken'
+              ? 'active bg-primary-blue text-white'
+              : 'bg-surface-800 text-muted-text hover:bg-surface-700'
           )}
           onClick={toggleVoiceMode}
           aria-label={voiceModeActive ? 'Disable voice mode' : 'Enable voice mode'}
@@ -250,13 +227,88 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </svg>
           <span className="text-sm font-medium">Voice Mode</span>
         </button>
+
+        {/* Voice selector toggle - always accessible */}
+        <div className="relative">
+          <button
+            className="voice-selector-toggle flex items-center gap-2 px-3 py-2 text-sm text-muted-text hover:text-primary-text transition-colors rounded-lg hover:bg-surface-700"
+            aria-label="Select voice"
+            onClick={toggleVoiceSelector}
+            aria-expanded={voiceSelectorOpen}
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            <span>Voice</span>
+          </button>
+
+          {/* Voice selector panel */}
+          {voiceSelectorOpen && (
+            <div className="voice-selector-panel absolute bottom-full right-0 mb-2 w-80 bg-surface-800 border border-primary-blue-glow rounded-lg shadow-lg">
+              {/* Header with close button */}
+              <div className="voice-selector-header flex justify-between items-center p-3 border-b border-primary-blue-glow">
+                <h3 className="text-sm font-semibold text-primary-text">Voice Settings</h3>
+                <button
+                  className="voice-selector-close w-6 h-6 flex items-center justify-center rounded hover:bg-surface-700 text-muted-text hover:text-primary-text transition-colors"
+                  onClick={toggleVoiceSelector}
+                  aria-label="Close voice selector"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="voice-selector-content p-4 space-y-4">
+                {/* Voice selection */}
+                <div className="voice-option-group">
+                  <label className="voice-label text-xs text-muted-text mb-2 block">Voice</label>
+                  <select
+                    className="voice-select w-full px-3 py-2 bg-surface-700 border border-primary-blue-glow rounded text-sm text-primary-text focus:outline-none focus:border-primary-blue"
+                    value={selectedVoice}
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                  >
+                    {config?.tts?.voices?.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name} ({voice.category})
+                      </option>
+                    )) || (
+                      <option value="af_sarah">Sarah (American Female)</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Speed control */}
+                <div className="voice-option-group">
+                  <label className="voice-label text-xs text-muted-text mb-2 block">
+                    Speed: {speed.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    className="speed-slider w-full"
+                    min={config?.tts?.speed_min || 0.5}
+                    max={config?.tts?.speed_max || 2.0}
+                    step={config?.tts?.speed_step || 0.1}
+                    value={speed}
+                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                  />
+                  <div className="speed-markers flex justify-between text-xs text-muted-text mt-1">
+                    <span>{config?.tts?.speed_min || 0.5}x</span>
+                    <span>{config?.tts?.speed_max || 2.0}x</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Input area */}
       <InputArea
         onSend={handleSendMessage}
         onPublishAudioTrack={(useSileroVAD || voiceModeActive) ? publishAudioTrack : undefined}
-        disabled={!isConnected || ((useSileroVAD || voiceModeActive) && !liveKitConnected)}
+        disabled={!isConnected}
         placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
         useSileroVAD={useSileroVAD || voiceModeActive}
       />

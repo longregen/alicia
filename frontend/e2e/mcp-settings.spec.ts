@@ -18,7 +18,8 @@ test.describe('MCP Settings', () => {
 
   test('should display empty state when no servers configured', async ({ page }) => {
     // Assuming fresh state with no servers
-    const emptyState = page.locator('.empty-state');
+    // Scope the selector to MCP settings to avoid matching other empty states
+    const emptyState = page.locator('.mcp-settings .empty-state');
 
     // Check if either empty state is shown or servers list is shown
     const hasServers = await page.locator('.servers-list .server-card').count() > 0;
@@ -66,31 +67,34 @@ test.describe('MCP Settings', () => {
 
     await mcpHelpers.addServer(serverName, 'npx', '-y, @modelcontextprotocol/server-filesystem, /tmp');
 
-    // Wait for server to potentially load tools
-    await page.waitForTimeout(2000);
-
+    // Wait for server card to appear and tools to load
     const serverCard = page.locator(`.server-card:has-text("${serverName}")`);
+    await serverCard.waitFor({ state: 'visible' });
+
+    // Wait for the tools section to appear (it only appears if server.tools.length > 0)
+    const toolsSection = serverCard.locator('.tools-section');
+    await toolsSection.waitFor({ state: 'visible', timeout: 5000 });
+
     const toolsToggle = serverCard.locator('.tools-toggle');
 
-    // Check if server has tools
-    const toolsToggleText = await toolsToggle.textContent();
+    // Verify tools toggle shows tool count
+    await expect(toolsToggle).toContainText('Tools');
 
-    if (toolsToggleText && toolsToggleText.includes('Tools')) {
-      await mcpHelpers.expandServerTools(serverName);
+    // Expand the tools section
+    await mcpHelpers.expandServerTools(serverName);
 
-      // Verify tools list is visible
-      const toolsList = serverCard.locator('.tools-list');
-      await expect(toolsList).toBeVisible();
+    // Verify tools list is visible
+    const toolsList = serverCard.locator('.tools-list');
+    await expect(toolsList).toBeVisible();
 
-      // Verify at least one tool is shown
-      const tools = toolsList.locator('.tool-item');
-      const toolCount = await tools.count();
-      expect(toolCount).toBeGreaterThan(0);
+    // Verify at least one tool is shown
+    const tools = toolsList.locator('.tool-item');
+    const toolCount = await tools.count();
+    expect(toolCount).toBeGreaterThan(0);
 
-      // Verify tool structure
-      const firstTool = tools.first();
-      await expect(firstTool.locator('.tool-name')).toBeVisible();
-    }
+    // Verify tool structure
+    const firstTool = tools.first();
+    await expect(firstTool.locator('.tool-name')).toBeVisible();
   });
 
   test('should remove an MCP server', async ({ page, mcpHelpers }) => {
@@ -116,10 +120,26 @@ test.describe('MCP Settings', () => {
   test('should validate required fields when adding server', async ({ page }) => {
     await page.click('button:has-text("Add Server")');
 
-    // Try to submit with empty fields
-    await page.click('button[type="submit"]:has-text("Add Server")');
+    // Wait for form to be visible
+    await page.waitForSelector('.add-server-form');
 
-    // Should show validation or error toast
+    // Fill only the name field, leave command empty to trigger validation
+    await page.fill('#server-name', 'test-incomplete-server');
+
+    // Try to submit - this should trigger validation since command is required
+    // We need to use evaluate to bypass HTML5 validation and trigger the React validation
+    await page.evaluate(() => {
+      const form = document.querySelector('.add-server-form') as HTMLFormElement;
+      if (form) {
+        // Temporarily remove required attributes to bypass browser validation
+        const inputs = form.querySelectorAll('input[required]');
+        inputs.forEach(input => input.removeAttribute('required'));
+        // Submit the form
+        form.requestSubmit();
+      }
+    });
+
+    // Should show validation or error toast from the app
     const toast = page.locator('.toast-error');
     await expect(toast).toBeVisible();
     await expect(toast).toContainText('required');

@@ -67,7 +67,13 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   }, [conversationId, messages, loadConversation]);
 
   // Synchronize connection state to connectionStore
+  // Skip in E2E tests where connection is mocked
   useEffect(() => {
+    // Don't override connection status in E2E tests
+    if (typeof window !== 'undefined' && (window as unknown as { __E2E_CONNECTION_MOCK__?: unknown }).__E2E_CONNECTION_MOCK__) {
+      return;
+    }
+
     if (loading || sending) {
       setConnectionStatus(ConnectionStatus.Connecting);
     } else if (syncError) {

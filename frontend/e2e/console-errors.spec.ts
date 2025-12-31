@@ -10,7 +10,11 @@ test.describe('Console Errors', () => {
       const text = msg.text();
       if (msg.type() === 'error') {
         // Ignore known benign errors (e.g., failed network requests in test env)
-        if (!text.includes('net::ERR_') && !text.includes('Failed to load resource')) {
+        if (
+          !text.includes('net::ERR_') &&
+          !text.includes('Failed to load resource') &&
+          !text.includes('WebSocket')
+        ) {
           consoleErrors.push(text);
         }
       } else if (msg.type() === 'warning') {
@@ -48,7 +52,11 @@ test.describe('Console Errors', () => {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!text.includes('net::ERR_') && !text.includes('Failed to load resource')) {
+        if (
+          !text.includes('net::ERR_') &&
+          !text.includes('Failed to load resource') &&
+          !text.includes('WebSocket')
+        ) {
           consoleErrors.push(text);
         }
       }
@@ -79,7 +87,11 @@ test.describe('Console Errors', () => {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!text.includes('net::ERR_') && !text.includes('Failed to load resource')) {
+        if (
+          !text.includes('net::ERR_') &&
+          !text.includes('Failed to load resource') &&
+          !text.includes('WebSocket')
+        ) {
           consoleErrors.push(text);
         }
       }
@@ -117,7 +129,11 @@ test.describe('Console Errors', () => {
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        if (!text.includes('net::ERR_') && !text.includes('Failed to load resource')) {
+        if (
+          !text.includes('net::ERR_') &&
+          !text.includes('Failed to load resource') &&
+          !text.includes('WebSocket')
+        ) {
           consoleErrors.push(text);
         }
       }

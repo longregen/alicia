@@ -108,6 +108,10 @@ const Toast: React.FC<ToastProps> = ({
     // Variant
     variantStyles[variant],
 
+    // Semantic classes for e2e tests
+    variant === 'success' ? 'toast-success' : '',
+    variant === 'error' ? 'toast-error' : '',
+
     // Animation
     'transition-all duration-200 ease-out',
     isExiting ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0',

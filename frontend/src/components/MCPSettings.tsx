@@ -163,16 +163,16 @@ export function MCPSettings() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'connected':
-        return <span className="badge badge-success">Connected</span>;
+        return <span className="status-badge badge badge-success">Connected</span>;
       case 'error':
-        return <span className="badge badge-error">Error</span>;
+        return <span className="status-badge badge badge-error">Error</span>;
       default:
-        return <span className="badge badge-warning">Disconnected</span>;
+        return <span className="status-badge badge badge-warning">Disconnected</span>;
     }
   };
 
   return (
-    <div className="p-5 max-w-4xl mx-auto">
+    <div className="mcp-settings p-5 max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold text-default m-0">MCP Server Settings</h2>
         <button
@@ -185,14 +185,14 @@ export function MCPSettings() {
 
       {toast && (
         <div className={`fixed top-5 right-5 px-5 py-3 rounded-md text-sm font-medium shadow-lg z-[1000] animate-[slideIn_0.3s_ease] ${
-          toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+          toast.type === 'success' ? 'toast-success bg-green-500 text-white' : 'toast-error bg-red-500 text-white'
         }`}>
           {toast.message}
         </div>
       )}
 
       {showAddForm && (
-        <form className="bg-elevated border border-default rounded-lg p-5 mb-6" onSubmit={handleAddServer}>
+        <form className="add-server-form bg-elevated border border-default rounded-lg p-5 mb-6" onSubmit={handleAddServer}>
           <h3 className="m-0 mb-4 text-lg font-semibold text-default">Add MCP Server</h3>
 
           <div className="mb-4">
@@ -262,7 +262,7 @@ export function MCPSettings() {
           <div className="flex gap-3 justify-end mt-5">
             <button
               type="button"
-              className="btn btn-secondary"
+              className="cancel-btn btn btn-secondary"
               onClick={() => setShowAddForm(false)}
             >
               Cancel
@@ -283,22 +283,22 @@ export function MCPSettings() {
       {error && <div className="bg-red-50 text-red-800 px-4 py-3 rounded-md mb-4 text-sm">{error}</div>}
 
       {!loading && !error && servers.length === 0 && (
-        <div className="text-center text-muted py-10 px-5 text-sm">
+        <div className="empty-state text-center text-muted py-10 px-5 text-sm">
           No MCP servers configured. Click "Add Server" to get started.
         </div>
       )}
 
       {!loading && !error && servers.length > 0 && (
-        <div className="flex flex-col gap-4">
+        <div className="servers-list flex flex-col gap-4">
           {servers.map(server => (
-            <div key={server.name} className="card card-hover p-4">
+            <div key={server.name} className="server-card card card-hover p-4">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-3 flex-1">
                   <h3 className="m-0 text-lg font-semibold text-default">{server.name}</h3>
                   {getStatusBadge(server.status)}
                 </div>
                 <button
-                  className="bg-transparent border-0 text-muted text-[28px] cursor-pointer p-0 w-8 h-8 flex items-center justify-center rounded transition-all hover:bg-red-50 hover:text-red-500"
+                  className="remove-server-btn bg-transparent border-0 text-muted text-[28px] cursor-pointer p-0 w-8 h-8 flex items-center justify-center rounded transition-all hover:bg-red-50 hover:text-red-500"
                   onClick={() => handleRemoveServer(server.name)}
                   title="Remove server"
                 >
@@ -309,16 +309,16 @@ export function MCPSettings() {
               <div className="flex flex-col gap-2 mb-3">
                 <div className="flex gap-2 text-sm">
                   <span className="font-semibold text-muted min-w-[80px]">Transport:</span>
-                  <span className="text-default break-all">{server.transport}</span>
+                  <span className="detail-value text-default break-all">{server.transport}</span>
                 </div>
                 <div className="flex gap-2 text-sm">
                   <span className="font-semibold text-muted min-w-[80px]">Command:</span>
-                  <span className="text-default break-all">{server.command}</span>
+                  <span className="detail-value text-default break-all">{server.command}</span>
                 </div>
                 {server.args.length > 0 && (
                   <div className="flex gap-2 text-sm">
                     <span className="font-semibold text-muted min-w-[80px]">Args:</span>
-                    <span className="text-default break-all">{server.args.join(', ')}</span>
+                    <span className="detail-value text-default break-all">{server.args.join(', ')}</span>
                   </div>
                 )}
                 {server.error && (
@@ -330,9 +330,9 @@ export function MCPSettings() {
               </div>
 
               {server.tools.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-default">
+                <div className="tools-section mt-3 pt-3 border-t border-default">
                   <button
-                    className="bg-transparent border-0 text-accent text-sm font-medium cursor-pointer py-2 px-0 flex items-center gap-2 transition-colors hover:text-accent/80"
+                    className="tools-toggle bg-transparent border-0 text-accent text-sm font-medium cursor-pointer py-2 px-0 flex items-center gap-2 transition-colors hover:text-accent/80"
                     onClick={() => toggleServerExpanded(server.name)}
                   >
                     {expandedServers.has(server.name) ? '▼' : '▶'}
@@ -340,10 +340,10 @@ export function MCPSettings() {
                   </button>
 
                   {expandedServers.has(server.name) && (
-                    <div className="mt-3 flex flex-col gap-2">
+                    <div className="tools-list mt-3 flex flex-col gap-2">
                       {getServerTools(server.name).map(tool => (
-                        <div key={tool.name} className="bg-surface p-3 rounded-md border-l-[3px] border-accent">
-                          <div className="font-semibold text-default text-sm mb-1">{tool.name}</div>
+                        <div key={tool.name} className="tool-item bg-surface p-3 rounded-md border-l-[3px] border-accent">
+                          <div className="tool-name font-semibold text-default text-sm mb-1">{tool.name}</div>
                           {tool.description && (
                             <div className="text-muted text-[13px] leading-[1.4]">{tool.description}</div>
                           )}

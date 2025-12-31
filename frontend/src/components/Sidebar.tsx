@@ -71,8 +71,8 @@ export function Sidebar({
         {conversations.map(conv => (
           <div
             key={conv.id}
-            className={`p-3 mb-2 bg-elevated rounded-md cursor-pointer flex justify-between items-center hover:bg-sunken transition-colors ${
-              selectedId === conv.id ? 'bg-sunken border-l-2 border-accent' : ''
+            className={`conversation-item p-3 mb-2 bg-elevated rounded-md cursor-pointer flex justify-between items-center hover:bg-sunken transition-colors ${
+              selectedId === conv.id ? 'selected bg-sunken border-l-2 border-accent' : ''
             }`}
             onClick={() => {
               if (editingId !== conv.id) {
