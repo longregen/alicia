@@ -20,6 +20,10 @@ import {
   MemoryAction,
   DimensionPreference,
   EliteSelect,
+  ControlStop,
+  ControlVariation,
+  StopType,
+  VariationType,
 } from '../types/protocol';
 import {
   Message,
@@ -714,6 +718,70 @@ export function sendEliteSelect(select: EliteSelect): void {
     conversationId: select.conversationId,
     type: MessageType.EliteSelect,
     body: select,
+  };
+
+  messageSender(envelope);
+}
+
+/**
+ * Send a control stop to the server
+ */
+export function sendControlStop(conversationId: string, stopType: StopType = 'all'): void {
+  if (!messageSender) {
+    console.warn('Cannot send control stop: no message sender available');
+    return;
+  }
+
+  const controlStop: ControlStop = {
+    conversationId,
+    stopType,
+  };
+
+  const envelope: Envelope = {
+    stanzaId: Date.now(),
+    conversationId,
+    type: MessageType.ControlStop,
+    body: controlStop,
+  };
+
+  messageSender(envelope);
+
+  // Update local state to reflect stopped streaming
+  const store = useConversationStore.getState();
+  if (store.currentStreamingMessageId) {
+    const message = store.messages[store.currentStreamingMessageId];
+    if (message && message.conversationId === conversationId) {
+      store.setCurrentStreamingMessageId(null);
+    }
+  }
+}
+
+/**
+ * Send a control variation (regenerate) to the server
+ */
+export function sendControlVariation(
+  conversationId: string,
+  targetId: string,
+  variationType: VariationType = 'regenerate',
+  newContent?: string
+): void {
+  if (!messageSender) {
+    console.warn('Cannot send control variation: no message sender available');
+    return;
+  }
+
+  const controlVariation: ControlVariation = {
+    conversationId,
+    targetId,
+    mode: variationType,
+    newContent,
+  };
+
+  const envelope: Envelope = {
+    stanzaId: Date.now(),
+    conversationId,
+    type: MessageType.ControlVariation,
+    body: controlVariation,
   };
 
   messageSender(envelope);

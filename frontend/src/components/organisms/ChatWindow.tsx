@@ -71,6 +71,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     connected: liveKitConnected,
     error: liveKitError,
     publishAudioTrack,
+    sendStop,
   } = useLiveKit((voiceModeActive || useSileroVAD) ? conversationId : null);
 
   const toggleVoiceMode = () => {
@@ -134,16 +135,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     if (onStopStreaming) {
       onStopStreaming();
     }
+    // Also send stop via LiveKit if connected
+    if (sendStop && conversationId) {
+      try {
+        await sendStop();
+      } catch (error) {
+        console.error('Failed to send stop command:', error);
+      }
+    }
   };
 
-  const handleRegenerate = () => {
+  const handleRegenerate = async () => {
     if (onRegenerateResponse) {
       onRegenerateResponse();
     }
+    // Regenerate via LiveKit requires message ID to regenerate from
+    // This will be passed by the parent component
   };
 
   // Determine voice connection status text
