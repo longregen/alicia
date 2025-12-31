@@ -1,8 +1,24 @@
 # Alicia Frontend Style Guide
 
+> **Visual Design Reference**: Use the look and feel of `frontend-mockup/` to guide the visual design. The mockup contains the canonical visual reference for spacing, colors, and component appearance.
+
 ## Design System Overview
 
 This project uses **Tailwind CSS 4** with a semantic color system based on OKLCH color space. Colors automatically adapt to dark/light mode via `prefers-color-scheme`.
+
+### Critical: Component CSS Classes
+
+The following CSS component classes are defined in `src/index.css` and **must not be removed**. These provide consistent styling across the application:
+
+| Class | Purpose |
+|-------|---------|
+| `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-destructive` | Button styles |
+| `.input` | Form input styling |
+| `.tab`, `.tab.active` | Tab navigation |
+| `.card`, `.card-hover` | Card containers |
+| `.badge`, `.badge-success`, `.badge-error`, `.badge-warning`, `.badge-neutral` | Status badges |
+
+**Always use these classes** instead of writing inline Tailwind for common components. If you need to modify them, update `src/index.css` rather than overriding with inline styles.
 
 ## Color Tokens
 
@@ -60,51 +76,62 @@ This project uses **Tailwind CSS 4** with a semantic color system based on OKLCH
 
 ## Component Patterns
 
-### Buttons
+### Buttons (use `.btn` classes)
 
 ```tsx
-// Primary button
-<button className="bg-accent hover:bg-accent-hover text-on-emphasis px-4 py-2 rounded-lg">
-  Submit
-</button>
+// Primary button - use for main actions
+<button className="btn btn-primary">Submit</button>
 
-// Secondary button
-<button className="bg-surface hover:bg-elevated text-default border px-4 py-2 rounded-lg">
-  Cancel
-</button>
+// Secondary button - use for secondary actions
+<button className="btn btn-secondary">Cancel</button>
 
-// Danger button
-<button className="bg-error hover:bg-error-600 text-on-emphasis px-4 py-2 rounded-lg">
-  Delete
-</button>
+// Ghost button - use for subtle/text-like buttons
+<button className="btn-ghost">Close</button>
+
+// Destructive button - use for dangerous actions
+<button className="btn btn-destructive">Delete</button>
 ```
 
-### Cards
+### Inputs (use `.input` class)
 
 ```tsx
-<div className="bg-surface rounded-lg p-4 shadow-md">
-  <h3 className="text-default font-medium">Title</h3>
-  <p className="text-muted text-sm">Description</p>
+<input className="input" placeholder="Enter text..." />
+<select className="input">...</select>
+<textarea className="input" rows={3} />
+```
+
+### Tabs (use `.tab` class)
+
+```tsx
+<div className="flex gap-1">
+  <button className={`tab ${activeTab === 'one' ? 'active' : ''}`}>Tab One</button>
+  <button className={`tab ${activeTab === 'two' ? 'active' : ''}`}>Tab Two</button>
 </div>
 ```
 
-### Status Badges
+### Cards (use `.card` class)
 
 ```tsx
-// Success
-<span className="bg-success-subtle text-success px-2 py-1 rounded text-sm">
-  Connected
-</span>
+// Basic card
+<div className="card p-4">
+  <h3 className="text-foreground font-medium">Title</h3>
+  <p className="text-muted-foreground text-sm">Description</p>
+</div>
 
-// Error
-<span className="bg-error-subtle text-error px-2 py-1 rounded text-sm">
-  Failed
-</span>
+// Interactive card with hover effect
+<div className="card card-hover p-4">...</div>
 
-// Warning
-<span className="bg-warning-subtle text-warning px-2 py-1 rounded text-sm">
-  Pending
-</span>
+// Card without border (for nested sections)
+<div className="bg-card rounded-lg p-4">...</div>
+```
+
+### Status Badges (use `.badge` classes)
+
+```tsx
+<span className="badge badge-success">Connected</span>
+<span className="badge badge-error">Failed</span>
+<span className="badge badge-warning">Pending</span>
+<span className="badge badge-neutral">Draft</span>
 ```
 
 ### Modals
@@ -122,11 +149,11 @@ This project uses **Tailwind CSS 4** with a semantic color system based on OKLCH
 ### Form Inputs
 
 ```tsx
-<input
-  className="bg-surface border rounded-lg px-3 py-2 text-default
-             placeholder:text-subtle
-             focus:border-accent focus:ring-2 focus:ring-accent focus:outline-none"
-/>
+// Use the .input class for consistent styling
+<input className="input" placeholder="Enter value..." />
+
+// For custom styling needs, extend rather than replace:
+<input className="input w-64" />  // adds width constraint
 ```
 
 ## Animations
@@ -148,21 +175,26 @@ Available animation classes:
 
 ## Best Practices
 
-1. **Always use semantic tokens** - Use `bg-surface` not `bg-gray-100`
-2. **No hardcoded colors** - Never use hex values or `bg-blue-500` directly
-3. **Dark mode is automatic** - Colors adapt via CSS custom properties
-4. **Use the `cls()` utility** - For conditional class concatenation:
+1. **Use component CSS classes** - Use `.btn`, `.input`, `.tab`, `.card`, `.badge` classes defined in `index.css`
+2. **Reference frontend-mockup** - Check `frontend-mockup/` for visual design guidance before implementing new UI
+3. **Always use semantic tokens** - Use `bg-surface` not `bg-gray-100`
+4. **No hardcoded colors** - Never use hex values or `bg-blue-500` directly
+5. **Dark mode is automatic** - Colors adapt via CSS custom properties
+6. **Avoid harsh borders** - Use `bg-card` or `bg-secondary` for visual separation instead of `border border-default`
+7. **Use the `cls()` utility** - For conditional class concatenation:
    ```tsx
    import { cls } from '../utils/cls';
 
    <div className={cls('bg-surface', isActive && 'bg-accent-subtle')} />
    ```
+8. **Don't remove component classes** - The classes in `@layer components` of `index.css` are used throughout the app
 
 ## File Structure
 
-- `src/index.css` - Design tokens defined in `@theme` block
+- `src/index.css` - Design tokens in `@theme` block AND component classes in `@layer components`
 - `tailwind.config.js` - Animations and spacing extensions
 - `src/utils/cls.ts` - Class name utility
+- `frontend-mockup/` - Visual design reference (canonical look and feel)
 
 ## Adding New Colors
 
