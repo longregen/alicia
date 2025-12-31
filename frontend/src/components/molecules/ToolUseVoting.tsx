@@ -52,9 +52,9 @@ const ToolUseVoting: React.FC<ToolUseVotingProps> = ({
   };
 
   return (
-    <div className={cls('flex flex-col gap-2', className)}>
+    <div className={cls('layout-stack-gap', className)}>
       {/* Main voting controls */}
-      <div className="flex items-center gap-2">
+      <div className="layout-center-gap">
         <FeedbackControls
           currentVote={currentVote as 'up' | 'down' | null}
           onVote={vote}
@@ -79,7 +79,7 @@ const ToolUseVoting: React.FC<ToolUseVotingProps> = ({
 
       {/* Quick feedback options */}
       {showQuickFeedback && showFeedbackOptions && (
-        <div className="flex flex-col gap-2 p-3 bg-surface rounded-lg border border-muted">
+        <div className="layout-stack-gap p-3 bg-surface rounded-lg border border-muted">
           <div className="text-xs text-muted font-medium">
             What's your feedback?
           </div>

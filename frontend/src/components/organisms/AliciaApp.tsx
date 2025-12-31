@@ -123,7 +123,7 @@ export function AliciaApp() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 min-h-0">
+      <main className="flex-1 layout-stack min-w-0 min-h-0">
         {activePanel === 'chat' && (
           <ChatWindow
             conversationId={activeConversationId}

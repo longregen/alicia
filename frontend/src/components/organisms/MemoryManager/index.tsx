@@ -127,9 +127,9 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
   };
 
   return (
-    <div className={cls('flex flex-col h-full bg-background min-h-0', className)}>
+    <div className={cls('layout-stack h-full bg-background min-h-0', className)}>
       {/* Header */}
-      <header className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0">
+      <header className="h-14 border-b border-border layout-between px-4 shrink-0">
         <div className="flex items-center gap-3">
           <svg
             className="w-5 h-5 text-accent"
@@ -152,7 +152,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
         <button
           onClick={handleCreateNew}
           className={cls(
-            'px-3 py-1.5 rounded bg-accent text-on-emphasis text-sm font-medium flex items-center gap-2',
+            'px-3 py-1.5 rounded bg-accent text-on-emphasis text-sm font-medium layout-center-gap',
             'hover:bg-accent-hover transition-colors'
           )}
         >
@@ -185,7 +185,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         {isFetching ? (
           <div className="flex items-center justify-center p-8">
-            <div className="flex items-center gap-2 text-muted">
+            <div className="layout-center-gap text-muted">
               <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path

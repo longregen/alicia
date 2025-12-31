@@ -61,7 +61,7 @@ const ResponseControls: React.FC<ResponseControlsProps> = ({
         <button
           onClick={handleStop}
           className={cls(
-            'flex items-center gap-2 px-4 py-2 rounded-lg',
+            'layout-center-gap px-4 py-2 rounded-lg',
             'bg-error hover:bg-error/80',
             'text-on-emphasis font-medium',
             'transition-all duration-200',
@@ -84,7 +84,7 @@ const ResponseControls: React.FC<ResponseControlsProps> = ({
         <button
           onClick={handleRegenerate}
           className={cls(
-            'flex items-center gap-2 px-4 py-2 rounded-lg',
+            'layout-center-gap px-4 py-2 rounded-lg',
             'bg-accent hover:bg-accent-hover',
             'text-on-emphasis font-medium',
             'transition-all duration-200',

@@ -55,7 +55,7 @@ const MemoryVoting: React.FC<MemoryVotingProps> = ({
       )}
 
       {/* Voting controls */}
-      <div className="flex items-center gap-2">
+      <div className="layout-center-gap">
         <span className="text-xs text-muted">Relevant?</span>
         <FeedbackControls
           currentVote={currentVote as 'up' | 'down' | null}

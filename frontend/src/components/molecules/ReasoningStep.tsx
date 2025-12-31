@@ -43,17 +43,17 @@ const ReasoningStep: React.FC<ReasoningStepProps> = ({
   return (
     <div
       className={cls(
-        'flex flex-col gap-2 p-3 rounded-lg',
+        'layout-stack-gap p-3 rounded-lg',
         'bg-reasoning border-l-4 border-accent',
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="layout-between-gap">
         <button
           onClick={toggleExpanded}
           className={cls(
-            'flex items-center gap-2 text-xs font-medium',
+            'layout-center-gap text-xs font-medium',
             'text-reasoning hover:text-accent',
             'transition-colors duration-200 cursor-pointer'
           )}

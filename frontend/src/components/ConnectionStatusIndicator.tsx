@@ -47,7 +47,7 @@ export function ConnectionStatusIndicator({ isCollapsed }: ConnectionStatusIndic
   return (
     <div
       className={cn(
-        'flex items-center gap-2 p-2 rounded transition-colors',
+        'layout-center-gap p-2 rounded transition-colors',
         isCollapsed && 'justify-center'
       )}
       title={isCollapsed ? getStatusText() : showError ? error : undefined}

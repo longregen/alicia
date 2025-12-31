@@ -285,7 +285,7 @@ export function Sidebar({
       <div className={cn('p-5 border-b border-sidebar-border', isCollapsed && 'p-3')}>
         {!isCollapsed ? (
           <>
-            <div className="flex items-center justify-between mb-3">
+            <div className="layout-between mb-3">
               <h2 className="text-2xl font-semibold">Alicia</h2>
               <button
                 onClick={toggleCollapsed}
@@ -339,7 +339,7 @@ export function Sidebar({
         {!isCollapsed && archivedConversations.length > 0 && (
           <div className="mb-4">
             <Collapsible open={archivedOpen} onOpenChange={setArchivedOpen}>
-              <CollapsibleTrigger className="w-full flex items-center justify-between text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wide hover:text-foreground transition-colors">
+              <CollapsibleTrigger className="w-full layout-between text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wide hover:text-foreground transition-colors">
                 <span>Archived ({archivedConversations.length})</span>
                 {archivedOpen ? (
                   <ChevronUp className="w-3 h-3" />
@@ -397,7 +397,7 @@ export function Sidebar({
           <div className="flex flex-col gap-2 mt-2">
             <button
               onClick={() => onPanelChange('memory')}
-              className="flex items-center gap-2 p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
+              className="layout-center-gap p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
               title="Memory"
             >
               <Brain className="w-4 h-4" />
@@ -405,7 +405,7 @@ export function Sidebar({
             </button>
             <button
               onClick={() => onPanelChange('server')}
-              className="flex items-center gap-2 p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
+              className="layout-center-gap p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
               title="Server"
             >
               <Server className="w-4 h-4" />
@@ -413,7 +413,7 @@ export function Sidebar({
             </button>
             <button
               onClick={onSettings}
-              className="flex items-center gap-2 p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
+              className="layout-center-gap p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
               title="Settings"
               data-testid="settings-btn"
             >

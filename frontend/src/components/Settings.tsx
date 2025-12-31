@@ -76,7 +76,7 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
   if (!isOpen) return null;
 
   return (
-    <div className="flex flex-col h-full bg-app">
+    <div className="layout-stack h-full bg-app">
       {/* Header */}
       <div className="flex justify-between items-center p-6 md:px-8 border-b border-default bg-surface">
         <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-default">Settings & Info</h1>
@@ -173,7 +173,7 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
                   <CardTitle>Voice & Audio</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="layout-between">
                     <Label htmlFor="audio-output">Audio Output</Label>
                     <Switch
                       id="audio-output"
@@ -258,21 +258,21 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
                   <CardTitle>Keyboard Shortcuts</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
+                  <div className="layout-between">
                     <span className="text-sm text-muted">Toggle sidebar</span>
                     <KbdGroup>
                       <Kbd>⌘</Kbd>
                       <Kbd>B</Kbd>
                     </KbdGroup>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="layout-between">
                     <span className="text-sm text-muted">Search conversations</span>
                     <KbdGroup>
                       <Kbd>⌘</Kbd>
                       <Kbd>K</Kbd>
                     </KbdGroup>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="layout-between">
                     <span className="text-sm text-muted">Send message</span>
                     <KbdGroup>
                       <Kbd>⌘</Kbd>

@@ -167,6 +167,43 @@
   .focus-ring {
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
   }
+
+  /* Layout utilities - reduce repetition of flex patterns */
+  .layout-between {
+    @apply flex items-center justify-between;
+  }
+  .layout-between-gap {
+    @apply flex items-center justify-between gap-2;
+  }
+  .layout-center {
+    @apply flex items-center;
+  }
+  .layout-center-gap {
+    @apply flex items-center gap-2;
+  }
+  .layout-center-gap-4 {
+    @apply flex items-center gap-4;
+  }
+  .layout-stack {
+    @apply flex flex-col;
+  }
+  .layout-stack-gap {
+    @apply flex flex-col gap-2;
+  }
+  .layout-stack-gap-4 {
+    @apply flex flex-col gap-4;
+  }
+  .layout-vcenter {
+    @apply flex flex-col items-center;
+  }
+  .layout-vcenter-gap {
+    @apply flex flex-col items-center gap-4;
+  }
+
+  /* Message bubble responsive max-width utility */
+  .message-max-width {
+    @apply max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg;
+  }
 }
 
 /* Component styles */

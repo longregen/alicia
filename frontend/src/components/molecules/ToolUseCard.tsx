@@ -55,20 +55,20 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
   return (
     <div
       className={cls(
-        'flex flex-col gap-2 p-3 rounded-lg border',
+        'layout-stack-gap p-3 rounded-lg border',
         'bg-tool-use border',
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="layout-between-gap">
+        <div className="layout-center-gap flex-1 min-w-0">
           {/* Tool icon */}
           <div className="flex-shrink-0 text-lg">🔧</div>
 
           {/* Tool name and description */}
           <div className="flex flex-col gap-1 flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="layout-center-gap">
               <span className="text-sm font-semibold text-tool-use">
                 {tool.name}
               </span>
@@ -114,7 +114,7 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
 
       {/* Result section */}
       {hasResult && (
-        <div className="flex flex-col gap-2">
+        <div className="layout-stack-gap">
           {/* Result content */}
           <div className="p-3 rounded-lg bg-tool-result border">
             <pre className="text-xs text-tool-result whitespace-pre-wrap font-mono">

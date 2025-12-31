@@ -53,7 +53,7 @@ const ReasoningBlock: React.FC<ReasoningBlockProps> = ({ content, keyId, id }) =
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={cls(
-          'w-full flex items-center justify-between',
+          'w-full layout-between',
           'text-xs text-reasoning font-medium mb-1',
           'hover:text-accent transition-colors'
         )}
@@ -276,7 +276,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const getContentToDisplay = (): React.ReactNode => {
     if (state === MESSAGE_STATES.STREAMING) {
       return (
-        <div className="flex items-center">
+        <div className="layout-center">
           <span>{processContent(displayedContent)}</span>
           <span className="inline-block w-0.5 h-4 bg-current ml-1 animate-pulse" />
         </div>
@@ -334,7 +334,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   return (
     <div
-      className={cls('flex flex-col gap-2', roleClass, className)}
+      className={cls('layout-stack-gap', roleClass, className)}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
@@ -351,7 +351,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* Main message bubble or edit mode */}
       {isEditing ? (
         <div className={cn(
-          'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg',
+          'w-full message-max-width',
           type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
         )}>
           <Textarea
@@ -446,10 +446,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
       {/* Addons footer with timestamp and branch navigator */}
       <div className={cls(
-        'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg',
+        'w-full message-max-width',
         type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
       )}>
-        <div className="flex items-center justify-between gap-2">
+        <div className="layout-between-gap">
           <div className="flex-1">
             <ComplexAddons
               addons={inlineAddons}
@@ -475,7 +475,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* Below addons */}
       {belowAddons.length > 0 && (
         <div className={cls(
-          'flex flex-col gap-2',
+          'layout-stack-gap',
           type === MESSAGE_TYPES.USER ? 'ml-4' : 'mr-4'
         )}>
           {belowAddons.map(addon => (
