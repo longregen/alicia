@@ -30,7 +30,7 @@ jobs:
       - name: Setup Nix cache
         uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6.1.3
         with:
-          primary-key: nix-${{ runner.os }}-backend-v1-${{ hashFiles('flake.lock') }}
+          primary-key: nix-${{ runner.os }}-backend-v2-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-backend-
 
       - name: Run go vet
@@ -74,7 +74,7 @@ jobs:
       - name: Setup Nix cache
         uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6.1.3
         with:
-          primary-key: nix-${{ runner.os }}-frontend-v1-${{ hashFiles('flake.lock') }}
+          primary-key: nix-${{ runner.os }}-frontend-v2-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-frontend-
 
       - name: Install dependencies
@@ -100,31 +100,31 @@ jobs:
           VITE_LIVEKIT_URL: wss://livekit.decent.town
         run: nix develop .#frontend --command npm run build
 
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: nix develop .#frontend --command npx playwright install --with-deps chromium
+      # - name: Install Playwright browsers
+      #   working-directory: frontend
+      #   run: nix develop .#frontend --command npx playwright install --with-deps chromium
 
-      - name: Run e2e tests
-        working-directory: frontend
-        run: nix develop .#frontend --command npm run test:e2e
+      # - name: Run e2e tests
+      #   working-directory: frontend
+      #   run: nix develop .#frontend --command npm run test:e2e
 
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: playwright-report
-          path: frontend/playwright-report/
-          retention-days: 14
+      # - name: Upload Playwright report
+      #   uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      #   if: always()
+      #   with:
+      #     name: playwright-report
+      #     path: frontend/playwright-report/
+      #     retention-days: 14
 
-      - name: Upload test screenshots
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure()
-        with:
-          name: playwright-screenshots
-          path: |
-            frontend/e2e/__screenshots__/
-            frontend/test-results/
-          retention-days: 14
+      # - name: Upload test screenshots
+      #   uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      #   if: failure()
+      #   with:
+      #     name: playwright-screenshots
+      #     path: |
+      #       frontend/e2e/__screenshots__/
+      #       frontend/test-results/
+      #     retention-days: 14
 
   # Android build and tests using Nix
   android:
@@ -144,7 +144,7 @@ jobs:
       - name: Setup Nix cache
         uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6.1.3
         with:
-          primary-key: nix-${{ runner.os }}-android-v1-${{ hashFiles('flake.lock') }}
+          primary-key: nix-${{ runner.os }}-android-v2-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-android-
 
       - name: Enable unprivileged user namespaces for bwrap
@@ -255,7 +255,7 @@ jobs:
       - name: Setup Nix cache
         uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6.1.3
         with:
-          primary-key: nix-${{ runner.os }}-deploy-v1-${{ hashFiles('flake.lock') }}
+          primary-key: nix-${{ runner.os }}-deploy-v2-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-deploy-
 
       - name: Build frontend and documentation

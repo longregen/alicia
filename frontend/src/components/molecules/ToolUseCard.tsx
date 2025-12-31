@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import StatusBadge from '../atoms/StatusBadge';
 import ToolUseVoting from './ToolUseVoting';
-import GhostButton from '../atoms/GhostButton';
+import Button from '../atoms/Button';
 import { cls } from '../../utils/cls';
 import type { BaseComponentProps, ToolData } from '../../types/components';
 
@@ -73,7 +73,7 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
                 {tool.name}
               </span>
               {tool.status && (
-                <StatusBadge status={getStatusType(tool.status)} size="sm" />
+                <StatusBadge status={getStatusType(tool.status)} />
               )}
             </div>
             {tool.description && (
@@ -86,10 +86,11 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
 
         {/* Expand/collapse button */}
         {hasResult && (
-          <GhostButton
+          <Button
+            variant="ghost"
             size="sm"
             onClick={toggleExpanded}
-            ariaLabel={isExpanded ? 'Collapse result' : 'Expand result'}
+            aria-label={isExpanded ? 'Collapse result' : 'Expand result'}
           >
             <svg
               className={cls(
@@ -107,7 +108,7 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
                 d="M19 9l-7 7-7-7"
               />
             </svg>
-          </GhostButton>
+          </Button>
         )}
       </div>
 
@@ -123,13 +124,14 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
 
           {/* Show more/less button */}
           {shouldTruncate && (
-            <GhostButton
+            <Button
+              variant="ghost"
               size="sm"
               onClick={toggleExpanded}
-              ariaLabel={isExpanded ? 'Show less' : 'Show more'}
+              aria-label={isExpanded ? 'Show less' : 'Show more'}
             >
               {isExpanded ? 'Show less' : 'Show more'}
-            </GhostButton>
+            </Button>
           )}
         </div>
       )}

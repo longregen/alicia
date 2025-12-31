@@ -1,17 +1,38 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { cls } from '../../utils/cls';
-import type { BaseComponentProps, Variant } from '../../types/components';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '../../lib/utils';
+import type { BaseComponentProps } from '../../types/components';
 
 /**
  * Toast atom component for displaying temporary notifications.
  * Auto-dismisses after a specified duration.
  */
 
-export interface ToastProps extends BaseComponentProps {
+const toastVariants = cva(
+  'flex items-center gap-3 p-4 rounded-lg border shadow-lg backdrop-blur-sm min-w-[300px] max-w-md transition-all duration-200 ease-out',
+  {
+    variants: {
+      variant: {
+        default: 'bg-surface text-default border',
+        secondary: 'bg-muted text-default border',
+        destructive: 'bg-error text-on-emphasis border-error',
+        outline: 'bg-surface text-default border-2',
+        success: 'bg-success text-on-emphasis border-success',
+        warning: 'bg-warning text-on-emphasis border-warning',
+        error: 'bg-error text-on-emphasis border-error',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
+
+export interface ToastProps
+  extends BaseComponentProps,
+    VariantProps<typeof toastVariants> {
   /** Toast message content */
   message: string;
-  /** Toast variant determines styling */
-  variant?: Variant;
   /** Auto-dismiss duration in ms (0 = no auto-dismiss) */
   duration?: number;
   /** Callback when toast is dismissed */
@@ -22,6 +43,8 @@ export interface ToastProps extends BaseComponentProps {
   showClose?: boolean;
 }
 
+type ToastVariant = NonNullable<VariantProps<typeof toastVariants>['variant']>;
+
 const Toast: React.FC<ToastProps> = ({
   message,
   variant = 'default',
@@ -31,6 +54,8 @@ const Toast: React.FC<ToastProps> = ({
   showClose = true,
   className = '',
 }) => {
+  // Ensure variant is never null/undefined for icon lookup
+  const resolvedVariant: ToastVariant = variant ?? 'default';
   const [isVisible, setIsVisible] = useState(visible);
   const [isExiting, setIsExiting] = useState(false);
 
@@ -63,21 +88,23 @@ const Toast: React.FC<ToastProps> = ({
     return null;
   }
 
-  const variantStyles = {
-    default: 'bg-surface text-default border',
-    primary: 'bg-accent text-on-emphasis border-accent',
-    success: 'bg-success text-on-emphasis border-success',
-    warning: 'bg-warning text-on-emphasis border-warning',
-    error: 'bg-error text-on-emphasis border-error',
-  };
-
-  const icons = {
+  const icons: Record<ToastVariant, React.ReactNode> = {
     default: (
       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
       </svg>
     ),
-    primary: (
+    secondary: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+      </svg>
+    ),
+    destructive: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+      </svg>
+    ),
+    outline: (
       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
       </svg>
@@ -99,24 +126,13 @@ const Toast: React.FC<ToastProps> = ({
     ),
   };
 
-  const toastClasses = cls(
-    // Base styles
-    'flex items-center gap-3 p-4',
-    'rounded-lg border shadow-lg backdrop-blur-sm',
-    'min-w-[300px] max-w-md',
-
-    // Variant
-    variantStyles[variant],
-
+  const toastClasses = cn(
+    toastVariants({ variant }),
     // Semantic classes for e2e tests
-    variant === 'success' ? 'toast-success' : '',
-    variant === 'error' ? 'toast-error' : '',
-
+    variant === 'success' && 'toast-success',
+    variant === 'error' && 'toast-error',
     // Animation
-    'transition-all duration-200 ease-out',
     isExiting ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0',
-
-    // Custom classes
     className
   );
 
@@ -124,7 +140,7 @@ const Toast: React.FC<ToastProps> = ({
     <div className={toastClasses} role="alert">
       {/* Icon */}
       <div className="flex-shrink-0">
-        {icons[variant]}
+        {icons[resolvedVariant]}
       </div>
 
       {/* Message */}
@@ -136,7 +152,7 @@ const Toast: React.FC<ToastProps> = ({
       {showClose && (
         <button
           onClick={handleDismiss}
-          className={cls(
+          className={cn(
             'flex-shrink-0 rounded-md p-1',
             'transition-colors duration-200',
             'hover:bg-black/10',
@@ -153,4 +169,7 @@ const Toast: React.FC<ToastProps> = ({
   );
 };
 
+Toast.displayName = 'Toast';
+
 export default Toast;
+export { toastVariants };

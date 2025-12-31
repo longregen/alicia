@@ -30,7 +30,7 @@ const CountBadge: React.FC<CountBadgeProps> = ({
   const displayCount = count > max ? `${max}+` : count.toString();
 
   return (
-    <Badge {...props} size={props.size || 'sm'}>
+    <Badge {...props}>
       {displayCount}
     </Badge>
   );

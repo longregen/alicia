@@ -55,6 +55,7 @@
           };
         };
         lib = pkgs.lib;
+        npmDepsHash = "sha256-OPDDA4ckhx99Dq8vrrIlQbSvdVyy+UEA3eY13SXaFus=";
 
         # PostgreSQL with pgvector extension for vector similarity search
         postgresWithVector = pkgs.postgresql_17.withPackages (p: [p.pgvector]);
@@ -374,7 +375,7 @@
           frontend-tests = pkgs.buildNpmPackage {
             name = "alicia-frontend-tests";
             src = ./frontend;
-            npmDepsHash = "sha256-IrRFQB+6Pz3hPaCDXejyLoQvTMZ9sWe573EVyoeoIks=";
+            inherit npmDepsHash;
 
             buildPhase = ''
               export HOME=$TMPDIR
@@ -441,7 +442,7 @@
           frontend-tests = pkgs.buildNpmPackage {
             name = "alicia-frontend-tests";
             src = ./frontend;
-            npmDepsHash = "sha256-IrRFQB+6Pz3hPaCDXejyLoQvTMZ9sWe573EVyoeoIks=";
+            inherit npmDepsHash;
 
             buildPhase = ''
               export HOME=$TMPDIR
@@ -496,6 +497,36 @@
             ln -sf ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm frontend/public/sql-wasm.wasm
 
             echo "VAD dependencies linked to frontend/public/"
+          '';
+        };
+
+        # E2E testing shell with headless Chromium for Playwright tests
+        devShells.e2e = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            nodejs_22
+            chromium
+
+            # Playwright system dependencies for Chromium
+            nss
+            nspr
+            at-spi2-atk
+            cups
+            libdrm
+            libxkbcommon
+            mesa
+            alsa-lib
+            pango
+            cairo
+            expat
+            glib
+            gtk3
+            gsettings-desktop-schemas
+          ];
+          shellHook = ''
+            export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+            export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="${pkgs.chromium}/bin/chromium"
+            echo "E2E testing environment ready"
+            echo "Chromium: $PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
           '';
         };
 

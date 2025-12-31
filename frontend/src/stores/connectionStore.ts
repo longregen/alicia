@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
+declare global {
+  interface Window {
+    __E2E_CONNECTION_MOCK__?: ConnectionStoreState;
+  }
+}
+
 export enum ConnectionStatus {
   Disconnected = 'disconnected',
   Connecting = 'connecting',
@@ -78,9 +84,9 @@ const initialState: ConnectionStoreState = {
 
 // Check for E2E test mock - this allows e2e tests to set initial connection state
 function getInitialState(): ConnectionStoreState {
-  if (typeof window !== 'undefined' && (window as any).__E2E_CONNECTION_MOCK__) {
+  if (typeof window !== 'undefined' && window.__E2E_CONNECTION_MOCK__) {
     // Create a fresh copy to avoid read-only property errors
-    const mock = (window as any).__E2E_CONNECTION_MOCK__;
+    const mock = window.__E2E_CONNECTION_MOCK__;
     return {
       status: mock.status,
       error: mock.error,

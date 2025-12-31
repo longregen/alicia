@@ -14,6 +14,9 @@ describe('MemoryList', () => {
       archived: false,
       createdAt: Date.now() - 10000,
       updatedAt: Date.now() - 10000,
+      tags: [],
+      importance: 0.5,
+      usageCount: 0,
     },
     {
       id: 'memory-2',
@@ -23,6 +26,9 @@ describe('MemoryList', () => {
       archived: false,
       createdAt: Date.now() - 20000,
       updatedAt: Date.now() - 5000,
+      tags: [],
+      importance: 0.5,
+      usageCount: 0,
     },
     {
       id: 'memory-3',
@@ -32,6 +38,9 @@ describe('MemoryList', () => {
       archived: false,
       createdAt: Date.now() - 30000,
       updatedAt: Date.now() - 30000,
+      tags: [],
+      importance: 0.5,
+      usageCount: 0,
     },
   ];
 

@@ -16,7 +16,7 @@ export interface StatusBadgeProps extends Omit<BadgeProps, 'variant' | 'showDot'
 
 const statusToVariant: Record<StatusType, Variant> = {
   idle: 'default',
-  running: 'primary',
+  running: 'default',
   completed: 'success',
   error: 'error',
   warning: 'warning',

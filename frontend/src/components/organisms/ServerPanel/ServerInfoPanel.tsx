@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { cls } from '../../../utils/cls';
+import { cn } from '../../../lib/utils';
 import { useServerInfo } from '../../../hooks/useServerInfo';
 import type { ConnectionQuality } from '../../../hooks/useServerInfo';
 import { api } from '../../../services/api';
@@ -15,6 +15,7 @@ import { useServerInfoStore } from '../../../stores/serverInfoStore';
  * - Session statistics (message count, tool calls, memories used, duration)
  *
  * Uses the useServerInfo hook for reactive state management.
+ * Follows the new design pattern with header bar and card-based layout.
  */
 
 export interface ServerInfoPanelProps {
@@ -23,6 +24,11 @@ export interface ServerInfoPanelProps {
   /** Compact mode for reduced spacing */
   compact?: boolean;
 }
+
+// Style constants
+const sectionClass = 'p-3 rounded-lg bg-surface border border-border';
+const labelClass = 'text-xs font-medium text-muted mb-1';
+const valueClass = 'text-sm text-foreground';
 
 const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
   className = '',
@@ -95,26 +101,15 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
     fetchServerInfo();
   }, []);
 
-  const getConnectionStatusColor = () => {
-    if (isConnected) return 'text-success';
-    if (isConnecting) return 'text-warning';
-    return 'text-error';
-  };
-
-  const getConnectionStatusBg = () => {
-    if (isConnected) return 'bg-success-subtle';
-    if (isConnecting) return 'bg-warning-subtle';
-    return 'bg-error-subtle';
-  };
-
+  // Helper functions for connection status
   const getConnectionStatusText = () => {
     switch (connectionStatus) {
       case 'connected':
         return 'Connected';
       case 'connecting':
-        return 'Connecting...';
+        return 'Connecting';
       case 'reconnecting':
-        return 'Reconnecting...';
+        return 'Reconnecting';
       case 'disconnected':
         return 'Disconnected';
       default:
@@ -122,64 +117,83 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
     }
   };
 
+  const getConnectionStatusBg = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'bg-green-500/10';
+      case 'connecting':
+      case 'reconnecting':
+        return 'bg-yellow-500/10';
+      case 'disconnected':
+        return 'bg-red-500/10';
+      default:
+        return 'bg-gray-500/10';
+    }
+  };
+
+  const getConnectionStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'text-green-600 dark:text-green-400';
+      case 'connecting':
+      case 'reconnecting':
+        return 'text-yellow-600 dark:text-yellow-400';
+      case 'disconnected':
+        return 'text-red-600 dark:text-red-400';
+      default:
+        return 'text-gray-600 dark:text-gray-400';
+    }
+  };
+
   const getQualityColor = (quality: ConnectionQuality) => {
     switch (quality) {
       case 'excellent':
-        return 'text-success';
+        return 'text-green-600 dark:text-green-400';
       case 'good':
-        return 'text-accent';
+        return 'text-blue-600 dark:text-blue-400';
       case 'fair':
-        return 'text-warning';
+        return 'text-yellow-600 dark:text-yellow-400';
       case 'poor':
-        return 'text-error';
+        return 'text-red-600 dark:text-red-400';
+      default:
+        return 'text-gray-600 dark:text-gray-400';
+    }
+  };
+
+  // Helper functions for MCP server status
+  const getMCPStatusBg = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return 'bg-green-500/10';
+      case 'disconnected':
+        return 'bg-gray-500/10';
+      case 'error':
+        return 'bg-red-500/10';
+      default:
+        return 'bg-gray-500/10';
     }
   };
 
   const getMCPStatusColor = (status: string) => {
     switch (status) {
       case 'connected':
-        return 'text-success';
+        return 'text-green-600 dark:text-green-400';
       case 'disconnected':
-        return 'text-muted';
+        return 'text-gray-600 dark:text-gray-400';
       case 'error':
-        return 'text-error';
+        return 'text-red-600 dark:text-red-400';
       default:
-        return 'text-muted';
+        return 'text-gray-600 dark:text-gray-400';
     }
   };
-
-  const getMCPStatusBg = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return 'bg-success-subtle';
-      case 'disconnected':
-        return 'bg-surface';
-      case 'error':
-        return 'bg-error-subtle';
-      default:
-        return 'bg-surface';
-    }
-  };
-
-  const sectionClass = cls(
-    'p-3',
-    'rounded',
-    'bg-surface',
-    'border',
-    compact ? 'space-y-2' : 'space-y-3'
-  );
-
-  const labelClass = cls('text-xs', 'font-medium', 'text-muted', 'uppercase tracking-wide');
-
-  const valueClass = cls('text-sm', 'text-default');
 
   // Show loading state
   if (isLoading) {
     return (
-      <div className={cls(compact ? 'space-y-3' : 'space-y-4', className)}>
-        <div className={cls(sectionClass, 'flex', 'items-center', 'justify-center')}>
+      <div className={cn(compact ? 'space-y-3' : 'space-y-4', className)}>
+        <div className={cn(sectionClass, 'flex', 'items-center', 'justify-center')}>
           <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <span className={cls('text-sm', 'text-muted', 'ml-2')}>Loading server info...</span>
+          <span className={cn('text-sm', 'text-muted', 'ml-2')}>Loading server info...</span>
         </div>
       </div>
     );
@@ -188,14 +202,14 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
   // Show error state
   if (error) {
     return (
-      <div className={cls(compact ? 'space-y-3' : 'space-y-4', className)}>
-        <div className={cls(sectionClass, 'border-error')}>
-          <div className={cls('text-sm', 'text-error')}>
+      <div className={cn(compact ? 'space-y-3' : 'space-y-4', className)}>
+        <div className={cn(sectionClass, 'border-error')}>
+          <div className={cn('text-sm', 'text-error')}>
             {error}
           </div>
           <button
             onClick={() => window.location.reload()}
-            className={cls('text-xs', 'text-accent hover:underline mt-2')}
+            className={cn('text-xs', 'text-accent hover:underline mt-2')}
           >
             Retry
           </button>
@@ -205,13 +219,13 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
   }
 
   return (
-    <div className={cls(compact ? 'space-y-3' : 'space-y-4', className)}>
+    <div className={cn(compact ? 'space-y-3' : 'space-y-4', className)}>
       {/* Connection Status Section */}
       <div className={sectionClass}>
         <div className={labelClass}>Connection</div>
-        <div className={cls('flex', 'items-center', 'gap-2', 'flex-row')}>
+        <div className={cn('flex', 'items-center', 'gap-2', 'flex-row')}>
           <div
-            className={cls(
+            className={cn(
               'px-2 py-1 rounded-full text-xs font-medium',
               getConnectionStatusBg(),
               getConnectionStatusColor()
@@ -221,8 +235,8 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
           </div>
           {isConnected && (
             <>
-              <div className={cls('w-1 h-1 rounded-full bg-border')} />
-              <div className={cls(valueClass, getQualityColor(connectionQuality))}>
+              <div className={cn('w-1 h-1 rounded-full bg-border')} />
+              <div className={cn(valueClass, getQualityColor(connectionQuality))}>
                 {latency}ms ({connectionQuality})
               </div>
             </>
@@ -239,7 +253,7 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
           <div className={labelClass}>Model</div>
           <div className={valueClass}>
             <div className="font-medium">{modelInfo.name}</div>
-            <div className={cls('text-xs', 'text-muted')}>Provider: {modelInfo.provider}</div>
+            <div className={cn('text-xs', 'text-muted')}>Provider: {modelInfo.provider}</div>
           </div>
         </div>
       )}
@@ -247,21 +261,21 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
       {/* MCP Servers Section */}
       {mcpServers.length > 0 && (
         <div className={sectionClass}>
-          <div className={cls('flex', 'justify-between', 'items-center', 'mb-2')}>
+          <div className={cn('flex', 'justify-between', 'items-center', 'mb-2')}>
             <div className={labelClass}>MCP Servers</div>
-            <div className={cls('text-xs', 'text-muted')}>
+            <div className={cn('text-xs', 'text-muted')}>
               {mcpServerSummary.connected}/{mcpServerSummary.total} connected
             </div>
           </div>
-          <div className={cls(compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cn(compact ? 'space-y-1' : 'space-y-2')}>
             {mcpServers.map((server) => (
               <div
                 key={server.name}
-                className={cls('flex', 'justify-between', 'items-center', 'gap-2')}
+                className={cn('flex', 'justify-between', 'items-center', 'gap-2')}
               >
-                <div className={cls(valueClass, 'truncate flex-1')}>{server.name}</div>
+                <div className={cn(valueClass, 'truncate flex-1')}>{server.name}</div>
                 <div
-                  className={cls(
+                  className={cn(
                     'px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap',
                     getMCPStatusBg(server.status),
                     getMCPStatusColor(server.status)
@@ -278,22 +292,22 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
       {/* Session Statistics Section */}
       <div className={sectionClass}>
         <div className={labelClass}>Session Statistics</div>
-        <div className={cls('grid grid-cols-2 gap-3', compact ? 'gap-2' : '')}>
+        <div className={cn('grid grid-cols-2 gap-3', compact ? 'gap-2' : '')}>
           <div>
-            <div className={cls('text-xs', 'text-muted')}>Messages</div>
-            <div className={cls(valueClass, 'font-medium')}>{sessionStats.messageCount}</div>
+            <div className={cn('text-xs', 'text-muted')}>Messages</div>
+            <div className={cn(valueClass, 'font-medium')}>{sessionStats.messageCount}</div>
           </div>
           <div>
-            <div className={cls('text-xs', 'text-muted')}>Tool Calls</div>
-            <div className={cls(valueClass, 'font-medium')}>{sessionStats.toolCallCount}</div>
+            <div className={cn('text-xs', 'text-muted')}>Tool Calls</div>
+            <div className={cn(valueClass, 'font-medium')}>{sessionStats.toolCallCount}</div>
           </div>
           <div>
-            <div className={cls('text-xs', 'text-muted')}>Memories Used</div>
-            <div className={cls(valueClass, 'font-medium')}>{sessionStats.memoriesUsed}</div>
+            <div className={cn('text-xs', 'text-muted')}>Memories Used</div>
+            <div className={cn(valueClass, 'font-medium')}>{sessionStats.memoriesUsed}</div>
           </div>
           <div>
-            <div className={cls('text-xs', 'text-muted')}>Duration</div>
-            <div className={cls(valueClass, 'font-medium')}>{formattedSessionDuration}</div>
+            <div className={cn('text-xs', 'text-muted')}>Duration</div>
+            <div className={cn(valueClass, 'font-medium')}>{formattedSessionDuration}</div>
           </div>
         </div>
       </div>

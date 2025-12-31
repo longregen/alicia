@@ -1,27 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { cls } from '../../utils/cls';
+import React from 'react';
+import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { cn } from '../../lib/utils';
 import type { BaseComponentProps, Variant } from '../../types/components';
 
-// Toggle size mapping
-const TOGGLE_SIZE_MAP = {
-  sm: {
-    track: 'w-8 h-4',
-    thumb: 'w-3 h-3',
-    translate: 'translate-x-4',
-  },
-  md: {
-    track: 'w-11 h-6',
-    thumb: 'w-5 h-5',
-    translate: 'translate-x-5',
-  },
-  lg: {
-    track: 'w-14 h-7',
-    thumb: 'w-6 h-6',
-    translate: 'translate-x-7',
-  },
-} as const;
+// Base Switch component following shadcn/ui pattern
+const Switch = React.forwardRef<
+  React.ComponentRef<typeof SwitchPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <SwitchPrimitive.Root
+    data-slot="switch"
+    className={cn(
+      'peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input',
+      className
+    )}
+    {...props}
+    ref={ref}
+  >
+    <SwitchPrimitive.Thumb
+      data-slot="switch-thumb"
+      className={cn(
+        'pointer-events-none block size-4 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0'
+      )}
+    />
+  </SwitchPrimitive.Root>
+));
 
-// Component props interface
+Switch.displayName = 'Switch';
+
+// Component props interface for backwards compatibility wrapper
 export interface ToggleSwitchProps extends BaseComponentProps {
   /** Whether the toggle is checked */
   checked?: boolean;
@@ -29,161 +36,66 @@ export interface ToggleSwitchProps extends BaseComponentProps {
   onChange?: (checked: boolean) => void;
   /** Whether the toggle is disabled */
   disabled?: boolean;
-  /** Size of the toggle switch */
-  size?: keyof typeof TOGGLE_SIZE_MAP;
-  /** Visual variant when checked */
+  /** Size of the toggle switch (maintained for API compatibility, maps to className) */
+  size?: 'sm' | 'md' | 'lg';
+  /** Visual variant when checked (maintained for API compatibility, limited support) */
   variant?: Variant;
   /** Optional label text */
   label?: string;
 }
 
+// Backwards compatibility wrapper
 const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   checked,
   onChange,
   disabled = false,
   size = 'md',
-  variant = 'default',
+  variant: _variant = 'default',
   label,
   className = ''
 }) => {
-  const [internalChecked, setInternalChecked] = useState<boolean>(checked ?? false);
-
-  // Determine if component is controlled
-  const isControlled = checked !== undefined;
-  const isChecked = isControlled ? checked : internalChecked;
-
-  // Sync internal state when checked prop changes in controlled mode
-  useEffect(() => {
-    if (isControlled && checked !== undefined) {
-      setInternalChecked(checked);
-    }
-  }, [checked, isControlled]);
-
-  const handleToggle = (newValue: boolean): void => {
-    if (!isControlled) {
-      setInternalChecked(newValue);
-    }
-    onChange?.(newValue);
+  const handleCheckedChange = (newChecked: boolean): void => {
+    onChange?.(newChecked);
   };
 
-  const getTrackClasses = (): string => {
-    const baseClasses = [
-      TOGGLE_SIZE_MAP[size].track,
-      'relative rounded-full',
-      'transition-all duration-200 ease-in-out',
-      'cursor-pointer',
-    ];
-
-    if (disabled) {
-      return cls(baseClasses, [
-        'bg-sunken cursor-not-allowed opacity-60',
-      ]);
-    }
-
-    if (isChecked) {
-      switch (variant) {
-        case 'success':
-          return cls(baseClasses, [
-            'bg-success hover:bg-success/90',
-          ]);
-        case 'warning':
-          return cls(baseClasses, [
-            'bg-warning hover:bg-warning/90',
-          ]);
-        case 'error':
-          return cls(baseClasses, [
-            'bg-error hover:bg-error/90',
-          ]);
-        default:
-          return cls(baseClasses, [
-            'bg-accent hover:bg-accent-hover',
-          ]);
-      }
-    } else {
-      return cls(baseClasses, [
-        'bg-sunken hover:bg-accent-subtle',
-      ]);
-    }
-  };
-
-  const getThumbClasses = (): string => {
-    const baseClasses = [
-      TOGGLE_SIZE_MAP[size].thumb,
-      'bg-on-emphasis rounded-full shadow-lg',
-      'transform transition-all duration-200 ease-in-out',
-      'absolute top-0.5 left-0.5',
-    ];
-
-    if (isChecked) {
-      return cls(baseClasses, TOGGLE_SIZE_MAP[size].translate);
-    }
-
-    return cls(baseClasses);
-  };
-
-  const handleClick = (): void => {
-    if (!disabled) {
-      handleToggle(!isChecked);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if ((e.key === 'Enter' || e.key === ' ') && !disabled) {
-      e.preventDefault();
-      handleToggle(!isChecked);
+  const getSizeClasses = (): string => {
+    switch (size) {
+      case 'sm':
+        return 'h-4 w-8 [&_[data-slot=switch-thumb]]:size-3 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-4';
+      case 'lg':
+        return 'h-6 w-11 [&_[data-slot=switch-thumb]]:size-5 [&_[data-slot=switch-thumb]]:data-[state=checked]:translate-x-5';
+      default:
+        return '';
     }
   };
 
   const getLabelClasses = (): string => {
-    const baseClasses = [
+    return cn(
       'text-sm font-medium select-none cursor-pointer',
-    ];
-
-    if (disabled) {
-      return cls(baseClasses, [
-        'text-muted cursor-not-allowed',
-      ]);
-    }
-
-    return cls(baseClasses, [
-      'text-default',
-    ]);
+      disabled ? 'text-muted cursor-not-allowed' : 'text-default'
+    );
   };
 
-  const ariaLabel = label || `Toggle switch ${isChecked ? 'on' : 'off'}`;
-
   return (
-    <div className={cls('flex items-center gap-3', className)}>
+    <div className={cn('flex items-center gap-3', className)}>
       {label && (
         <label
           className={getLabelClasses()}
-          onClick={handleClick}
+          onClick={() => !disabled && onChange?.(!checked)}
         >
           {label}
         </label>
       )}
 
-      <div
-        className={getTrackClasses()}
-        onClick={handleClick}
-        role="button"
-        tabIndex={disabled ? -1 : 0}
-        onKeyDown={handleKeyDown}
-        aria-pressed={isChecked}
-        aria-label={ariaLabel}
-        aria-disabled={disabled}
-      >
-        <input
-          type="checkbox"
-          checked={isChecked}
-          onChange={() => {}} // Controlled by parent div
-          disabled={disabled}
-          className="sr-only"
-        />
-        <div className={getThumbClasses()} />
-      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={handleCheckedChange}
+        disabled={disabled}
+        className={getSizeClasses()}
+      />
     </div>
   );
 };
 
 export default ToggleSwitch;
+export { Switch, ToggleSwitch };

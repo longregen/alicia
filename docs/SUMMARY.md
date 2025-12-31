@@ -27,6 +27,7 @@
 - [LiveKit Integration](LIVEKIT.md)
 - [Prompt Optimization (GEPA)](GEPA_PRIMER.md)
 - [Optimization System](OPTIMIZATION_SYSTEM.md)
+- [MCP Client Orchestration Guide](MCP_CLIENT_PRIMER.md)
 
 # Protocol Specification
 

@@ -8,6 +8,14 @@ import { EliteSolutionSelector } from './molecules/EliteSolutionSelector/EliteSo
 import { PIVOT_PRESETS, type PresetId } from '../stores/dimensionStore';
 import { sendDimensionPreference, sendEliteSelect } from '../adapters/protocolAdapter';
 import type { DimensionWeights } from '../types/protocol';
+import { Card, CardHeader, CardTitle, CardContent } from './atoms/Card';
+import { Switch } from './atoms/Switch';
+import { Slider } from './atoms/Slider';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './atoms/Select';
+import { Kbd, KbdGroup } from './atoms/Kbd';
+import Button from './atoms/Button';
+import { Label } from './atoms/Label';
+import { cn } from '../lib/utils';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -15,10 +23,14 @@ interface SettingsProps {
   conversationId?: string | null;
 }
 
-type SettingsTab = 'mcp' | 'server' | 'memories' | 'notes' | 'optimization';
+type SettingsTab = 'mcp' | 'server' | 'memories' | 'notes' | 'optimization' | 'preferences';
 
 export function Settings({ isOpen, onClose, conversationId }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('mcp');
+  const [audioOutputEnabled, setAudioOutputEnabled] = useState(false);
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+  const [theme, setTheme] = useState('system');
+  const [responseLength, setResponseLength] = useState<'concise' | 'balanced' | 'detailed'>('balanced');
 
   // Handle dimension preference changes - send to server via WebSocket
   const handlePresetChange = useCallback((presetId: PresetId) => {
@@ -101,6 +113,12 @@ export function Settings({ isOpen, onClose, conversationId }: SettingsProps) {
           >
             Optimization
           </button>
+          <button
+            className={`tab whitespace-nowrap ${activeTab === 'preferences' ? 'active' : ''}`}
+            onClick={() => setActiveTab('preferences')}
+          >
+            Preferences
+          </button>
         </div>
       </div>
 
@@ -139,6 +157,147 @@ export function Settings({ isOpen, onClose, conversationId }: SettingsProps) {
                   Select a conversation to sync optimization preferences with the server
                 </div>
               )}
+            </div>
+          )}
+          {activeTab === 'preferences' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Voice & Audio Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Voice & Audio</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="audio-output">Audio Output</Label>
+                    <Switch
+                      id="audio-output"
+                      checked={audioOutputEnabled}
+                      onCheckedChange={setAudioOutputEnabled}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="voice-speed">Voice Speed: {voiceSpeed.toFixed(1)}x</Label>
+                    <Slider
+                      id="voice-speed"
+                      min={0.5}
+                      max={2.0}
+                      step={0.1}
+                      value={[voiceSpeed]}
+                      onValueChange={(values) => setVoiceSpeed(values[0])}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Response Length Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Response Length</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between text-xs text-muted">
+                    <span>Concise</span>
+                    <span>Balanced</span>
+                    <span>Detailed</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {(['concise', 'balanced', 'detailed'] as const).map((length) => (
+                      <button
+                        key={length}
+                        onClick={() => setResponseLength(length)}
+                        className={cn(
+                          'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
+                          responseLength === length
+                            ? 'bg-accent text-accent-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        )}
+                      >
+                        {length.charAt(0).toUpperCase() + length.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted">
+                    {responseLength === 'concise' && 'Short, direct answers without elaboration.'}
+                    {responseLength === 'balanced' && 'Clear explanations with relevant details.'}
+                    {responseLength === 'detailed' && 'Comprehensive responses with examples and context.'}
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Appearance Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="theme-select">Theme</Label>
+                    <Select value={theme} onValueChange={setTheme}>
+                      <SelectTrigger id="theme-select">
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Keyboard Shortcuts Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Keyboard Shortcuts</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted">Toggle sidebar</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>B</Kbd>
+                    </KbdGroup>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted">Search conversations</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>K</Kbd>
+                    </KbdGroup>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted">Send message</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>Enter</Kbd>
+                    </KbdGroup>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Privacy & Data Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Privacy & Data</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => console.log('Export data clicked')}
+                  >
+                    Export Data
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => console.log('Clear all data clicked')}
+                  >
+                    Clear All Data
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>

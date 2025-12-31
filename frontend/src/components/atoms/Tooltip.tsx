@@ -1,14 +1,81 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { cls } from '../../utils/cls';
+import * as React from 'react';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { cn } from '../../lib/utils';
 import type { BaseComponentProps } from '../../types/components';
 
 /**
  * Tooltip atom component for displaying contextual information on hover.
- * Supports multiple positions and delay options.
+ * Built with Radix UI primitives for accessibility and proper positioning.
  */
 
 export type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';
 
+// Provider component
+function TooltipProvider({
+  delayDuration = 0,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
+  return (
+    <TooltipPrimitive.Provider
+      data-slot="tooltip-provider"
+      delayDuration={delayDuration}
+      {...props}
+    />
+  );
+}
+
+// Root component with built-in provider
+function TooltipRoot({
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+  return (
+    <TooltipProvider>
+      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+    </TooltipProvider>
+  );
+}
+
+// Trigger component
+function TooltipTrigger({
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+}
+
+// Content component
+function TooltipContent({
+  className,
+  sideOffset = 4,
+  children,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        data-slot="tooltip-content"
+        sideOffset={sideOffset}
+        className={cn(
+          'z-50 origin-(--radix-tooltip-content-transform-origin) rounded-md px-3 py-2 text-xs',
+          'bg-overlay backdrop-blur-sm text-on-emphasis',
+          'border border-border-emphasis shadow-lg',
+          'animate-in fade-in-0 zoom-in-95',
+          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
+          'data-[side=bottom]:slide-in-from-top-2',
+          'data-[side=left]:slide-in-from-right-2',
+          'data-[side=right]:slide-in-from-left-2',
+          'data-[side=top]:slide-in-from-bottom-2',
+          className
+        )}
+        {...props}
+      >
+        {children}
+        <TooltipPrimitive.Arrow className="fill-overlay" />
+      </TooltipPrimitive.Content>
+    </TooltipPrimitive.Portal>
+  );
+}
+
+// Backwards-compatible wrapper component
 export interface TooltipProps extends BaseComponentProps {
   /** Tooltip content text */
   content: string;
@@ -25,86 +92,29 @@ export interface TooltipProps extends BaseComponentProps {
 const Tooltip: React.FC<TooltipProps> = ({
   content,
   position = 'top',
-  delay = 200,
+  delay = 0,
   disabled = false,
   className = '',
   children,
 }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const handleMouseEnter = () => {
-    if (disabled) return;
-
-    timeoutRef.current = setTimeout(() => {
-      setIsVisible(true);
-    }, delay);
-  };
-
-  const handleMouseLeave = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    setIsVisible(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const positionClasses = {
-    top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-    bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-    left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-    right: 'left-full top-1/2 -translate-y-1/2 ml-2',
-  };
-
-  const arrowClasses = {
-    top: 'top-full left-1/2 -translate-x-1/2 border-t-overlay',
-    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-overlay',
-    left: 'left-full top-1/2 -translate-y-1/2 border-l-overlay',
-    right: 'right-full top-1/2 -translate-y-1/2 border-r-overlay',
-  };
-
-  const tooltipClasses = cls(
-    'absolute',
-    positionClasses[position],
-    'px-3 py-2 text-xs text-on-emphasis',
-    'bg-overlay backdrop-blur-sm rounded-md',
-    'opacity-0 transition-opacity duration-200',
-    'pointer-events-none whitespace-nowrap z-50',
-    'shadow-lg border border-border-emphasis',
-    'min-w-[8rem] max-w-xs',
-    isVisible ? 'opacity-100' : ''
-  );
+  if (disabled || !content) {
+    return <>{children}</>;
+  }
 
   return (
-    <div
-      className={cls('relative inline-block', className)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {children}
-      {!disabled && content && (
-        <div className={tooltipClasses}>
-          {content}
-          {/* Tooltip arrow */}
-          <div
-            className={cls(
-              'absolute',
-              arrowClasses[position],
-              'border-4 border-transparent'
-            )}
-          />
-        </div>
-      )}
-    </div>
+    <TooltipProvider delayDuration={delay}>
+      <TooltipPrimitive.Root data-slot="tooltip">
+        <TooltipPrimitive.Trigger data-slot="tooltip-trigger" asChild>
+          <span className={cn('inline-block', className)}>{children}</span>
+        </TooltipPrimitive.Trigger>
+        <TooltipContent side={position}>{content}</TooltipContent>
+      </TooltipPrimitive.Root>
+    </TooltipProvider>
   );
 };
 
+// Named exports for compound component pattern
+export { TooltipProvider, TooltipRoot, TooltipTrigger, TooltipContent };
+
+// Default export for backwards compatibility
 export default Tooltip;

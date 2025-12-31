@@ -7,10 +7,13 @@ export interface Memory {
   id: string;
   content: string;
   category: MemoryCategory;
+  tags: string[];
+  importance: number;
   pinned: boolean;
   archived: boolean;
   createdAt: number;
   updatedAt: number;
+  usageCount: number;
 }
 
 interface MemoryStoreState {
@@ -57,10 +60,13 @@ export const useMemoryStore = create<MemoryStore>()(
           id,
           content,
           category,
+          tags: [],
+          importance: 0.5,
           pinned,
           archived: false,
           createdAt: timestamp,
           updatedAt: timestamp,
+          usageCount: 0,
         };
       }),
 

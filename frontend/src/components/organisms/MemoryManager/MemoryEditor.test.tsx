@@ -13,6 +13,9 @@ describe('MemoryEditor', () => {
     archived: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    tags: [],
+    importance: 0.5,
+    usageCount: 0,
   };
 
   const mockOnSave = vi.fn();

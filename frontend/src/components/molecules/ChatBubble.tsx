@@ -2,9 +2,14 @@ import React, { useState, useEffect } from 'react';
 import MessageBubble from '../atoms/MessageBubble';
 import ComplexAddons, { type ToolDetail } from '../atoms/ComplexAddons';
 import FeedbackControls from '../atoms/FeedbackControls';
+import BranchNavigator from '../atoms/BranchNavigator';
+import { Textarea } from '../atoms/Textarea';
+import Button from '../atoms/Button';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
+import { cn } from '../../lib/utils';
 import { useFeedback } from '../../hooks/useFeedback';
+import { useBranchStore } from '../../stores/branchStore';
 import type {
   BaseComponentProps,
   MessageType,
@@ -12,6 +17,7 @@ import type {
   MessageAddon,
   ToolData,
 } from '../../types/components';
+import type { MessageId } from '../../types/streaming';
 
 /**
  * Collapsible reasoning block component.
@@ -125,6 +131,10 @@ export interface ChatBubbleProps extends BaseComponentProps {
   addons?: MessageAddon[];
   /** Array of tools attached to the message */
   tools?: ToolData[];
+  /** Message ID for branch tracking */
+  messageId?: MessageId;
+  /** Callback when user clicks "Continue from here" on an assistant message */
+  onContinueFromHere?: (messageId: MessageId) => void;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -136,16 +146,46 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   streamingText = '',
   addons = [],
   tools = [],
+  messageId,
+  onContinueFromHere,
   className = ''
 }) => {
   const [displayedContent, setDisplayedContent] = useState<string>('');
   const [typingIndex, setTypingIndex] = useState<number>(0);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editedContent, setEditedContent] = useState<string>('');
+  const [isHovering, setIsHovering] = useState<boolean>(false);
+
+  // Branch store for managing message versions
+  const {
+    initializeBranch,
+    createBranch,
+    navigateToBranch,
+    getCurrentBranch,
+    getBranchCount,
+    getCurrentIndex,
+  } = useBranchStore();
+
+  // Initialize branch for user messages on mount
+  useEffect(() => {
+    if (messageId && type === MESSAGE_TYPES.USER && content) {
+      initializeBranch(messageId, content);
+    }
+  }, [messageId, type, content, initializeBranch]);
+
+  // Get current branch content if available
+  const currentBranch = messageId ? getCurrentBranch(messageId) : null;
+  const branchCount = messageId ? getBranchCount(messageId) : 0;
+  const currentIndex = messageId ? getCurrentIndex(messageId) : 0;
+
+  // Use branch content if available, otherwise use prop content
+  const effectiveContent = currentBranch ? currentBranch.content : content;
 
   // Handle streaming/typing animation
   useEffect(() => {
     if (state === MESSAGE_STATES.STREAMING) {
-      // Use streamingText for streaming mode, fallback to content
-      const textToAnimate = streamingText || content;
+      // Use streamingText for streaming mode, fallback to effectiveContent
+      const textToAnimate = streamingText || effectiveContent;
 
       if (textToAnimate) {
         const timer = setTimeout(() => {
@@ -158,10 +198,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         return () => clearTimeout(timer);
       }
     } else {
-      setDisplayedContent(content);
+      setDisplayedContent(effectiveContent);
       setTypingIndex(0); // Reset typing index when not streaming
     }
-  }, [content, streamingText, state, typingIndex]);
+  }, [effectiveContent, streamingText, state, typingIndex]);
 
   /**
    * Process content to extract and render reasoning blocks as React elements.
@@ -243,7 +283,35 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       );
     }
 
-    return processContent(content);
+    return processContent(effectiveContent);
+  };
+
+  const handleEditClick = () => {
+    setEditedContent(effectiveContent);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (type === MESSAGE_TYPES.USER && messageId) {
+      // For user messages: create new branch (UI-only)
+      createBranch(messageId, editedContent);
+    } else if (type === MESSAGE_TYPES.ASSISTANT) {
+      // For assistant messages: submit as correction feedback
+      console.log('Assistant message edited - would submit feedback:', editedContent);
+      // TODO: feedbackApi.submitCorrection(editedContent);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedContent('');
+  };
+
+  const handleNavigateBranch = (direction: 'prev' | 'next') => {
+    if (messageId) {
+      navigateToBranch(messageId, direction);
+    }
   };
 
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
@@ -261,8 +329,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   // Determine role-based class for e2e testing
   const roleClass = type === MESSAGE_TYPES.USER ? 'user' : type === MESSAGE_TYPES.ASSISTANT ? 'assistant' : 'system';
 
+  // Don't allow editing while streaming
+  const canEdit = state !== MESSAGE_STATES.STREAMING;
+
   return (
-    <div className={cls('flex flex-col gap-2', roleClass, className)}>
+    <div
+      className={cls('flex flex-col gap-2', roleClass, className)}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
       {/* Streaming status badge */}
       {state === MESSAGE_STATES.STREAMING && type === MESSAGE_TYPES.ASSISTANT && (
         <div className="w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mr-auto mb-1">
@@ -273,29 +348,127 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         </div>
       )}
 
-      {/* Main message bubble */}
-      <MessageBubble
-        type={type}
-        content={getContentToDisplay()}
-        state={state}
-        timestamp={timestamp}
-        showTyping={showTyping}
-        addons={[]}
-        hideTimestamp={true}
-      />
+      {/* Main message bubble or edit mode */}
+      {isEditing ? (
+        <div className={cn(
+          'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg',
+          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
+        )}>
+          <Textarea
+            value={editedContent}
+            onChange={(e) => setEditedContent(e.target.value)}
+            className="w-full mb-2 min-h-24"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancelEdit}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSaveEdit}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="relative group">
+          <MessageBubble
+            type={type}
+            content={getContentToDisplay()}
+            state={state}
+            timestamp={timestamp}
+            showTyping={showTyping}
+            addons={[]}
+            hideTimestamp={true}
+          />
+          {/* Edit button - show on hover */}
+          {canEdit && isHovering && (
+            <div className={cn(
+              'absolute top-2 flex gap-1',
+              type === MESSAGE_TYPES.USER ? 'left-2' : 'right-2'
+            )}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleEditClick}
+                className="opacity-70 hover:opacity-100"
+                aria-label="Edit message"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+              </Button>
+              {/* Continue from here button - only for assistant messages */}
+              {type === MESSAGE_TYPES.ASSISTANT && messageId && onContinueFromHere && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onContinueFromHere(messageId)}
+                  className="opacity-70 hover:opacity-100"
+                  aria-label="Continue from here"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Addons footer with timestamp (always shown) */}
+      {/* Addons footer with timestamp and branch navigator */}
       <div className={cls(
         'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg',
         type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
       )}>
-        <ComplexAddons
-          addons={inlineAddons}
-          toolDetails={toolDetails}
-          timestamp={timestamp}
-          className="w-full"
-          showFeedback={true}
-        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex-1">
+            <ComplexAddons
+              addons={inlineAddons}
+              toolDetails={toolDetails}
+              timestamp={timestamp}
+              className="w-full"
+              showFeedback={true}
+            />
+          </div>
+          {/* Branch navigator - only for user messages with branches */}
+          {type === MESSAGE_TYPES.USER && messageId && branchCount > 0 && (
+            <BranchNavigator
+              messageId={messageId}
+              currentIndex={currentIndex}
+              totalBranches={branchCount}
+              onNavigate={handleNavigateBranch}
+            />
+          )}
+        </div>
       </div>
 
 

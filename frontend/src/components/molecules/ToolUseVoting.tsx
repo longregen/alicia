@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import FeedbackControls from '../atoms/FeedbackControls';
-import GhostButton from '../atoms/GhostButton';
+import Button from '../atoms/Button';
 import { useFeedback } from '../../hooks/useFeedback';
 import { cls } from '../../utils/cls';
 import type { BaseComponentProps } from '../../types/components';
@@ -66,13 +66,14 @@ const ToolUseVoting: React.FC<ToolUseVotingProps> = ({
 
         {/* Quick feedback toggle button */}
         {showQuickFeedback && !compact && (
-          <GhostButton
+          <Button
+            variant="ghost"
             size="sm"
             onClick={toggleFeedbackOptions}
-            ariaLabel="Show quick feedback options"
+            aria-label="Show quick feedback options"
           >
             {currentQuickFeedback ? '✓ Feedback' : '+ Feedback'}
-          </GhostButton>
+          </Button>
         )}
       </div>
 

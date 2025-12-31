@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReasoningVoting from './ReasoningVoting';
-import GhostButton from '../atoms/GhostButton';
+import Button from '../atoms/Button';
 import { cls } from '../../utils/cls';
 import type { BaseComponentProps } from '../../types/components';
 
@@ -89,9 +89,9 @@ const ReasoningStep: React.FC<ReasoningStepProps> = ({
 
       {/* Show more button */}
       {shouldTruncate && !isExpanded && (
-        <GhostButton size="sm" onClick={toggleExpanded} ariaLabel="Show more">
+        <Button variant="ghost" size="sm" onClick={toggleExpanded} aria-label="Show more">
           Show more
-        </GhostButton>
+        </Button>
       )}
 
       {/* Voting controls */}

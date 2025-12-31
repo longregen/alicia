@@ -1,17 +1,35 @@
 import React from 'react';
-import { cls } from '../../utils/cls';
-import type { BaseComponentProps, Variant, Size } from '../../types/components';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '../../lib/utils';
 
 /**
  * Base Badge component for displaying status, scores, and counts.
- * Provides the foundation for StatusBadge, ScoreBadge, and CountBadge.
+ * Uses CVA for variant management.
  */
 
-export interface BadgeProps extends BaseComponentProps {
-  /** Badge variant style */
-  variant?: Variant;
-  /** Badge size */
-  size?: Size;
+const badgeVariants = cva(
+  'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        destructive: 'border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80',
+        outline: 'text-foreground',
+        success: 'border-transparent bg-green-500 text-white shadow hover:bg-green-600',
+        warning: 'border-transparent bg-yellow-500 text-white shadow hover:bg-yellow-600',
+        error: 'border-transparent bg-red-500 text-white shadow hover:bg-red-600',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  }
+);
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {
   /** Optional icon or prefix */
   icon?: React.ReactNode;
   /** Optional dot indicator */
@@ -20,55 +38,28 @@ export interface BadgeProps extends BaseComponentProps {
   dotColor?: string;
 }
 
-const Badge: React.FC<BadgeProps> = ({
-  variant = 'default',
-  size = 'md',
-  icon,
-  showDot = false,
-  dotColor,
-  className = '',
-  children,
-}) => {
-  const sizeClasses = {
-    sm: 'px-1.5 py-0.5 text-xs',
-    md: 'px-2 py-1 text-sm',
-    lg: 'px-3 py-1.5 text-base',
-  };
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, icon, showDot = false, dotColor, children, ...props }, ref) => {
+    const dotColorClass = dotColor || 'bg-current';
 
-  const variantStyles = {
-    default: 'bg-surface text-default border',
-    primary: 'bg-accent-subtle text-accent border-accent',
-    success: 'bg-success-subtle text-success border-success',
-    warning: 'bg-warning-subtle text-warning border-warning',
-    error: 'bg-error-subtle text-error border-error',
-  };
+    return (
+      <div
+        ref={ref}
+        className={cn(badgeVariants({ variant }), className)}
+        data-slot="badge"
+        {...props}
+      >
+        {showDot && (
+          <span className={cn('w-1.5 h-1.5 rounded-full', dotColorClass)} />
+        )}
+        {icon && <span className="flex items-center">{icon}</span>}
+        {children}
+      </div>
+    );
+  }
+);
 
-  const badgeClasses = cls(
-    // Base styles
-    'inline-flex items-center gap-1',
-    'rounded-full border font-medium whitespace-nowrap',
-
-    // Size
-    sizeClasses[size],
-
-    // Variant
-    variantStyles[variant],
-
-    // Custom classes
-    className
-  );
-
-  const dotColorClass = dotColor || 'bg-current';
-
-  return (
-    <span className={badgeClasses}>
-      {showDot && (
-        <span className={cls('w-1.5 h-1.5 rounded-full', dotColorClass)} />
-      )}
-      {icon && <span className="flex items-center">{icon}</span>}
-      {children}
-    </span>
-  );
-};
+Badge.displayName = 'Badge';
 
 export default Badge;
+export { badgeVariants };

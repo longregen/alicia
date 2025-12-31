@@ -1,98 +1,72 @@
 import React from 'react';
-import { cls } from '../../utils/cls';
-import type { BaseComponentProps, Size, Variant } from '../../types/components';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '../../lib/utils';
 
 /**
  * Base button component with support for different variants and sizes.
- * Provides the foundation for IconButton, PrimaryButton, and GhostButton.
+ * Uses CVA for variant management and supports asChild pattern for polymorphism.
  */
 
-export interface ButtonProps extends BaseComponentProps {
-  /** Button variant style */
-  variant?: Variant;
-  /** Button size */
-  size?: Size;
-  /** Whether the button is disabled */
-  disabled?: boolean;
+const buttonVariants = cva(
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*="size-"])]:size-4 shrink-0',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
+        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+        outline: 'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
+        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+        ghost: 'hover:bg-accent hover:text-accent-foreground',
+        link: 'text-primary underline-offset-4 hover:underline',
+      },
+      size: {
+        default: 'h-9 px-4 py-2',
+        sm: 'h-8 rounded-md px-3 text-xs',
+        lg: 'h-10 rounded-md px-8',
+        icon: 'size-9',
+        'icon-sm': 'size-8',
+        'icon-lg': 'size-10',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  /** Render as a child element (polymorphic behavior) */
+  asChild?: boolean;
   /** Whether the button is in loading state */
   loading?: boolean;
-  /** Click handler */
-  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
-  /** Button type */
-  type?: 'button' | 'submit' | 'reset';
-  /** ARIA label */
-  ariaLabel?: string;
-  /** Full width button */
-  fullWidth?: boolean;
 }
 
-const Button: React.FC<ButtonProps> = ({
-  variant = 'default',
-  size = 'md',
-  disabled = false,
-  loading = false,
-  onClick,
-  type = 'button',
-  ariaLabel,
-  fullWidth = false,
-  className = '',
-  children,
-}) => {
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (!disabled && !loading && onClick) {
-      onClick(e);
-    }
-  };
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+    const Comp = asChild ? Slot : 'button';
 
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base',
-  };
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        disabled={disabled || loading}
+        data-slot="button"
+        {...props}
+      >
+        {loading && (
+          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        )}
+        {children}
+      </Comp>
+    );
+  }
+);
 
-  const variantClasses = {
-    default: 'bg-surface text-default border hover:bg-sunken',
-    primary: 'bg-accent text-on-emphasis hover:bg-accent-hover active:bg-accent-active border-accent',
-    success: 'bg-success text-on-emphasis hover:bg-success/90 border-success',
-    warning: 'bg-warning text-on-emphasis hover:bg-warning/90 border-warning',
-    error: 'bg-error text-on-emphasis hover:bg-error/90 border-error',
-  };
-
-  const buttonClasses = cls(
-    // Base styles
-    'inline-flex items-center justify-center gap-2',
-    'border rounded-lg font-medium',
-    'transition-all duration-200',
-    'focus:outline-none focus:ring-2 focus:ring-accent',
-
-    // Size
-    sizeClasses[size],
-
-    // Variant
-    variantClasses[variant],
-
-    // States
-    disabled || loading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
-    fullWidth ? 'w-full' : '',
-
-    // Custom classes
-    className
-  );
-
-  return (
-    <button
-      type={type}
-      onClick={handleClick}
-      disabled={disabled || loading}
-      aria-label={ariaLabel}
-      className={buttonClasses}
-    >
-      {loading && (
-        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-      )}
-      {children}
-    </button>
-  );
-};
+Button.displayName = 'Button';
 
 export default Button;
+export { buttonVariants };

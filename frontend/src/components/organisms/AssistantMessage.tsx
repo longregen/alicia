@@ -153,6 +153,7 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
         timestamp={message.createdAt}
         addons={addons}
         tools={tools}
+        messageId={messageId}
       />
       {memoryTraces.length > 0 && (
         <MemoryTraceAddon traces={memoryTraces} className="mt-2" />

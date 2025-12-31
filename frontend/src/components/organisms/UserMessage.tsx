@@ -119,6 +119,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
       state={MESSAGE_STATES.COMPLETED}
       timestamp={message.createdAt}
       addons={addons}
+      messageId={messageId}
       className={className}
     />
   );

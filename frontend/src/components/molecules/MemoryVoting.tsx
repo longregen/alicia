@@ -45,7 +45,6 @@ const MemoryVoting: React.FC<MemoryVotingProps> = ({
             score={relevance}
             max={1}
             showPercent
-            size="sm"
             thresholds={{
               error: 30,
               warning: 60,

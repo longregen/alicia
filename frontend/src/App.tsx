@@ -82,6 +82,14 @@ function AppContent({
     await updateConversation(id, { title: newTitle });
   };
 
+  const handleArchiveConversation = async (id: string) => {
+    await updateConversation(id, { status: 'archived' });
+  };
+
+  const handleUnarchiveConversation = async (id: string) => {
+    await updateConversation(id, { status: 'active' });
+  };
+
   const handleSendMessage = async (content: string) => {
     await sendMessage(content);
   };
@@ -94,6 +102,15 @@ function AppContent({
   const handleOpenSettings = () => {
     setSettingsOpen(true);
     setSidebarOpen(false);
+  };
+
+  const handlePanelChange = (panel: 'memory' | 'server' | 'settings') => {
+    // In this version of App, we only support settings panel
+    if (panel === 'settings') {
+      handleOpenSettings();
+    }
+    // Memory and server panels are not implemented in this version
+    // They are available in AliciaApp.tsx
   };
 
   return (
@@ -160,7 +177,10 @@ function AppContent({
           onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
           onRenameConversation={handleRenameConversation}
+          onArchive={handleArchiveConversation}
+          onUnarchive={handleUnarchiveConversation}
           onSettings={handleOpenSettings}
+          onPanelChange={handlePanelChange}
           loading={conversationsLoading}
         />
       </div>

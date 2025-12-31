@@ -10,7 +10,7 @@ export interface BaseComponentProps {
 export type Size = 'sm' | 'md' | 'lg';
 
 // Color variants
-export type Variant = 'default' | 'primary' | 'success' | 'warning' | 'error';
+export type Variant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error';
 
 // Recording states
 export type RecordingState = 'idle' | 'recording' | 'processing' | 'completed' | 'error';
