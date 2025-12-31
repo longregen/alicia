@@ -278,9 +278,8 @@ class PowerAwareWakeWordDetector @Inject constructor(
     }
 
     /**
-     * Required override from SensorEventListener.
-     * Not used in this implementation as we don't need to respond to sensor accuracy changes.
-     * Sensor accuracy is handled automatically by the Android framework.
+     * Required override from SensorEventListener. Accuracy changes don't affect wake word detection
+     * as we only need relative motion/orientation data, not precise measurements.
      */
     override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
         // No action needed - sensor accuracy changes don't affect wake word detection
@@ -304,6 +303,7 @@ class PowerAwareWakeWordDetector @Inject constructor(
         if (!powerManager.isInteractive && movement > IN_POCKET_MOVEMENT_THRESHOLD) {
             isInPocket.set(true)
         } else if (powerManager.isInteractive) {
+            // Clear in-pocket state when screen is on (user is likely interacting with device)
             isInPocket.set(false)
         }
     }

@@ -102,7 +102,7 @@ object Logger {
 
     /**
      * Log What-A-Terrible-Failure (wtf)
-     * Note: wtf() always logs regardless of debug mode as it indicates critical failures
+     * Note: wtf() bypasses log level filtering as it indicates critical failures. However, it still requires Timber to be configured.
      */
     fun wtf(tag: String, message: String, throwable: Throwable? = null) {
         val prefixedTag = "$TAG_PREFIX:$tag"
@@ -211,6 +211,8 @@ object Logger {
  *
  * This extension function executes the provided block, measures how long it takes,
  * and automatically logs the duration using the TaggedLogger's time() method.
+ *
+ * Note: Logging only occurs if debug mode is enabled and minimum log level is DEBUG or more verbose (VERBOSE).
  *
  * @param operation A descriptive name for the operation being measured, used in the log message
  * @param block The code block to execute and measure

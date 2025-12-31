@@ -2,11 +2,9 @@
 
 This document describes the architecture of Alicia, a real-time voice assistant that enables natural conversations through audio. Alicia uses LiveKit as its real-time communication layer to provide seamless, streaming conversations with AI across web, mobile, and command-line interfaces.
 
-> **Note**: This document describes both implemented and planned features. See the [Implementation Status](#implementation-status) section below for details on what is currently available.
-
 ## System Overview
 
-Alicia is a multi-platform voice assistant that provides real-time, streaming conversations with AI. The system combines speech recognition (Whisper), language understanding (Qwen3), and voice synthesis (Kokoro) to create a seamless conversational experience. LiveKit serves as the central communication hub, handling all real-time audio streaming and protocol message delivery.
+Alicia is a multi-platform voice assistant that provides real-time, streaming conversations with AI. The system combines speech recognition (Whisper), language understanding (Qwen2.5-7B-Instruct-AWQ), and voice synthesis (Kokoro) to create a seamless conversational experience. LiveKit serves as the central communication hub, handling all real-time audio streaming and protocol message delivery.
 
 ```mermaid
 graph TD
@@ -23,7 +21,7 @@ graph TD
     subgraph "Alicia Agent"
         Agent[LiveKit Agent Process]
         Whisper[Whisper ASR]
-        LLM[Qwen3 LLM]
+        LLM[Qwen2.5-7B-Instruct-AWQ LLM]
         TTS[Kokoro TTS]
     end
 
@@ -54,9 +52,9 @@ graph TD
 
 3. **Dual Transport Channels**:
    - **Audio tracks** carry voice (user microphone → agent, agent TTS → user)
-   - **Data channels** carry protocol messages (all 16 message types, MessagePack-encoded)
+   - **Data channels** carry protocol messages (MessagePack-encoded)
 
-4. **Agent as Participant**: The Alicia agent joins rooms as participant `alicia_agent`, processing audio and generating responses in real-time.
+4. **Agent as Participant**: The Alicia agent joins rooms as participant `alicia-agent`, processing audio and generating responses in real-time.
 
 5. **Client Flexibility**: Clients can be voice-only, text-only, or multimodal, all using the same underlying infrastructure.
 
@@ -70,7 +68,7 @@ graph TD
    - **LiveKit Agents Framework**: Framework for building AI agents
 
 2. **Backend Language & Tools**:
-   - Go 1.25+ (API services, CLI client, conversation management, agent worker)
+   - Go 1.22+ (API services, CLI client, conversation management, agent worker)
    - golangci-lint (static code analysis)
 
 3. **Database & Storage**:
@@ -81,11 +79,11 @@ graph TD
 
 4. **Protocol & Serialization**:
    - MessagePack (binary protocol implementation as specified in PROTOCOL.md)
-   - All 16 message types flow over LiveKit data channels
+   - Protocol messages flow over LiveKit data channels
 
 5. **AI Models & Integration**:
    - Whisper (speech recognition via speaches server)
-   - Qwen3-8B-AWQ (language understanding via vLLM server)
+   - Qwen2.5-7B-Instruct-AWQ (language understanding via vLLM server)
    - Kokoro TTS (voice synthesis via speaches server)
    - LiteLLM (OpenAI-compatible API proxy)
 
@@ -130,7 +128,7 @@ graph TB
 
     subgraph "AI Components"
         ASR[Whisper ASR<br/>speaches]
-        LLM[Qwen3 LLM<br/>vLLM]
+        LLM[Qwen2.5-7B-Instruct-AWQ LLM<br/>vLLM]
         TTSEngine[Kokoro TTS<br/>speaches]
         LiteLLM[LiteLLM Proxy<br/>OpenAI API]
     end
@@ -185,10 +183,10 @@ Each Alicia conversation corresponds to exactly one LiveKit room. This provides:
 **Room Naming Convention**:
 ```
 Room Name: conv_{conversation_id}
-Example:   conv_k9mX2pL7qR
+Example:   conv_ac_k9mX2pL7qR
 ```
 
-Where `conversation_id` is a NanoID from the `alicia_conversations.id` column.
+Where `conversation_id` is a random ID from the `alicia_conversations.id` column (generated using `generate_random_id('ac')`).
 
 **Room Configuration**:
 ```go
@@ -233,7 +231,7 @@ await room.localParticipant.publishTrack(audioTrack);
 
 The AI assistant running as a LiveKit Agent worker.
 
-- **Identity**: `alicia_agent`
+- **Identity**: `alicia-agent` (with optional conversation-specific suffix)
 - **Permissions**: Can publish TTS audio, subscribe to user audio, publish/receive data messages
 - **Tracks**: Publishes synthesized speech audio (Opus, 48kHz)
 
@@ -252,7 +250,7 @@ LiveKit handles codec negotiation, adaptive bitrate, packet loss recovery, and j
 
 #### Data Channels
 
-All 16 Alicia protocol message types flow over LiveKit data channels:
+Alicia protocol messages flow over LiveKit data channels:
 
 - **Encoding**: MessagePack (binary)
 - **Reliability**: Uses LiveKit's RELIABLE data channel (guaranteed delivery, ordered)
@@ -297,7 +295,7 @@ func CreateRoomToken(conversationID, userID string, isAgent bool) (string, error
 
     identity := fmt.Sprintf("user_%s", userID)
     if isAgent {
-        identity = "alicia_agent"
+        identity = "alicia-agent"
     }
 
     token.SetIdentity(identity)
@@ -308,60 +306,52 @@ func CreateRoomToken(conversationID, userID string, isAgent bool) (string, error
         CanSubscribe: true,
         CanPublishData: true,
     })
-    token.SetValidFor(24 * time.Hour)
+    token.SetValidFor(6 * time.Hour)
 
     return token.ToJWT()
 }
 ```
 
-Tokens are scoped to a specific room and expire after 24 hours.
+Tokens are scoped to a specific room and expire after 6 hours (configurable).
 
 ## Component Descriptions
 
 ### 1. Client Applications
 
-Alicia is designed to support multiple client implementations. Current status:
+Alicia supports multiple client implementations across different platforms.
 
-#### Web Interface ✅ IMPLEMENTED
+#### Web Interface
 
 - **Framework**: React with TypeScript
-- **Current Features**:
+- **Features**:
   - Text message input and display
   - Conversation management (create, list, delete)
   - Message history
   - REST API integration
   - LiveKit real-time voice integration (`useLiveKit.ts`)
-  - Audio input via microphone (`AudioInput.tsx`)
-  - Audio output with TTS playback (`AudioOutput.tsx`)
+  - Voice activity detection and microphone input (`MicrophoneVAD.tsx`)
   - Real-time streaming via data channels
   - MessagePack protocol implementation
 - **Deployment**: Static site (Vite build)
 
-#### Mobile App ✅ IMPLEMENTED
+#### Mobile App
 
 - **Platform**: Android (Kotlin/Jetpack Compose)
-- **Current Features**:
+- **Features**:
   - Native audio capture and playback via LiveKit SDK
   - Porcupine wake word detection
   - Room database for local storage
   - Background voice service
   - Hilt dependency injection
-- **Planned Features**:
-  - Push notification integration
-  - Offline message queueing
 
-#### CLI Tool ✅ IMPLEMENTED
+#### CLI Tool
 
 - **Language**: Go
-- **Current Features**:
+- **Features**:
   - Interactive chat with streaming responses (`chat` command)
   - Conversation management (create, list, delete)
   - Text-only mode for terminal sessions
   - Database integration for persistence
-- **Planned Features**:
-  - Terminal-based voice interaction
-  - Conversation history export
-  - Script integration capabilities
 
 ### 2. API Service
 
@@ -424,31 +414,9 @@ webhook:
 
 The AI assistant implementation, running as a LiveKit Agent worker:
 
-**Architecture**:
-```go
-// Agent entrypoint
-func (a *Agent) HandleJob(ctx context.Context, job *livekit.Job) error {
-    // Extract conversation from room name
-    conversationID := strings.TrimPrefix(job.Room.Name, "conv_")
+**Architecture** (Conceptual):
 
-    // Load conversation state
-    conversation, err := a.loadConversation(ctx, conversationID)
-    if err != nil {
-        return err
-    }
-
-    // Initialize voice pipeline with external services
-    pipeline := NewVoicePipeline(
-        a.vadService,                    // Voice activity detection
-        a.speechesClient,                // STT via speaches server
-        a.litellmClient,                 // LLM via LiteLLM (OpenAI-compatible)
-        a.speechesClient,                // TTS via speaches server
-        conversation.ToChatContext(),
-    )
-
-    return pipeline.Start(ctx, job.Room)
-}
-```
+The agent processes voice conversations through a pipeline that integrates speech recognition, language understanding, and speech synthesis. The actual implementation is in `/internal/adapters/livekit/agent.go` and uses the Go ports/adapters pattern with services for ASR, LLM, and TTS.
 
 **Voice Pipeline Flow**:
 
@@ -458,7 +426,7 @@ graph LR
     VAD --> Buffer[Audio Buffer]
     Buffer --> Whisper[Whisper ASR]
     Whisper --> Trans[Transcription]
-    Trans --> Qwen[Qwen3 LLM]
+    Trans --> Qwen[Qwen2.5-7B-Instruct-AWQ LLM]
     Qwen --> Resp[Response Text]
     Resp --> Kokoro[Kokoro TTS]
     Kokoro --> AudioOut[Agent Audio Track]
@@ -481,91 +449,15 @@ graph LR
 - **Model**: `whisper-large-v3` or `whisper-medium` (configurable)
 - **Output**: Streaming transcription with partial and final results
 - **Protocol**: Sends `Transcription` messages (Type 9) via data channel
+- **Service Interface**: Implements `ports.ASRService` defined in `/internal/ports/`
 
-```go
-// SpeachesSTT implements speech-to-text via speaches server
-func (s *SpeachesSTT) Recognize(ctx context.Context, buffer *AudioBuffer) (<-chan Segment, error) {
-    segments := make(chan Segment)
+#### Qwen2.5-7B-Instruct-AWQ LLM (Language Understanding)
 
-    go func() {
-        defer close(segments)
-
-        // Call speaches OpenAI-compatible transcription endpoint
-        resp, err := s.client.CreateTranscription(ctx, &openai.TranscriptionRequest{
-            Audio:  buffer.Reader(),
-            Model:  s.model,
-            Stream: true,
-        })
-
-        for segment := range resp.Segments {
-            // Send transcription via protocol
-            s.sendProtocolMessage(Envelope{
-                Type: 9, // Transcription
-                Body: TranscriptionBody{
-                    Text:       segment.Text,
-                    IsFinal:    segment.IsFinal,
-                    Confidence: segment.Confidence,
-                },
-            })
-            segments <- segment
-        }
-    }()
-
-    return segments, nil
-}
-```
-
-#### Qwen3 LLM (Language Understanding)
-
-- **Implementation**: vLLM server behind LiteLLM (OpenAI-compatible API)
-- **Model**: `Qwen3-8B-AWQ` (quantized for efficiency)
+- **Implementation**: OpenAI-compatible API (vLLM or LiteLLM)
+- **Model**: Configurable (commonly `Qwen2.5-7B-Instruct-AWQ` quantized for efficiency)
 - **Context**: Full conversation history + memory context
 - **Protocol**: Sends `StartAnswer` (Type 13) and `AssistantSentence` (Type 16) messages
-
-```go
-// LiteLLMClient implements LLM via OpenAI-compatible API
-func (l *LiteLLMClient) Chat(ctx context.Context, chatCtx *ChatContext) (<-chan Chunk, error) {
-    chunks := make(chan Chunk)
-
-    // Generate message ID
-    messageID := nanoid.New()
-
-    // Send StartAnswer message
-    l.sendProtocolMessage(Envelope{
-        Type: 13, // StartAnswer
-        Body: StartAnswerBody{
-            ID:             messageID,
-            ConversationID: l.conversationID,
-        },
-    })
-
-    go func() {
-        defer close(chunks)
-
-        // Stream response from LiteLLM (OpenAI-compatible)
-        stream, _ := l.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-            Model:    l.model,
-            Messages: chatCtx.ToMessages(),
-            Stream:   true,
-        })
-
-        for chunk := range stream {
-            // Send AssistantSentence for each chunk
-            l.sendProtocolMessage(Envelope{
-                Type: 16, // AssistantSentence
-                Body: AssistantSentenceBody{
-                    MessageID: messageID,
-                    Text:      chunk.Choices[0].Delta.Content,
-                    IsFinal:   chunk.Choices[0].FinishReason != "",
-                },
-            })
-            chunks <- Chunk{Text: chunk.Choices[0].Delta.Content}
-        }
-    }()
-
-    return chunks, nil
-}
-```
+- **Service Implementation**: See `/internal/llm/service.go` for the actual implementation
 
 #### Kokoro TTS (Text-to-Speech)
 
@@ -573,140 +465,44 @@ func (l *LiteLLMClient) Chat(ctx context.Context, chatCtx *ChatContext) (<-chan 
 - **Voice**: Configurable (af_sarah, am_adam, etc.)
 - **Output**: 24kHz stereo audio, resampled to 48kHz Opus for LiveKit
 - **Streaming**: Sentence-by-sentence synthesis for low latency
-
-```go
-// SpeachesTTS implements TTS via speaches server
-func (t *SpeachesTTS) Synthesize(ctx context.Context, text string) (<-chan []byte, error) {
-    audioChunks := make(chan []byte)
-
-    go func() {
-        defer close(audioChunks)
-
-        // Split into sentences for streaming
-        sentences := splitSentences(text)
-
-        for _, sentence := range sentences {
-            // Call speaches OpenAI-compatible TTS endpoint
-            resp, _ := t.client.CreateSpeech(ctx, openai.CreateSpeechRequest{
-                Model: "kokoro",
-                Voice: t.voice,
-                Input: sentence,
-            })
-
-            // Resample to 48kHz for LiveKit
-            audio48k := resample(resp.Audio, 24000, 48000)
-
-            // Stream to LiveKit audio track
-            t.audioSource.CaptureFrame(audio48k)
-
-            audioChunks <- audio48k
-        }
-    }()
-
-    return audioChunks, nil
-}
-```
+- **Service Interface**: Implements `ports.TTSService` defined in `/internal/ports/`
 
 **Protocol Message Handling**:
 
-The agent processes all incoming protocol messages:
-
-```go
-func (a *Agent) OnDataReceived(packet *livekit.DataPacket) {
-    var envelope Envelope
-    msgpack.Unmarshal(packet.Data, &envelope)
-
-    handlers := map[uint16]func(Envelope){
-        2:  a.handleUserMessage,       // UserMessage
-        6:  a.handleToolUseRequest,    // ToolUseRequest
-        10: a.handleControlStop,       // ControlStop
-        11: a.handleControlVariation,  // ControlVariation
-        12: a.handleConfiguration,     // Configuration
-    }
-
-    if handler, ok := handlers[envelope.Type]; ok {
-        handler(envelope)
-    }
-}
-```
+The agent processes incoming protocol messages through a message router that dispatches to appropriate handlers based on message type. See `/internal/adapters/livekit/message_router.go` for the actual implementation.
 
 **Conversation State Management**:
 
-The agent loads conversation history and memory context from PostgreSQL on startup and persists all messages to the database:
-
-```go
-func (a *Agent) handleUserMessage(envelope Envelope) {
-    body := envelope.Body.(UserMessageBody)
-
-    // Store in database
-    _, err := a.db.Exec(ctx, `
-        INSERT INTO alicia_messages
-        (id, conversation_id, role, content, previous_id, created_at)
-        VALUES ($1, $2, 'user', $3, $4, NOW())
-    `,
-        body.ID,
-        envelope.ConversationID,
-        body.Content,
-        body.PreviousID,
-    )
-
-    // Process with LLM
-    response := a.llm.Chat(ctx, chatContext)
-}
-```
+The agent loads conversation history and memory context from PostgreSQL and persists all messages to the database. The implementation uses repository patterns defined in `/internal/adapters/postgres/` with type-safe queries generated by sqlc.
 
 ### 5. Database Layer
 
 PostgreSQL serves as the persistent storage for all conversation data:
 
-**Schema Overview**:
+**Schema Overview** (Simplified):
 
-```sql
--- Conversations
-CREATE TABLE alicia_conversations (
-    id TEXT PRIMARY KEY,  -- NanoID
-    user_id TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    metadata JSONB
-);
+The database schema includes tables for:
+- **alicia_conversations**: Conversation metadata and state
+- **alicia_messages**: User and assistant messages with linked-list structure
+- **alicia_sentences**: Individual sentences within messages (for streaming)
+- **alicia_audio**: Audio data and transcriptions
+- **alicia_memory**: Memory entries with vector embeddings (1024 dimensions)
+- **alicia_memory_used**: Tracking which memories were used in responses
+- **alicia_tools**: Tool definitions and configurations
+- **alicia_tool_uses**: Tool execution logs
+- **alicia_reasoning_steps**: Chain-of-thought reasoning traces
+- **alicia_votes**: User feedback on messages, tools, memories, and reasoning
+- **alicia_notes**: User annotations and corrections
+- **alicia_mcp_servers**: MCP (Model Context Protocol) server configurations
+- **prompt_optimization_runs**, **prompt_candidates**, **prompt_evaluations**: GEPA optimization infrastructure
 
--- Messages (both user and assistant)
-CREATE TABLE alicia_messages (
-    id TEXT PRIMARY KEY,  -- NanoID
-    conversation_id TEXT NOT NULL REFERENCES alicia_conversations(id),
-    role TEXT NOT NULL,  -- 'user' or 'assistant'
-    content TEXT NOT NULL,
-    previous_id TEXT REFERENCES alicia_messages(id),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    metadata JSONB
-);
+Key features:
+- Vector similarity search using pgvector with `vector(1024)` embeddings
+- Linked-list message structure via `previous_id` for branching support
+- Comprehensive audit trails with `created_at`, `updated_at`, `deleted_at`
+- JSONB columns for flexible metadata storage
 
--- Memory entries for retrieval
-CREATE TABLE alicia_memory (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT NOT NULL REFERENCES alicia_conversations(id),
-    content TEXT NOT NULL,
-    embedding vector(1536),  -- pgvector
-    importance FLOAT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
--- Tool usage logs
-CREATE TABLE alicia_tool_usage (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT NOT NULL REFERENCES alicia_conversations(id),
-    tool_name TEXT NOT NULL,
-    parameters JSONB,
-    result JSONB,
-    success BOOLEAN,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
--- Vector index for memory retrieval
-CREATE INDEX ON alicia_memory USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
-```
+See `/migrations/001_init.up.sql` for the complete schema definition.
 
 **Access Patterns**:
 
@@ -725,7 +521,7 @@ sequenceDiagram
     participant LiveKit
     participant Agent
     participant Whisper
-    participant Qwen3
+    participant Qwen
     participant Kokoro
     participant DB
 
@@ -744,13 +540,13 @@ sequenceDiagram
     LiveKit->>Client: Data: Transcription (final)
 
     Agent->>DB: Store UserMessage
-    Agent->>Qwen3: Generate Response (with context)
+    Agent->>Qwen: Generate Response (with context)
 
     Agent->>LiveKit: Data: StartAnswer
     LiveKit->>Client: Data: StartAnswer
 
     loop For each response chunk
-        Qwen3->>Agent: Response Chunk
+        Qwen->>Agent: Response Chunk
         Agent->>LiveKit: Data: AssistantSentence
         LiveKit->>Client: Data: AssistantSentence
         Agent->>Kokoro: Synthesize Chunk
@@ -769,15 +565,15 @@ sequenceDiagram
     participant Client
     participant LiveKit
     participant Agent
-    participant Qwen3
+    participant Qwen
     participant Tool
     participant DB
 
     Client->>LiveKit: Data: UserMessage
     LiveKit->>Agent: Data: UserMessage
 
-    Agent->>Qwen3: Process with Tools Available
-    Qwen3->>Agent: Tool Request (e.g., web_search)
+    Agent->>Qwen: Process with Tools Available
+    Qwen->>Agent: Tool Request (e.g., web_search)
 
     Agent->>LiveKit: Data: ToolUseRequest
     LiveKit->>Client: Data: ToolUseRequest (for transparency)
@@ -790,8 +586,8 @@ sequenceDiagram
 
     Agent->>DB: Log Tool Usage
 
-    Agent->>Qwen3: Continue with Result
-    Qwen3->>Agent: Final Response
+    Agent->>Qwen: Continue with Result
+    Qwen->>Agent: Final Response
 
     Agent->>LiveKit: Data: StartAnswer + AssistantSentence
     LiveKit->>Client: Data: Messages
@@ -857,7 +653,7 @@ room.LocalParticipant.PublishData(data, lksdk.DataPacket_RELIABLE)
 
 ### Message Types
 
-All 16 protocol message types flow over LiveKit data channels:
+Core protocol message types flow over LiveKit data channels:
 
 | Type | Name | Direction | Purpose |
 |------|------|-----------|---------|
@@ -877,8 +673,13 @@ All 16 protocol message types flow over LiveKit data channels:
 | 14 | MemoryTrace | Agent → Client | Memory retrieval events |
 | 15 | Commentary | Agent → Client | Meta-commentary |
 | 16 | AssistantSentence | Agent → Client | Streaming response chunk |
+| 20 | Feedback | Client → Agent | User votes on messages/tools/memories |
+| 22 | UserNote | Client → Agent | User annotations and corrections |
+| 24 | MemoryAction | Both | Memory CRUD operations |
+| 26 | ServerInfo | Agent → Client | Server status and configuration |
+| 29-31 | GEPA Messages | Both | Optimization dimension preferences and elite selection |
 
-See [PROTOCOL.md](./protocol/index.md) for complete specifications.
+See [PROTOCOL.md](./protocol/index.md) for complete specifications and all message types.
 
 ### Audio Track vs AudioChunk Messages
 
@@ -1009,7 +810,7 @@ logger.Info("user_message_received",
 ### 1. Access Control
 
 - LiveKit rooms isolated per conversation
-- JWT tokens with 24-hour expiry
+- JWT tokens with 6-hour expiry (configurable)
 - User identity verified via API authentication
 
 ### 2. Data Privacy
@@ -1030,105 +831,81 @@ logger.Info("user_message_received",
 - Agent limits concurrent conversations per worker
 - LiveKit enforces max participants per room
 
-## Implementation Status
+## System Capabilities
 
-This section provides a clear overview of what is currently implemented versus what is planned.
+### Core Infrastructure
 
-### Core Infrastructure ✅
+- PostgreSQL database with migrations
+- Go backend service architecture (hexagonal/ports & adapters)
+- REST API for conversation management
+- LiveKit server integration
+- MessagePack protocol implementation
+- OpenTelemetry tracing support
 
-- [x] PostgreSQL database with migrations
-- [x] Go backend service architecture (hexagonal/ports & adapters)
-- [x] REST API for conversation management
-- [x] LiveKit server integration
-- [x] MessagePack protocol implementation
-- [x] OpenTelemetry tracing support
+### Backend Agent
 
-### Backend Agent ✅
+- LiveKit agent worker
+- Voice pipeline (STT → LLM → TTS)
+- Whisper ASR integration (via speaches server)
+- Qwen3 LLM integration (via LiteLLM/vLLM)
+- Kokoro TTS integration (via speaches server)
+- Real-time audio streaming
+- Protocol message routing
+- Conversation state management
+- Message persistence
 
-- [x] LiveKit agent worker
-- [x] Voice pipeline (STT → LLM → TTS)
-- [x] Whisper ASR integration (via speaches server)
-- [x] Qwen3 LLM integration (via LiteLLM/vLLM)
-- [x] Kokoro TTS integration (via speaches server)
-- [x] Real-time audio streaming
-- [x] Protocol message routing
-- [x] Conversation state management
-- [x] Message persistence
+### Web Frontend
 
-### Web Frontend ✅
+- React + TypeScript + Vite setup
+- Basic UI components (ChatWindow, MessageList, InputBar, Sidebar)
+- REST API integration for text messages
+- Conversation management
+- Message history display
+- LiveKit client integration (`useLiveKit.ts` hook)
+- Voice activity detection with microphone input (`MicrophoneVAD.tsx` component)
+- Real-time streaming via data channels
+- MessagePack protocol handling (core message types)
 
-- [x] React + TypeScript + Vite setup
-- [x] Basic UI components (ChatWindow, MessageList, InputBar, Sidebar)
-- [x] REST API integration for text messages
-- [x] Conversation management
-- [x] Message history display
-- [x] LiveKit client integration (`useLiveKit.ts` hook)
-- [x] Microphone input (`AudioInput.tsx` component)
-- [x] Audio playback (`AudioOutput.tsx` component with TTS)
-- [x] Real-time streaming via data channels
-- [x] MessagePack protocol handling (all 16 message types)
-- [ ] Visual transcription feedback
+### Tools & Features
 
-### Tools & Features ✅
+- Tool execution framework
+- Tool coordinator
+- Web search tool (full DuckDuckGo HTML integration)
 
-- [x] Tool execution framework
-- [x] Tool coordinator
-- [x] Web search tool (full DuckDuckGo HTML integration - see `docs/WEB_SEARCH_IMPLEMENTATION.md`)
-- [ ] Other external tools (planned)
+### Memory & Context
 
-### Memory & Context ✅
+- Database schema for memory storage
+- pgvector integration for embeddings
+- Memory retrieval use cases (integrated in `generate_response.go:71-90`)
+- Memory storage from conversations
+- Context augmentation with memories
 
-- [x] Database schema for memory storage
-- [x] pgvector integration for embeddings
-- [x] Memory retrieval use cases (integrated in `generate_response.go:106-122`)
-- [x] Memory storage from conversations
-- [x] Context augmentation with memories
-- [ ] Memory management UI (planned)
+### Multi-Platform Support
 
-### Multi-Platform Support ✅
+- Web frontend (full voice support)
+- Android app (Kotlin/Compose, LiveKit, Porcupine wake word, Room database)
+- CLI tool (interactive chat, conversation management, streaming responses)
 
-- [x] Web frontend (full voice support)
-- [x] Android app (Kotlin/Compose, LiveKit, Porcupine wake word, Room database)
-- [x] CLI tool (interactive chat, conversation management, streaming responses)
-
-### Future Enhancements 🚧
-
-#### Frontend UX Enhancements
-
-Comprehensive UI improvements to enable users to actively participate in improving AI responses. See the [Frontend UX Enhancement Plan](frontend-ux-plan.md) for complete specifications.
-
-Key features:
-- **Granular Voting System**: Vote on individual messages, tool uses, memory selections, and reasoning steps
-- **User Notes**: Annotate messages with improvement suggestions and corrections
-- **Memory Management**: Full CRUD interface for viewing, editing, and organizing memories
-- **Server Information Panel**: Real-time visibility into connection status, sync state, and model configuration
+### Advanced Features
 
 #### DSPy + GEPA Prompt Optimization
 
-Integration of Stanford's DSPy framework with GEPA optimizer for automatic prompt improvement. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for architecture and implementation details.
+The system integrates Stanford's DSPy framework with GEPA optimizer for automatic prompt improvement.
 
 Key capabilities:
-- **Automatic Prompt Optimization**: Use GEPA's reflective mutation to evolve better prompts
-- **Tool Usage Optimization**: Improve tool descriptions, argument generation, and result formatting
-- **Memory-Aware Learning**: Leverage conversation memories as few-shot demonstrations
+- **Automatic Prompt Optimization**: Uses GEPA's reflective mutation to evolve better prompts
+- **Tool Usage Optimization**: Improves tool descriptions, argument generation, and result formatting
+- **Memory-Aware Learning**: Leverages conversation memories as few-shot demonstrations
 - **Feedback Loop**: User votes and notes feed directly into optimization metrics
 
 #### Silero VAD (Voice Activity Detection)
 
-Planned integration of Silero VAD in the web frontend to automatically detect when users start and stop speaking, eliminating the need for push-to-talk buttons:
+Silero VAD is implemented in the web frontend (`frontend/src/utils/sileroVAD.ts`) to automatically detect when users start and stop speaking:
 
 - Browser-based speech detection using Silero VAD
 - Configurable sensitivity threshold
 - Automatic microphone activation on speech
-- Visual indicator showing when speech is detected
-
-#### Personal Knowledge Integration
-
-Full integration with personal knowledge database systems:
-
-- Connect to personal wikis and note-taking apps
-- Index local documents for context retrieval
-- Semantic search across personal knowledge bases
+- Integrated with MicrophoneVAD component
 
 ## Conclusion
 

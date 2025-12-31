@@ -1,7 +1,7 @@
 import React from 'react';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
-import type { BaseComponentProps, MessageType, MessageState, MessageAddon } from '../../types/components';
+import type { BaseComponentProps, MessageRole, MessageState, MessageAddon } from '../../types/components';
 
 /**
  * MessageBubble atom component for displaying basic chat message bubbles.
@@ -17,7 +17,7 @@ import type { BaseComponentProps, MessageType, MessageState, MessageAddon } from
 // Component props interface
 export interface MessageBubbleProps extends BaseComponentProps {
   /** Type of message (user, assistant, system) */
-  type?: MessageType;
+  type?: MessageRole;
   /** Message content - can be HTML string or React nodes */
   content?: React.ReactNode;
   /** Current message state */

@@ -98,9 +98,9 @@ func (s *Service) doChatWithTools(ctx context.Context, messages []ports.LLMMessa
 }
 
 // ChatStream sends a streaming chat request
-func (s *Service) ChatStream(ctx context.Context, messages []ports.LLMMessage) (<-chan ports.LLMStreamChunk, error) {
+func (s *Service) ChatStream(parentCtx context.Context, messages []ports.LLMMessage) (<-chan ports.LLMStreamChunk, error) {
 	// Add timeout to prevent hanging on slow/failed LLM requests
-	ctx, cancel := context.WithTimeout(ctx, LLMTimeout)
+	ctx, cancel := context.WithTimeout(parentCtx, LLMTimeout)
 
 	chatMessages := s.convertMessages(messages)
 
@@ -113,16 +113,16 @@ func (s *Service) ChatStream(ctx context.Context, messages []ports.LLMMessage) (
 	outputChan := make(chan ports.LLMStreamChunk, 10)
 	go func() {
 		defer cancel()
-		s.convertStreamChunks(clientChan, outputChan)
+		s.convertStreamChunks(ctx, clientChan, outputChan)
 	}()
 
 	return outputChan, nil
 }
 
 // ChatStreamWithTools sends a streaming chat request with tools
-func (s *Service) ChatStreamWithTools(ctx context.Context, messages []ports.LLMMessage, tools []*models.Tool) (<-chan ports.LLMStreamChunk, error) {
+func (s *Service) ChatStreamWithTools(parentCtx context.Context, messages []ports.LLMMessage, tools []*models.Tool) (<-chan ports.LLMStreamChunk, error) {
 	// Add timeout to prevent hanging on slow/failed LLM requests
-	ctx, cancel := context.WithTimeout(ctx, LLMTimeout)
+	ctx, cancel := context.WithTimeout(parentCtx, LLMTimeout)
 
 	chatMessages := s.convertMessages(messages)
 	llmTools := s.convertTools(tools)
@@ -136,7 +136,7 @@ func (s *Service) ChatStreamWithTools(ctx context.Context, messages []ports.LLMM
 	outputChan := make(chan ports.LLMStreamChunk, 10)
 	go func() {
 		defer cancel()
-		s.convertStreamChunks(clientChan, outputChan)
+		s.convertStreamChunks(ctx, clientChan, outputChan)
 	}()
 
 	return outputChan, nil
@@ -195,35 +195,46 @@ func (s *Service) convertToolCalls(toolCalls []ToolCall) []*ports.LLMToolCall {
 }
 
 // convertStreamChunks converts client stream chunks to ports stream chunks
-func (s *Service) convertStreamChunks(clientChan <-chan StreamChunk, outputChan chan<- ports.LLMStreamChunk) {
+func (s *Service) convertStreamChunks(ctx context.Context, clientChan <-chan StreamChunk, outputChan chan<- ports.LLMStreamChunk) {
 	defer close(outputChan)
 
-	for chunk := range clientChan {
-		portChunk := ports.LLMStreamChunk{
-			Content:   chunk.Content,
-			Reasoning: chunk.Reasoning,
-			Done:      chunk.Done,
-			Error:     chunk.Error,
-		}
+	for {
+		select {
+		case <-ctx.Done():
+			// Context cancelled, exit gracefully
+			outputChan <- ports.LLMStreamChunk{Error: ctx.Err()}
+			return
+		case chunk, ok := <-clientChan:
+			if !ok {
+				return // Channel closed normally
+			}
 
-		if chunk.ToolCall != nil {
-			// Parse the arguments JSON string into a map
-			var args map[string]any
-			if err := json.Unmarshal([]byte(chunk.ToolCall.Function.Arguments), &args); err != nil {
-				// If parsing fails, send an error chunk
-				outputChan <- ports.LLMStreamChunk{
-					Error: fmt.Errorf("failed to parse tool call arguments: %w", err),
+			portChunk := ports.LLMStreamChunk{
+				Content:   chunk.Content,
+				Reasoning: chunk.Reasoning,
+				Done:      chunk.Done,
+				Error:     chunk.Error,
+			}
+
+			if chunk.ToolCall != nil {
+				// Parse the arguments JSON string into a map
+				var args map[string]any
+				if err := json.Unmarshal([]byte(chunk.ToolCall.Function.Arguments), &args); err != nil {
+					// If parsing fails, send an error chunk
+					outputChan <- ports.LLMStreamChunk{
+						Error: fmt.Errorf("failed to parse tool call arguments: %w", err),
+					}
+					continue
 				}
-				continue
+
+				portChunk.ToolCall = &ports.LLMToolCall{
+					ID:        chunk.ToolCall.ID,
+					Name:      chunk.ToolCall.Function.Name,
+					Arguments: args,
+				}
 			}
 
-			portChunk.ToolCall = &ports.LLMToolCall{
-				ID:        chunk.ToolCall.ID,
-				Name:      chunk.ToolCall.Function.Name,
-				Arguments: args,
-			}
+			outputChan <- portChunk
 		}
-
-		outputChan <- portChunk
 	}
 }

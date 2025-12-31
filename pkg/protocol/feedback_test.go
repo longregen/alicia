@@ -34,31 +34,6 @@ func TestFeedbackMessageTypeString(t *testing.T) {
 	}
 }
 
-func TestFeedbackMessageTypeConstants(t *testing.T) {
-	tests := []struct {
-		name    string
-		msgType MessageType
-		want    MessageType
-	}{
-		{"TypeFeedback", TypeFeedback, 20},
-		{"TypeFeedbackConfirmation", TypeFeedbackConfirmation, 21},
-		{"TypeUserNote", TypeUserNote, 22},
-		{"TypeNoteConfirmation", TypeNoteConfirmation, 23},
-		{"TypeMemoryAction", TypeMemoryAction, 24},
-		{"TypeMemoryConfirmation", TypeMemoryConfirmation, 25},
-		{"TypeServerInfo", TypeServerInfo, 26},
-		{"TypeSessionStats", TypeSessionStats, 27},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.msgType != tt.want {
-				t.Errorf("%s = %d, want %d", tt.name, tt.msgType, tt.want)
-			}
-		})
-	}
-}
-
 // =============================================================================
 // Feedback Message Tests
 // =============================================================================

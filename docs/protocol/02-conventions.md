@@ -26,10 +26,10 @@ All messages MUST be sent within an envelope. The envelope format is detailed in
 
 **Stanza ID:** A signed 32-bit integer that uniquely identifies a message within a conversation and determines its order. Stanza IDs are **monotonically increasing** (in absolute value) per conversation:
 
-- **Client messages** use **positive stanza IDs** (1, 3, 5, ...)
-- **Agent messages** use **negative stanza IDs** (-2, -4, -6, ...)
+- **Client messages** use **positive stanza IDs** (1, 2, 3, ...)
+- **Agent messages** use **negative stanza IDs** (-1, -2, -3, ...)
 
-The absolute value increases by 1 for each new message, ensuring total ordering while encoding sender role in the sign. Clients MUST assign increasing positive stanza IDs; agents MUST assign increasing negative stanza IDs.
+Each sender increments (client) or decrements (agent) their stanza ID by 1 for each new message, ensuring total ordering while encoding sender role in the sign. Clients MUST assign sequentially increasing positive stanza IDs starting from 1; agents MUST assign sequentially decreasing negative stanza IDs starting from -1.
 
 **Message ID (NanoID):** Each conversation message has a stable unique identifier called the **Alicia message ID**. Alicia uses NanoIDs (typically 21-character secure random strings) for message identifiers in its database. Protocol messages that correspond to stored conversation entries (user messages, assistant answers, tool results, etc.) MUST include their NanoID in the message content and (when applicable) a `previousId` field referencing the prior related message's NanoID. This allows mapping protocol messages to database records and linking them via `previousId` as defined in the Alicia schema.
 

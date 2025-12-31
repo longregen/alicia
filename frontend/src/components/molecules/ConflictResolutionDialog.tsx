@@ -63,7 +63,7 @@ const ConflictResolutionDialog: React.FC<ConflictResolutionDialogProps> = ({
             <div className="layout-center-gap">
               <span className="font-medium text-default">Your Version</span>
               {conflict?.localModifiedAt && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted">
                   Modified: {new Date(conflict.localModifiedAt).toLocaleString()}
                 </span>
               )}
@@ -78,7 +78,7 @@ const ConflictResolutionDialog: React.FC<ConflictResolutionDialogProps> = ({
             <div className="layout-center-gap">
               <span className="font-medium text-default">Server Version</span>
               {conflict?.serverModifiedAt && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted">
                   Modified: {new Date(conflict.serverModifiedAt).toLocaleString()}
                 </span>
               )}

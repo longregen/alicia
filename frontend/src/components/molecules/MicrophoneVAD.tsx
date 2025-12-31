@@ -46,8 +46,8 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
 
   // Use external props if provided, otherwise use internal state
   const microphoneStatus = externalMicrophoneStatus ?? internalMicrophoneStatus;
-  const isSpeaking = externalIsSpeaking || internalIsSpeaking;
-  const speechProbability = externalSpeechProbability || internalSpeechProbability;
+  const isSpeaking = externalIsSpeaking ?? internalIsSpeaking;
+  const speechProbability = externalSpeechProbability ?? internalSpeechProbability;
   const isActive = microphoneStatus === MicrophoneStatus.Recording;
 
   // Create refs for direct DOM manipulation
@@ -69,7 +69,8 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
       onSpeechProbability: (probability, speaking) => {
         setInternalSpeechProbability(probability);
         setInternalIsSpeaking(speaking);
-        // Note: onSpeechProbabilityChange is intentionally not called here to avoid loops
+        // Note: onSpeechProbabilityChange is called via requestAnimationFrame in useEffect
+        // to avoid React re-renders during high-frequency updates
       },
       onSpeechStart: () => {
         console.log('Speech detected - start');
@@ -225,7 +226,7 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isActive, speechProbability]); // Removed animation params to prevent restarts
+  }, [isActive, speechProbability]); // Only depend on isActive and speechProbability - animation state managed via refs
 
   // Determine button state classes
   const getButtonClasses = () => {

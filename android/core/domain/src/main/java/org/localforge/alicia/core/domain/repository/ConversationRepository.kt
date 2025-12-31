@@ -63,7 +63,6 @@ interface ConversationRepository {
 
     /**
      * Get the count of all conversations.
-     * Returns count directly as database queries don't throw exceptions in Room.
      * @return Total number of conversations
      */
     suspend fun getConversationCount(): Int
@@ -131,7 +130,6 @@ interface ConversationRepository {
 
     /**
      * Get the count of messages in a conversation.
-     * Returns count directly as database queries don't throw exceptions in Room.
      * @param conversationId Conversation ID
      * @return Number of messages in the conversation
      */

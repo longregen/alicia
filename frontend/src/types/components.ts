@@ -15,8 +15,9 @@ export type Variant = 'default' | 'secondary' | 'destructive' | 'outline' | 'suc
 // Recording states
 export type RecordingState = 'idle' | 'recording' | 'processing' | 'completed' | 'error';
 
-// Message types
-export type MessageType = 'user' | 'assistant' | 'system';
+// Message roles - imported from models.ts (canonical definition)
+import type { MessageRole } from './models';
+export type { MessageRole };
 
 // Message states
 export type MessageState = 'idle' | 'typing' | 'sending' | 'streaming' | 'completed' | 'error';
@@ -59,13 +60,17 @@ export interface ToolData {
   type?: string; // 'reasoning' | 'search' | 'calculation' etc.
 }
 
-// Reasoning data interface (deprecated - use ToolData with type='reasoning')
+/**
+ * @deprecated Use ToolData with type='reasoning' instead
+ */
 export interface ReasoningData {
   steps?: string[];
   conclusion?: string;
 }
 
-// Tool use data interface (deprecated - use ToolData)
+/**
+ * @deprecated Use ToolData instead
+ */
 export interface ToolUseData {
   name: string;
   description: string;
@@ -80,6 +85,7 @@ export interface MessageMetadata {
   transcriptionConfidence?: number;
   speechDuration?: number;
   reasoning?: string;
+  /** @deprecated Use toolData instead */
   toolUse?: ToolUseData | null;
   responseTime?: number;
   tokensGenerated?: number;
@@ -89,7 +95,7 @@ export interface MessageMetadata {
 // Message data structure
 export interface MessageData {
   id: string;
-  type: MessageType;
+  type: MessageRole;
   content: string;
   timestamp: Date;
   state?: MessageState;
@@ -104,10 +110,9 @@ export interface LanguageData {
   flag: string;
 }
 
-// Memory trace data structure
-export interface MemoryTrace {
-  id: string;
-  messageId: string;
-  content: string;
-  relevance: number; // 0-1 score
-}
+/**
+ * Re-export MemoryTrace from protocol.ts.
+ * This is the canonical definition for memory traces used in the protocol.
+ * Import from here for component usage.
+ */
+export type { MemoryTrace } from './protocol';

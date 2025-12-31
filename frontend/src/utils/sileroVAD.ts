@@ -157,7 +157,7 @@ export class SileroVADManager {
         }
       });
 
-      // Don't start yet - the audio context will be initialized on first start()
+      // VAD initialized and ready - call start() to begin recording
       this.isInitialized = true;
       this.updateStatus(MicrophoneStatus.Active);
 
@@ -178,14 +178,15 @@ export class SileroVADManager {
     }
 
     if (this.vadInstance) {
-      // Just resume since we already initialized the audio context
+      // Start VAD recording (audio context initialized during initialize())
       this.vadInstance.start();
       this.updateStatus(MicrophoneStatus.Recording);
     }
   }
 
   /**
-   * Stop VAD processing
+   * Pause VAD processing (can be resumed with start())
+   * Status remains Active as the system is ready to resume
    */
   stop(): void {
     if (this.vadInstance) {

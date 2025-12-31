@@ -227,8 +227,8 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   };
 
   if (variant === 'modal') {
-    // Modal implementation would go here
-    return null; // Placeholder for modal variant
+    console.warn('LanguageSelector: modal variant not yet implemented');
+    return null;
   }
 
   return (

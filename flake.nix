@@ -143,81 +143,65 @@
             version = "0.1.0";
           };
 
+          # FHS environment for running Gradle with Android tools
+          # This provides /lib64/ld-linux-x86-64.so.2 and standard paths
+          # so that aapt2 and other extracted binaries work without patching
+          # Shared between alicia-android-deps and alicia-android
+          androidFHSEnv = pkgs.buildFHSEnv {
+            name = "android-fhs-env";
+            targetPkgs = pkgs:
+              with pkgs; [
+                # Core build tools
+                androidSdk
+                jdk17
+                gradle
+
+                # Standard libraries needed by Android tools (aapt2, etc.)
+                stdenv.cc.cc.lib
+                zlib
+                ncurses5
+                libpulseaudio
+
+                # Build essentials
+                coreutils
+                gnused
+                gnugrep
+                gawk
+                findutils
+                which
+                file
+                gnutar
+                gzip
+                bash
+              ];
+            multiPkgs = pkgs:
+              with pkgs; [
+                # 32-bit libraries for NDK compatibility
+                zlib
+              ];
+            runScript = "bash";
+            profile = ''
+              export ANDROID_HOME="${androidSdk}/share/android-sdk"
+              export ANDROID_SDK_ROOT="$ANDROID_HOME"
+              export JAVA_HOME="${pkgs.jdk17.home}"
+            '';
+          };
+
           # Android Gradle dependency cache (separate to avoid circular dependency)
           alicia-android-deps = let
-            # Minimal dummy package for fetchDeps
+            # Package for fetchDeps with gradleUpdateScript
             dummyPkg = pkgs.stdenv.mkDerivation {
               pname = "alicia-android-deps-base";
               version = "0.1.0";
-              src = ./android;
-              dontBuild = true;
-              installPhase = "mkdir -p $out";
-            };
-          in
-            pkgs.gradle.fetchDeps {
-              pkg = dummyPkg;
-              data = ./android/deps.json;
-              useBwrap = false;
-            };
-
-          # Android APK (hermetic build with cached dependencies)
-          # Uses buildFHSEnv to create a proper FHS environment where unpatched
-          # ELF binaries (like aapt2) work without patching - solving the NixOS
-          # Gradle/Android build problem.
-          alicia-android = let
-            # FHS environment for running Gradle with Android tools
-            # This provides /lib64/ld-linux-x86-64.so.2 and standard paths
-            # so that aapt2 and other extracted binaries work without patching
-            androidFHSEnv = pkgs.buildFHSEnv {
-              name = "android-fhs-env";
-              targetPkgs = pkgs:
-                with pkgs; [
-                  # Core build tools
-                  androidSdk
-                  jdk17
-                  gradle
-
-                  # Standard libraries needed by Android tools (aapt2, etc.)
-                  stdenv.cc.cc.lib
-                  zlib
-                  ncurses5
-                  libpulseaudio
-
-                  # Build essentials
-                  coreutils
-                  gnused
-                  gnugrep
-                  gawk
-                  findutils
-                  which
-                  file
-                  gnutar
-                  gzip
-                  bash
-                ];
-              multiPkgs = pkgs:
-                with pkgs; [
-                  # 32-bit libraries for NDK compatibility
-                  zlib
-                ];
-              runScript = "bash";
-              profile = ''
-                export ANDROID_HOME="${androidSdk}/share/android-sdk"
-                export ANDROID_SDK_ROOT="$ANDROID_HOME"
-                export JAVA_HOME="${pkgs.jdk17.home}"
-              '';
-            };
-          in
-            pkgs.stdenv.mkDerivation (finalAttrs: {
-              pname = "alicia-android";
-              version = "0.1.0";
-
               src = ./android;
 
               nativeBuildInputs = [
                 androidFHSEnv
                 pkgs.jdk17
               ];
+
+              dontBuild = true;
+              installPhase = "mkdir -p $out";
 
               # Gradle dependency update script (used by mitmCache)
               # Runs inside FHS environment so aapt2 works without patching
@@ -257,6 +241,29 @@
                   ./gradlew assembleDebug --no-daemon || true
                 '
               '';
+            };
+          in
+            pkgs.gradle.fetchDeps {
+              pkg = dummyPkg;
+              data = ./android/deps.json;
+              useBwrap = false;
+            };
+
+          # Android APK (hermetic build with cached dependencies)
+          # Uses buildFHSEnv to create a proper FHS environment where unpatched
+          # ELF binaries (like aapt2) work without patching - solving the NixOS
+          # Gradle/Android build problem.
+          alicia-android =
+            pkgs.stdenv.mkDerivation (finalAttrs: {
+              pname = "alicia-android";
+              version = "0.1.0";
+
+              src = ./android;
+
+              nativeBuildInputs = [
+                androidFHSEnv
+                pkgs.jdk17
+              ];
 
               buildPhase = ''
                 chmod +x gradlew

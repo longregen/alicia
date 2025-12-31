@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import org.localforge.alicia.core.database.AliciaDatabase
 import org.localforge.alicia.core.database.dao.ConversationDao
 import org.localforge.alicia.core.database.dao.MessageDao
+import org.localforge.alicia.core.database.dao.SyncQueueDao
 import javax.inject.Singleton
 
 /**
@@ -33,11 +34,18 @@ object DatabaseModule {
             AliciaDatabase::class.java,
             AliciaDatabase.DATABASE_NAME
         )
-            // Allow destructive migration only on downgrade (version rollback scenarios).
-            // This prevents data loss during app upgrades while supporting version rollbacks.
-            // For production, implement proper Room migrations for schema changes.
+            // WARNING: DEVELOPMENT MODE - This will DELETE ALL DATA on ANY schema change!
+            // This configuration destroys the database on both upgrades AND downgrades.
+            // It allows rapid schema iteration during development without writing migrations.
+            //
+            // BEFORE PRODUCTION RELEASE:
+            // 1. Remove .fallbackToDestructiveMigration()
+            // 2. Implement proper Room Migration objects for all schema versions
+            // 3. Test upgrade paths from all previous versions
+            // 4. Consider exportSchema = true in @Database for migration validation
+            //
             // See: https://developer.android.com/training/data-storage/room/migrating-db-versions
-            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+            .fallbackToDestructiveMigration()
             .build()
     }
 
@@ -57,5 +65,14 @@ object DatabaseModule {
     @Singleton
     fun provideMessageDao(database: AliciaDatabase): MessageDao {
         return database.messageDao()
+    }
+
+    /**
+     * Provides the SyncQueueDao.
+     */
+    @Provides
+    @Singleton
+    fun provideSyncQueueDao(database: AliciaDatabase): SyncQueueDao {
+        return database.syncQueueDao()
     }
 }

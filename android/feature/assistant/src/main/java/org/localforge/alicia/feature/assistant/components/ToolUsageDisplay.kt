@@ -20,8 +20,8 @@ import org.localforge.alicia.core.domain.model.ToolUsage
 import com.google.gson.GsonBuilder
 
 /**
- * Display tool usages inline with messages.
- * Similar to web's ToolUsageDisplay.tsx
+ * Displays tool usage information with collapsible parameter and result details.
+ * Shows the tool name, execution status, and expandable sections for inputs/outputs.
  */
 @Composable
 fun ToolUsageDisplay(

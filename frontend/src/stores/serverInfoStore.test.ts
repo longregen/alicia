@@ -20,28 +20,12 @@ describe('serverInfoStore', () => {
   });
 
   describe('initial state', () => {
-    it('should start with disconnected status', () => {
+    it('should have correct initial state', () => {
       const state = useServerInfoStore.getState();
       expect(state.connectionStatus).toBe('disconnected');
-    });
-
-    it('should start with zero latency', () => {
-      const state = useServerInfoStore.getState();
       expect(state.latency).toBe(0);
-    });
-
-    it('should start with null model info', () => {
-      const state = useServerInfoStore.getState();
       expect(state.modelInfo).toBeNull();
-    });
-
-    it('should start with empty MCP servers', () => {
-      const state = useServerInfoStore.getState();
       expect(state.mcpServers).toEqual([]);
-    });
-
-    it('should start with zero session stats', () => {
-      const state = useServerInfoStore.getState();
       expect(state.sessionStats).toEqual({
         messageCount: 0,
         toolCallCount: 0,

@@ -97,7 +97,7 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
 
       <div className="mb-7 text-center">
         <svg width="600" height="400" className={cls('border bg-elevated')}>
-          {/* Simple scatter plot - in production, use a proper charting library */}
+          {/* Basic scatter plot - consider upgrading to a charting library for interactivity */}
           <g transform="translate(50, 350)">
             {/* Axes */}
             <line x1="0" y1="0" x2="500" y2="0" className="stroke-default" strokeWidth="2" />

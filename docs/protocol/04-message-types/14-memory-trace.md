@@ -10,19 +10,11 @@
 
 * `id` (Text, NanoID): A unique identifier for this memory trace event, corresponding to a row in the `alicia_memory_used` table.
 * `conversationId` (Text): The conversation identifier.
-* `previousId` (Text, NanoID): The ID of the message that prompted this memory usage. This typically references the UserMessage that required memory retrieval, though it can also reference the StartAnswer or AssistantMessage ID if the memory is tied to answer generation.
+* `messageId` (Text, NanoID): The ID of the message that prompted this memory usage. This typically references the UserMessage that required memory retrieval, though it can also reference the StartAnswer or AssistantMessage ID if the memory is tied to answer generation.
 * `memoryId` (Text): An identifier for the specific memory item that was accessed. This references a record in the memory database or vector store, enabling lookups of the full memory content.
-* `memoryType` (Text, optional): The category of memory accessed, such as "long_term_note", "profile_attribute", "conversation_summary", "world_fact", or "user_preference".
-* `action` (Text): How the memory was used. Values include:
-  * `"retrieved"`: Memory was fetched and used for context
-  * `"stored"`: New memory was saved
-  * `"updated"`: Existing memory was modified
 * `content` (Text): A snippet or summary of the memory content that was used. For example, "User's birthday is July 10" or "Prefers technical explanations with code examples." For large memories like documents, this field contains a truncated version or summary.
-* `confidence` (Float, optional): When using similarity search or RAG retrieval, this represents the relevance score or confidence level of the retrieved memory (typically 0.0 to 1.0).
-* `metadata` (Map, optional): Additional details such as:
-  * `retrievalScore`: Similarity score from vector search
-  * `tags`: Categories or labels associated with the memory
-  * `source`: Origin of the memory (e.g., "user_profile", "conversation_2024_03")
+* `relevance` (Float): When using similarity search or RAG retrieval, this represents the relevance score of the retrieved memory (typically 0.0 to 1.0).
+* `source` (Text, optional): Origin of the memory (e.g., "user_profile", "conversation_2024_03").
 
 **MessagePack Representation (Example):**
 
@@ -30,16 +22,11 @@
 {
   "id": "mem_001",
   "conversationId": "conv_7H93k",
-  "previousId": "msg_u1A2B",
+  "messageId": "msg_u1A2B",
   "memoryId": "user_location_pref",
-  "memoryType": "profile",
-  "action": "retrieved",
   "content": "User is located in New York and prefers local restaurant recommendations",
-  "confidence": 0.92,
-  "metadata": {
-    "tags": ["location", "user_profile"],
-    "source": "user_profile"
-  }
+  "relevance": 0.92,
+  "source": "user_profile"
 }
 ```
 
@@ -49,17 +36,16 @@
 
 1. Server receives UserMessage: "What restaurants should I visit?"
 2. Server sends StartAnswer
-3. Server sends MemoryTrace #1: Retrieved user location from profile (action: "retrieved")
-4. Server sends MemoryTrace #2: Retrieved user's cuisine preferences (action: "retrieved")
+3. Server sends MemoryTrace #1: Retrieved user location from profile
+4. Server sends MemoryTrace #2: Retrieved user's cuisine preferences
 5. Server sends AssistantSentence with personalized recommendations
 
 **Use Cases:**
 
-* **Retrieval Transparency**: When the assistant retrieves "User prefers Italian food" from the profile, a MemoryTrace shows this memory was used to inform the answer.
-* **Memory Updates**: When the assistant learns something new like "User mentioned they are vegetarian," a MemoryTrace with action "stored" logs this new memory.
-* **RAG Context**: During semantic search, multiple MemoryTrace messages show which documents or facts were retrieved, along with their confidence scores.
+* **Retrieval Transparency**: When the assistant retrieves "User prefers Italian food" from the profile, a MemoryTrace shows this memory was used to inform the answer, with a relevance score indicating how well it matched the query.
+* **RAG Context**: During semantic search, multiple MemoryTrace messages show which documents or facts were retrieved, along with their relevance scores.
 
-**Multiple Memory Entries:** If multiple memories are accessed for a single query, the server sends multiple MemoryTrace messages, each with its own unique ID. All may reference the same `previousId` (the user's question).
+**Multiple Memory Entries:** If multiple memories are accessed for a single query, the server sends multiple MemoryTrace messages, each with its own unique ID. All may reference the same `messageId` (the user's question).
 
 **Client Handling:** Clients may display memory traces in a debug panel or "show context" feature, allowing users to understand what background information influenced the response. In production UIs, these messages might be hidden from end users but valuable for developers reviewing conversation quality.
 
@@ -67,13 +53,11 @@
 
 * `id` (primary key)
 * `conversation_id`
-* `message_id` (the triggering message, mapped to `previousId`)
+* `message_id` (the triggering message)
 * `memory_id` (the referenced memory item)
-* `memory_type`
-* `action` (retrieved/stored/updated)
 * `content` (excerpt or summary)
-* `confidence` (retrieval score)
+* `relevance` (retrieval score)
+* `source` (origin of the memory)
 * `created_at` (timestamp)
-* `metadata` (JSON/JSONB)
 
 This alignment ensures all memory operations are traceable and auditable through both the live protocol and database records.

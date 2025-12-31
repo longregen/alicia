@@ -9,12 +9,11 @@ import Badge from '../atoms/Badge';
 import ConflictResolutionDialog from './ConflictResolutionDialog';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
-import { cn } from '../../lib/utils';
 import { useFeedback } from '../../hooks/useFeedback';
 import { useBranchStore } from '../../stores/branchStore';
 import type {
   BaseComponentProps,
-  MessageType,
+  MessageRole,
   MessageState,
   MessageAddon,
   ToolData,
@@ -25,7 +24,7 @@ import type { ConflictDetails } from '../../types/sync';
 
 /**
  * Collapsible reasoning block component.
- * Renders reasoning steps as blue-bordered blocks that start collapsed.
+ * Renders reasoning steps as blue-bordered blocks that start expanded.
  * Supports voting via useFeedback hook when an id is provided.
  */
 interface ReasoningBlockProps {
@@ -120,7 +119,7 @@ const ReasoningBlock: React.FC<ReasoningBlockProps> = ({ content, keyId, id }) =
 // Component props interface
 export interface ChatBubbleProps extends BaseComponentProps {
   /** Type of message (user, assistant, system) */
-  type?: MessageType;
+  type?: MessageRole;
   /** Message content text */
   content?: string;
   /** Current message state */
@@ -219,7 +218,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   /**
    * Process content to extract and render reasoning blocks as React elements.
-   * Returns safe React nodes instead of using dangerouslySetInnerHTML.
+   * Returns safe React nodes.
    * Reasoning blocks are sorted by sequence number when multiple exist.
    */
   const processContent = (text: string): React.ReactNode => {
@@ -312,7 +311,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     } else if (type === MESSAGE_TYPES.ASSISTANT) {
       // For assistant messages: submit as correction feedback
       console.log('Assistant message edited - would submit feedback:', editedContent);
-      // TODO: feedbackApi.submitCorrection(editedContent);
+      // Note: Correction/conflict resolution requires backend API implementation
+      // For now, these are UI-only operations
     }
     setIsEditing(false);
   };
@@ -336,14 +336,14 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const handleKeepLocal = () => {
     console.log('Keeping local version for message:', messageId);
-    // TODO: Implement API call to resolve conflict with local version
-    // This would call something like: syncApi.resolveConflict(messageId, 'local')
+    // Note: Correction/conflict resolution requires backend API implementation
+    // For now, these are UI-only operations
   };
 
   const handleKeepServer = () => {
     console.log('Keeping server version for message:', messageId);
-    // TODO: Implement API call to resolve conflict with server version
-    // This would call something like: syncApi.resolveConflict(messageId, 'server')
+    // Note: Correction/conflict resolution requires backend API implementation
+    // For now, these are UI-only operations
   };
 
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
@@ -382,7 +382,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
       {/* Sync conflict badge */}
       {syncStatus === 'conflict' && (
-        <div className={cn(
+        <div className={cls(
           'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mb-1',
           type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
         )}>
@@ -411,7 +411,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
       {/* Sync pending badge */}
       {syncStatus === 'pending' && (
-        <div className={cn(
+        <div className={cls(
           'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mb-1',
           type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
         )}>
@@ -436,7 +436,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
       {/* Main message bubble or edit mode */}
       {isEditing ? (
-        <div className={cn(
+        <div className={cls(
           'w-full message-max-width',
           type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
         )}>
@@ -476,7 +476,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           />
           {/* Edit button - show on hover */}
           {canEdit && isHovering && (
-            <div className={cn(
+            <div className={cls(
               'absolute top-2 flex gap-1',
               type === MESSAGE_TYPES.USER ? 'left-2' : 'right-2'
             )}>

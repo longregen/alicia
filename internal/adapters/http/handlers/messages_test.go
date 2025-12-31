@@ -98,6 +98,10 @@ func (m *mockMessageRepo) GetAfterSequence(ctx context.Context, conversationID s
 	return result, nil
 }
 
+func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	return nil, nil
+}
+
 func (m *mockMessageRepo) GetPendingSync(ctx context.Context, conversationID string) ([]*models.Message, error) {
 	return nil, nil
 }
@@ -116,6 +120,10 @@ func (m *mockMessageRepo) GetIncompleteOlderThan(ctx context.Context, olderThan 
 }
 
 func (m *mockMessageRepo) GetIncompleteByConversation(ctx context.Context, conversationID string, olderThan time.Time) ([]*models.Message, error) {
+	return nil, nil
+}
+
+func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	return nil, nil
 }
 
@@ -499,6 +507,10 @@ func TestMessagesHandler_Send_WithPreviousMessage(t *testing.T) {
 	// Add a previous message
 	prevMsg := models.NewUserMessage("am_prev", "ac_test123", 1, "First message")
 	messageRepo.byConversation["ac_test123"] = []*models.Message{prevMsg}
+
+	// Set conversation tip to the previous message
+	tipID := "am_prev"
+	conv.TipMessageID = &tipID
 
 	body := `{"contents": "Second message"}`
 	req := httptest.NewRequest("POST", "/api/v1/conversations/ac_test123/messages", bytes.NewBufferString(body))

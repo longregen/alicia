@@ -41,8 +41,8 @@ in
   # Speaches Service (STT/TTS)
   # ============================================================================
 
-  # Import speaches NixOS module
-  imports = [ speaches.nixosModules.default ];
+  # Import speaches NixOS module (x86_64-linux for VM tests)
+  imports = [ speaches.nixosModules.x86_64-linux.default ];
 
   services.speaches = {
     enable = true;

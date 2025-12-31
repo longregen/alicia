@@ -7,28 +7,24 @@
 **Fields:**
 
 * `conversationId` (Text): Conversation ID (maps to LiveKit room name).
-* `acknowledgedStanzaId` (Int32, optional): The stanzaId of a specific message being acknowledged. For example, after a user sends stanzaId 5, the server sends an Acknowledgement where acknowledgedStanzaId = 5 to indicate "I received your message #5".
-* `acknowledgedMessageId` (Text, NanoID, optional): Alternatively or additionally, the NanoID of the message being acknowledged. This is more explicit and useful when acknowledging a particular message out-of-order. In most cases, using stanzaId suffices since it's sequential, but NanoID can be used for more complex scenarios.
-* `lastSeenStanzaId` (Int32, optional): A cumulative acknowledgement indicator, meaning "I have received everything up to this stanzaId". This is useful during reconnection or as periodic ACKs so the other side knows the highest message number that has been received. If this field is present, it implies all messages with absolute stanza ID ≤ that value have been received.
-* `notes` (Text, optional): Additional information for debugging purposes, e.g. "ACK for user message" or context. Usually not needed in production.
+* `acknowledgedStanzaId` (Int32): The stanzaId of the message being acknowledged. For example, after a user sends stanzaId 5, the server sends an Acknowledgement where acknowledgedStanzaId = 5 to indicate "I received your message #5".
+* `success` (Boolean): Indicates whether the acknowledged operation was successful. True if the message was processed successfully, false if there was an error or the operation failed.
 
 **MessagePack Representation (Informative):**
 
-```
+```json
 {
   "conversationId": "conv_7H93k",
   "acknowledgedStanzaId": 5,
-  "acknowledgedMessageId": "msg_u1A2B",
-  "lastSeenStanzaId": 5,
-  "notes": "Processing user query"
+  "success": true
 }
 ```
 
-**Semantics:** An Acknowledgement is optional in this protocol because the underlying LiveKit transport is reliable. However, it becomes important in specific scenarios:
+**Semantics:** Acknowledgements are generally optional in this protocol because the underlying LiveKit transport is reliable. However, they become important and **RECOMMENDED** in specific scenarios:
 
-* **Flow control:** When the server sends a long stream of data (like many AssistantSentence messages), the client sends acknowledgements periodically to signal that it is keeping up or to adjust rate. If the client stops acknowledging and the server has a policy to wait or slow down, it uses this signal.
-* **Reconnection:** When a client reconnects after a drop, it sends `lastSequenceSeen` in the Configuration handshake. That essentially serves a similar role to an acknowledgement: "I saw everything up through X". The server may also send an Acknowledgement once it resumes, to confirm the resumption point.
-* **Confirm critical actions:** After a ControlStop (type 10) is sent by the client to stop generation, the server SHOULD send an Acknowledgement to confirm it received the stop command, since the user wants assurance it took effect. Similarly, after a ControlVariation (type 11) is processed, an acknowledgement confirms receipt.
+* **Flow control (optional):** When the server sends a long stream of data (like many AssistantSentence messages), the client MAY send acknowledgements periodically to signal that it is keeping up or to adjust rate. If the client stops acknowledging and the server has a policy to wait or slow down, it uses this signal.
+* **Reconnection (optional):** When a client reconnects after a drop, it sends `lastSequenceSeen` in the Configuration handshake. That essentially serves a similar role to an acknowledgement: "I saw everything up through X". The server may also send an Acknowledgement once it resumes, to confirm the resumption point.
+* **Confirm critical actions (RECOMMENDED):** After a ControlStop (type 10) is sent by the client to stop generation, the server SHOULD send an Acknowledgement to confirm it received the stop command, since the user wants assurance it took effect. Similarly, after a ControlVariation (type 11) is processed, an acknowledgement confirms receipt.
 
 **Usage:** The protocol does not mandate an acknowledgement for every message. Acknowledgements are typically used:
 

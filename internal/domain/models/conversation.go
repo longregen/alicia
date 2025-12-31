@@ -29,10 +29,14 @@ type Conversation struct {
 	Status          ConversationStatus       `json:"status"`
 	LiveKitRoomName string                   `json:"livekit_room_name,omitempty"`
 	Preferences     *ConversationPreferences `json:"preferences,omitempty"`
+	TipMessageID    *string                  `json:"tip_message_id,omitempty"`
 
 	// Reconnection semantics: track last stanzaId sent by client and server
 	LastClientStanzaID int32 `json:"last_client_stanza_id"`
 	LastServerStanzaID int32 `json:"last_server_stanza_id"`
+
+	// Prompt versioning: track which system prompt version is used
+	SystemPromptVersionID string `json:"system_prompt_version_id,omitempty"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`

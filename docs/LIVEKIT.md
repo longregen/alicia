@@ -87,19 +87,14 @@ room, err := livekitService.CreateRoom(ctx, roomName)
 
 Clients and agents need JWT tokens to join rooms. Tokens are scoped differently:
 
-**Client tokens** (6-hour validity):
+**Token generation**:
 ```go
-token := livekitService.GenerateToken(roomName, userID, 6*time.Hour)
+token := livekitService.GenerateToken(roomName, participantID)
 ```
 
 Grants: `RoomJoin`, `RoomList`, `CanPublish`, `CanSubscribe`
 
-**Agent tokens** (24-hour validity):
-```go
-token := livekitService.GenerateToken(roomName, "alicia-agent", 24*time.Hour)
-```
-
-Grants: Same as client, plus extended validity for long-running agent processes
+**Note**: Token validity duration is determined by the service configuration (typically 6 hours for clients from `ServiceConfig`, 24 hours for agents from `AgentConfig`)
 
 ### 3. Agent Connection
 
@@ -225,6 +220,11 @@ room.LocalParticipant.PublishData(data, lksdk.DataPublishOptions{Reliable: true}
 envelope, err := codec.Decode(data)
 ```
 
+**Validation**: The codec performs validation on all messages:
+- Envelope must not be nil
+- Message type must be registered in the type registry
+- Body must not be nil
+
 See `/internal/adapters/livekit/codec.go` for full implementation.
 
 ### Envelope Structure
@@ -235,13 +235,13 @@ See `/internal/adapters/livekit/codec.go` for full implementation.
 
 **ConversationID**: Always `conv_{nanoid}` format, matching room name
 
-**Type**: One of 16 message types (see protocol documentation)
+**Type**: One of 27 message types (types 1-16, 20-27, 29-31; see protocol documentation)
 
 **Body**: Message-specific payload (varies by type)
 
 ### Message Types
 
-The protocol defines 16 core message types:
+The protocol defines message types organized into functional groups:
 
 **Core Messages (1-16)**:
 - `TypeErrorMessage` (1): Error notifications
@@ -261,15 +261,21 @@ The protocol defines 16 core message types:
 - `TypeCommentary` (15): Meta-commentary on response
 - `TypeAssistantSentence` (16): Complete sentence unit
 
-**Feedback Messages (20-25)**:
+**Reserved (17-19)**: Reserved for future use
+
+**Feedback & Memory (20-27)**:
 - `TypeFeedback` (20): User feedback/votes
 - `TypeFeedbackConfirmation` (21): Feedback acknowledged
 - `TypeUserNote` (22): User annotation
 - `TypeNoteConfirmation` (23): Note acknowledged
 - `TypeMemoryAction` (24): Memory management action
 - `TypeMemoryConfirmation` (25): Memory action confirmed
+- `TypeServerInfo` (26): Server info broadcast
+- `TypeSessionStats` (27): Session statistics
 
-**Optimization Messages (29-31)**:
+**Reserved (28)**: Reserved for future use
+
+**Optimization (29-31)**:
 - `TypeDimensionPreference` (29): GEPA dimension preference
 - `TypeEliteSelect` (30): User selects elite option
 - `TypeEliteOptions` (31): Agent sends elite options
@@ -301,11 +307,12 @@ const sendMessage = (content: string) => {
 **Server behavior**:
 ```go
 // Agent maintains negative, decrementing stanza counter
-lastStanzaID := int32(-1)
+// Initialized to -1, then decremented before use
+lastStanzaID := int32(-1)  // Start at -1, will decrement to -2, -3, etc.
 
 func sendMessage(envelope *protocol.Envelope) {
+    lastStanzaID-- // First message gets -2, then -3, -4, ...
     envelope.StanzaID = lastStanzaID
-    lastStanzaID-- // -1, -2, -3, ...
 
     data, _ := codec.Encode(envelope)
     room.LocalParticipant.PublishData(data, lksdk.DataPublishOptions{Reliable: true})
@@ -499,8 +506,8 @@ class LiveKitManager(
 ### Protocol Definitions
 
 - `/pkg/protocol/envelope.go` - Envelope structure
-- `/pkg/protocol/messages.go` - All 16 message types
-- `/pkg/protocol/types.go` - Type constants and enums
+- `/pkg/protocol/messages.go` - Message struct definitions
+- `/pkg/protocol/types.go` - All 27 message type constants and enums
 
 ## Common Patterns
 

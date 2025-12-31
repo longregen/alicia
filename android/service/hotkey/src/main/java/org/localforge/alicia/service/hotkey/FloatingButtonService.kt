@@ -100,7 +100,7 @@ class FloatingButtonService : Service() {
      */
     @SuppressLint("InflateParams")
     private fun setupFloatingButton() {
-        // Inflate the floating button layout (null root is intentional for overlay windows)
+        // Inflate the floating button layout for overlay window (root parameter omitted)
         floatingView = LayoutInflater.from(this).inflate(
             R.layout.floating_button,
             null
@@ -263,7 +263,6 @@ class FloatingButtonService : Service() {
      *
      * TODO: Implement quick menu with options for dismiss, settings, and position adjustment.
      *       Currently only logs the long press event.
-     *       See: https://github.com/localforge/alicia/issues/TODO
      */
     private fun handleLongPress() {
         Timber.d("Floating button long pressed")
@@ -276,7 +275,8 @@ class FloatingButtonService : Service() {
         val screenWidth = getScreenWidth()
         val currentX = layoutParams?.x ?: 0
 
-        // Determine which edge is closer and ensure valid bounds
+        // Snap to nearest screen edge. coerceAtLeast(0) ensures button stays within
+        // screen bounds even with unusual screen/button size ratios.
         val targetX = if (currentX < screenWidth / 2) {
             0 // Snap to left
         } else {

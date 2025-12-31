@@ -104,7 +104,9 @@ class AudioManager @Inject constructor(
     }
 
     /**
-     * Play audio data through the speaker.
+     * Play audio data through the default assistant audio output.
+     * Routes to speaker, Bluetooth, or wired headset based on system audio routing.
+     * Initializes AudioTrack if not already created.
      *
      * @param audioData PCM audio data to play
      */

@@ -35,3 +35,7 @@ go.work
 go.work.sum
 frontend/coverage/
 .postgres/
+
+# Binary files
+*.wasm
+

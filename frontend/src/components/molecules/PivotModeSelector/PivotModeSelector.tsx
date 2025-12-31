@@ -30,7 +30,7 @@ export interface PivotModeSelectorProps {
 }
 
 export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
-  showAdvanced: initialShowAdvanced = false,
+  showAdvanced: initialShowAdvanced = false, // Renamed from showAdvanced for clarity
   onPresetChange,
   onWeightsChange,
   disabled = false,

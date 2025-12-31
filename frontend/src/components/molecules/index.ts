@@ -10,6 +10,7 @@ export { default as ToolUseCard } from './ToolUseCard';
 export { default as ToolUseVoting } from './ToolUseVoting';
 
 // Re-export from subdirectories
+// These resolve to subdirectory index.ts files via Node module resolution
 export { default as EliteSolutionSelector } from './EliteSolutionSelector';
 export { default as PivotModeSelector } from './PivotModeSelector';
 

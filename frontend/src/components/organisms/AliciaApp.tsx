@@ -28,6 +28,7 @@ export type Panel = 'chat' | 'memory' | 'server' | 'settings';
  */
 export function AliciaApp() {
   // UI state
+  // Reserved for future sidebar state management
   const [_sidebarOpen, _setSidebarOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<Panel>('chat');
 
@@ -43,6 +44,7 @@ export function AliciaApp() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   // Voice state
+  // Reserved for future voice state integration
   const [_voiceState, _setVoiceState] = useState<VoiceState>('idle');
 
   // Log conversation errors (could be enhanced with toast notifications)
@@ -89,7 +91,8 @@ export function AliciaApp() {
   };
 
   const handleSendMessage = (message: string, isVoice: boolean) => {
-    // TODO: Implement message sending
+    // Message sending is delegated to ChatWindow component
+    // This handler is for future cross-component message coordination
     console.log('Send message:', message, 'isVoice:', isVoice);
   };
 

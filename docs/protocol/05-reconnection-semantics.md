@@ -30,20 +30,20 @@ When a client reconnects (after a network disruption, app reload, or LiveKit con
 
 ## Example Reconnection Scenario
 
-Suppose conversation ID `abc123` has progressed to 30 messages (stanzaId absolute value 30) when the connection drops. The client only received up to stanzaId 25.
+Suppose conversation ID `abc123` has 30 server messages (server's lastServerStanzaID is -30) when the connection drops. The client only received through server message 25 (stanzaId -25).
 
 **Reconnection flow:**
 
 1. Client rejoins LiveKit room with room name derived from `abc123`
-2. Client sends: `Configuration { conversationId: "abc123", lastSequenceSeen: 25 }`
-3. Server responds: `Acknowledgement { acknowledgedStanzaId: 25, conversationId: "abc123" }` — confirming "you're up to 25"
-4. Server detects messages 26–30 are missing on the client
-5. Server retransmits messages 26 through 30 in order over the data channel
-6. These retransmissions use the original content and IDs (they are not "new" messages, just delivered again)
+2. Client sends: `Configuration { conversationId: "abc123", lastSequenceSeen: -25 }`
+3. Server responds: `Acknowledgement { acknowledgedStanzaId: -25, conversationId: "abc123" }` — confirming "you're caught up through -25"
+4. Server detects messages -26 through -30 are missing on the client
+5. Server retransmits messages -26 through -30 in order over the data channel
+6. These retransmissions use the original content and IDs (they are not fresh messages, just delivered again)
 7. The server ensures order is preserved
-8. After resending, the client is caught up, and new messages can flow
+8. After resending, the client is caught up, and subsequent messages can flow
 
-The server may send an Acknowledgement or special response after the Configuration handshake indicating the resume was successful and possibly listing how many messages will be resent or the new lastSequence. However, it can also directly start resending messages.
+The server may send an Acknowledgement or special response after the Configuration handshake indicating the resume was successful and possibly listing how many messages will be resent or the current lastSequence. However, it can also directly start resending messages.
 
 ## LiveKit-Specific Reconnection Benefits
 
@@ -64,22 +64,22 @@ LiveKit provides several automatic reconnection features that complement the pro
 
 ## Use of `lastStanzaMap`
 
-In typical linear conversation flow, `lastSequenceSeen` suffices to indicate the point up to which the client is synced. The `lastStanzaMap` is optional and can be used for advanced cases:
+In typical linear conversation flow, `lastSequenceSeen` suffices to indicate the point up to which the client is synced. The `lastStanzaMap` is optional and supports advanced synchronization scenarios:
 
-* **Multiple independent sequences:** If the protocol or a future extension allows multiple independent sequences (like separate channels for audio and text), a map might hold entries like `{"text": 25, "audio": 10}` if those progressed differently. In the current specification, audio and text are intertwined in one sequence
-* **Partial message delivery:** If an AssistantMessage was extremely large and split at a lower level than sentences, `lastStanzaMap` could theoretically map message IDs to markers of how much was seen. However, since chunking uses full messages (each AssistantSentence has a stanza id), the sequence number covers this
+* **Multiple independent sequences:** The map can hold entries for different message types or channels if they progress independently, such as `{"text": 25, "audio": 10}`. In the base protocol, audio and text share a single sequence
+* **Partial message delivery:** For extremely large AssistantMessages split below the sentence level, `lastStanzaMap` can map message IDs to delivery markers. Since the protocol chunks messages at the sentence level (each AssistantSentence has a stanza id), the sequence number typically covers synchronization needs
 
-A conservative usage is: the client may omit `lastStanzaMap` in normal cases. If provided, the server should use it to refine what needs sending. For example, if the client got all of message 26 and 27, but missed message 28 which was an AssistantMessage with 5 sentence chunks, and the client got 3 of them, `lastStanzaMap` might indicate messageId 28 → last sentence seq 3. The server then knows to resend sentence 4 and 5 of that answer if possible.
+The client may omit `lastStanzaMap` in normal cases. If provided, the server uses it to refine which messages need retransmission. For example, if the client received messages 26 and 27 completely, but only got 3 of 5 sentence chunks from message 28, `lastStanzaMap` indicates messageId 28 → last sentence seq 3. The server then resends sentences 4 and 5 if possible.
 
-Implementation of such fine detail is complex and might not be fully supported; a simpler approach is to resend from message 28 entirely or from sentence 4 if the server can detect that internally. Since MessagePack messages don't inherently allow starting mid-message, the server would likely re-send all of message 28's chunks anyway.
+Implementation of such granular synchronization is complex; a simpler approach resends the entire message 28 or continues from sentence 4 if the server tracks this internally. Since MessagePack messages don't inherently support mid-message resumption, the server typically resends all chunks for a given message.
 
-In summary, `lastStanzaMap` is an advanced hint mechanism. For the initial version of the protocol, it can be left as an empty map or omitted unless both sides explicitly implement partial message resume.
+The `lastStanzaMap` is an advanced hint mechanism. It can be left as an empty map or omitted unless both client and server implement partial message resumption.
 
 ## Handling Message Replay
 
 **Duplicate Prevention:**
 
-The server takes care not to duplicate IDs. It resends old messages, not generating new ones. The envelope of a resent message carries the original stanzaId and original message NanoID. The client, which might still have these in its log, should recognize duplicates if it actually received them before. Ideally, if properly using lastSequenceSeen, it won't get duplicates (except perhaps the next one if lastSequenceSeen was off by one).
+The server takes care not to duplicate IDs. It resends existing messages rather than generating new ones. Retransmitted message envelopes carry the original stanzaId (negative for server-sent messages) and original message ID. The client, which might still have these in its log, should recognize duplicates by comparing IDs. With correct use of lastSequenceSeen, duplicates should not occur (except potentially the next message if lastSequenceSeen was off by one).
 
 **Large Gaps:**
 
@@ -87,7 +87,7 @@ If the gap is large (client missed many messages), the server might throttle how
 
 **Expired Conversations:**
 
-If the conversation has ended or expired on the server side (some systems archive or clean up old conversations), and a client tries to resume, the server responds with an ErrorMessage indicating conversation not found or not resumable. Alternatively, it might silently start a new conversation (though that could confuse the user, so it's better to inform).
+If the conversation has ended or expired on the server side (some systems archive or clean up archived conversations), and a client tries to resume, the server responds with an ErrorMessage indicating conversation not found or not resumable. The server should inform the client rather than silently starting a fresh conversation, as this could confuse the user.
 
 **Security:**
 
@@ -128,24 +128,22 @@ After sending Configuration, the client might wait for an explicit acknowledgeme
 
 **Scenario:**
 
-1. Client was in conversation ID `abc123`, last received message had stanzaId -30
+1. Client was in conversation ID `abc123`, last received server message had stanzaId -30 (the 30th server message)
 2. LiveKit connection drops (network issue)
 3. Client detects disconnection and attempts reconnect
 4. Client rejoins LiveKit room for conversation `abc123`
 5. LiveKit establishes connection, restores audio/video tracks
-6. Client sends over data channel: `Configuration { conversationId: "abc123", lastSequenceSeen: 30 }`
-7. Server responds: `Acknowledgement { acknowledgedStanzaId: 30, conversationId: "abc123" }`
-8. Server checks and sees last message in that conversation was -35 (so 31..35 were missed by client)
-9. Server resends messages 31, 32, 33, 34, 35 in order over the data channel. These could include the remaining AssistantSentence chunks of the answer that was cut off
-10. After resending, the server continues normally. If message 35 was final of an answer, it waits for next user message
-11. Client receives the missed messages, updates UI accordingly (maybe completing an answer that was half-shown)
+6. Client sends over data channel: `Configuration { conversationId: "abc123", lastSequenceSeen: -30 }`
+7. Server responds: `Acknowledgement { acknowledgedStanzaId: -30, conversationId: "abc123" }`
+8. Server checks and sees the last server message in that conversation has stanzaId -35 (the 35th server message, so messages 31-35 were missed)
+9. Server resends messages with stanzaIds -31, -32, -33, -34, -35 in order over the data channel. These could include the remaining AssistantSentence chunks of the answer that was cut off
+10. After resending, the server continues normally. If message -35 was the final part of an answer, it waits for the next user message
+11. Client receives the missed messages, updates UI accordingly (completing an answer that was partially shown)
 12. Conversation proceeds seamlessly
 
 ## Multiple Conversations
 
-The Alicia protocol assumes one conversation per LiveKit room. If a client needs to handle multiple chats, it opens separate LiveKit room connections or handles them sequentially. The protocol does not multiplex conversations on one room connection in this specification. Therefore, the conversationId in the envelope is the same for all messages after handshake.
-
-If a future extension allows multiplexing, then conversationId would be used actively to route messages; lastStanzaMap could then map each conversationId to a last seen stanza. This is out of scope for now.
+The Alicia protocol assumes one conversation per LiveKit room. If a client needs to handle multiple chats, it opens separate LiveKit room connections or handles them sequentially. The protocol does not multiplex conversations on one room connection. Therefore, the conversationId in the envelope remains constant for all messages after the initial handshake.
 
 ## Implementation Requirements
 

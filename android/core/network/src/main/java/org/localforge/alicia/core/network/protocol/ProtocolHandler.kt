@@ -19,7 +19,7 @@ class ProtocolHandler {
         val packer = MessagePack.newDefaultPacker(output)
 
         try {
-            // Pack envelope as map with 5 fields: stanzaId, conversationId, type, meta, body
+            // Pack envelope as map with exactly 5 fields per protocol spec: stanzaId, conversationId, type, meta, body
             packer.packMapHeader(5)
 
             // stanzaId
@@ -157,6 +157,11 @@ class ProtocolHandler {
         }
     }
 
+    /**
+     * Pack a value into MessagePack format.
+     * Supported types: String, Int, Long, Float, Double, Boolean, ByteArray, Map<String,Any>, List.
+     * Unknown types are coerced to String via toString() with a warning logged.
+     */
     private fun packValue(packer: org.msgpack.core.MessagePacker, value: Any?) {
         when (value) {
             null -> packer.packNil()
@@ -396,8 +401,9 @@ class ProtocolHandler {
         )
     }
 
-    // Pack/unpack methods for remaining message types
-    // Pack methods use explicit field packing; unpack methods use either explicit unpacking or generic unpackMap()
+    // Message type serialization methods.
+    // All types use explicit field packing. Most use generic unpacking (unpackMap),
+    // while types with ByteArray fields use explicit unpacking for proper binary handling.
     private fun packUserMessage(packer: org.msgpack.core.MessagePacker, body: UserMessageBody) {
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)

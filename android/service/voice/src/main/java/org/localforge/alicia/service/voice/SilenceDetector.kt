@@ -99,7 +99,7 @@ class SilenceDetector(
      * Calculate RMS (Root Mean Square) energy of audio samples.
      * This represents the "loudness" or energy level of the audio.
      *
-     * @param audioData PCM audio data as byte array (16-bit samples)
+     * @param audioData PCM audio data as byte array (16-bit little-endian samples)
      * @return RMS energy value
      */
     private fun calculateRMSEnergy(audioData: ByteArray): Float {

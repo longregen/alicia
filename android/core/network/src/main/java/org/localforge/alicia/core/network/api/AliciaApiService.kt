@@ -76,14 +76,12 @@ interface AliciaApiService {
     suspend fun getVoices(): Response<List<VoiceResponse>>
 
     /**
-     * Utility wrapper method for getVoices(). This is not an actual HTTP endpoint,
-     * it delegates to getVoices() for naming consistency.
+     * Convenience alias for [getVoices]. Delegates to the same endpoint.
      */
     suspend fun getAvailableVoices(): Response<List<VoiceResponse>> = getVoices()
 
     /**
-     * Utility wrapper method for listConversations(). This is not an actual HTTP endpoint,
-     * it delegates to listConversations() for naming consistency.
+     * Convenience alias for [listConversations]. Delegates to the same endpoint.
      */
     suspend fun getConversations(): Response<ConversationListResponse> = listConversations()
 

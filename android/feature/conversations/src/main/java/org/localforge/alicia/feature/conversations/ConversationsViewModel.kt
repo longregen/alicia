@@ -17,8 +17,8 @@ import javax.inject.Inject
  *
  * This ViewModel handles loading, displaying, and managing user conversations,
  * as well as coordinating synchronization with the backend server.
- * It observes the local database for conversation changes and exposes sync state
- * from the SyncManager.
+ * It observes the local database for conversation changes and manages synchronization
+ * with the backend server via the SyncManager.
  *
  * @property conversationRepository Repository for accessing conversation data
  * @property syncManager Manager for handling data synchronization with the backend
@@ -78,7 +78,8 @@ class ConversationsViewModel @Inject constructor(
     }
 
     /**
-     * Deletes a specific conversation from the local database.
+     * Deletes a specific conversation and all its messages.
+     * Attempts server deletion first, then deletes locally regardless of server result.
      *
      * @param id The unique identifier of the conversation to delete
      */
@@ -94,8 +95,8 @@ class ConversationsViewModel @Inject constructor(
     }
 
     /**
-     * Deletes all conversations from the local database.
-     * This operation cannot be undone.
+     * Deletes all conversations and their messages from the local database.
+     * This operation cannot be undone. Note: Does not sync deletions to the server.
      */
     fun clearAllConversations() {
         viewModelScope.launch {

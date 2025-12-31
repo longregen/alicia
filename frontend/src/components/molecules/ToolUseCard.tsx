@@ -32,7 +32,7 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
   };
 
   // Map tool status to badge status
-  const getStatusType = (status?: string) => {
+  const getStatusType = (status?: string): 'running' | 'completed' | 'error' | 'idle' => {
     switch (status) {
       case 'running':
         return 'running';
@@ -47,9 +47,9 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
 
   const hasResult = tool.result && tool.result.length > 0;
   const previewLength = 150;
-  const shouldTruncate = hasResult && tool.result!.length > previewLength;
+  const shouldTruncate = hasResult && (tool.result?.length ?? 0) > previewLength;
   const previewResult = shouldTruncate
-    ? tool.result!.slice(0, previewLength) + '...'
+    ? tool.result?.slice(0, previewLength) + '...'
     : tool.result;
 
   return (

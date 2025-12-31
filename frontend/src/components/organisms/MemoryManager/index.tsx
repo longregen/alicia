@@ -98,6 +98,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
   };
 
   const handleArchive = async (memory: Memory) => {
+    // Confirmation dialog for archive - provides user feedback even though archive is reversible
     if (confirm(`Archive this memory?\n\n"${memory.content}"`)) {
       try {
         archive(memory.id);

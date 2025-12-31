@@ -21,22 +21,23 @@ type SourceInfo struct {
 
 // Memory represents a piece of long-term memory for RAG
 type Memory struct {
-	ID             string          `json:"id"`
-	Content        string          `json:"content"`
-	Embeddings     []float32       `json:"embeddings,omitempty"`
-	EmbeddingsInfo *EmbeddingsInfo `json:"embeddings_info,omitempty"`
-	Importance     float32         `json:"importance"`
-	Confidence     float32         `json:"confidence"`
-	UserRating     *int            `json:"user_rating,omitempty"`
-	CreatedBy      string          `json:"created_by,omitempty"`
-	SourceType     string          `json:"source_type,omitempty"`
-	SourceInfo     *SourceInfo     `json:"source_info,omitempty"`
-	Tags           []string        `json:"tags,omitempty"`
-	Pinned         bool            `json:"pinned"`
-	Archived       bool            `json:"archived"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
-	DeletedAt      *time.Time      `json:"deleted_at,omitempty"`
+	ID              string          `json:"id"`
+	Content         string          `json:"content"`
+	Embeddings      []float32       `json:"embeddings,omitempty"`
+	EmbeddingsInfo  *EmbeddingsInfo `json:"embeddings_info,omitempty"`
+	Importance      float32         `json:"importance"`
+	Confidence      float32         `json:"confidence"`
+	UserRating      *int            `json:"user_rating,omitempty"`
+	CreatedBy       string          `json:"created_by,omitempty"`
+	SourceType      string          `json:"source_type,omitempty"`
+	SourceInfo      *SourceInfo     `json:"source_info,omitempty"`
+	SourceMessageID *string         `json:"source_message_id,omitempty" db:"source_message_id"`
+	Tags            []string        `json:"tags,omitempty"`
+	Pinned          bool            `json:"pinned"`
+	Archived        bool            `json:"archived"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	DeletedAt       *time.Time      `json:"deleted_at,omitempty"`
 }
 
 // Common source types

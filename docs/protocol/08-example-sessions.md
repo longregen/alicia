@@ -18,12 +18,12 @@ This example shows a simple text conversation with streaming response.
 2. **Client sends Configuration** message over the data channel with no `conversationId` (indicating new conversation), `lastSequenceSeen: 0`
 3. **Server creates conversation**, assigns `conversationId = "conv_7H93k..."`, and responds with Acknowledgement
 4. **User types message**: "What is the capital of France?"
-5. **Client sends UserMessage** with content, generates NanoID `msg_u1A2B`, sets `previousId: null` (first message)
+5. **Client sends UserMessage** with `stanzaId: 1`, content, generates NanoID `msg_u1A2B`, sets `previousId: null` (first message)
 6. **Server acknowledges** receipt with Acknowledgement message
-7. **Server begins generating response**, sends StartAnswer with `id: "msg_a9X8Y"`, `previousId: "msg_u1A2B"`
+7. **Server begins generating response**, sends StartAnswer with `stanzaId: -1`, `id: "msg_a9X8Y"`, `previousId: "msg_u1A2B"`
 8. **Server streams response** as AssistantSentence messages:
-   - Sentence 1: "The capital of France is Paris."
-   - Sentence 2: "It is located in the north-central part of the country." (isFinal: true)
+   - Sentence 1 (stanzaId: -2): "The capital of France is Paris."
+   - Sentence 2 (stanzaId: -3): "It is located in the north-central part of the country." (isFinal: true)
 9. **Conversation continues** or awaits next user message
 
 ### Sequence Diagram
@@ -43,13 +43,13 @@ sequenceDiagram
     S->>C: Acknowledgement {conversationId: "conv_7H93k..."}
 
     Note over C: User types message
-    C->>S: UserMessage {id: "msg_u1A2B", content: "What is the capital of France?"}
-    S->>C: Acknowledgement {acknowledgedStanzaId: 3}
+    C->>S: UserMessage {id: "msg_u1A2B", stanzaId: 1, content: "What is the capital of France?"}
+    S->>C: Acknowledgement {acknowledgedStanzaId: 1}
 
     Note over S: Process query
-    S->>C: StartAnswer {id: "msg_a9X8Y", previousId: "msg_u1A2B"}
-    S->>C: AssistantSentence {sequence: 1, text: "The capital of France is Paris."}
-    S->>C: AssistantSentence {sequence: 2, text: "It is located in the north-central...", isFinal: true}
+    S->>C: StartAnswer {id: "msg_a9X8Y", stanzaId: -1, previousId: "msg_u1A2B"}
+    S->>C: AssistantSentence {stanzaId: -2, sequence: 1, text: "The capital of France is Paris."}
+    S->>C: AssistantSentence {stanzaId: -3, sequence: 2, text: "It is located in the north-central...", isFinal: true}
 ```
 
 ## Example 2: Voice Conversation
@@ -68,14 +68,14 @@ This example demonstrates a complete voice interaction with audio tracks and tra
 2. **Client publishes audio track** to LiveKit room (microphone input)
 3. **Server receives audio** via subscribed track
 4. **Server transcribes** in real-time, sends Transcription messages:
-   - Partial: "What's the..." (isFinal: false)
-   - Partial: "What's the weather..." (isFinal: false)
-   - Final: "What's the weather in Tokyo?" (isFinal: true)
-5. **Server creates UserMessage** from final transcription with `id: "msg_u5Z9P"`
-6. **Server retrieves memory** about user's timezone preference, sends MemoryTrace
-7. **Server calls weather tool**, sends ToolUseRequest and ToolUseResult
-8. **Server generates response**, sends StartAnswer with `id: "msg_aB3K7"`
-9. **Server streams text response** as AssistantSentence messages
+   - Partial (stanzaId: -1): "What's the..." (isFinal: false)
+   - Partial (stanzaId: -2): "What's the weather..." (isFinal: false)
+   - Final (stanzaId: -3): "What's the weather in Tokyo?" (isFinal: true)
+5. **Server creates UserMessage** from final transcription with `stanzaId: -4`, `id: "msg_u5Z9P"`
+6. **Server retrieves memory** about user's timezone preference, sends MemoryTrace (stanzaId: -5)
+7. **Server calls weather tool**, sends ToolUseRequest (stanzaId: -6) and ToolUseResult (stanzaId: -7)
+8. **Server generates response**, sends StartAnswer with `stanzaId: -8`, `id: "msg_aB3K7"`
+9. **Server streams text response** as AssistantSentence messages (stanzaId: -9, -10)
 10. **Server streams audio response** via TTS over audio track
 11. **Client plays audio** from subscribed assistant audio track
 
@@ -92,24 +92,24 @@ sequenceDiagram
     C->>L: Publish audio track (microphone)
     L->>S: Audio frames
 
-    S->>C: Transcription {text: "What's the...", isFinal: false}
-    S->>C: Transcription {text: "What's the weather...", isFinal: false}
-    S->>C: Transcription {text: "What's the weather in Tokyo?", isFinal: true}
+    S->>C: Transcription {stanzaId: -1, text: "What's the...", isFinal: false}
+    S->>C: Transcription {stanzaId: -2, text: "What's the weather...", isFinal: false}
+    S->>C: Transcription {stanzaId: -3, text: "What's the weather in Tokyo?", isFinal: true}
 
-    S->>C: UserMessage {id: "msg_u5Z9P", content: "What's the weather in Tokyo?"}
+    S->>C: UserMessage {stanzaId: -4, id: "msg_u5Z9P", content: "What's the weather in Tokyo?"}
 
     Note over S: Retrieve user memory
-    S->>C: MemoryTrace {memoryType: "profile", content: "User timezone: JST"}
+    S->>C: MemoryTrace {stanzaId: -5, memoryType: "profile", content: "User timezone: JST"}
 
     Note over S: Need weather data
-    S->>C: ToolUseRequest {toolName: "get_weather", parameters: {city: "Tokyo"}}
+    S->>C: ToolUseRequest {stanzaId: -6, toolName: "get_weather", parameters: {city: "Tokyo"}}
     S->>T: Call weather API
     T->>S: Weather data
-    S->>C: ToolUseResult {success: true, data: {...}}
+    S->>C: ToolUseResult {stanzaId: -7, success: true, data: {...}}
 
-    S->>C: StartAnswer {id: "msg_aB3K7", previousId: "msg_u5Z9P"}
-    S->>C: AssistantSentence {sequence: 1, text: "The current weather in Tokyo..."}
-    S->>C: AssistantSentence {sequence: 2, text: "...is sunny with a temperature of 22°C.", isFinal: true}
+    S->>C: StartAnswer {stanzaId: -8, id: "msg_aB3K7", previousId: "msg_u5Z9P"}
+    S->>C: AssistantSentence {stanzaId: -9, sequence: 1, text: "The current weather in Tokyo..."}
+    S->>C: AssistantSentence {stanzaId: -10, sequence: 2, text: "...is sunny with a temperature of 22°C.", isFinal: true}
 
     S->>L: Publish audio track (TTS)
     L->>C: Audio frames
@@ -124,21 +124,21 @@ This example shows how reconnection works when the connection drops during a str
 
 **Initial State:**
 * Conversation `conv_abc123` is active
-* Server has sent messages up to stanzaId -12 (second sentence of an answer)
-* Client receives up to stanzaId -12, then connection drops
+* Server has sent messages up to stanzaId -6 (second sentence of an answer)
+* Client receives up to stanzaId -6, then connection drops
 
 **Reconnection Flow:**
 
 1. **Connection drops** (network issue)
-2. **Client detects disconnection**, stores `lastSequenceSeen: 12`
+2. **Client detects disconnection**, stores `lastSequenceSeen: 6`
 3. **Client rejoins LiveKit room** with same conversation identifier
 4. **LiveKit restores connection** and resubscribes to audio tracks
-5. **Client sends Configuration** with `conversationId: "conv_abc123"`, `lastSequenceSeen: 12`
+5. **Client sends Configuration** with `conversationId: "conv_abc123"`, `lastSequenceSeen: 6`
 6. **Server acknowledges** with Acknowledgement
-7. **Server checks database** and finds messages 13-15 were not delivered:
-   - Message -13: AssistantSentence (sequence 3)
-   - Message -14: AssistantSentence (sequence 4, final)
-   - Message -15: Commentary
+7. **Server checks database** and finds messages with stanzaId -7, -8, -9 were not delivered:
+   - Message -7: AssistantSentence (sequence 3)
+   - Message -8: AssistantSentence (sequence 4, final)
+   - Message -9: Commentary
 8. **Server replays** missing messages in order
 9. **Client receives** remaining sentences and completes the answer display
 10. **Conversation continues** seamlessly
@@ -153,26 +153,26 @@ sequenceDiagram
     participant D as Database
 
     Note over C,S: Initial conversation in progress
-    S->>C: AssistantSentence {stanzaId: -11, sequence: 1}
-    S->>C: AssistantSentence {stanzaId: -12, sequence: 2}
+    S->>C: AssistantSentence {stanzaId: -5, sequence: 1}
+    S->>C: AssistantSentence {stanzaId: -6, sequence: 2}
 
     Note over C,L: Connection drops
-    Note over C: Stores lastSequenceSeen=12
+    Note over C: Stores lastSequenceSeen=6
 
     Note over C: Detect disconnect, attempt reconnect
     C->>L: Rejoin room "conv_abc123"
     L->>S: Participant reconnected
 
-    C->>S: Configuration {conversationId: "conv_abc123", lastSequenceSeen: 12}
-    S->>C: Acknowledgement {acknowledgedStanzaId: 12}
+    C->>S: Configuration {conversationId: "conv_abc123", lastSequenceSeen: 6}
+    S->>C: Acknowledgement {acknowledgedStanzaId: 6}
 
-    S->>D: Query messages WHERE stanza_sequence > 12
-    D->>S: Messages 13, 14, 15
+    S->>D: Query messages WHERE abs(stanza_id) > 6
+    D->>S: Messages -7, -8, -9
 
     Note over S: Replay missed messages
-    S->>C: AssistantSentence {stanzaId: -13, sequence: 3}
-    S->>C: AssistantSentence {stanzaId: -14, sequence: 4, isFinal: true}
-    S->>C: Commentary {stanzaId: -15, commentType: "system_note"}
+    S->>C: AssistantSentence {stanzaId: -7, sequence: 3}
+    S->>C: AssistantSentence {stanzaId: -8, sequence: 4, isFinal: true}
+    S->>C: Commentary {stanzaId: -9, commentType: "system_note"}
 
     Note over C: Answer completed, UI updated
 ```
@@ -189,14 +189,14 @@ This example demonstrates how users can edit their messages and trigger a new re
 
 **Edit Flow:**
 
-1. **User sends message**: "What's the weather in Paris?" (UserMessage `id: "U100"`, stanzaId 3)
-2. **Server sends StartAnswer** (`id: "A200"`, stanzaId -4, previousId: "U100")
+1. **User sends message**: "What's the weather in Paris?" (UserMessage `id: "U100"`, stanzaId 1)
+2. **Server sends StartAnswer** (`id: "A200"`, stanzaId -1, previousId: "U100")
 3. **User realizes mistake** and wants to ask about London instead
-4. **Client sends ControlVariation** with `targetId: "U100"`, `mode: "edit"`
-5. **Client sends new UserMessage**: "What's the weather in London?" (UserMessage `id: "U101"`, stanzaId 7)
+4. **Client sends ControlVariation** with `targetId: "U100"`, `mode: "edit"` (stanzaId 2)
+5. **Client sends new UserMessage**: "What's the weather in London?" (UserMessage `id: "U101"`, stanzaId 3)
 6. **Server receives ControlVariation**, marks message U100 as replaced, cancels generation for A200
 7. **Server receives new UserMessage U101**, begins processing
-8. **Server sends new StartAnswer** for London weather (`id: "A201"`, stanzaId -8, previousId: "U101")
+8. **Server sends new StartAnswer** for London weather (`id: "A201"`, stanzaId -2, previousId: "U101")
 9. **Server streams response** about London weather
 10. **Database reflects** U100 is replaced by U101, A200 is cancelled, A201 is active
 
@@ -209,24 +209,24 @@ sequenceDiagram
     participant D as Database
 
     Note over C: User types and sends
-    C->>S: UserMessage {id: "U100", stanzaId: 3, content: "What's the weather in Paris?"}
+    C->>S: UserMessage {id: "U100", stanzaId: 1, content: "What's the weather in Paris?"}
     S->>D: Insert message U100
 
-    S->>C: StartAnswer {id: "A200", stanzaId: -4, previousId: "U100"}
+    S->>C: StartAnswer {id: "A200", stanzaId: -1, previousId: "U100"}
     S->>D: Insert message A200 (streaming)
 
     Note over C: User realizes mistake, clicks edit
-    C->>S: ControlVariation {targetId: "U100", mode: "edit"}
+    C->>S: ControlVariation {stanzaId: 2, targetId: "U100", mode: "edit"}
     Note over S: Cancel generation for A200
     S->>D: Update A200 status=cancelled
 
-    C->>S: UserMessage {id: "U101", stanzaId: 7, content: "What's the weather in London?"}
+    C->>S: UserMessage {id: "U101", stanzaId: 3, content: "What's the weather in London?"}
     S->>D: Insert U101, mark U100 as replaced_by=U101
 
     Note over S: Process new message
-    S->>C: StartAnswer {id: "A201", stanzaId: -8, previousId: "U101"}
-    S->>C: AssistantSentence {sequence: 1, text: "The weather in London..."}
-    S->>C: AssistantSentence {sequence: 2, text: "...is cloudy with light rain.", isFinal: true}
+    S->>C: StartAnswer {id: "A201", stanzaId: -2, previousId: "U101"}
+    S->>C: AssistantSentence {stanzaId: -3, sequence: 1, text: "The weather in London..."}
+    S->>C: AssistantSentence {stanzaId: -4, sequence: 2, text: "...is cloudy with light rain.", isFinal: true}
 ```
 
 ## Example 5: Multi-Turn Conversation with Memory
@@ -347,9 +347,9 @@ All protocol messages in these examples flow through LiveKit:
 ### StanzaId Sequencing
 
 In all examples:
-* **Client messages** use positive odd numbers: 1, 3, 5, 7...
-* **Server messages** use negative even numbers: -2, -4, -6, -8...
-* **Monotonically increasing** (absolute values)
+* **Client messages** use positive numbers starting at 1: 1, 2, 3, 4...
+* **Server messages** use negative numbers starting at -1: -1, -2, -3, -4...
+* **Monotonically increasing** in absolute value
 * Used for ordering and reconnection tracking
 
 ### Database Persistence

@@ -98,6 +98,49 @@ func (m *mockMessageRepo) GetIncompleteByConversation(ctx context.Context, conve
 	return []*models.Message{}, nil
 }
 
+func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	// Simple implementation: return message chain by following PreviousID
+	var chain []*models.Message
+	currentID := tipMessageID
+
+	for currentID != "" {
+		msg, ok := m.store[currentID]
+		if !ok {
+			break
+		}
+		chain = append([]*models.Message{msg}, chain...)
+		if msg.PreviousID == "" {
+			break
+		}
+		currentID = msg.PreviousID
+	}
+
+	return chain, nil
+}
+
+func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
+	msg, ok := m.store[messageID]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+
+	// Find all messages with the same PreviousID
+	var siblings []*models.Message
+	for _, m := range m.store {
+		if msg.PreviousID == "" && m.PreviousID == "" {
+			if m.ID != messageID && m.ConversationID == msg.ConversationID {
+				siblings = append(siblings, m)
+			}
+		} else if msg.PreviousID != "" && m.PreviousID != "" && m.PreviousID == msg.PreviousID {
+			if m.ID != messageID {
+				siblings = append(siblings, m)
+			}
+		}
+	}
+
+	return siblings, nil
+}
+
 type mockConversationRepo struct {
 	store map[string]*models.Conversation
 }
@@ -175,6 +218,20 @@ func (m *mockConversationRepo) ListByUserID(ctx context.Context, userID string, 
 
 func (m *mockConversationRepo) ListActiveByUserID(ctx context.Context, userID string, limit, offset int) ([]*models.Conversation, error) {
 	return []*models.Conversation{}, nil
+}
+
+func (m *mockConversationRepo) UpdateTip(ctx context.Context, conversationID, messageID string) error {
+	if conv, ok := m.store[conversationID]; ok {
+		conv.TipMessageID = &messageID
+	}
+	return nil
+}
+
+func (m *mockConversationRepo) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
+	if conv, ok := m.store[convID]; ok {
+		conv.SystemPromptVersionID = versionID
+	}
+	return nil
 }
 
 type mockSentenceRepo struct{}
@@ -437,6 +494,30 @@ func (m *mockIDGenerator) GenerateNoteID() string {
 	return "an_test1"
 }
 
+func (m *mockIDGenerator) GenerateSessionStatsID() string {
+	return "ass_test1"
+}
+
+func (m *mockIDGenerator) GenerateOptimizationRunID() string {
+	return "aor_test1"
+}
+
+func (m *mockIDGenerator) GeneratePromptCandidateID() string {
+	return "apc_test1"
+}
+
+func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
+	return "ape_test1"
+}
+
+func (m *mockIDGenerator) GenerateTrainingExampleID() string {
+	return "gte_test1"
+}
+
+func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
+	return "spv_test1"
+}
+
 // Mock VoteRepository for testing feedback handlers
 type mockVoteRepository struct {
 	votes      map[string]*models.Vote
@@ -497,6 +578,32 @@ func (m *mockVoteRepository) GetAggregates(ctx context.Context, targetType strin
 	return &models.VoteAggregates{Upvotes: 1, Downvotes: 0}, nil
 }
 
+func (m *mockVoteRepository) GetToolUseVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithToolContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithMemoryContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithMemoryContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithExtractionContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepository) CountByTargetType(ctx context.Context, targetType string) (int, error) {
+	count := 0
+	for _, vote := range m.votes {
+		if vote.TargetType == targetType {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // Mock NoteRepository for testing note handlers
 type mockNoteRepository struct {
 	notes     map[string]*models.Note
@@ -553,22 +660,6 @@ func (m *mockNoteRepository) GetByID(ctx context.Context, id string) (*models.No
 		return note, nil
 	}
 	return nil, errors.New("note not found")
-}
-
-func (m *mockIDGenerator) GenerateSessionStatsID() string {
-	return "ass_test1"
-}
-
-func (m *mockIDGenerator) GenerateOptimizationRunID() string {
-	return "aor_test1"
-}
-
-func (m *mockIDGenerator) GeneratePromptCandidateID() string {
-	return "apc_test1"
-}
-
-func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
-	return "ape_test1"
 }
 
 type mockProtocolHandler struct {

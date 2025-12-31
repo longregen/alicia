@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 
 /**
  * SectionHeader component for consistent header patterns across the app.
@@ -44,7 +44,7 @@ const SectionHeader = React.forwardRef<HTMLDivElement, SectionHeaderProps>(
     return (
       <div
         ref={ref}
-        className={cn(
+        className={cls(
           'layout-between',
           styles.container,
           bordered && 'border-b border-default',
@@ -53,9 +53,9 @@ const SectionHeader = React.forwardRef<HTMLDivElement, SectionHeaderProps>(
         {...props}
       >
         <div className="layout-stack">
-          <h2 className={cn(styles.title, 'text-default')}>{title}</h2>
+          <h2 className={cls(styles.title, 'text-default')}>{title}</h2>
           {subtitle && (
-            <p className={cn(styles.subtitle, 'text-muted-foreground')}>{subtitle}</p>
+            <p className={cls(styles.subtitle, 'text-muted-foreground')}>{subtitle}</p>
           )}
         </div>
         {action && <div className="layout-center-gap">{action}</div>}

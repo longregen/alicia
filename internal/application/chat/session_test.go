@@ -51,6 +51,20 @@ func (m *mockConversationRepo) UpdateStanzaIDs(ctx context.Context, id string, c
 	return nil
 }
 
+func (m *mockConversationRepo) UpdateTip(ctx context.Context, conversationID, messageID string) error {
+	if conv, ok := m.conversations[conversationID]; ok {
+		conv.TipMessageID = &messageID
+	}
+	return nil
+}
+
+func (m *mockConversationRepo) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
+	if conv, ok := m.conversations[convID]; ok {
+		conv.SystemPromptVersionID = versionID
+	}
+	return nil
+}
+
 func (m *mockConversationRepo) Delete(ctx context.Context, id string) error {
 	delete(m.conversations, id)
 	return nil
@@ -162,6 +176,49 @@ func (m *mockMessageRepo) GetIncompleteOlderThan(ctx context.Context, olderThan 
 
 func (m *mockMessageRepo) GetIncompleteByConversation(ctx context.Context, conversationID string, olderThan time.Time) ([]*models.Message, error) {
 	return nil, nil
+}
+
+func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	// Simple implementation: return message chain by following PreviousID
+	var chain []*models.Message
+	currentID := tipMessageID
+
+	for currentID != "" {
+		msg, ok := m.messages[currentID]
+		if !ok {
+			break
+		}
+		chain = append([]*models.Message{msg}, chain...)
+		if msg.PreviousID == "" {
+			break
+		}
+		currentID = msg.PreviousID
+	}
+
+	return chain, nil
+}
+
+func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
+	msg, ok := m.messages[messageID]
+	if !ok {
+		return nil, domain.ErrMessageNotFound
+	}
+
+	// Find all messages with the same PreviousID
+	var siblings []*models.Message
+	for _, m := range m.messages {
+		if msg.PreviousID == "" && m.PreviousID == "" {
+			if m.ID != messageID && m.ConversationID == msg.ConversationID {
+				siblings = append(siblings, m)
+			}
+		} else if msg.PreviousID != "" && m.PreviousID != "" && m.PreviousID == msg.PreviousID {
+			if m.ID != messageID {
+				siblings = append(siblings, m)
+			}
+		}
+	}
+
+	return siblings, nil
 }
 
 type mockIDGenerator struct {
@@ -278,6 +335,18 @@ func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
 	id := m.counter
 	m.counter++
 	return fmt.Sprintf("ape_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateTrainingExampleID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("gte_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("spv_%d", id)
 }
 
 func (m *mockIDGenerator) GenerateLiveKitRoomName() string {

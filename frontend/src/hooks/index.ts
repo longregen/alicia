@@ -15,3 +15,17 @@ export type {
 } from './useMemories';
 export { useTheme } from './useTheme';
 export type { Theme } from './useTheme';
+export { useAsync } from './useAsync';
+export { useConversations } from './useConversations';
+export { useMessages } from './useMessages';
+export { useLiveQuery } from './useLiveQuery';
+export { useConversationStore } from './useConversationStore';
+
+// Internal-only hooks (not exported):
+// - useSSE: Internal streaming implementation
+// - useDatabase: Internal DB abstraction
+// - useSync: Internal sync layer (wrapped by useMessages)
+// - useVAD: Internal voice activity detection
+// - useWebSocketSync: Internal sync transport (wrapped by useSync)
+// - useAudioManager: Internal audio handling
+// - useLiveKit: Internal LiveKit transport

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 import type { BaseComponentProps } from '../../types/components';
 
 /**
@@ -126,7 +126,7 @@ const Toast: React.FC<ToastProps> = ({
     ),
   };
 
-  const toastClasses = cn(
+  const toastClasses = cls(
     toastVariants({ variant }),
     // Semantic classes for e2e tests
     variant === 'success' && 'toast-success',
@@ -152,7 +152,7 @@ const Toast: React.FC<ToastProps> = ({
       {showClose && (
         <button
           onClick={handleDismiss}
-          className={cn(
+          className={cls(
             'flex-shrink-0 rounded-md p-1',
             'transition-colors duration-200',
             'hover:bg-black/10',

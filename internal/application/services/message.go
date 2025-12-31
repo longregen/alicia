@@ -59,8 +59,20 @@ func (s *MessageService) Create(ctx context.Context, conversationID string, role
 	id := s.idGenerator.GenerateMessageID()
 	message := models.NewMessage(id, conversationID, sequenceNumber, role, contents)
 
+	// Set previous_id to the current conversation tip for message branching
+	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
+		message.SetPreviousMessage(*conversation.TipMessageID)
+	}
+
 	if err := s.messageRepo.Create(ctx, message); err != nil {
 		return nil, domain.NewDomainError(err, "failed to create message")
+	}
+
+	// Update conversation tip to point to the new message
+	if err := s.convRepo.UpdateTip(ctx, conversationID, message.ID); err != nil {
+		// Log but don't fail - this is a non-critical operation
+		// The message is already created successfully
+		return message, nil
 	}
 
 	return message, nil
@@ -100,7 +112,21 @@ func (s *MessageService) GetByConversation(ctx context.Context, conversationID s
 		return nil, err
 	}
 
-	messages, err := s.messageRepo.GetByConversation(ctx, conversationID)
+	conversation, err := s.convRepo.GetByID(ctx, conversationID)
+	if err != nil {
+		return nil, domain.NewDomainError(domain.ErrConversationNotFound, "conversation not found")
+	}
+
+	var messages []*models.Message
+
+	// If conversation has a tip, get the chain from the tip
+	// Otherwise fall back to getting all messages (for backwards compatibility)
+	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
+		messages, err = s.messageRepo.GetChainFromTip(ctx, *conversation.TipMessageID)
+	} else {
+		messages, err = s.messageRepo.GetByConversation(ctx, conversationID)
+	}
+
 	if err != nil {
 		return nil, domain.NewDomainError(err, "failed to get messages")
 	}

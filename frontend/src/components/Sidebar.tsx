@@ -3,7 +3,7 @@ import { Brain, Server, Settings, ChevronLeft, ChevronRight, ChevronDown, Chevro
 import { Conversation } from '../types/models';
 import { useSidebarStore, COLLAPSED_WIDTH } from '../stores/sidebarStore';
 import { formatRelativeTime } from '../lib/timeUtils';
-import { cn } from '../lib/utils';
+import { cls } from '../utils/cls';
 import {
   CommandDialog,
   CommandInput,
@@ -138,7 +138,7 @@ export function Sidebar({
       <DropdownMenu key={conv.id}>
         <DropdownMenuTrigger asChild>
           <div
-            className={cn(
+            className={cls(
               'conversation-item p-3 mb-2 rounded-md cursor-pointer transition-colors',
               'hover:bg-sidebar-accent',
               selectedId === conv.id && 'bg-sidebar-accent border-l-2 border-accent',
@@ -275,14 +275,14 @@ export function Sidebar({
 
       <div
         ref={sidebarRef}
-        className={cn(
+        className={cls(
           'bg-sidebar text-foreground flex flex-col border-r border-sidebar-border h-full relative transition-all',
           isResizing && 'select-none'
         )}
         style={{ width: `${actualWidth}px` }}
       >
       {/* Header with toggle button */}
-      <div className={cn('p-5 border-b border-sidebar-border', isCollapsed && 'p-3')}>
+      <div className={cls('p-5 border-b border-sidebar-border', isCollapsed && 'p-3')}>
         {!isCollapsed ? (
           <>
             <div className="layout-between mb-3">
@@ -359,7 +359,7 @@ export function Sidebar({
       </div>
 
       {/* Bottom navigation */}
-      <div className={cn('border-t border-sidebar-border', isCollapsed ? 'p-2' : 'p-2.5')}>
+      <div className={cls('border-t border-sidebar-border', isCollapsed ? 'p-2' : 'p-2.5')}>
         {/* Connection status indicator */}
         <ConnectionStatusIndicator isCollapsed={isCollapsed} />
 
@@ -427,12 +427,13 @@ export function Sidebar({
       {/* Resize handle */}
       {!isCollapsed && (
         <div
-          className={cn(
+          className={cls(
             'absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors',
             isResizing && 'bg-accent'
           )}
           onMouseDown={() => setIsResizing(true)}
           role="separator"
+          aria-orientation="vertical"
           aria-label="Resize sidebar"
         />
       )}

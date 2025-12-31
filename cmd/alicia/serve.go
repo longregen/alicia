@@ -106,6 +106,9 @@ func runServer(ctx context.Context) error {
 	}
 	log.Println("Database connection established")
 
+	// Initialize ID generator
+	idGen := id.New()
+
 	// Initialize repositories
 	conversationRepo := postgres.NewConversationRepository(pool)
 	messageRepo := postgres.NewMessageRepository(pool)
@@ -120,9 +123,8 @@ func runServer(ctx context.Context) error {
 	voteRepo := postgres.NewVoteRepository(pool)
 	sessionStatsRepo := postgres.NewSessionStatsRepository(pool)
 	optimizationRepo := postgres.NewOptimizationRepository(pool)
-
-	// Initialize ID generator
-	idGen := id.New()
+	trainingExampleRepo := postgres.NewTrainingExampleRepository(pool, idGen)
+	promptVersionRepo := postgres.NewSystemPromptVersionRepository(pool, idGen)
 
 	// Initialize transaction manager
 	txManager := postgres.NewTransactionManager(pool)
@@ -172,6 +174,25 @@ func runServer(ctx context.Context) error {
 	)
 	log.Println("Optimization service initialized")
 
+	// Initialize prompt version service
+	promptVersionService := services.NewPromptVersionService(
+		promptVersionRepo,
+		idGen,
+	)
+	log.Println("Prompt version service initialized")
+
+	// Initialize training set builder service
+	trainingBuilderConfig := services.DefaultTrainingSetBuilderConfig()
+	trainingBuilderService := services.NewTrainingSetBuilderService(
+		voteRepo,
+		trainingExampleRepo,
+		toolRepo,
+		memoryRepo,
+		idGen,
+		trainingBuilderConfig,
+	)
+	log.Println("Training set builder service initialized")
+
 	// Register built-in tools
 	if err := builtin.RegisterAllBuiltinTools(ctx, toolService, memoryRepo, embeddingClient); err != nil {
 		log.Printf("Warning: Failed to register built-in tools: %v", err)
@@ -190,6 +211,7 @@ func runServer(ctx context.Context) error {
 		llmService,
 		toolService,
 		memoryService,
+		promptVersionService,
 		idGen,
 		txManager,
 	)
@@ -243,6 +265,8 @@ func runServer(ctx context.Context) error {
 		memoryService,
 		optimizationService,
 		optimizationRepo,
+		trainingBuilderService,
+		promptVersionService,
 		liveKitService,
 		idGen,
 		pool,

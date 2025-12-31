@@ -152,6 +152,7 @@ export function useVAD(options: UseVADOptions = {}): UseVADReturn {
           bridgeRef.current.cleanup();
           bridgeRef.current = null;
         }
+        optionsRef.current.onError?.(callbackError as Error);
         throw callbackError;
       }
     } catch (error) {

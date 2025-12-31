@@ -8,7 +8,9 @@ Protocol messages flow over **LiveKit data channels**, while voice audio travels
 
 ### Message Categories
 
-The 16 message types are organized into the following categories:
+The protocol currently defines message types 1-31 (with some IDs reserved for future use) organized into the following categories:
+
+**Note:** Types 1-16 are core messages with complete documentation. Types 17-19 and 28 are reserved. Types 20-27 are feedback & memory messages. Types 29-31 are optimization messages.
 
 #### Conversation Messages (Types 2-3)
 - [UserMessage](./02-user-message.md) – ID = 2 – User's text input
@@ -35,6 +37,25 @@ The 16 message types are organized into the following categories:
 - [Configuration](./12-configuration.md) – ID = 12 – Session configuration
 - [MemoryTrace](./14-memory-trace.md) – ID = 14 – Memory retrieval log
 - [Commentary](./15-commentary.md) – ID = 15 – Assistant's internal commentary
+
+#### Sync Messages (Types 17-18)
+- SyncRequest – ID = 17 – Reserved for Sync (not currently documented)
+- SyncResponse – ID = 18 – Reserved for Sync (not currently documented)
+
+#### Feedback Messages (Types 20-27)
+- Feedback – ID = 20 – User feedback on message quality
+- FeedbackConfirmation – ID = 21 – Confirmation of feedback receipt
+- UserNote – ID = 22 – User-created notes on messages
+- NoteConfirmation – ID = 23 – Confirmation of note receipt
+- MemoryAction – ID = 24 – Memory management actions (create/update/delete/pin/archive)
+- MemoryConfirmation – ID = 25 – Confirmation of memory action
+- ServerInfo – ID = 26 – Server status and configuration info
+- SessionStats – ID = 27 – Session statistics and metrics
+
+#### Optimization Messages (Types 29-31)
+- DimensionPreference – ID = 29 – User preferences for dimension weights
+- EliteSelect – ID = 30 – Selection of elite solution
+- EliteOptions – ID = 31 – Available elite solution options
 
 ### Common Fields
 

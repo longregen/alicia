@@ -10,7 +10,7 @@
 
 **Fields:**
 
-* `requestId` (Text, NanoID): References the `id` of the ToolUseRequest that this result fulfills. This ties the result to its originating request, enabling correlation in the conversation flow.
+* `id` (Text, NanoID): References the `id` of the ToolUseRequest that this result fulfills. This ties the result to its originating request, enabling correlation in the conversation flow.
 
 * `success` (Bool): Indicates whether the tool execution was successful. `true` means the tool ran and returned a result. `false` means there was a failure (in which case, `errorCode` and `errorMessage` fields provide details).
 
@@ -38,7 +38,7 @@
 Successful result example:
 ```json
 {
-  "requestId": "toolreq_abc123",
+  "id": "toolreq_abc123",
   "success": true,
   "result": {
     "results": [
@@ -53,7 +53,7 @@ Successful result example:
 Error result example:
 ```json
 {
-  "requestId": "toolreq_xyz789",
+  "id": "toolreq_xyz789",
   "success": false,
   "errorCode": "execution_error",
   "errorMessage": "File not found: /Users/alice/documents/notes.txt"
@@ -63,7 +63,7 @@ Error result example:
 Timeout error example:
 ```json
 {
-  "requestId": "toolreq_def456",
+  "id": "toolreq_def456",
   "success": false,
   "errorCode": "timeout",
   "errorMessage": "Tool execution exceeded timeout of 5000ms"
@@ -78,7 +78,7 @@ Upon receiving a ToolUseResult, the assistant (server) incorporates the result i
 
 2. **Server execution flow**: When the server executes a tool internally (`execution: "server"`), it sends the ToolUseResult to the client for transparency. The client may display intermediate information (e.g., "Assistant searched the web: found 5 results") or simply log it for the conversation record.
 
-The `requestId` field ensures proper correlation between requests and results, even when multiple tool requests are in flight simultaneously.
+The `id` field ensures proper correlation between requests and results, even when multiple tool requests are in flight simultaneously.
 
 **Error Handling:**
 
@@ -100,4 +100,4 @@ When the client receives a ToolUseResult from the server (indicating the server 
 
 **LiveKit Integration:**
 
-ToolUseResult messages flow over LiveKit data channels as MessagePack-encoded payloads. The reliable data channel ensures that results are delivered in order and the `requestId` correlation remains intact. Both client and server use this correlation to maintain conversation state and track which tool executions have completed.
+ToolUseResult messages flow over LiveKit data channels as MessagePack-encoded payloads. The reliable data channel ensures that results are delivered in order and the `id` correlation remains intact. Both client and server use this correlation to maintain conversation state and track which tool executions have completed.

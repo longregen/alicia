@@ -12,6 +12,7 @@
 - [Architecture Overview](ARCHITECTURE.md)
 - [Components](COMPONENTS.md)
 - [Database Schema](DATABASE.md)
+- [Database Reference](database/index.md)
 - [ID Scheme](ID_SCHEME.md)
 
 # Platform Guides
@@ -65,3 +66,5 @@
 # Reference
 
 - [User Stories](USER_STORIES.md)
+- [Style Guide](STYLE.md)
+- [Testing with Playwright](TESTING_PLAYWRIGHT.md)

@@ -1,5 +1,5 @@
 -- Alicia Database Schema
--- Migration 001: Initial schema (consolidated)
+-- Migration 001: Consolidated initial schema
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -19,6 +19,7 @@ CREATE TYPE conversation_status AS ENUM ('active', 'archived', 'deleted');
 CREATE TYPE audio_type AS ENUM ('input', 'output');
 CREATE TYPE sync_status AS ENUM ('pending', 'synced', 'conflict');
 CREATE TYPE completion_status AS ENUM ('pending', 'streaming', 'completed', 'failed');
+CREATE TYPE optimization_status AS ENUM ('pending', 'running', 'completed', 'failed');
 
 -- ============================================================================
 -- alicia_conversations
@@ -132,7 +133,7 @@ CREATE INDEX idx_audio_livekit_track ON alicia_audio(livekit_track_sid) WHERE li
 CREATE TABLE alicia_memory (
     id TEXT PRIMARY KEY DEFAULT generate_random_id('amem'),
     content TEXT NOT NULL,
-    embeddings vector(1536),
+    embeddings vector(1024),
     embeddings_info JSONB DEFAULT '{}',
     importance REAL DEFAULT 0.5,
     confidence REAL DEFAULT 1.0,
@@ -141,6 +142,8 @@ CREATE TABLE alicia_memory (
     source_type TEXT,
     source_info JSONB DEFAULT '{}',
     tags TEXT[] DEFAULT '{}',
+    pinned BOOLEAN NOT NULL DEFAULT FALSE,
+    archived BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP
@@ -149,6 +152,11 @@ CREATE TABLE alicia_memory (
 CREATE INDEX idx_memory_embeddings ON alicia_memory USING ivfflat (embeddings vector_cosine_ops) WITH (lists = 100);
 CREATE INDEX idx_memory_importance ON alicia_memory(importance DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_memory_tags ON alicia_memory USING gin(tags) WHERE deleted_at IS NULL;
+CREATE INDEX idx_memory_pinned ON alicia_memory(pinned) WHERE deleted_at IS NULL AND pinned = TRUE;
+CREATE INDEX idx_memory_archived ON alicia_memory(archived) WHERE deleted_at IS NULL;
+
+COMMENT ON COLUMN alicia_memory.pinned IS 'Whether this memory is pinned for priority access';
+COMMENT ON COLUMN alicia_memory.archived IS 'Whether this memory is archived and hidden from normal views';
 
 -- ============================================================================
 -- alicia_memory_used
@@ -281,6 +289,253 @@ CREATE TABLE alicia_mcp_servers (
 CREATE INDEX idx_mcp_servers_name ON alicia_mcp_servers(name);
 
 -- ============================================================================
+-- alicia_votes
+-- ============================================================================
+CREATE TABLE alicia_votes (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('av'),
+    conversation_id TEXT NOT NULL REFERENCES alicia_conversations(id) ON DELETE CASCADE,
+    message_id TEXT REFERENCES alicia_messages(id) ON DELETE CASCADE,
+    target_type TEXT NOT NULL CHECK (target_type IN ('message', 'tool_use', 'memory', 'reasoning')),
+    target_id TEXT NOT NULL,
+    vote TEXT NOT NULL CHECK (vote IN ('up', 'down', 'critical')),
+    quick_feedback TEXT CHECK (quick_feedback IN ('wrong_tool', 'wrong_params', 'unnecessary', 'missing_context', 'outdated', 'wrong_context', 'too_generic', 'incorrect', 'incorrect_assumption', 'missed_consideration', 'overcomplicated', 'wrong_direction')),
+    note TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_votes_conversation ON alicia_votes(conversation_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_votes_message ON alicia_votes(message_id) WHERE message_id IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_votes_target ON alicia_votes(target_type, target_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_votes_type_vote ON alicia_votes(target_type, vote) WHERE deleted_at IS NULL;
+
+COMMENT ON COLUMN alicia_votes.target_type IS 'Type of entity being voted on: message, tool_use, memory, or reasoning';
+COMMENT ON COLUMN alicia_votes.target_id IS 'ID of the target entity being voted on';
+COMMENT ON COLUMN alicia_votes.vote IS 'Vote type: up (positive), down (negative), critical (essential - for memories)';
+COMMENT ON COLUMN alicia_votes.quick_feedback IS 'Optional predefined feedback category for quick structured feedback';
+
+-- ============================================================================
+-- alicia_notes
+-- ============================================================================
+CREATE TABLE alicia_notes (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('an'),
+    message_id TEXT NOT NULL REFERENCES alicia_messages(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('improvement', 'correction', 'context', 'general')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_notes_message ON alicia_notes(message_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_notes_category ON alicia_notes(category) WHERE deleted_at IS NULL;
+CREATE INDEX idx_notes_created_at ON alicia_notes(created_at DESC) WHERE deleted_at IS NULL;
+
+COMMENT ON COLUMN alicia_notes.category IS 'Note category: improvement (suggestion), correction (factual error), context (clarification), general (freeform)';
+
+-- ============================================================================
+-- alicia_session_stats
+-- ============================================================================
+CREATE TABLE alicia_session_stats (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('ass'),
+    conversation_id TEXT NOT NULL REFERENCES alicia_conversations(id) ON DELETE CASCADE,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    tool_call_count INTEGER NOT NULL DEFAULT 0,
+    memories_used INTEGER NOT NULL DEFAULT 0,
+    session_duration_seconds INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_session_stats_conversation ON alicia_session_stats(conversation_id);
+CREATE INDEX idx_session_stats_created_at ON alicia_session_stats(created_at DESC);
+
+COMMENT ON COLUMN alicia_session_stats.message_count IS 'Total number of messages in the session';
+COMMENT ON COLUMN alicia_session_stats.tool_call_count IS 'Total number of tool calls made during the session';
+COMMENT ON COLUMN alicia_session_stats.memories_used IS 'Total number of unique memories retrieved during the session';
+COMMENT ON COLUMN alicia_session_stats.session_duration_seconds IS 'Total duration of the session in seconds';
+
+-- ============================================================================
+-- prompt_optimization_runs
+-- ============================================================================
+CREATE TABLE prompt_optimization_runs (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('aor'),
+    signature_name VARCHAR(255) NOT NULL,
+    status optimization_status NOT NULL DEFAULT 'pending',
+    config JSONB DEFAULT '{}',
+    best_score REAL,
+    iterations INTEGER NOT NULL DEFAULT 0,
+    dimension_weights JSONB DEFAULT '{"successRate": 0.25, "quality": 0.20, "efficiency": 0.15, "robustness": 0.15, "generalization": 0.10, "diversity": 0.10, "innovation": 0.05}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_optimization_runs_status ON prompt_optimization_runs(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_optimization_runs_signature ON prompt_optimization_runs(signature_name) WHERE deleted_at IS NULL;
+CREATE INDEX idx_optimization_runs_created ON prompt_optimization_runs(created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_optimization_runs_completed ON prompt_optimization_runs(completed_at DESC) WHERE deleted_at IS NULL AND completed_at IS NOT NULL;
+
+COMMENT ON TABLE prompt_optimization_runs IS 'GEPA optimization run records tracking prompt optimization sessions';
+COMMENT ON COLUMN prompt_optimization_runs.config IS 'Optimization configuration including hyperparameters and constraints';
+
+-- ============================================================================
+-- prompt_candidates
+-- ============================================================================
+CREATE TABLE prompt_candidates (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('apc'),
+    run_id TEXT NOT NULL REFERENCES prompt_optimization_runs(id) ON DELETE CASCADE,
+    instructions TEXT NOT NULL,
+    demos JSONB,
+    coverage INTEGER NOT NULL DEFAULT 0,
+    avg_score REAL,
+    generation INTEGER NOT NULL DEFAULT 0,
+    parent_id TEXT REFERENCES prompt_candidates(id) ON DELETE SET NULL,
+    dimension_scores JSONB DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_candidates_run ON prompt_candidates(run_id, generation) WHERE deleted_at IS NULL;
+CREATE INDEX idx_candidates_score ON prompt_candidates(run_id, avg_score DESC NULLS LAST) WHERE deleted_at IS NULL;
+CREATE INDEX idx_candidates_parent ON prompt_candidates(parent_id) WHERE parent_id IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_candidates_coverage ON prompt_candidates(run_id, coverage DESC) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE prompt_candidates IS 'Candidate prompts representing the Pareto frontier during optimization';
+COMMENT ON COLUMN prompt_candidates.coverage IS 'Number of examples this candidate covers successfully';
+COMMENT ON COLUMN prompt_candidates.generation IS 'Generation number in the evolutionary optimization process';
+
+-- ============================================================================
+-- prompt_evaluations
+-- ============================================================================
+CREATE TABLE prompt_evaluations (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('ape'),
+    candidate_id TEXT NOT NULL REFERENCES prompt_candidates(id) ON DELETE CASCADE,
+    example_id VARCHAR(255) NOT NULL,
+    score REAL NOT NULL,
+    feedback TEXT,
+    trace JSONB,
+    dimension_scores JSONB DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_evaluations_candidate ON prompt_evaluations(candidate_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_evaluations_example ON prompt_evaluations(example_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_evaluations_score ON prompt_evaluations(candidate_id, score DESC) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE prompt_evaluations IS 'Evaluation results for candidate prompts against test examples';
+COMMENT ON COLUMN prompt_evaluations.trace IS 'Execution trace for debugging and analysis';
+
+-- ============================================================================
+-- optimized_programs
+-- ============================================================================
+CREATE TABLE optimized_programs (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('op'),
+    run_id TEXT NOT NULL REFERENCES prompt_optimization_runs(id) ON DELETE CASCADE,
+    signature_name VARCHAR(255) NOT NULL,
+    instructions TEXT NOT NULL,
+    demos JSONB,
+    metadata JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_programs_run ON optimized_programs(run_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_programs_signature ON optimized_programs(signature_name) WHERE deleted_at IS NULL;
+CREATE INDEX idx_programs_created ON optimized_programs(created_at DESC) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE optimized_programs IS 'Final optimized prompt programs ready for deployment';
+
+-- ============================================================================
+-- optimized_tools
+-- ============================================================================
+CREATE TABLE optimized_tools (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('ot'),
+    tool_id TEXT NOT NULL REFERENCES alicia_tools(id) ON DELETE CASCADE,
+    optimized_description TEXT NOT NULL,
+    optimized_schema JSONB,
+    result_template TEXT,
+    examples JSONB,
+    version INTEGER NOT NULL DEFAULT 1,
+    score REAL,
+    optimized_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    active BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_optimized_tools_tool ON optimized_tools(tool_id, version DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_optimized_tools_active ON optimized_tools(tool_id, active) WHERE deleted_at IS NULL AND active = true;
+CREATE INDEX idx_optimized_tools_score ON optimized_tools(score DESC NULLS LAST) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE optimized_tools IS 'Optimized tool configurations with improved descriptions and schemas';
+COMMENT ON COLUMN optimized_tools.active IS 'Whether this optimized version is currently in use';
+
+-- ============================================================================
+-- tool_result_formatters
+-- ============================================================================
+CREATE TABLE tool_result_formatters (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('trf'),
+    tool_name VARCHAR(255) NOT NULL UNIQUE,
+    template TEXT NOT NULL,
+    max_length INTEGER NOT NULL DEFAULT 2000,
+    summarize_at INTEGER NOT NULL DEFAULT 1000,
+    summary_prompt TEXT,
+    key_fields JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_formatters_tool_name ON tool_result_formatters(tool_name) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE tool_result_formatters IS 'Learned result formatting rules for optimizing tool output presentation';
+COMMENT ON COLUMN tool_result_formatters.summarize_at IS 'Character threshold at which to apply summarization';
+
+-- ============================================================================
+-- tool_usage_patterns
+-- ============================================================================
+CREATE TABLE tool_usage_patterns (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('tup'),
+    tool_name VARCHAR(255) NOT NULL,
+    user_intent_pattern TEXT NOT NULL,
+    success_rate REAL,
+    avg_result_quality REAL,
+    common_arguments JSONB,
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_usage_patterns_tool ON tool_usage_patterns(tool_name) WHERE deleted_at IS NULL;
+CREATE INDEX idx_usage_patterns_success ON tool_usage_patterns(tool_name, success_rate DESC NULLS LAST) WHERE deleted_at IS NULL;
+CREATE INDEX idx_usage_patterns_updated ON tool_usage_patterns(updated_at DESC) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE tool_usage_patterns IS 'Tool usage analytics for identifying optimization opportunities';
+COMMENT ON COLUMN tool_usage_patterns.user_intent_pattern IS 'Pattern describing common user intent for this tool usage';
+
+-- ============================================================================
+-- pareto_archive
+-- ============================================================================
+CREATE TABLE pareto_archive (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('pa'),
+    run_id TEXT NOT NULL REFERENCES prompt_optimization_runs(id) ON DELETE CASCADE,
+    instructions TEXT NOT NULL,
+    demos JSONB DEFAULT '[]',
+    dimension_scores JSONB NOT NULL DEFAULT '{}',
+    generation INT NOT NULL DEFAULT 0,
+    coverage INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_pareto_archive_run ON pareto_archive(run_id);
+CREATE INDEX idx_pareto_archive_scores ON pareto_archive USING GIN (dimension_scores);
+
+COMMENT ON TABLE pareto_archive IS 'Stores elite solutions from GEPA Pareto optimization, representing non-dominated trade-offs across 7 dimensions';
+COMMENT ON COLUMN pareto_archive.dimension_scores IS 'Per-dimension performance metrics: successRate, quality, efficiency, robustness, generalization, diversity, innovation';
+COMMENT ON COLUMN pareto_archive.coverage IS 'Number of examples this solution solves best, used for coverage-based selection';
+
+-- ============================================================================
 -- Triggers for updated_at
 -- ============================================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -337,4 +592,20 @@ CREATE TRIGGER update_meta_updated_at
 
 CREATE TRIGGER update_mcp_servers_updated_at
     BEFORE UPDATE ON alicia_mcp_servers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_votes_updated_at
+    BEFORE UPDATE ON alicia_votes
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_notes_updated_at
+    BEFORE UPDATE ON alicia_notes
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_session_stats_updated_at
+    BEFORE UPDATE ON alicia_session_stats
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_usage_patterns_updated_at
+    BEFORE UPDATE ON tool_usage_patterns
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

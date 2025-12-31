@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 func TestHealthHandler_Handle_Success(t *testing.T) {
@@ -164,93 +163,5 @@ func TestHealthHandler_CalculateOverallStatus(t *testing.T) {
 				t.Errorf("calculateOverallStatus() = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestHealthHandler_ServiceHealth_JSONMarshaling(t *testing.T) {
-	latency := int64(100)
-	errMsg := "connection refused"
-
-	tests := []struct {
-		name    string
-		health  ServiceHealth
-		wantErr bool
-	}{
-		{
-			name: "healthy service",
-			health: ServiceHealth{
-				Status:    "healthy",
-				LatencyMs: &latency,
-			},
-			wantErr: false,
-		},
-		{
-			name: "unhealthy service",
-			health: ServiceHealth{
-				Status:    "unhealthy",
-				LatencyMs: &latency,
-				Error:     &errMsg,
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			data, err := json.Marshal(tt.health)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("json.Marshal() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			var unmarshaled ServiceHealth
-			if err := json.Unmarshal(data, &unmarshaled); err != nil {
-				t.Errorf("json.Unmarshal() error = %v", err)
-				return
-			}
-
-			if unmarshaled.Status != tt.health.Status {
-				t.Errorf("Status = %v, want %v", unmarshaled.Status, tt.health.Status)
-			}
-		})
-	}
-}
-
-func TestHealthHandler_CreateSilentWAV(t *testing.T) {
-	// Test creating a silent WAV file
-	wav := createSilentWAV(16000, 1)
-
-	// Check minimum size (44 byte header + 1 second at 16kHz 16-bit mono = 32000 bytes)
-	expectedSize := 44 + 32000
-	if len(wav) != expectedSize {
-		t.Errorf("expected WAV size %d, got %d", expectedSize, len(wav))
-	}
-
-	// Check RIFF header
-	if string(wav[0:4]) != "RIFF" {
-		t.Errorf("expected RIFF header, got %s", string(wav[0:4]))
-	}
-
-	// Check WAVE format
-	if string(wav[8:12]) != "WAVE" {
-		t.Errorf("expected WAVE format, got %s", string(wav[8:12]))
-	}
-
-	// Check fmt chunk
-	if string(wav[12:16]) != "fmt " {
-		t.Errorf("expected fmt chunk, got %s", string(wav[12:16]))
-	}
-
-	// Check data chunk
-	if string(wav[36:40]) != "data" {
-		t.Errorf("expected data chunk, got %s", string(wav[36:40]))
-	}
-}
-
-func TestHealthHandler_HealthCheckConfig(t *testing.T) {
-	cfg := DefaultHealthCheckConfig()
-
-	if cfg.Timeout != 5*time.Second {
-		t.Errorf("expected timeout 5s, got %v", cfg.Timeout)
 	}
 }

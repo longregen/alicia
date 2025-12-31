@@ -109,9 +109,9 @@ export async function loadFromIndexedDB(): Promise<void> {
       const getRequest = store.get('sqliteDb');
 
       getRequest.onsuccess = async () => {
-        if (getRequest.result && db) {
+        if (getRequest.result) {
           try {
-            // Load stored data into existing database
+            // Create new database instance from stored data and replace current reference
             const SQL = await initSqlJs({
               locateFile: () => '/sql-wasm.wasm'
             });

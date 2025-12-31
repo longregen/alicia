@@ -47,7 +47,7 @@ import {
   EliteSelect,
 } from '../types/protocol';
 import {
-  Message,
+  NormalizedMessage,
   MessageSentence,
   ToolCall,
   MemoryTrace,
@@ -78,7 +78,7 @@ import { audioManager } from '../utils/audioManager';
 // Mock the store with a minimal implementation
 const createMockStore = () => {
   const store = {
-    messages: {} as Record<string, Message>,
+    messages: {} as Record<string, NormalizedMessage>,
     sentences: {} as Record<string, MessageSentence>,
     toolCalls: {} as Record<string, ToolCall>,
     audioRefs: {} as Record<string, AudioRef>,
@@ -86,13 +86,19 @@ const createMockStore = () => {
     currentStreamingMessageId: null as MessageId | null,
     currentConversationId: null as ConversationId | null,
 
-    addMessage: vi.fn((message: Message) => {
+    addMessage: vi.fn((message: NormalizedMessage) => {
       store.messages[message.id] = message;
     }),
 
     updateMessageStatus: vi.fn((id: MessageId, status: MessageStatus) => {
       if (store.messages[id]) {
         store.messages[id].status = status;
+      }
+    }),
+
+    updateMessageContent: vi.fn((id: MessageId, content: string) => {
+      if (store.messages[id]) {
+        store.messages[id].content = content;
       }
     }),
 
@@ -187,6 +193,13 @@ vi.mock('../stores/dimensionStore', () => ({
     getState: vi.fn(() => ({
       updateElites: vi.fn(),
     })),
+  },
+}));
+
+// Mock messageRepository
+vi.mock('../db/repository', () => ({
+  messageRepository: {
+    upsert: vi.fn(),
   },
 }));
 
@@ -408,6 +421,49 @@ describe('protocolAdapter', () => {
         toolCallIds: [],
         memoryTraceIds: [],
       };
+    });
+
+    it('audio and sentence IDs match when sentence has explicit ID (sentence arrives first)', async () => {
+      // Sentence arrives first with EXPLICIT ID (not sequence-based)
+      const sentence: AssistantSentence = {
+        id: 'sent-custom-id', // This is the key: explicit ID
+        previousId: 'msg-000',
+        conversationId: 'conv-001',
+        sequence: 0,
+        text: 'Hello there!',
+        isFinal: false,
+      };
+
+      handleAssistantSentence(sentence, mockStore as any);
+
+      const addedSentence = mockStore.addSentence.mock.calls[0][0];
+
+      // Sentence will have ID: sent-custom-id
+      expect(addedSentence.id).toBe(createSentenceId('sent-custom-id'));
+      // No audio yet
+      expect(addedSentence.audioRefId).toBeUndefined();
+
+      // Mock audioManager.store
+      vi.mocked(audioManager.store).mockResolvedValue('audio-001' as AudioRefId);
+
+      // Now audio arrives with sequence 0
+      const audioData = new Uint8Array([1, 2, 3, 4, 5]);
+      const audioChunk: AudioChunk = {
+        conversationId: 'conv-001',
+        format: 'pcm_s16le_24000',
+        sequence: 0,
+        durationMs: 100,
+        trackSid: 'track-001',
+        data: audioData,
+      };
+
+      await handleAudioChunk(audioChunk, mockStore as any);
+
+      // After the fix: audio handler should find sentence by sequence and update it
+      expect(mockStore.updateSentence).toHaveBeenCalledWith(
+        createSentenceId('sent-custom-id'),
+        { audioRefId: createAudioRefId('audio-001') }
+      );
     });
 
     it('stores audio and associates with sentence (audio arrives first)', async () => {

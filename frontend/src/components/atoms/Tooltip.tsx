@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 import type { BaseComponentProps } from '../../types/components';
 
 /**
@@ -54,7 +54,7 @@ function TooltipContent({
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
-        className={cn(
+        className={cls(
           'z-50 origin-(--radix-tooltip-content-transform-origin) rounded-md px-3 py-2 text-xs',
           'bg-overlay backdrop-blur-sm text-on-emphasis',
           'border border-border-emphasis shadow-lg',
@@ -105,7 +105,7 @@ const Tooltip: React.FC<TooltipProps> = ({
     <TooltipProvider delayDuration={delay}>
       <TooltipPrimitive.Root data-slot="tooltip">
         <TooltipPrimitive.Trigger data-slot="tooltip-trigger" asChild>
-          <span className={cn('inline-block', className)}>{children}</span>
+          <span className={cls('inline-block', className)}>{children}</span>
         </TooltipPrimitive.Trigger>
         <TooltipContent side={position}>{content}</TooltipContent>
       </TooltipPrimitive.Root>

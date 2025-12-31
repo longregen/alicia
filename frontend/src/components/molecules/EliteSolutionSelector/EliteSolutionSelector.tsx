@@ -78,6 +78,8 @@ interface EliteCardProps {
   disabled?: boolean;
 }
 
+const COMPACT_DIMENSION_COUNT = 4; // Show top 4 dimensions in compact mode
+
 const EliteCard: React.FC<EliteCardProps> = ({
   elite,
   isActive,
@@ -105,7 +107,7 @@ const EliteCard: React.FC<EliteCardProps> = ({
       </div>
 
       <div className="flex flex-wrap gap-2 mb-2">
-        {DIMENSION_DISPLAY.slice(0, 4).map(({ key, icon }) => (
+        {DIMENSION_DISPLAY.slice(0, COMPACT_DIMENSION_COUNT).map(({ key, icon }) => (
           <DimensionScoreBar
             key={key}
             dimension={key}
@@ -114,6 +116,7 @@ const EliteCard: React.FC<EliteCardProps> = ({
             compact
           />
         ))}
+        {/* Show creativity dimensions only when significantly present (>50%) */}
         {elite.scores.diversity > 0.5 && (
           <DimensionScoreBar
             dimension="diversity"

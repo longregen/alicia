@@ -14,7 +14,7 @@ import {
   selectCurrentStreamingMessageId,
   selectActions,
 } from './useConversationStore';
-import type { Message, MessageSentence, ToolCall, MemoryTrace } from '../types/streaming';
+import type { NormalizedMessage, MessageSentence, ToolCall, MemoryTrace } from '../types/streaming';
 import { MessageStatus } from '../types/streaming';
 
 describe('useConversationStore', () => {
@@ -24,7 +24,7 @@ describe('useConversationStore', () => {
     store.clearConversation();
   });
 
-  const createMockMessage = (id: string, createdAt: Date = new Date()): Message => ({
+  const createMockMessage = (id: string, createdAt: Date = new Date()): NormalizedMessage => ({
     id: id as any,
     conversationId: 'conv-1' as any,
     role: 'assistant',

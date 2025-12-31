@@ -6,9 +6,9 @@ This document describes the implementation of Alicia's prompt optimization syste
 
 The optimization system implements a sophisticated pipeline for improving AI prompts through:
 
-1. **Memory-Aware Few-Shot Learning** (Phase 4) - Retrieves relevant memories to enrich training examples
-2. **HTTP API & CLI** (Phase 5) - Provides programmatic and command-line access to optimization
-3. **Feedback Integration & Streaming** (Phase 6) - Real-time progress updates and user-driven dimension adjustments
+1. **Memory-Aware Few-Shot Learning** - Retrieves relevant memories to enrich training examples
+2. **HTTP API & CLI** - Provides programmatic and command-line access to optimization
+3. **Feedback Integration & Streaming** - Real-time progress updates and user-driven dimension adjustments
 
 ## Architecture
 
@@ -22,7 +22,7 @@ The optimization system implements a sophisticated pipeline for improving AI pro
 │  - Tracks dimension weights             │
 └──────────────┬──────────────────────────┘
                │
-               ├──> MemoryAwareModule (Phase 4)
+               ├──> MemoryAwareModule
                │    - Retrieves relevant memories
                │    - Converts to demonstrations
                │    - Enriches few-shot examples
@@ -38,7 +38,7 @@ The optimization system implements a sophisticated pipeline for improving AI pro
                     - Weight normalization
 ```
 
-## Phase 4: Memory-Aware Optimization
+## Memory-Aware Optimization
 
 ### Implementation
 
@@ -145,6 +145,35 @@ score := scores.WeightedScore(weights)
 // = successRate*w1 + quality*w2 + efficiency*w3 + ...
 ```
 
+### Pivot Presets (Frontend)
+
+**Location**: `frontend/src/stores/dimensionStore.ts`
+
+The frontend provides 5 preset weight configurations for quick optimization pivots:
+
+| Preset | Icon | Success | Quality | Efficiency | Robustness | Generalization | Diversity | Innovation |
+|--------|------|---------|---------|------------|------------|----------------|-----------|------------|
+| **Accurate** | ✓ | 40% | 25% | 10% | 10% | 10% | 3% | 2% |
+| **Fast** | ⚡ | 20% | 15% | 35% | 15% | 10% | 3% | 2% |
+| **Reliable** | 🛡️ | 25% | 20% | 10% | 30% | 10% | 3% | 2% |
+| **Creative** | 🎨 | 15% | 20% | 10% | 10% | 10% | 20% | 15% |
+| **Balanced** | ⚖️ | 25% | 20% | 15% | 15% | 10% | 10% | 5% |
+
+**Usage**:
+
+```typescript
+import { useDimensionStore, PIVOT_PRESETS } from '@/stores/dimensionStore';
+
+// Select a preset
+const { setPreset } = useDimensionStore();
+setPreset('accuracy');
+
+// Get best elite for current weights
+const bestElite = useDimensionStore(selectBestEliteForWeights);
+```
+
+Presets automatically select the best elite solution from the Pareto archive that maximizes the weighted score for the chosen configuration.
+
 ## Pareto Archive Management
 
 **Location**: `/home/usr/projects/alicia/internal/prompt/pareto.go`
@@ -182,7 +211,7 @@ func calculateCrowdingDistances(solutions []*EliteSolution) []float64
 
 This implements NSGA-II style crowding distance calculation to prefer solutions in less-crowded regions of the objective space.
 
-## Phase 6: Feedback Integration
+## Feedback Integration
 
 ### Feedback Mapping System
 
@@ -482,50 +511,65 @@ gepaConfig := &optimizers.GEPAConfig{
 
 Optimization data is stored in PostgreSQL:
 
-### optimization_runs
+### prompt_optimization_runs
 ```sql
-CREATE TABLE optimization_runs (
-    id VARCHAR PRIMARY KEY,
-    name VARCHAR NOT NULL,
-    prompt_type VARCHAR NOT NULL,
-    status VARCHAR NOT NULL,
-    max_iterations INT NOT NULL,
-    iterations INT DEFAULT 0,
-    best_score FLOAT DEFAULT 0,
-    best_dim_scores JSONB,
-    dimension_weights JSONB,
-    config JSONB,
-    meta JSONB,
-    created_at TIMESTAMP DEFAULT NOW(),
-    completed_at TIMESTAMP
+CREATE TABLE prompt_optimization_runs (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('por'),
+    signature_name VARCHAR(255) NOT NULL,
+    status optimization_status NOT NULL DEFAULT 'pending',
+    config JSONB DEFAULT '{}',
+    best_score REAL,
+    iterations INTEGER NOT NULL DEFAULT 0,
+    dimension_weights JSONB DEFAULT '{"successRate": 0.25, ...}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    deleted_at TIMESTAMP
 );
 ```
 
 ### prompt_candidates
 ```sql
 CREATE TABLE prompt_candidates (
-    id VARCHAR PRIMARY KEY,
-    run_id VARCHAR REFERENCES optimization_runs(id),
-    iteration INT NOT NULL,
-    prompt_text TEXT NOT NULL,
-    avg_score FLOAT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('pc'),
+    run_id TEXT NOT NULL REFERENCES prompt_optimization_runs(id) ON DELETE CASCADE,
+    instructions TEXT NOT NULL,
+    demos JSONB,
+    dimension_scores JSONB DEFAULT '{}',
+    coverage INTEGER NOT NULL DEFAULT 0,
+    avg_score REAL,
+    generation INTEGER NOT NULL DEFAULT 0,
+    parent_id TEXT REFERENCES prompt_candidates(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
 );
 ```
 
 ### prompt_evaluations
 ```sql
 CREATE TABLE prompt_evaluations (
-    id VARCHAR PRIMARY KEY,
-    candidate_id VARCHAR REFERENCES prompt_candidates(id),
-    run_id VARCHAR REFERENCES optimization_runs(id),
-    input TEXT NOT NULL,
-    output TEXT NOT NULL,
-    score FLOAT NOT NULL,
-    dimension_scores JSONB,
-    success BOOLEAN NOT NULL,
-    latency_ms BIGINT,
-    created_at TIMESTAMP DEFAULT NOW()
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('pe'),
+    candidate_id TEXT NOT NULL REFERENCES prompt_candidates(id) ON DELETE CASCADE,
+    example_id VARCHAR(255) NOT NULL,
+    score REAL NOT NULL,
+    dimension_scores JSONB DEFAULT '{}',
+    feedback TEXT,
+    trace JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+```
+
+### pareto_archive
+```sql
+CREATE TABLE pareto_archive (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('pa'),
+    run_id TEXT NOT NULL REFERENCES prompt_optimization_runs(id) ON DELETE CASCADE,
+    instructions TEXT NOT NULL,
+    demos JSONB DEFAULT '[]',
+    dimension_scores JSONB NOT NULL DEFAULT '{}',
+    generation INT NOT NULL DEFAULT 0,
+    coverage INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 ```
 
@@ -604,11 +648,6 @@ func (m *CustomMetric) Score(
 
 ## Related Documentation
 
-- `/home/usr/projects/alicia/docs/PHASE_6_INTEGRATION.md` - Detailed Phase 6 integration guide
-- `/home/usr/projects/alicia/docs/DATABASE.md` - Database schema details
-- `/home/usr/projects/alicia/docs/ARCHITECTURE.md` - Overall system architecture
-
-## See Also
-
+- [Database Schema](DATABASE.md) - Full database schema details
+- [Architecture](ARCHITECTURE.md) - Overall system architecture
 - [GEPA Primer](GEPA_PRIMER.md) - Detailed GEPA algorithm explanation
-- [Database Schema](DATABASE.md) - Optimization tables

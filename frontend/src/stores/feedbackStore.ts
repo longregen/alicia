@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
 export type VoteType = 'up' | 'down' | 'critical';
-export type VotableType = 'message' | 'tool_use' | 'memory' | 'reasoning';
-// Alias for backward compatibility
+export type VotableType = 'message' | 'tool_use' | 'memory' | 'reasoning' | 'memory_usage' | 'memory_extraction';
+// TODO: Remove if TargetType is not used for backward compatibility
 export type TargetType = VotableType;
 
 export interface Vote {

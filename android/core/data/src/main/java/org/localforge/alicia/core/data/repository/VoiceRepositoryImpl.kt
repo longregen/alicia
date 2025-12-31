@@ -36,9 +36,11 @@ class VoiceRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful && response.body() != null) {
                 val voices = response.body()!!.toDomain()
-                // Use compareAndSet to ensure thread-safe update
+                // Use compareAndSet to ensure thread-safe update.
+                // If another thread already set the cache, get() returns their value.
+                // The fallback `?: voices` handles the edge case where get() returns null
+                // after a successful compareAndSet (shouldn't happen, but defensive).
                 cachedVoices.compareAndSet(null, voices)
-                // Return the cached value in case another thread updated it
                 Result.success(cachedVoices.get() ?: voices)
             } else {
                 Result.failure(
@@ -53,6 +55,7 @@ class VoiceRepositoryImpl @Inject constructor(
     override fun getCurrentVoice(): Flow<Voice?> {
         return settingsDataStore.selectedVoice.map { voiceId ->
             // May return null if getAvailableVoices() hasn't been called yet, or if no voice matches the selected ID
+            // Thread-safe: uses AtomicReference to prevent race conditions during cache reads
             cachedVoices.get()?.find { it.id == voiceId }
         }
     }

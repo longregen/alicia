@@ -120,7 +120,7 @@ object NetworkModule {
     }
 
     /**
-     * Provide ProtocolHandler for MessagePack encoding/decoding
+     * Provide ProtocolHandler for protocol message encoding/decoding
      */
     @Provides
     @Singleton

@@ -1,10 +1,13 @@
 import type {
   LanguageData,
   MessageState,
-  MessageType,
+  MessageRole,
   RecordingState,
   AudioState,
 } from './types/components';
+
+// These constants mirror types from types/components.ts
+// Consider importing directly if synchronization becomes an issue
 
 // Message states constants
 export const MESSAGE_STATES = {
@@ -20,7 +23,7 @@ export const MESSAGE_TYPES = {
   USER: 'user',
   ASSISTANT: 'assistant',
   SYSTEM: 'system',
-} as const satisfies Record<string, MessageType>;
+} as const satisfies Record<string, MessageRole>;
 
 export const RECORDING_STATES = {
   IDLE: 'idle',

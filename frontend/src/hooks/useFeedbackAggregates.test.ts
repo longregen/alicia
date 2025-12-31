@@ -9,7 +9,7 @@ import {
   createMemoryTraceId,
   createConversationId,
   MessageStatus,
-  type Message,
+  type NormalizedMessage,
   type ToolCall,
   type MemoryTrace,
 } from '../types/streaming';
@@ -24,7 +24,7 @@ describe('useFeedbackAggregates', () => {
   it('should return neutral sentiment with no votes', () => {
     const messageId = createMessageId('msg-1');
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -69,7 +69,7 @@ describe('useFeedbackAggregates', () => {
       resultContent: 'result2',
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -121,7 +121,7 @@ describe('useFeedbackAggregates', () => {
       relevance: 0.8,
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -170,7 +170,7 @@ describe('useFeedbackAggregates', () => {
       resultContent: 'result',
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -210,7 +210,7 @@ describe('useFeedbackAggregates', () => {
       resultContent: 'result',
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -250,7 +250,7 @@ describe('useFeedbackAggregates', () => {
       resultContent: 'result',
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -277,7 +277,7 @@ describe('useFeedbackAggregates', () => {
     expect(result.current.sentiment).toBe('negative');
   });
 
-  it('should include critical votes in positive count', () => {
+  it('should include critical votes in negative count', () => {
     const messageId = createMessageId('msg-1');
     const toolCall: ToolCall = {
       id: createToolCallId('tool-1'),
@@ -290,7 +290,7 @@ describe('useFeedbackAggregates', () => {
       resultContent: 'result',
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -305,19 +305,19 @@ describe('useFeedbackAggregates', () => {
     useConversationStore.getState().addMessage(message);
     useConversationStore.getState().addToolCall(toolCall);
 
-    // 2 upvotes, 3 critical, 0 downvotes
+    // 1 upvote, 4 critical (counted as negative), 0 downvotes = 20% positive
     useFeedbackStore.getState().setAggregates('tool_use', 'tool-1', {
-      upvotes: 2,
+      upvotes: 1,
       downvotes: 0,
-      special: { critical: 3 },
+      special: { critical: 4 },
     });
 
     const { result } = renderHook(() => useFeedbackAggregates(messageId));
 
-    expect(result.current.toolUseFeedback.critical).toBe(3);
-    expect(result.current.totalPositive).toBe(5); // 2 upvotes + 3 critical
+    expect(result.current.toolUseFeedback.critical).toBe(4);
+    expect(result.current.totalPositive).toBe(1); // only upvotes
     expect(result.current.totalVotes).toBe(5);
-    expect(result.current.sentiment).toBe('positive');
+    expect(result.current.sentiment).toBe('negative'); // 20% positive = negative sentiment
   });
 
   it('should aggregate votes from multiple tool calls and memories', () => {
@@ -339,7 +339,7 @@ describe('useFeedbackAggregates', () => {
       relevance: 0.9,
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -377,7 +377,7 @@ describe('useFeedbackAggregates', () => {
   it('should handle message with no tool calls or memories', () => {
     const messageId = createMessageId('msg-1');
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',
@@ -412,7 +412,7 @@ describe('useFeedbackAggregates', () => {
       resultContent: 'result',
     };
 
-    const message: Message = {
+    const message: NormalizedMessage = {
       id: messageId,
       conversationId: createConversationId('conv-1'),
       role: 'assistant',

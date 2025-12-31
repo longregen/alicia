@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/longregen/alicia/internal/domain/models"
@@ -243,13 +244,8 @@ func (m *MemoryAwareModule) parseGenericExample(content string) (core.Example, b
 
 // updateDemonstrations updates the module's few-shot demonstrations
 func (m *MemoryAwareModule) updateDemonstrations(demos []core.Example) {
-	// Access the underlying Predict module and set demonstrations
-	// This assumes dspy-go's Predict module has a SetDemonstrations method
-	// If not available, we can store demos in the module and inject them during prompt construction
 	if m.Predict != nil {
-		// In dspy-go, demonstrations are typically set via the signature or module config
-		// We'll need to update the module's internal state
-		// For now, this is a placeholder - actual implementation depends on dspy-go's API
+		m.Predict.SetDemos(demos)
 	}
 }
 
@@ -280,7 +276,7 @@ func RankMemoriesByRelevance(
 		// Calculate recency score (newer memories get higher scores)
 		// Exponential decay: score = exp(-days/30)
 		// This gives: 1.0 for today, 0.36 after 30 days, 0.13 after 60 days
-		daysSinceCreation := float32(0) // Placeholder - calculate actual days
+		daysSinceCreation := float32(time.Since(result.Memory.CreatedAt).Hours() / 24)
 		score.RecencyScore = float32(1.0) / (1.0 + daysSinceCreation/30.0)
 
 		// Check category match

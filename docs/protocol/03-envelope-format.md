@@ -11,7 +11,7 @@ The stanza ID identifies the message's position in the conversation sequence and
 - **Client messages**: Start at 1 and increment positively (1, 2, 3, ...)
 - **Server messages**: Start at -1 and decrement negatively (-1, -2, -3, ...)
 
-This bidirectional monotonic ordering enables easy sender identification and maintains sequence within each direction. The server and client reject or ignore messages that violate monotonic ordering (for example, if a client sends a stanzaId that is not greater than all its previously sent IDs).
+This bidirectional monotonic ordering enables easy sender identification and maintains sequence within each direction. The server and client reject or ignore messages that violate monotonic ordering (for example, if a client sends a stanzaId that is not greater than all prior IDs it has sent).
 
 #### `conversationId` (String)
 
@@ -20,13 +20,13 @@ The unique identifier of the conversation to which this message belongs. The con
 - **Multiplexing**: Multiple conversations can exist simultaneously
 - **Resumption**: Clients can reconnect to existing conversations by rejoining the corresponding LiveKit room
 
-For a newly initialized connection, the client leaves this field blank or null to request a new conversation. When resuming an existing conversation, the client sets this to the known conversation ID from a prior session. Once a conversation is established, this field remains constant for all messages in that session.
+For an initial connection, the client leaves this field blank or null to request conversation creation. When resuming an existing conversation, the client sets this to the known conversation ID from a prior session. Once a conversation is established, this field remains constant for all messages in that session.
 
 #### `type` (UInt16)
 
-A numeric code indicating the message type. Each message type in the protocol is assigned a numeric ID (1 through 16, defined in the Message Types section). This field's value corresponds to one of the defined message types. The receiver uses this `type` to determine how to decode and interpret the `body` field.
+A numeric code indicating the message type. Each message type in the protocol is assigned a numeric ID (currently defined types 1-31, with some IDs reserved, as detailed in the Message Types section). This field's value corresponds to one of the defined message types. The receiver uses this `type` to determine how to decode and interpret the `body` field.
 
-On the wire, this is encoded as a small unsigned integer. If a receiver encounters an unknown `type` code, it ignores or safely skips that message, allowing forward compatibility when new message types are added.
+On the wire, this is encoded as a small unsigned integer. If a receiver encounters an unknown `type` code, it ignores or safely skips that message, allowing forward compatibility with additional message types.
 
 #### `meta` (Map)
 
@@ -35,7 +35,7 @@ A container for metadata associated with the message. This is a map/dictionary w
 Common metadata includes:
 
 - `timestamp`: Client message creation time
-- `clientVersion`: Version of the client software
+- `clientVersion`: Client software version string
 - Request context flags
 - OpenTelemetry tracing fields (see below)
 

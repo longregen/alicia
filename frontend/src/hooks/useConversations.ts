@@ -77,7 +77,8 @@ export function useConversations() {
 
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only fetch on mount
 
   return {
     conversations,

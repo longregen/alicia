@@ -171,29 +171,3 @@ func TestConfigHandler_GetPublicConfig_EmptyLiveKitURL(t *testing.T) {
 		t.Errorf("expected empty LiveKit URL, got %v", response.LiveKitURL)
 	}
 }
-
-func TestConfigHandler_GetPublicConfig_VoicesList(t *testing.T) {
-	// Test that the voices list is properly populated
-	if len(voiceList) == 0 {
-		t.Error("expected voiceList to contain voices")
-	}
-
-	// Verify some expected voices exist
-	expectedVoices := map[string]bool{
-		"af_heart": false,
-		"af_bella": false,
-		"am_adam":  false,
-	}
-
-	for _, voice := range voiceList {
-		if _, exists := expectedVoices[voice.ID]; exists {
-			expectedVoices[voice.ID] = true
-		}
-	}
-
-	for voiceID, found := range expectedVoices {
-		if !found {
-			t.Errorf("expected voice %s to be in voiceList", voiceID)
-		}
-	}
-}

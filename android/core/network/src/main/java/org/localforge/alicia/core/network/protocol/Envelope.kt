@@ -39,25 +39,6 @@ data class Envelope(
         const val META_KEY_CLIENT_VERSION = "clientVersion"
         const val META_KEY_TRACE_ID = "messaging.trace_id"
         const val META_KEY_SPAN_ID = "messaging.span_id"
-
-        /**
-         * Create a new envelope with the given parameters
-         */
-        fun create(
-            stanzaId: Int,
-            conversationId: String,
-            type: MessageType,
-            body: Any,
-            meta: Map<String, Any>? = null
-        ): Envelope {
-            return Envelope(
-                stanzaId = stanzaId,
-                conversationId = conversationId,
-                type = type,
-                meta = meta,
-                body = body
-            )
-        }
     }
 
     /**

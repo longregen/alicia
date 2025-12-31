@@ -46,8 +46,8 @@ fun Context.vibrate(durationMs: Long = 50, amplitude: Int = VibrationEffect.DEFA
 }
 
 /**
- * Vibrate with a pattern
- * @param pattern Array of alternating durations of off/on (e.g., [0, 50, 100, 50])
+ * Vibrate with a pattern (plays once, does not repeat)
+ * @param pattern Array of alternating durations in milliseconds of off/on (e.g., [0, 50, 100, 50])
  */
 @RequiresPermission(Manifest.permission.VIBRATE)
 fun Context.vibratePattern(pattern: LongArray) {
@@ -66,17 +66,13 @@ fun Context.vibratePattern(pattern: LongArray) {
 /**
  * Check if a service is running
  *
- * Note: ActivityManager.getRunningServices() is deprecated as of API 26 with no replacement.
- * This method only works reliably for services within the same application.
- * For cross-app service detection, there is no alternative due to privacy restrictions.
- *
- * Since we only need to check our own services, this implementation is acceptable.
+ * Note: ActivityManager.getRunningServices() is deprecated as of API 26 (Android 8.0) with no
+ * replacement. However, it still works reliably for checking services within the same application
+ * (verified up to Android 14).
  */
 fun Context.isServiceRunning(serviceClass: Class<*>): Boolean {
     return try {
         val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        // This deprecated API is the only way to check if a service is running.
-        // It still works for the app's own services as of Android 14.
         @Suppress("DEPRECATION")
         manager.getRunningServices(Integer.MAX_VALUE)
             .any { it.service.className == serviceClass.name }

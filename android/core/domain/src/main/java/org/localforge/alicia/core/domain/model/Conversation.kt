@@ -73,7 +73,7 @@ data class Conversation(
 
     companion object {
         /**
-         * Thread-safe date formatter for conversation timestamps.
+         * Date formatter for conversation timestamps.
          */
         private val dateFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
             .withZone(ZoneId.systemDefault())

@@ -26,12 +26,48 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   // Memoize sorted messages to avoid creating new arrays on every render
-  const messages = useMemo(
-    () => Object.values(messagesMap).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
-    [messagesMap]
-  );
+  // Sort messages using previousId chain for correct conversation order,
+  // falling back to timestamp when no previousId chain exists
+  const messages = useMemo(() => {
+    const messageArray = Object.values(messagesMap);
 
-  // Auto-scroll to bottom when new messages arrive or streaming starts
+    // Build a map for quick lookup
+    const messageById = new Map(messageArray.map(m => [m.id, m]));
+
+    // Track which messages have been positioned
+    const positioned = new Set<string>();
+    const result: typeof messageArray = [];
+
+    // Helper to recursively position a message and all its dependencies
+    const positionMessage = (msg: typeof messageArray[0]): void => {
+      if (positioned.has(msg.id)) return;
+
+      // If this message has a previousId, position that first
+      if (msg.previousId && messageById.has(msg.previousId)) {
+        const prevMsg = messageById.get(msg.previousId)!;
+        positionMessage(prevMsg);
+      }
+
+      // Now position this message
+      if (!positioned.has(msg.id)) {
+        result.push(msg);
+        positioned.add(msg.id);
+      }
+    };
+
+    // First, sort all messages by timestamp as a baseline
+    const sorted = [...messageArray].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    // Then process each message, respecting previousId chains
+    for (const msg of sorted) {
+      positionMessage(msg);
+    }
+
+    return result;
+  }, [messagesMap]);
+
+  // Scroll to bottom when messages change or streaming state changes
+  // Note: This scrolls on any change, not just additions
   useEffect(() => {
     if (virtuosoRef.current) {
       virtuosoRef.current.scrollToIndex({

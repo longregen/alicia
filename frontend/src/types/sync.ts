@@ -1,7 +1,11 @@
 import { Message } from './models';
 
-// Wire format types using camelCase to match Go msgpack serialization
-// The Go backend uses msgpack tags like `msgpack:"syncedMessages"`
+/**
+ * Wire format types using camelCase to match Go msgpack serialization.
+ * The Go backend uses msgpack tags like `msgpack:"syncedMessages"`.
+ * All types in this file use camelCase for network transport,
+ * while database models use snake_case.
+ */
 
 export interface SyncMessageRequest {
   localId: string;
@@ -52,8 +56,11 @@ export interface SyncStatusResponse {
   lastSyncedAt?: string;
 }
 
-// MessageResponse is the wire format for messages (camelCase)
-// This matches the Go msgpack serialization
+/**
+ * MessageResponse is the wire format for messages from the backend.
+ * Uses camelCase to match Go msgpack serialization (e.g., `msgpack:"conversationId"`).
+ * Convert to Message type using messageResponseToMessage() for use in app.
+ */
 export interface MessageResponse {
   id: string;
   conversationId: string;

@@ -33,6 +33,8 @@ type Server struct {
 	memoryService           ports.MemoryService
 	optimizationService     ports.OptimizationService
 	optimizationRepo        ports.PromptOptimizationRepository
+	trainingBuilderService  *services.TrainingSetBuilderService
+	promptVersionService    *services.PromptVersionService
 	liveKitService          ports.LiveKitService
 	idGen                   ports.IDGenerator
 	db                      *pgxpool.Pool
@@ -56,6 +58,8 @@ func NewServer(
 	memoryService ports.MemoryService,
 	optimizationService ports.OptimizationService,
 	optimizationRepo ports.PromptOptimizationRepository,
+	trainingBuilderService *services.TrainingSetBuilderService,
+	promptVersionService *services.PromptVersionService,
 	liveKitService ports.LiveKitService,
 	idGen ports.IDGenerator,
 	db *pgxpool.Pool,
@@ -76,6 +80,8 @@ func NewServer(
 		memoryService:           memoryService,
 		optimizationService:     optimizationService,
 		optimizationRepo:        optimizationRepo,
+		trainingBuilderService:  trainingBuilderService,
+		promptVersionService:    promptVersionService,
 		liveKitService:          liveKitService,
 		idGen:                   idGen,
 		db:                      db,
@@ -141,6 +147,8 @@ func (s *Server) setupRouter() {
 		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.broadcaster, s.wsBroadcaster)
 		r.Get("/conversations/{id}/messages", messagesHandler.List)
 		r.Post("/conversations/{id}/messages", messagesHandler.Send)
+		r.Get("/messages/{id}/siblings", messagesHandler.GetSiblings)
+		r.Post("/conversations/{id}/switch-branch", messagesHandler.SwitchBranch)
 
 		syncHandler := handlers.NewSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.broadcaster)
 		r.Post("/conversations/{id}/sync", syncHandler.SyncMessages)
@@ -182,6 +190,20 @@ func (s *Server) setupRouter() {
 		r.Delete("/memories/{id}/vote", voteHandler.RemoveMemoryVote)
 		r.Get("/memories/{id}/votes", voteHandler.GetMemoryVotes)
 		r.Post("/memories/{id}/irrelevance-reason", voteHandler.MemoryIrrelevanceReason)
+		// Memory usage voting (replaces per-memory voting for selection)
+		r.Route("/memory-usages/{id}", func(r chi.Router) {
+			r.Post("/vote", voteHandler.VoteOnMemoryUsage)
+			r.Delete("/vote", voteHandler.RemoveMemoryUsageVote)
+			r.Get("/votes", voteHandler.GetMemoryUsageVotes)
+			r.Post("/irrelevance-reason", voteHandler.MemoryUsageIrrelevanceReason)
+		})
+		// Memory extraction voting (nested under messages)
+		r.Route("/messages/{messageId}/extracted-memories/{memoryId}", func(r chi.Router) {
+			r.Post("/vote", voteHandler.VoteOnMemoryExtraction)
+			r.Delete("/vote", voteHandler.RemoveMemoryExtractionVote)
+			r.Get("/votes", voteHandler.GetMemoryExtractionVotes)
+			r.Post("/quality-feedback", voteHandler.MemoryExtractionQualityFeedback)
+		})
 		// Reasoning voting
 		r.Post("/reasoning/{id}/vote", voteHandler.VoteOnReasoning)
 		r.Delete("/reasoning/{id}/vote", voteHandler.RemoveReasoningVote)
@@ -233,8 +255,13 @@ func (s *Server) setupRouter() {
 
 			// Optimization progress streaming
 			if s.optimizationRepo != nil {
-				streamHandler := handlers.NewOptimizationStreamHandler(s.optimizationService, s.optimizationRepo)
-				r.Get("/optimizations/{id}/stream", streamHandler.StreamOptimizationProgress)
+				// Cast to concrete type to access progress channel methods
+				if concreteOptService, ok := s.optimizationService.(*services.OptimizationService); ok {
+					streamHandler := handlers.NewOptimizationStreamHandler(concreteOptService)
+					r.Get("/optimizations/{id}/stream", streamHandler.StreamOptimizationProgress)
+				} else {
+					log.Printf("Warning: optimization service is not *services.OptimizationService, SSE streaming disabled")
+				}
 			}
 
 			// Feedback integration endpoints
@@ -250,6 +277,29 @@ func (s *Server) setupRouter() {
 			r.Get("/deployments/{prompt_type}/active", deploymentHandler.GetActiveDeployment)
 			r.Get("/deployments/{prompt_type}/history", deploymentHandler.ListDeploymentHistory)
 			r.Delete("/deployments/{run_id}", deploymentHandler.RollbackDeployment)
+		}
+
+		// Training and prompt version endpoints (Phase 8)
+		if s.trainingBuilderService != nil && s.optimizationService != nil && s.promptVersionService != nil {
+			// Type assert optimizationService to concrete type for TrainingHandler
+			optService, ok := s.optimizationService.(*services.OptimizationService)
+			if ok {
+				trainingHandler := handlers.NewTrainingHandler(
+					s.trainingBuilderService,
+					optService,
+					s.promptVersionService,
+				)
+
+				r.Route("/training", func(r chi.Router) {
+					r.Get("/stats", trainingHandler.GetTrainingStats)
+					r.Post("/optimize", trainingHandler.RunOptimization)
+				})
+
+				r.Route("/prompts", func(r chi.Router) {
+					r.Get("/versions", trainingHandler.ListPromptVersions)
+					r.Post("/versions/{id}/activate", trainingHandler.ActivatePromptVersion)
+				})
+			}
 		}
 	})
 

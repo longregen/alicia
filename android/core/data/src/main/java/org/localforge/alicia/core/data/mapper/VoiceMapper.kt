@@ -6,6 +6,8 @@ import org.localforge.alicia.core.network.model.VoiceResponse
 
 /**
  * Convert VoiceResponse to Voice domain model.
+ *
+ * Note: VoiceResponse.style is mapped to Voice.description field.
  */
 fun VoiceResponse.toDomain(): Voice {
     return Voice(
@@ -13,7 +15,6 @@ fun VoiceResponse.toDomain(): Voice {
         name = name,
         language = language,
         gender = parseGender(gender ?: "neutral"),
-        // Map VoiceResponse.style to Voice.description field
         description = style
     )
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -40,36 +39,6 @@ func (m *mockTTSAdapterForHandler) GetDefaultVoice() string {
 }
 
 // Tests for TTSHandler.Speech
-
-func TestTTSHandler_Speech_Success(t *testing.T) {
-	mockAdapter := &mockTTSAdapterForHandler{}
-	handler := NewTTSHandler((*speech.TTSAdapter)(nil))
-
-	body := `{"model": "tts-1", "input": "Hello world", "voice": "af_heart"}`
-	req := httptest.NewRequest("POST", "/v1/audio/speech", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-
-	// We can't easily test the actual handler without mocking internals,
-	// but we can test the request parsing
-	var ttsReq TTSRequest
-	if err := json.NewDecoder(bytes.NewBufferString(body)).Decode(&ttsReq); err != nil {
-		t.Fatalf("failed to decode request: %v", err)
-	}
-
-	if ttsReq.Input != "Hello world" {
-		t.Errorf("expected input 'Hello world', got %v", ttsReq.Input)
-	}
-
-	if ttsReq.Voice != "af_heart" {
-		t.Errorf("expected voice 'af_heart', got %v", ttsReq.Voice)
-	}
-
-	_ = mockAdapter
-	_ = handler
-	_ = rr
-}
 
 func TestTTSHandler_Speech_EmptyInput(t *testing.T) {
 	mockAdapter := &mockTTSAdapterForHandler{}
@@ -141,56 +110,6 @@ func TestTTSHandler_Speech_CustomSpeed(t *testing.T) {
 	}
 }
 
-func TestTTSHandler_Speech_AllOutputFormats(t *testing.T) {
-	formats := []struct {
-		format      string
-		contentType string
-	}{
-		{"mp3", "audio/mpeg"},
-		{"opus", "audio/opus"},
-		{"aac", "audio/aac"},
-		{"flac", "audio/flac"},
-		{"wav", "audio/wav"},
-		{"pcm", "audio/pcm"},
-	}
-
-	for _, tc := range formats {
-		t.Run(tc.format, func(t *testing.T) {
-			// Test content type mapping logic
-			contentType := "audio/mpeg" // default
-			switch tc.format {
-			case "opus":
-				contentType = "audio/opus"
-			case "aac":
-				contentType = "audio/aac"
-			case "flac":
-				contentType = "audio/flac"
-			case "wav":
-				contentType = "audio/wav"
-			case "pcm":
-				contentType = "audio/pcm"
-			}
-
-			if contentType != tc.contentType {
-				t.Errorf("expected content type %v for format %v, got %v", tc.contentType, tc.format, contentType)
-			}
-		})
-	}
-}
-
-func TestTTSHandler_Speech_SynthesizeError(t *testing.T) {
-	// This test verifies error handling logic conceptually
-	synthesizeErr := errors.New("synthesis failed")
-
-	if synthesizeErr == nil {
-		t.Error("expected synthesis error to be non-nil")
-	}
-
-	if synthesizeErr.Error() != "synthesis failed" {
-		t.Errorf("expected error message 'synthesis failed', got %v", synthesizeErr.Error())
-	}
-}
-
 func TestTTSHandler_Speech_RequestBodySizeLimit(t *testing.T) {
 	handler := NewTTSHandler((*speech.TTSAdapter)(nil))
 
@@ -238,35 +157,4 @@ func TestTTSHandler_Speech_NilAdapter(t *testing.T) {
 	}()
 
 	handler.Speech(rr, req)
-}
-
-func TestTTSRequest_Structure(t *testing.T) {
-	// Test that TTSRequest structure matches OpenAI format
-	req := TTSRequest{
-		Model:          "tts-1",
-		Input:          "Hello world",
-		Voice:          "af_heart",
-		ResponseFormat: "mp3",
-		Speed:          1.0,
-	}
-
-	if req.Model != "tts-1" {
-		t.Errorf("expected model 'tts-1', got %v", req.Model)
-	}
-
-	if req.Input != "Hello world" {
-		t.Errorf("expected input 'Hello world', got %v", req.Input)
-	}
-
-	if req.Voice != "af_heart" {
-		t.Errorf("expected voice 'af_heart', got %v", req.Voice)
-	}
-
-	if req.ResponseFormat != "mp3" {
-		t.Errorf("expected response_format 'mp3', got %v", req.ResponseFormat)
-	}
-
-	if req.Speed != 1.0 {
-		t.Errorf("expected speed 1.0, got %v", req.Speed)
-	}
 }

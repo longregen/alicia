@@ -106,9 +106,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
   const [audioState, setAudioState] = useState<AudioState>(AUDIO_STATES.IDLE);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
-  // Don't separate audio addons - treat them like any other addon
-  // const audioAddon = addons.find(addon => addon.type === 'audio');
-  // const nonAudioAddons = addons.filter(addon => addon.type !== 'audio');
+  // Audio addons are handled with special rendering in the renderAddon function below
 
   // Mock audio duration - in a real app this would come from the audio file
   const audioDuration = 45; // seconds

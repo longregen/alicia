@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
 	"github.com/longregen/alicia/internal/domain/models"
@@ -47,6 +48,31 @@ type NoteResponse struct {
 type NoteListResponse struct {
 	Notes []NoteResponse `json:"notes"`
 	Total int            `json:"total"`
+}
+
+// inferTargetType infers the target type from the ID prefix
+func inferTargetType(id string) string {
+	if len(id) < 3 {
+		return "message"
+	}
+
+	// Extract prefix (everything before first underscore)
+	parts := strings.SplitN(id, "_", 2)
+	if len(parts) < 2 {
+		return "message"
+	}
+
+	prefix := parts[0]
+	switch prefix {
+	case "am":
+		return "message"
+	case "atu":
+		return "tool_use"
+	case "ar":
+		return "reasoning"
+	default:
+		return "message"
+	}
 }
 
 // toNoteResponse converts a domain Note to a NoteResponse
@@ -309,7 +335,9 @@ func (h *NoteHandler) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := toNoteResponse(note, "message")
+	// Infer target type from the note's message_id (which contains the target ID)
+	targetType := inferTargetType(note.MessageID)
+	response := toNoteResponse(note, targetType)
 	respondJSON(w, response, http.StatusOK)
 }
 

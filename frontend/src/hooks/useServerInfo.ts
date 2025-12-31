@@ -90,6 +90,7 @@ export function useServerInfo() {
   );
 
   // Computed: formatted session duration
+  // Note: Duplicated in useSessionStats hook. Intentional to keep hooks independent.
   const formattedSessionDuration = useMemo(() => {
     const { sessionDuration } = sessionStats;
     if (sessionDuration < 60) {

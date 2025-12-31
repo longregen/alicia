@@ -155,6 +155,53 @@ func (m *mockMessageRepo) GetIncompleteByConversation(ctx context.Context, conve
 	return messages, nil
 }
 
+func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	// Simple implementation: return message chain by following PreviousID
+	var chain []*models.Message
+	currentID := tipMessageID
+
+	for currentID != "" {
+		msg, ok := m.store[currentID]
+		if !ok {
+			break
+		}
+		chain = append([]*models.Message{m.copyMessage(msg)}, chain...)
+		if msg.PreviousID == "" {
+			break
+		}
+		currentID = msg.PreviousID
+	}
+
+	return chain, nil
+}
+
+func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	msg, ok := m.store[messageID]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+
+	// Find all messages with the same PreviousID
+	var siblings []*models.Message
+	for _, m := range m.store {
+		if msg.PreviousID == "" && m.PreviousID == "" {
+			if m.ID != messageID && m.ConversationID == msg.ConversationID {
+				siblings = append(siblings, m)
+			}
+		} else if msg.PreviousID != "" && m.PreviousID != "" && m.PreviousID == msg.PreviousID {
+			if m.ID != messageID {
+				siblings = append(siblings, m)
+			}
+		}
+	}
+
+	return siblings, nil
+}
+
 type mockSentenceRepo struct {
 	mu    sync.RWMutex
 	store map[string]*models.Sentence
@@ -464,6 +511,22 @@ func (m *mockConversationRepo) ListByUserID(ctx context.Context, userID string, 
 
 func (m *mockConversationRepo) ListActiveByUserID(ctx context.Context, userID string, limit, offset int) ([]*models.Conversation, error) {
 	return []*models.Conversation{}, nil
+}
+
+func (m *mockConversationRepo) UpdateTip(ctx context.Context, conversationID, messageID string) error {
+	if c, ok := m.store[conversationID]; ok {
+		c.TipMessageID = &messageID
+		return nil
+	}
+	return errors.New("not found")
+}
+
+func (m *mockConversationRepo) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
+	if c, ok := m.store[convID]; ok {
+		c.SystemPromptVersionID = versionID
+		return nil
+	}
+	return errors.New("not found")
 }
 
 type mockLLMService struct {
@@ -831,6 +894,14 @@ func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
 	return "ape_test1"
 }
 
+func (m *mockIDGenerator) GenerateTrainingExampleID() string {
+	return "gte_test1"
+}
+
+func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
+	return "spv_test1"
+}
+
 type mockTransactionManager struct{}
 
 func (m *mockTransactionManager) WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error {
@@ -851,6 +922,10 @@ func TestGenerateResponse_BasicNonStreaming(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	uc := NewGenerateResponse(
 		msgRepo,
 		sentRepo,
@@ -861,6 +936,7 @@ func TestGenerateResponse_BasicNonStreaming(t *testing.T) {
 		llmService,
 		toolService,
 		nil, // No memory service
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -913,6 +989,10 @@ func TestGenerateResponse_WithReasoning(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	// Configure LLM to return reasoning
 	llmService.chatResponse = &ports.LLMResponse{
 		Content:   "Response with reasoning",
@@ -929,6 +1009,7 @@ func TestGenerateResponse_WithReasoning(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -974,6 +1055,10 @@ func TestGenerateResponse_WithMemoryRetrieval(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	// Create a user message
 	userMsg := models.NewMessage("user_msg_1", "conv_123", 0, models.MessageRoleUser, "What's my favorite color?")
 	msgRepo.Create(context.Background(), userMsg)
@@ -1011,6 +1096,7 @@ func TestGenerateResponse_WithMemoryRetrieval(t *testing.T) {
 		llmService,
 		toolService,
 		memoryService,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -1046,6 +1132,10 @@ func TestGenerateResponse_WithToolExecution(t *testing.T) {
 	toolService := newMockToolService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
+
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
 
 	// Create a tool
 	tool := models.NewTool("tool_1", "calculator", "Calculate numbers", map[string]any{})
@@ -1093,6 +1183,7 @@ func TestGenerateResponse_WithToolExecution(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -1130,6 +1221,10 @@ func TestGenerateResponse_LLMError(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	llmService.chatError = errors.New("LLM service unavailable")
 
 	uc := NewGenerateResponse(
@@ -1142,6 +1237,7 @@ func TestGenerateResponse_LLMError(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -1169,6 +1265,10 @@ func TestGenerateResponse_ToolExecutionError(t *testing.T) {
 	toolService := newMockToolService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
+
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
 
 	// Create a tool
 	tool := models.NewTool("tool_1", "faulty_tool", "A tool that fails", map[string]any{})
@@ -1208,6 +1308,7 @@ func TestGenerateResponse_ToolExecutionError(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -1246,6 +1347,10 @@ func TestGenerateResponse_StreamingMode(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	// Configure streaming channel
 	streamCh := make(chan ports.LLMStreamChunk, 10)
 	llmService.streamChannel = streamCh
@@ -1267,6 +1372,7 @@ func TestGenerateResponse_StreamingMode(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -1333,6 +1439,10 @@ func TestGenerateResponse_StreamingError(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	llmService.streamError = errors.New("streaming failed")
 
 	uc := NewGenerateResponse(
@@ -1345,6 +1455,7 @@ func TestGenerateResponse_StreamingError(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)
@@ -1373,6 +1484,10 @@ func TestGenerateResponse_WithPreGeneratedMessageID(t *testing.T) {
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation first
+	conv := models.NewConversation("conv_123", "", "")
+	convRepo.Create(context.Background(), conv)
+
 	uc := NewGenerateResponse(
 		msgRepo,
 		sentRepo,
@@ -1383,6 +1498,7 @@ func TestGenerateResponse_WithPreGeneratedMessageID(t *testing.T) {
 		llmService,
 		toolService,
 		nil,
+		nil, // No prompt version service
 		idGen,
 		txManager,
 	)

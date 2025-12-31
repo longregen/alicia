@@ -84,7 +84,7 @@ export function DimensionScoresChart({ scores, weights, compact }: DimensionScor
         })}
       </div>
 
-      {/* Radar chart visualization would go here in a production implementation */}
+      {/* TODO: Implement radar chart visualization (requires recharts or d3) */}
       <div className="text-center py-10 bg-surface rounded text-muted">
         <p>Radar chart visualization (requires chart library like recharts or d3)</p>
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 import type { SyncStatus } from '../../types/models';
 
 const syncStatusBadgeVariants = cva(
@@ -60,7 +60,7 @@ const SyncStatusBadge = React.forwardRef<HTMLSpanElement, SyncStatusBadgeProps>(
     return (
       <span
         ref={ref}
-        className={cn(syncStatusBadgeVariants({ status }), className)}
+        className={cls(syncStatusBadgeVariants({ status }), className)}
         {...props}
       >
         {statusIcons[status]}

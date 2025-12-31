@@ -7,10 +7,9 @@ import com.squareup.moshi.JsonClass
  * Response model for message data from the API
  *
  * @property sequenceNumber The position of this message in the conversation sequence (0-based).
- * @property previousId The ID of the previous message in the sequence. Null for the first message
- *                      in a conversation (when sequenceNumber is 0). When null, this message
- *                      starts a new sequence chain. All subsequent messages will reference their
- *                      predecessor via this field to maintain message ordering.
+ * @property previousId The ID of the previous message in the sequence. Typically null for
+ *                      the first message in a conversation. When null, this message starts
+ *                      a new sequence chain.
  */
 @JsonClass(generateAdapter = true)
 data class MessageResponse(

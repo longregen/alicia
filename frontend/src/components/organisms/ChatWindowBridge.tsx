@@ -6,7 +6,7 @@ import {
   createMessageId,
   createConversationId,
   MessageStatus,
-  Message as StreamingMessage,
+  NormalizedMessage,
 } from '../../types/streaming';
 import { Message } from '../../types/models';
 
@@ -32,7 +32,7 @@ export interface ChatWindowBridgeProps {
 /**
  * Convert legacy Message to new streaming Message format
  */
-function convertToStreamingMessage(legacyMessage: Message): StreamingMessage {
+function convertToStreamingMessage(legacyMessage: Message): NormalizedMessage {
   return {
     id: createMessageId(legacyMessage.id),
     conversationId: createConversationId(legacyMessage.conversation_id),
@@ -55,7 +55,7 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   conversationId,
   syncError = null,
 }) => {
-  const loadConversation = useConversationStore((state) => state.loadConversation);
+  const mergeMessages = useConversationStore((state) => state.mergeMessages);
   const setConnectionStatus = useConnectionStore((state) => state.setConnectionStatus);
   const setError = useConnectionStore((state) => state.setError);
 
@@ -63,9 +63,9 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   useEffect(() => {
     if (conversationId && messages) {
       const streamingMessages = messages.map(convertToStreamingMessage);
-      loadConversation(createConversationId(conversationId), streamingMessages);
+      mergeMessages(createConversationId(conversationId), streamingMessages);
     }
-  }, [conversationId, messages, loadConversation]);
+  }, [conversationId, messages, mergeMessages]);
 
   // Synchronize connection state to connectionStore
   // Skip in E2E tests where connection is mocked
@@ -89,8 +89,8 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   }, [loading, sending, syncError, conversationId, setConnectionStatus, setError]);
 
   // Handle message sending - bridge to legacy callback
+  // Legacy handler doesn't support voice flag - parameter prefixed with underscore
   const handleSendMessage = (message: string, _isVoice: boolean) => {
-    // For now, ignore isVoice flag since legacy handler doesn't use it
     onSendMessage(message);
   };
 

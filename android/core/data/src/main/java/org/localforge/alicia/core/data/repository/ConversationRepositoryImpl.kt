@@ -131,7 +131,8 @@ class ConversationRepositoryImpl @Inject constructor(
             try {
                 apiService.deleteConversation(conversationId)
             } catch (e: Exception) {
-                // Ignore network errors, proceed with local deletion
+                // Network errors are expected in offline-first mode; log and proceed with local deletion
+                logger.w("Failed to delete conversation $conversationId from server, proceeding with local deletion", e)
             }
 
             // Delete from local database (cascade will delete messages too)
@@ -292,7 +293,7 @@ class ConversationRepositoryImpl @Inject constructor(
     // ========== Search Operations ==========
 
     /**
-     * Search messages across all conversations.
+     * Search messages across all conversations using database query. See MessageDao.searchMessages() for search implementation details.
      */
     override fun searchMessages(query: String): Flow<List<Message>> {
         return messageDao.searchMessages(query)
@@ -303,7 +304,7 @@ class ConversationRepositoryImpl @Inject constructor(
         conversationId: String,
         query: String
     ): Flow<List<Message>> {
-        // Filters messages by substring match (case-insensitive)
+        // Client-side filter: searches messages by substring match (case-insensitive). Unlike searchMessages(), this filters in-memory rather than using a database query.
         return messageDao.getMessagesForConversation(conversationId)
             .map { entities ->
                 entities.filter { it.content.contains(query, ignoreCase = true) }
@@ -480,6 +481,7 @@ class ConversationRepositoryImpl @Inject constructor(
                         "local-only" -> {
                             // Message exists only locally, keep pending status
                             // No action needed - will be synced in next round
+                            logger.d("Message ${syncedMessage.localId} exists only locally, keeping pending status for next sync")
                         }
                     }
                 }

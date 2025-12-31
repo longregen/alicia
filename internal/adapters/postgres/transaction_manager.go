@@ -31,25 +31,19 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(ctx c
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// Check if we're already in a transaction
 	if GetTx(ctx) != nil {
-		// Nested transaction - just execute the function
 		return fn(ctx)
 	}
 
-	// Begin a new transaction
 	tx, err := tm.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	// Add transaction to context
 	txCtx := context.WithValue(ctx, txKey, tx)
 
-	// Ensure rollback on panic
 	defer func() {
 		if r := recover(); r != nil {
-			// Rollback on panic
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
 				err = fmt.Errorf("panic recovered: %v, rollback error: %w", r, rbErr)
 			} else {
@@ -58,17 +52,14 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(ctx c
 		}
 	}()
 
-	// Execute the function
 	err = fn(txCtx)
 	if err != nil {
-		// Rollback on error
 		if rbErr := tx.Rollback(ctx); rbErr != nil {
 			return fmt.Errorf("transaction error: %v, rollback error: %w", err, rbErr)
 		}
 		return err
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}

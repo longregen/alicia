@@ -52,7 +52,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ className = '' }) =
   return (
     <ChatBubble
       type={MESSAGE_TYPES.ASSISTANT}
-      content=""
+      content=""  // Empty for streaming - actual content comes via streamingText prop
       state={MESSAGE_STATES.STREAMING}
       timestamp={streamingMessage.createdAt}
       streamingText={streamingText}

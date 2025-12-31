@@ -59,7 +59,8 @@ data class ReasoningStep(
  * @property conversationId The conversation context
  * @property toolName Name of the tool to execute
  * @property parameters Input parameters for the tool
- * @property execution Expected values: 'server', 'client', or 'either'. No compile-time validation - ensure correct values are passed.
+ * @property execution Expected values: 'server', 'client', or 'either'.
+ * TODO: Replace with enum for type safety. Currently a String for MessagePack compatibility.
  * @property timeoutMs Optional timeout in milliseconds
  */
 data class ToolUseRequest(

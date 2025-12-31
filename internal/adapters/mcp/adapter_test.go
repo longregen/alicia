@@ -350,6 +350,16 @@ func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
 	return "ape_test"
 }
 
+func (m *mockIDGenerator) GenerateTrainingExampleID() string {
+	m.counter++
+	return "gte_test"
+}
+
+func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
+	m.counter++
+	return "spv_test"
+}
+
 // Helper to create a pre-initialized mock client
 func createMockClient(tools []Tool, callResult *ToolsCallResult, callErr error) *Client {
 	transport := newMockTransport()

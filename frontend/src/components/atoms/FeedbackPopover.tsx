@@ -4,7 +4,7 @@ import { RadioGroup, RadioGroupItem } from './RadioGroup';
 import { Textarea } from './Textarea';
 import { Label } from './Label';
 import Button from './Button';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 
 /**
  * FeedbackPopover atom component for collecting detailed feedback.
@@ -80,7 +80,7 @@ const FeedbackPopover: React.FC<FeedbackPopoverProps> = ({
         {variant === 'icon' ? (
           <button
             aria-label="Give feedback"
-            className={cn(
+            className={cls(
               'flex items-center justify-center rounded-md transition-colors',
               'text-muted hover:text-default hover:bg-accent',
               'size-8',

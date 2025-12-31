@@ -70,7 +70,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val voiceRepository: VoiceRepository,
     private val conversationRepository: ConversationRepository
-    // TODO: Add liveKitManager when needed for connection testing or WebRTC features
+    // LiveKitManager is not injected here as voice features are handled by VoiceController
 ) : ViewModel() {
 
     private val _settings = MutableStateFlow(AppSettings())
@@ -82,7 +82,8 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Loads settings from repository and combines them into the UI state.
-     * Connection status (isConnected, lastConnectionCheck) is updated only via testConnection(), not during initial load.
+     * Connection status is intentionally ephemeral - always starts disconnected.
+     * Use testConnection() to verify server connectivity.
      */
     private fun loadSettings() {
         viewModelScope.launch {
@@ -210,7 +211,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Sets the voice for text-to-speech.
+     * Sets the voice for text-to-speech in the voice repository.
      *
      * @param voiceId The voice identifier to set
      */

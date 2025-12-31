@@ -1,5 +1,11 @@
-// Protocol types for Alicia real-time binary protocol
-// Based on backend protocol in pkg/protocol/
+/**
+ * Protocol types for Alicia real-time binary protocol.
+ * Based on backend protocol in pkg/protocol/.
+ *
+ * IMPORTANT: Keep this file in sync with the Go backend protocol definitions.
+ * Any changes to message types, enums, or structures must be coordinated
+ * with the backend team to maintain protocol compatibility.
+ */
 
 export enum MessageType {
   ErrorMessage = 1,
@@ -47,6 +53,18 @@ export type StopType = 'generation' | 'speech' | 'all';
 export type ToolExecution = 'server' | 'client' | 'either';
 export type AnswerType = 'text' | 'voice' | 'text+voice';
 export type VariationType = 'regenerate' | 'edit' | 'continue';
+
+/**
+ * ToolCall discriminated union for tool use requests.
+ * Use the `status` field to discriminate between states:
+ * - 'pending': Tool call queued but not started
+ * - 'executing': Tool call currently running
+ * - 'success': Tool call completed successfully (includes resultContent)
+ * - 'error': Tool call failed (includes error message)
+ *
+ * This type is used in streaming.ts for normalized store state.
+ * For protocol messages, see ToolUseRequest and ToolUseResult.
+ */
 
 // Envelope wraps all protocol messages
 export interface Envelope {
@@ -178,6 +196,7 @@ export interface MemoryTrace {
   memoryId: string;
   content: string;
   relevance: number;
+  source?: string;
 }
 
 export interface Commentary {
@@ -189,6 +208,7 @@ export interface Commentary {
 }
 
 export interface AssistantSentence {
+  /** Optional ID - may be undefined for in-progress streaming sentences that haven't been assigned an ID yet */
   id?: string;
   previousId: string;
   conversationId: string;
@@ -279,6 +299,7 @@ export interface ModelInfo {
   provider: string;
 }
 
+// Note: MCPServerStatus also defined in mcp.ts - import from there for MCP-specific usage
 export type MCPServerStatus = 'connected' | 'disconnected' | 'error';
 
 export interface MCPServerInfo {

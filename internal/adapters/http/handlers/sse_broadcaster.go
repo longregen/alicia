@@ -123,6 +123,51 @@ func (b *SSEBroadcaster) BroadcastSyncEvent(conversationID string) {
 	}
 }
 
+// BroadcastErrorEvent sends an error event to all subscribers of a conversation
+func (b *SSEBroadcaster) BroadcastErrorEvent(conversationID string, code string, message string) {
+	b.mu.RLock()
+	connections, exists := b.connections[conversationID]
+	b.mu.RUnlock()
+
+	if !exists || len(connections) == 0 {
+		return
+	}
+
+	// Create error event data
+	eventData := map[string]interface{}{
+		"type": "error",
+		"error": map[string]string{
+			"code":    code,
+			"message": message,
+		},
+	}
+
+	jsonData, err := json.Marshal(eventData)
+	if err != nil {
+		log.Printf("SSE: Failed to marshal error event: %v", err)
+		return
+	}
+
+	// Format as SSE event
+	event := fmt.Sprintf("data: %s\n\n", string(jsonData))
+
+	// Broadcast to all connections (non-blocking)
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	for ch := range connections {
+		select {
+		case ch <- event:
+			// Event sent successfully
+		default:
+			// Channel buffer full, skip this client
+			log.Printf("SSE: Channel buffer full for conversation %s", conversationID)
+		}
+	}
+
+	log.Printf("SSE: Broadcasted error to %d clients for conversation %s", len(connections), conversationID)
+}
+
 // GetConnectionCount returns the number of active connections for a conversation
 func (b *SSEBroadcaster) GetConnectionCount(conversationID string) int {
 	b.mu.RLock()

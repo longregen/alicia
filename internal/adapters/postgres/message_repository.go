@@ -288,7 +288,6 @@ func (r *MessageRepository) GetByLocalID(ctx context.Context, localID string) (*
 	return r.scanMessage(r.conn(ctx).QueryRow(ctx, query, localID))
 }
 
-// scanMessage scans a single message row
 func (r *MessageRepository) scanMessage(row pgx.Row) (*models.Message, error) {
 	var m models.Message
 	var previousID, localID, serverID sql.NullString
@@ -408,6 +407,80 @@ func (r *MessageRepository) GetIncompleteByConversation(ctx context.Context, con
 		ORDER BY created_at ASC`
 
 	rows, err := r.conn(ctx).Query(ctx, query, conversationID, olderThan)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanMessages(rows)
+}
+
+// GetChainFromTip walks backwards from the tip message via previous_id and returns messages in chronological order
+func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	// Use recursive CTE to walk the chain backwards, then reverse the order
+	query := `
+		WITH RECURSIVE message_chain AS (
+			-- Base case: start with the tip message
+			SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
+			       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at,
+			       1 as depth
+			FROM alicia_messages
+			WHERE id = $1 AND deleted_at IS NULL
+
+			UNION ALL
+
+			-- Recursive case: follow previous_id backwards
+			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
+			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.created_at, m.updated_at, m.deleted_at,
+			       mc.depth + 1
+			FROM alicia_messages m
+			INNER JOIN message_chain mc ON m.id = mc.previous_id
+			WHERE m.deleted_at IS NULL
+		)
+		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
+		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		FROM message_chain
+		ORDER BY depth DESC`
+
+	rows, err := r.conn(ctx).Query(ctx, query, tipMessageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanMessages(rows)
+}
+
+// GetSiblings returns all messages that share the same previous_id (i.e., branches from the same parent)
+func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	// First get the previous_id of the given message
+	var previousID sql.NullString
+	queryPrevious := `SELECT previous_id FROM alicia_messages WHERE id = $1 AND deleted_at IS NULL`
+	err := r.conn(ctx).QueryRow(ctx, queryPrevious, messageID).Scan(&previousID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no previous_id, there are no siblings (this is a root message)
+	if !previousID.Valid {
+		return []*models.Message{}, nil
+	}
+
+	// Get all messages with the same previous_id
+	query := `
+		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
+		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		FROM alicia_messages
+		WHERE previous_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at ASC`
+
+	rows, err := r.conn(ctx).Query(ctx, query, previousID.String)
 	if err != nil {
 		return nil, err
 	}

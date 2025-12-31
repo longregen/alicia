@@ -180,7 +180,7 @@ class VoiceController @Inject constructor(
         }
 
         try {
-            val envelope = Envelope.create(
+            val envelope = Envelope(
                 stanzaId = generateClientStanzaId(),
                 conversationId = conversationId,
                 type = MessageType.CONTROL_STOP,
@@ -209,7 +209,7 @@ class VoiceController @Inject constructor(
         }
 
         try {
-            val envelope = Envelope.create(
+            val envelope = Envelope(
                 stanzaId = generateClientStanzaId(),
                 conversationId = conversationId,
                 type = MessageType.CONTROL_VARIATION,
@@ -300,8 +300,6 @@ class VoiceController @Inject constructor(
         updateState(VoiceState.Listening)
 
         // Set up callbacks before connecting
-        // Note: Audio playback is handled automatically by LiveKit SDK when tracks are subscribed
-
         // Handle protocol messages
         liveKitManager.onDataReceived { envelope ->
             controllerScope.launch {
@@ -335,8 +333,8 @@ class VoiceController @Inject constructor(
 
             Timber.i("Connecting to LiveKit: url=$liveKitUrl, room=${tokenResponse.roomName}")
 
-            // Connect to LiveKit with real token
-            liveKitManager.connect(liveKitUrl, tokenResponse.token, tokenResponse.roomName)
+            // Connect to LiveKit with real token (room name is encoded in the token)
+            liveKitManager.connect(liveKitUrl, tokenResponse.token)
 
             // LiveKit automatically handles audio capture and publishing
             // Start silence detection
