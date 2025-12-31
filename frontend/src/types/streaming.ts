@@ -100,23 +100,25 @@ export interface MemoryTrace {
 }
 
 // Message structure for normalized store
-export interface Message {
+// Uses snake_case for sync_status to maintain database schema compatibility
+export interface NormalizedMessage {
   id: MessageId;
   conversationId: ConversationId;
   role: 'user' | 'assistant' | 'system';
   content: string;
   status: MessageStatus;
   createdAt: Date;
+  previousId?: MessageId; // Optional link to previous message in conversation chain
   sentenceIds: SentenceId[];
   toolCallIds: ToolCallId[];
   memoryTraceIds: MemoryTraceId[];
-  sync_status?: 'pending' | 'synced' | 'conflict';
+  sync_status?: 'pending' | 'synced' | 'conflict'; // snake_case for database compatibility
 }
 
 // Normalized conversation store state
 export interface ConversationStoreState {
   // Normalized entities
-  messages: Record<string, Message>;
+  messages: Record<string, NormalizedMessage>;
   sentences: Record<string, MessageSentence>;
   toolCalls: Record<string, ToolCall>;
   audioRefs: Record<string, AudioRef>;

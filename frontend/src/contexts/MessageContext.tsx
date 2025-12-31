@@ -23,7 +23,7 @@ export interface ToolUsage {
 }
 
 interface MessageContextType {
-  // Streaming state (for LiveKit)
+  // Streaming state (used for real-time message streaming from any source)
   streamingMessages: Map<string, string>; // sentence sequence -> content
   currentTranscription: string;
   isGenerating: boolean;
@@ -37,19 +37,19 @@ interface MessageContextType {
   commentaries: Commentary[];
   acknowledgements: Acknowledgement[];
 
-  // Compatibility - empty messages array for components that still need it
+  // Legacy compatibility field - always empty, use store for actual messages
   messages: never[];
 
-  // Streaming actions (for LiveKit)
+  // Streaming actions
   updateStreamingSentence: (sequence: number, content: string) => void;
   clearStreamingSentences: () => void;
-  finalizeStreamingMessage: (message: unknown) => void; // For LiveKit compatibility
+  finalizeStreamingMessage: (message: unknown) => void; // Streaming finalization handler
 
-  // Message actions (for LiveKit compatibility)
-  addMessage: (message: unknown) => void;
+  // Message actions
+  addMessage: (message: unknown) => void; // Message addition handler
 
   // Transcription actions
-  setTranscription: (text: string) => void;
+  setTranscription: (text: string) => void; // Transcription handler
   clearTranscription: () => void;
 
   // Generation state actions
@@ -95,15 +95,16 @@ export function MessageProvider({ children }: { children: ReactNode }) {
     setStreamingMessages(new Map());
   }, []);
 
+  // No-op: Message operations are handled by the store, not context
+  // These exist for interface compatibility with legacy components
   const finalizeStreamingMessage = useCallback((_message: unknown) => {
-    // No-op for now - messages are handled by useMessages hook
     clearStreamingSentences();
     setIsGeneratingState(false);
     setCurrentGeneratingMessageId(null);
   }, [clearStreamingSentences]);
 
   const addMessage = useCallback((_message: unknown) => {
-    // No-op for now - messages are handled by useMessages hook
+    // No-op
   }, []);
 
   const setTranscription = useCallback((text: string) => {

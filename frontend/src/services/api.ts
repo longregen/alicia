@@ -75,6 +75,7 @@ export const api = {
     const response = await fetchWithErrorHandling(`${API_BASE}/conversations/${id}`, {
       method: 'DELETE',
     });
+    // Exception to standard error handling: void return requires manual check
     if (!response.ok) {
       const errorMessage = await response.text();
       throw new Error(errorMessage || `Failed to delete conversation: ${response.status}`);
@@ -108,7 +109,7 @@ export const api = {
 
   // LiveKit
   async getLiveKitToken(conversationId: string, participantName?: string): Promise<string> {
-    // Use persistent device ID instead of random ID
+    // Create stable participant ID using persistent device ID (format: user_{deviceId})
     const deviceId = getDeviceId();
     const participantId = `user_${deviceId}`;
 
@@ -250,6 +251,68 @@ export const api = {
 
   async getMemoryVotes(memoryId: string): Promise<VoteResponse> {
     const response = await fetchWithErrorHandling(`${API_BASE}/memories/${memoryId}/votes`);
+    return handleResponse<VoteResponse>(response);
+  },
+
+  // Memory usage voting (selection/retrieval)
+  async voteOnMemoryUsage(usageId: string, vote: 'up' | 'down'): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/memory-usages/${usageId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vote }),
+    });
+    return handleResponse<VoteResponse>(response);
+  },
+
+  async removeMemoryUsageVote(usageId: string): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/memory-usages/${usageId}/vote`, {
+      method: 'DELETE',
+    });
+    return handleResponse<VoteResponse>(response);
+  },
+
+  async getMemoryUsageVotes(usageId: string): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/memory-usages/${usageId}/votes`);
+    return handleResponse<VoteResponse>(response);
+  },
+
+  async submitMemoryUsageIrrelevanceReason(usageId: string, reason: string): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/memory-usages/${usageId}/irrelevance-reason`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse<VoteResponse>(response);
+  },
+
+  // Memory extraction voting (creation)
+  async voteOnMemoryExtraction(messageId: string, memoryId: string, vote: 'up' | 'down'): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}/extracted-memories/${memoryId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vote }),
+    });
+    return handleResponse<VoteResponse>(response);
+  },
+
+  async removeMemoryExtractionVote(messageId: string, memoryId: string): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}/extracted-memories/${memoryId}/vote`, {
+      method: 'DELETE',
+    });
+    return handleResponse<VoteResponse>(response);
+  },
+
+  async getMemoryExtractionVotes(messageId: string, memoryId: string): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}/extracted-memories/${memoryId}/votes`);
+    return handleResponse<VoteResponse>(response);
+  },
+
+  async submitMemoryExtractionQualityFeedback(messageId: string, memoryId: string, feedback: string): Promise<VoteResponse> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}/extracted-memories/${memoryId}/quality-feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback }),
+    });
     return handleResponse<VoteResponse>(response);
   },
 

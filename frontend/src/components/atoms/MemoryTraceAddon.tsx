@@ -4,14 +4,7 @@ import type { BaseComponentProps } from '../../types/components';
 import FeedbackControls from './FeedbackControls';
 import { useFeedback } from '../../hooks/useFeedback';
 import type { VoteType } from '../../stores/feedbackStore';
-
-// Memory trace interface
-export interface MemoryTrace {
-  id: string;
-  messageId: string;
-  content: string;
-  relevance: number; // 0-1 score
-}
+import type { MemoryTrace } from '../../types/streaming';
 
 // Component props interface
 export interface MemoryTraceAddonProps extends BaseComponentProps {
@@ -30,7 +23,7 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
   const expandedTrace = expandedTraceId
     ? traces.find(t => t.id === expandedTraceId)
     : null;
-  const feedback = useFeedback('memory', expandedTrace?.id || '');
+  const feedback = useFeedback('memory_usage', expandedTrace?.id || '');
 
   // Map VoteType to UI vote type (critical maps to down for UI display)
   const currentUiVote: 'up' | 'down' | null =
@@ -53,16 +46,14 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
 
   // Get color class based on relevance threshold
   const getRelevanceColor = (relevance: number): string => {
-    if (relevance >= 0.8) return 'text-accent';
-    if (relevance >= 0.6) return 'text-accent';
+    if (relevance >= 0.7) return 'text-success';
     if (relevance >= 0.4) return 'text-accent';
     return 'text-muted';
   };
 
   // Get background color class based on relevance threshold
   const getRelevanceBgColor = (relevance: number): string => {
-    if (relevance >= 0.8) return 'bg-accent-subtle';
-    if (relevance >= 0.6) return 'bg-accent-subtle';
+    if (relevance >= 0.7) return 'bg-success/10';
     if (relevance >= 0.4) return 'bg-accent-subtle';
     return 'bg-surface';
   };

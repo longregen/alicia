@@ -75,6 +75,9 @@ All require authentication via `Authorization` header.
   - Returns assistant message
   - Broadcasts to SSE/WebSocket subscribers
 
+- `GET /api/v1/messages/{id}/siblings` - Get sibling messages (alternate responses)
+- `POST /api/v1/conversations/{id}/switch-branch` - Switch to a different message branch
+
 ### Sync Protocol (MessagePack)
 
 - `POST /api/v1/conversations/{id}/sync` - HTTP-based message sync
@@ -113,7 +116,7 @@ Only available if MCP adapter is configured.
 - `DELETE /api/v1/mcp/servers/{name}` - Remove MCP server
 - `GET /api/v1/mcp/tools` - List all tools from all MCP servers
 
-### Voting & Feedback
+### Memory & Feedback Voting
 
 Fine-grained feedback system for prompt optimization:
 
@@ -132,6 +135,18 @@ Fine-grained feedback system for prompt optimization:
 - `POST /api/v1/memories/{id}/vote` - Vote on memory relevance
 - `POST /api/v1/memories/{id}/irrelevance-reason` - Report irrelevant memory
 - `DELETE /api/v1/memories/{id}/vote` - Remove vote
+
+**Memory Usage Voting**:
+- `POST /api/v1/memory-usages/{id}/vote` - Vote on memory usage relevance
+- `DELETE /api/v1/memory-usages/{id}/vote` - Remove vote from memory usage
+- `GET /api/v1/memory-usages/{id}/votes` - Get memory usage vote statistics
+- `POST /api/v1/memory-usages/{id}/irrelevance-reason` - Report why memory was irrelevant
+
+**Memory Extraction Voting**:
+- `POST /api/v1/messages/{messageId}/extracted-memories/{memoryId}/vote` - Vote on extraction quality
+- `DELETE /api/v1/messages/{messageId}/extracted-memories/{memoryId}/vote` - Remove extraction vote
+- `GET /api/v1/messages/{messageId}/extracted-memories/{memoryId}/votes` - Get extraction vote stats
+- `POST /api/v1/messages/{messageId}/extracted-memories/{memoryId}/quality-feedback` - Quality feedback
 
 **Reasoning Voting**:
 - `POST /api/v1/reasoning/{id}/vote` - Vote on reasoning quality
@@ -184,11 +199,23 @@ DSPy/GEPA optimization endpoints (only if optimization service is configured):
 - `GET /api/v1/feedback/dimensions` - Get dimension weights
 - `PUT /api/v1/feedback/dimensions` - Update dimension weights
 
-**Deployment (Phase 6)**:
+**Deployment**:
 - `POST /api/v1/deployments` - Deploy optimized prompt
 - `GET /api/v1/deployments/{prompt_type}/active` - Get active deployment
 - `GET /api/v1/deployments/{prompt_type}/history` - List deployment history
 - `DELETE /api/v1/deployments/{run_id}` - Rollback deployment
+
+### Training
+
+Training and prompt version management endpoints for GEPA optimization.
+
+#### Training Operations
+- `GET /api/v1/training/stats` - Get training statistics
+- `POST /api/v1/training/optimize` - Trigger optimization run
+
+#### Prompt Version Management
+- `GET /api/v1/prompts/versions` - List all prompt versions
+- `POST /api/v1/prompts/versions/{id}/activate` - Activate a specific prompt version
 
 ### Server Info & Statistics
 
@@ -222,11 +249,12 @@ All configuration via `ALICIA_` environment variables:
 ### Server
 - `ALICIA_SERVER_HOST` - Bind address (default: "0.0.0.0")
 - `ALICIA_SERVER_PORT` - HTTP port (default: 8080)
-- `ALICIA_SERVER_CORS_ORIGINS` - Allowed CORS origins (comma-separated)
-- `ALICIA_SERVER_STATIC_DIR` - Static file directory for frontend serving
+- `ALICIA_CORS_ORIGINS` - Allowed CORS origins (comma-separated)
+- `ALICIA_STATIC_DIR` - Static file directory for frontend serving
 
 ### Database
 - `ALICIA_POSTGRES_URL` - PostgreSQL connection string (required)
+- `ALICIA_DB_PATH` - SQLite database path (CLI mode)
 
 ### LLM
 - `ALICIA_LLM_URL` - LLM endpoint (required)
@@ -235,10 +263,19 @@ All configuration via `ALICIA_` environment variables:
 - `ALICIA_LLM_MAX_TOKENS` - Max completion tokens
 - `ALICIA_LLM_TEMPERATURE` - Sampling temperature
 
+### Reflection LLM (optional)
+- `ALICIA_REFLECTION_LLM_URL` - Stronger LLM for GEPA reflection
+- `ALICIA_REFLECTION_LLM_API_KEY` - API key
+- `ALICIA_REFLECTION_LLM_MODEL` - Model name
+- `ALICIA_REFLECTION_LLM_MAX_TOKENS` - Max completion tokens
+- `ALICIA_REFLECTION_LLM_TEMPERATURE` - Sampling temperature
+
 ### LiveKit (optional)
 - `ALICIA_LIVEKIT_URL` - WebSocket URL
 - `ALICIA_LIVEKIT_API_KEY` - API key
 - `ALICIA_LIVEKIT_API_SECRET` - API secret
+- `ALICIA_LIVEKIT_WORKER_COUNT` - Number of worker goroutines (default: 10)
+- `ALICIA_LIVEKIT_WORK_QUEUE_SIZE` - Work queue buffer size (default: 100)
 
 ### ASR/TTS (optional)
 - `ALICIA_ASR_URL` - ASR service endpoint
@@ -268,5 +305,5 @@ All configuration via `ALICIA_` environment variables:
 
 - [CLI.md](CLI.md) - Command-line interface for server management
 - [AGENT.md](AGENT.md) - LiveKit agent worker architecture
-- [API.md](API.md) - Detailed API documentation with request/response examples
-- [CONFIGURATION.md](CONFIGURATION.md) - Complete configuration reference
+- [COMPONENTS.md](COMPONENTS.md) - System architecture and component documentation
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guides and configuration

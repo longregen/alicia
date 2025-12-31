@@ -90,7 +90,8 @@ class VoiceService : Service() {
             }
         }
 
-        // Initialize wake word detection - only if permission is granted
+        // Start wake word detection only if RECORD_AUDIO permission is granted.
+        // Permission must be requested by the UI before starting service.
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.RECORD_AUDIO

@@ -1,6 +1,6 @@
 import React from 'react';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 import type { BaseComponentProps, Variant } from '../../types/components';
 
 // Base Switch component following shadcn/ui pattern
@@ -10,7 +10,7 @@ const Switch = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SwitchPrimitive.Root
     data-slot="switch"
-    className={cn(
+    className={cls(
       'peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input',
       className
     )}
@@ -19,7 +19,7 @@ const Switch = React.forwardRef<
   >
     <SwitchPrimitive.Thumb
       data-slot="switch-thumb"
-      className={cn(
+      className={cls(
         'pointer-events-none block size-4 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0'
       )}
     />
@@ -50,6 +50,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   onChange,
   disabled = false,
   size = 'md',
+  // Note: variant prop is accepted for API compatibility but not yet implemented
   variant: _variant = 'default',
   label,
   className = ''
@@ -70,14 +71,14 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   };
 
   const getLabelClasses = (): string => {
-    return cn(
+    return cls(
       'text-sm font-medium select-none cursor-pointer',
       disabled ? 'text-muted cursor-not-allowed' : 'text-default'
     );
   };
 
   return (
-    <div className={cn('flex items-center gap-3', className)}>
+    <div className={cls('flex items-center gap-3', className)}>
       {label && (
         <label
           className={getLabelClasses()}

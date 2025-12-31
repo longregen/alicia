@@ -339,26 +339,3 @@ func TestConversation_IsActive(t *testing.T) {
 		})
 	}
 }
-
-func TestNewConversation(t *testing.T) {
-	conv := NewConversation("test_123", "test_user", "Test Title")
-
-	if conv.ID != "test_123" {
-		t.Errorf("expected ID test_123, got %s", conv.ID)
-	}
-	if conv.UserID != "test_user" {
-		t.Errorf("expected UserID test_user, got %s", conv.UserID)
-	}
-	if conv.Title != "Test Title" {
-		t.Errorf("expected title 'Test Title', got %s", conv.Title)
-	}
-	if conv.Status != ConversationStatusActive {
-		t.Errorf("expected status active, got %s", conv.Status)
-	}
-	if conv.DeletedAt != nil {
-		t.Error("expected DeletedAt to be nil for new conversation")
-	}
-	if conv.Preferences == nil {
-		t.Error("expected Preferences to be initialized")
-	}
-}

@@ -1,5 +1,5 @@
 import { useConnectionStore, ConnectionStatus } from '../stores/connectionStore';
-import { cn } from '../lib/utils';
+import { cls } from '../utils/cls';
 
 interface ConnectionStatusIndicatorProps {
   isCollapsed: boolean;
@@ -46,7 +46,7 @@ export function ConnectionStatusIndicator({ isCollapsed }: ConnectionStatusIndic
 
   return (
     <div
-      className={cn(
+      className={cls(
         'layout-center-gap p-2 rounded transition-colors',
         isCollapsed && 'justify-center'
       )}
@@ -55,7 +55,7 @@ export function ConnectionStatusIndicator({ isCollapsed }: ConnectionStatusIndic
     >
       <div className="relative">
         <div
-          className={cn(
+          className={cls(
             'w-2 h-2 rounded-full',
             getStatusColor(),
             isAnimated && 'animate-pulse'

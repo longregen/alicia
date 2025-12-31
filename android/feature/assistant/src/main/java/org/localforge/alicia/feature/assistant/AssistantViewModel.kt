@@ -117,9 +117,10 @@ class AssistantViewModel @Inject constructor(
     }
 
     /**
-     * Toggles between listening and idle states for voice input.
-     * Activates voice listening when idle or waiting for wake word, deactivates when already listening.
-     * Does nothing during processing or speaking states.
+     * Toggle voice activation based on current state.
+     * - IDLE or LISTENING_FOR_WAKE_WORD: Activates listening
+     * - LISTENING: Deactivates
+     * - Other states (Processing, Speaking, Activated): No action (ignored)
      */
     @SuppressLint("MissingPermission")
     fun toggleListening() {

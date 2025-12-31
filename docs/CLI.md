@@ -10,6 +10,105 @@ The CLI is the primary entry point for running Alicia services and managing conv
 
 ## Available Commands
 
+### `alicia new`
+
+Create a new conversation.
+
+**Usage**:
+```bash
+# Create with auto-generated title
+alicia new
+
+# Create with custom title
+alicia new --title "My Conversation"
+alicia new -t "Planning Session"
+```
+
+**Source**: `/cmd/alicia/conversation.go`
+
+**Example**:
+```bash
+$ alicia new --title "Project Planning"
+Created conversation: conv_abc123xyz
+Title: Project Planning
+```
+
+### `alicia list`
+
+List all conversations.
+
+**Usage**:
+```bash
+# List active conversations (default: 50)
+alicia list
+
+# Include archived conversations
+alicia list --all
+alicia list -a
+
+# Limit number of results
+alicia list --limit 20
+alicia list -l 20
+```
+
+**Source**: `/cmd/alicia/conversation.go`
+
+**Example**:
+```bash
+$ alicia list
+ID                            Title                                    Status     Created
+----------------------------------------------------------------------------------------------------
+conv_abc123xyz                Project Planning                         active     2025-12-30 14:32
+conv_def456uvw                Debug Session                            active     2025-12-29 09:15
+conv_ghi789rst                Code Review                              active     2025-12-28 16:45
+```
+
+### `alicia show`
+
+Display all messages in a conversation.
+
+**Usage**:
+```bash
+alicia show <conversation-id>
+```
+
+**Source**: `/cmd/alicia/conversation.go`
+
+**Example**:
+```bash
+$ alicia show conv_abc123xyz
+Conversation: Project Planning
+ID: conv_abc123xyz
+Status: active
+Created: 2025-12-30 14:32:15
+
+[14:32:18] user:
+What's the best way to structure this project?
+--------------------------------------------------------------------------------
+
+[14:32:22] assistant:
+I'd recommend organizing it into these modules...
+--------------------------------------------------------------------------------
+```
+
+### `alicia delete`
+
+Delete a conversation (soft delete).
+
+**Usage**:
+```bash
+alicia delete <conversation-id>
+```
+
+**Source**: `/cmd/alicia/conversation.go`
+
+**Example**:
+```bash
+$ alicia delete conv_abc123xyz
+Deleted conversation: Project Planning
+ID: conv_abc123xyz
+```
+
 ### `alicia chat`
 
 Interactive text-based chat with Alicia.
@@ -57,7 +156,7 @@ alicia serve
 - Initializes PostgreSQL connection pool
 - Sets up all repositories (conversations, messages, tools, memory, etc.)
 - Configures LLM, ASR, TTS, and embedding services
-- Registers built-in tools (calculator, web search, memory query)
+- Registers built-in tools (calculator, web search always available; memory query available when embedding service is configured)
 - Starts HTTP server with REST API and WebSocket endpoints
 - Enables LiveKit token generation for voice clients
 
@@ -110,6 +209,8 @@ alicia agent
 - `ALICIA_LIVEKIT_URL` - LiveKit server WebSocket URL
 - `ALICIA_LIVEKIT_API_KEY` - LiveKit API key
 - `ALICIA_LIVEKIT_API_SECRET` - LiveKit API secret
+
+**Optional Configuration (for voice functionality)**:
 - `ALICIA_ASR_URL` - ASR service endpoint
 - `ALICIA_TTS_URL` - TTS service endpoint
 
@@ -198,6 +299,30 @@ LiveKit:
   API Key:    API...***
   API Secret: ***
   Status:     Configured
+
+ASR (Speech Recognition):
+  URL:     http://localhost:5000
+  Model:   whisper-1
+  API Key: ***
+  Status:  Optional (for voice functionality)
+
+TTS (Text-to-Speech):
+  URL:     http://localhost:5001
+  Model:   tts-1
+  Voice:   alloy
+  API Key: ***
+  Status:  Optional (for voice functionality)
+
+Database:
+  PostgreSQL:    postgresql://...***
+  SQLite Path:   /home/user/.local/share/alicia/alicia.db (not used by CLI commands)
+
+Environment variables:
+  ALICIA_LLM_URL, ALICIA_LLM_API_KEY, ALICIA_LLM_MODEL
+  ALICIA_LIVEKIT_URL, ALICIA_LIVEKIT_API_KEY, ALICIA_LIVEKIT_API_SECRET
+  ALICIA_ASR_URL, ALICIA_ASR_API_KEY, ALICIA_ASR_MODEL
+  ALICIA_TTS_URL, ALICIA_TTS_API_KEY, ALICIA_TTS_MODEL, ALICIA_TTS_VOICE
+  ALICIA_DB_PATH, ALICIA_POSTGRES_URL
 ```
 
 ### `alicia version`
@@ -216,6 +341,8 @@ Alicia v0.3.0
   Commit:     a1b2c3d4
   Build Date: 2025-12-30T10:00:00Z
 ```
+
+**Note**: Version displays "dev" unless built with ldflags (e.g., `-ldflags "-X main.version=v0.3.0"`)
 
 ## Configuration
 
@@ -243,8 +370,8 @@ All configuration is done via environment variables with `ALICIA_` prefix:
 - `ALICIA_TTS_VOICE` - Voice name (default: "alloy")
 
 ### Database
-- `ALICIA_POSTGRES_URL` - PostgreSQL connection string
-- `ALICIA_DB_PATH` - SQLite database path (for local CLI chat)
+- `ALICIA_POSTGRES_URL` - PostgreSQL connection string (required for all CLI commands: `serve`, `agent`, `chat`, `new`, `list`, `show`, `delete`)
+- `ALICIA_DB_PATH` - SQLite database path (legacy/reserved for future use; not currently used by CLI commands)
 
 ### Embedding (for Memory/RAG)
 - `ALICIA_EMBEDDING_URL` - Embedding service endpoint
@@ -266,4 +393,3 @@ All configuration is done via environment variables with `ALICIA_` prefix:
 
 - [SERVER.md](SERVER.md) - HTTP API endpoints and architecture
 - [AGENT.md](AGENT.md) - LiveKit agent worker details
-- [CONFIGURATION.md](CONFIGURATION.md) - Detailed configuration guide

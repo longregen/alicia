@@ -300,8 +300,6 @@ class VoiceController @Inject constructor(
         updateState(VoiceState.Listening)
 
         // Set up callbacks before connecting
-        // Note: Audio playback is handled automatically by LiveKit SDK when tracks are subscribed
-
         // Handle protocol messages
         liveKitManager.onDataReceived { envelope ->
             controllerScope.launch {

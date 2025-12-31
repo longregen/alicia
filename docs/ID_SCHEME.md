@@ -26,6 +26,8 @@ ams_3nQ5kL8pR7mV2tY9xC6wH
 
 ## ID Prefixes
 
+### Core Entities
+
 | Prefix | Entity | Database Table | Description |
 |--------|--------|----------------|-------------|
 | `ac_` | Conversation | `alicia_conversations` | A conversation thread between user and assistant |
@@ -39,6 +41,31 @@ ams_3nQ5kL8pR7mV2tY9xC6wH
 | `ar_` | Reasoning Step | `alicia_reasoning_steps` | A chain-of-thought reasoning step (for extended thinking) |
 | `aucc_` | User Commentary | `alicia_user_conversation_commentaries` | User feedback or annotations on conversations |
 | `amt_` | Meta | `alicia_meta` | Generic key-value metadata storage |
+
+### Integration & Infrastructure
+
+| Prefix | Entity | Database Table | Description |
+|--------|--------|----------------|-------------|
+| `amcp_` | MCP Server | `alicia_mcp_servers` | Model Context Protocol server configuration |
+| `room_` | LiveKit Room | - | LiveKit room name for real-time audio/video (Note: `GenerateLiveKitRoomName()` exists in `Generator` but is NOT part of the `IDGenerator` interface) |
+
+### Feedback & Analytics
+
+| Prefix | Entity | Database Table | Description |
+|--------|--------|----------------|-------------|
+| `av_` | Vote | `alicia_votes` | User vote (up/down/critical) on messages, tools, memories |
+| `an_` | Note | `alicia_notes` | User annotation or note on a message |
+| `ass_` | Session Stats | `alicia_session_stats` | Aggregated statistics for a conversation session |
+
+### Prompt Optimization (GEPA)
+
+| Prefix | Entity | Database Table | Description |
+|--------|--------|----------------|-------------|
+| `aor_` | Optimization Run | `prompt_optimization_runs` | A prompt optimization session |
+| `apc_` | Prompt Candidate | `prompt_candidates` | A candidate prompt in the optimization process |
+| `ape_` | Prompt Evaluation | `prompt_evaluations` | Evaluation result for a prompt candidate |
+| `gte_` | Training Example | `gepa_training_examples` | Training example for GEPA derived from user votes |
+| `spv_` | System Prompt Version | `system_prompt_versions` | Version of a system prompt for A/B testing |
 
 ## Why Use ID Prefixes?
 
@@ -91,7 +118,7 @@ GET /conversations/ac_k9mX2pL7qR3vN5pQ8tYzW/messages/am_7gH4mN9pL2kR6vT5xB8wZ
 
 ### Go Code Generation
 
-IDs are generated using the `IDGenerator` interface defined in `/home/user/alicia/internal/ports/repositories.go`:
+IDs are generated using the `IDGenerator` interface defined in `internal/ports/repositories.go`:
 
 ```go
 type IDGenerator interface {
@@ -102,7 +129,7 @@ type IDGenerator interface {
 }
 ```
 
-The concrete implementation is in `/home/user/alicia/internal/adapters/id/generator.go`:
+The concrete implementation is in `internal/adapters/id/generator.go`:
 
 ```go
 func (g *Generator) generate(prefix string) string {
@@ -177,7 +204,8 @@ Retrieved memories:
 ```
 Assistant message: am_9vT2kL5pR8mN4xB7wZ3qH
 └─ Tool Use: atu_4xQ7kL2pR9mV5tY3wB8nH
-   ├─ Tool: at_web_search_builtin
+   ├─ Tool ID: at_8nQ5kL7pR2mV9tY3xB6wH
+   ├─ Tool Name: web_search_builtin
    ├─ Status: success
    └─ Result: {...}
 ```
@@ -235,39 +263,30 @@ logger.Info("processing message",
 )
 ```
 
-## Related Documentation
+### 5. Fallback Behavior
 
-- [Database Schema](/home/user/alicia/docs/DATABASE.md)
-- [Architecture Overview](/home/user/alicia/docs/ARCHITECTURE.md)
-- [Protocol Specification](/home/user/alicia/docs/protocol/index.md)
-
-## Migration Notes
-
-If you're adding a new entity type:
-
-1. **Choose a unique prefix** that doesn't conflict with existing ones
-2. **Add to IDGenerator interface** in `/home/user/alicia/internal/ports/repositories.go`
-3. **Implement in Generator** in `/home/user/alicia/internal/adapters/id/generator.go`
-4. **Add database default** in the migration file
-5. **Update this documentation** with the new prefix
-
-Example for a hypothetical "Session" entity:
+The ID generator includes fallback logic for the rare case when NanoID generation fails:
 
 ```go
-// In ports/repositories.go
-type IDGenerator interface {
-    // ...
-    GenerateSessionID() string  // as_xxx
+func (g *Generator) generate(prefix string) string {
+    id, err := gonanoid.New(21)
+    if err != nil {
+        return prefix + "_fallback"  // Returns "<prefix>_fallback" on error
+    }
+    return prefix + "_" + id
 }
-
-// In adapters/id/generator.go
-func (g *Generator) GenerateSessionID() string {
-    return g.generate("as")
-}
-
-// In migration
-CREATE TABLE alicia_sessions (
-    id TEXT PRIMARY KEY DEFAULT generate_random_id('as'),
-    -- ...
-);
 ```
+
+**Important**: If you encounter IDs like `ac_fallback`, `am_fallback`, etc. in your logs, this indicates an issue with the random number generator or NanoID library. While these fallback IDs are valid and won't cause crashes, they:
+
+- **Are not unique**: Multiple failures will produce the same fallback ID
+- **Indicate a system problem**: Check system entropy, library compatibility, or resource constraints
+- **Should be investigated**: This should never happen in normal operation
+
+If you see fallback IDs in production, file an incident report immediately.
+
+## Related Documentation
+
+- [Database Schema](DATABASE.md)
+- [Architecture Overview](ARCHITECTURE.md)
+- [Protocol Specification](protocol/index.md)

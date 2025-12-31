@@ -10,7 +10,7 @@ The Android application is built using modern Android development practices with
 
 ### Project Structure
 
-The Android project is organized into 12 Gradle modules following Clean Architecture:
+The Android project is organized into 11 Gradle modules following Clean Architecture:
 
 ```
 android/
@@ -68,19 +68,25 @@ Powered by Picovoice Porcupine engine:
 
 **Location**: `/android/service/voice/src/main/java/org/localforge/alicia/service/voice/VoiceController.kt`
 
-Manages the voice conversation lifecycle through states:
+Manages the voice conversation lifecycle through states (implementation uses UPPER_SNAKE_CASE naming):
 
-- **Idle**: Waiting for wake word or manual activation
-- **Listening**: Recording user speech
-- **Processing**: Sending audio to server via LiveKit
-- **Speaking**: Playing back assistant response
-- **Error**: Handling failures with user feedback
+| State | Description |
+|-------|-------------|
+| IDLE | Initial state, not listening |
+| LISTENING_FOR_WAKE_WORD | Background listening for wake word detection |
+| ACTIVATED | Wake word detected, preparing to listen |
+| LISTENING | Actively recording user speech |
+| PROCESSING | Transcribing and generating response |
+| SPEAKING | Playing assistant audio response |
+| ERROR | Error state, requires recovery |
+| CONNECTING | Establishing LiveKit connection |
+| DISCONNECTED | Connection lost, attempting reconnect |
 
 Coordinates between wake word detection, LiveKit streaming, and UI updates.
 
 ### Protocol Handling
 
-**Location**: `/android/core/network/src/main/java/org/localforge/alicia/core/network/ProtocolHandler.kt`
+**Location**: `/android/core/network/src/main/java/org/localforge/alicia/core/network/protocol/ProtocolHandler.kt`
 
 Implements MessagePack-based binary protocol for efficient data exchange:
 
@@ -159,9 +165,9 @@ Required Android permissions:
 - **LiveKit Manager**: `/android/core/network/src/main/java/org/localforge/alicia/core/network/LiveKitManager.kt`
 - **Voice Controller**: `/android/service/voice/src/main/java/org/localforge/alicia/service/voice/VoiceController.kt`
 - **Assistant ViewModel**: `/android/feature/assistant/src/main/java/org/localforge/alicia/feature/assistant/AssistantViewModel.kt`
-- **Protocol Handler**: `/android/core/network/src/main/java/org/localforge/alicia/core/network/ProtocolHandler.kt`
+- **Protocol Handler**: `/android/core/network/src/main/java/org/localforge/alicia/core/network/protocol/ProtocolHandler.kt`
 - **Navigation**: `/android/app/src/main/java/org/localforge/alicia/navigation/AliciaNavigation.kt`
-- **Theme**: `/android/app/src/main/java/org/localforge/alicia/ui/theme/AliciaTheme.kt`
+- **Theme**: `/android/app/src/main/java/org/localforge/alicia/ui/theme/Theme.kt`
 
 ## See Also
 

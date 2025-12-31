@@ -1,3 +1,10 @@
+/**
+ * Model Context Protocol (MCP) types.
+ *
+ * MCP enables Claude to connect with external data sources and tools.
+ * See: https://modelcontextprotocol.io/
+ */
+
 export type MCPTransport = 'stdio' | 'sse';
 export type MCPServerStatus = 'connected' | 'disconnected' | 'error';
 
@@ -12,6 +19,7 @@ export interface MCPServerConfig {
 export interface MCPTool {
   name: string;
   description?: string;
+  /** JSON Schema definition for tool input parameters */
   inputSchema?: Record<string, unknown>;
 }
 

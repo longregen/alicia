@@ -6,6 +6,9 @@ import type { MessageId, ToolCallId, SentenceId } from '../types/streaming';
  *
  * Re-exports the Zustand store hook and provides typed selector functions
  * for common use cases throughout the application.
+ *
+ * WARNING: Raw state selectors return object/array references. Components using
+ * these should compute derived data with useMemo to avoid infinite re-render loops.
  */
 
 // Re-export the base store hook

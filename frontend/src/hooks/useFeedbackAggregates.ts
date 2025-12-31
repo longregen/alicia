@@ -87,15 +87,15 @@ export function useFeedbackAggregates(messageId: MessageId): FeedbackAggregates 
     const totalPositive =
       toolUseFeedback.upvotes +
       memoryFeedback.upvotes +
-      reasoningFeedback.upvotes +
-      toolUseFeedback.critical +
-      memoryFeedback.critical +
-      reasoningFeedback.critical;
+      reasoningFeedback.upvotes;
 
     const totalNegative =
       toolUseFeedback.downvotes +
       memoryFeedback.downvotes +
-      reasoningFeedback.downvotes;
+      reasoningFeedback.downvotes +
+      toolUseFeedback.critical +
+      memoryFeedback.critical +
+      reasoningFeedback.critical;
 
     const totalVotes = totalPositive + totalNegative;
 

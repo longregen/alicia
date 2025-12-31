@@ -15,7 +15,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import { Kbd, KbdGroup } from './atoms/Kbd';
 import Button from './atoms/Button';
 import { Label } from './atoms/Label';
-import { cn } from '../lib/utils';
+import Tooltip from './atoms/Tooltip';
+import { cls } from '../utils/cls';
 import { useTheme } from '../hooks/useTheme';
 import {
   AlertDialog,
@@ -48,6 +49,7 @@ const DEFAULT_PREFERENCES = {
 };
 
 export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }: SettingsProps) {
+  // Note: defaultTab is synchronized via useEffect, making it act as a controlled prop
   const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
   const [audioOutputEnabled, setAudioOutputEnabled] = useState(DEFAULT_PREFERENCES.audioOutputEnabled);
 
@@ -265,7 +267,7 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
                       <button
                         key={length}
                         onClick={() => setResponseLength(length)}
-                        className={cn(
+                        className={cls(
                           'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors',
                           responseLength === length
                             ? 'bg-accent text-accent-foreground'
@@ -285,6 +287,7 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
               </Card>
 
               {/* Memory Settings Card */}
+              {/* Note: These settings are UI placeholders - state management to be implemented */}
               <Card>
                 <CardHeader>
                   <CardTitle>Memory</CardTitle>
@@ -392,20 +395,25 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
                   <CardTitle>Privacy & Data</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => console.log('Export data clicked')}
-                  >
-                    Export Data
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => console.log('Clear all data clicked')}
-                  >
-                    Clear All Data
-                  </Button>
+                  {/* TODO: Implement data export/clear functionality */}
+                  <Tooltip content="Coming soon">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={true}
+                    >
+                      Export Data
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Coming soon">
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      disabled={true}
+                    >
+                      Clear All Data
+                    </Button>
+                  </Tooltip>
                 </CardContent>
               </Card>
             </div>

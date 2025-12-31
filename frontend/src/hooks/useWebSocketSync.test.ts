@@ -19,6 +19,7 @@ vi.mock('../db/repository', () => ({
 
 vi.mock('../adapters/protocolAdapter', () => ({
   handleProtocolMessage: vi.fn(),
+  handleConnectionLost: vi.fn(),
 }));
 
 // Import mocked modules

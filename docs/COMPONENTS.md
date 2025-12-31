@@ -2,10 +2,6 @@
 
 This document outlines the components that implement Alicia following a hexagonal architecture approach. The architecture is simple yet flexible, with clear separation of concerns.
 
-> **Implementation Status**: This document describes both implemented and planned components. Look for status markers:
-> - ✅ **Implemented**: Component is fully built and functional
-> - ⚠️ **Partial**: Component exists but has missing functionality
-> - 🚧 **Planned**: Component is designed but not yet implemented
 
 ## Hexagonal Architecture Overview
 
@@ -64,7 +60,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
 
 #### Domain Models
 
-1. **Conversation** ✅
+1. **Conversation**
    - Represents a conversation between a user and the assistant
    - Contains conversation metadata and references to messages
    - Key attributes:
@@ -77,7 +73,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Maintains the overall conversation state and context
    - Critical for implementing the "Persistent Conversation Memory" user story
 
-2. **Message** ✅
+2. **Message**
    - Base model for all message types
    - Contains common fields like ID, conversation ID, timestamp
    - Key attributes:
@@ -89,7 +85,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Provides the foundation for the conversation history
    - Enables the linked-list structure for message ordering
 
-3. **UserMessage** ✅
+3. **UserMessage**
    - Extends Message
    - Contains user's input text
    - Key attributes:
@@ -98,7 +94,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Represents the user's side of the conversation
    - May be created from text input or transcribed audio
 
-4. **AssistantMessage** ✅
+4. **AssistantMessage**
    - Extends Message
    - Contains assistant's response text
    - Key attributes:
@@ -109,7 +105,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Represents the assistant's side of the conversation
    - May include references to reasoning, tool usage, and memory retrieval
 
-5. **Audio** ✅
+5. **Audio**
    - Represents audio data for speech input/output
    - Contains audio format, duration, and binary data
    - Key attributes:
@@ -121,7 +117,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
      - `transcription`: Optional transcription of the audio content
    - Critical for implementing the voice conversation features
 
-6. **Memory** ✅
+6. **Memory**
    - Represents a piece of information stored in long-term memory
    - Contains content, embeddings, importance score, etc.
    - Key attributes:
@@ -139,7 +135,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Supports semantic search for relevant information
    - Critical for implementing the "Persistent Conversation Memory" user story
 
-7. **Tool** ✅
+7. **Tool**
    - Represents an external tool that can be used by the assistant
    - Contains tool name, parameters, and result schema
    - Key attributes:
@@ -151,7 +147,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Supports integration with external systems and APIs
    - Critical for implementing the "Tool Integration" user story
 
-8. **MessageSentence** ✅
+8. **MessageSentence**
    - Represents a single sentence from an assistant message
    - Key attributes:
      - `id`: Unique identifier
@@ -167,9 +163,104 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Supports synchronized text and audio playback
    - Critical for implementing the "Streaming Audio Response" user story
 
+9. **ReasoningStep**
+   - Represents a step in the assistant's reasoning process
+   - Key attributes:
+     - `id`: Unique identifier
+     - `message_id`: Reference to the parent message
+     - `sequence_number`: Order of the reasoning step
+     - `content`: The reasoning content
+     - `created_at`: When the step was created
+   - Enables transparent reasoning display
+   - Supports chain-of-thought visibility
+
+10. **Vote**
+    - Represents user feedback on various content types
+    - Key attributes:
+      - `id`: Unique identifier
+      - `target_type`: Type of target ('message', 'tool_use', 'memory', 'reasoning')
+      - `target_id`: ID of the target being voted on
+      - `value`: Vote value (1 for upvote, -1 for downvote)
+      - `quickFeedback`: Optional structured feedback category
+      - `note`: Optional freeform note
+      - `created_at`: When the vote was cast
+    - Enables user feedback collection
+    - Supports quality improvement through feedback loops
+
+11. **Note**
+    - Represents user annotations on messages or tool uses
+    - Key attributes:
+      - `id`: Unique identifier
+      - `target_type`: Type of target ('message', 'tool_use', 'reasoning')
+      - `target_id`: ID of the annotated target
+      - `content`: The note content
+      - `created_at`: When the note was created
+    - Enables user annotations for context
+    - Supports conversation augmentation
+
+12. **MemoryUsage**
+    - Tracks when and how memories are used in conversations
+    - Key attributes:
+      - `id`: Unique identifier
+      - `conversation_id`: Reference to the conversation
+      - `message_id`: Reference to the message
+      - `memory_id`: Reference to the memory used
+      - `similarity_score`: How similar the memory was to the query
+      - `position_in_results`: Ranking position in search results
+    - Enables memory usage analytics
+    - Supports memory importance recalculation
+
+13. **MCPServer**
+    - Represents a Model Context Protocol server configuration
+    - Key attributes:
+      - `id`: Unique identifier
+      - `name`: Server name
+      - `transport_type`: Transport type ('stdio', 'sse', 'http')
+      - `command`: Command to start stdio servers
+      - `url`: URL for HTTP/SSE servers
+      - `enabled`: Whether the server is enabled
+    - Enables external tool integration via MCP
+    - Supports dynamic tool discovery
+
+14. **OptimizationRun**
+    - Represents a prompt optimization run (GEPA)
+    - Key attributes:
+      - `id`: Unique identifier
+      - `name`: Run name
+      - `prompt_type`: Type of prompt being optimized
+      - `baseline_prompt`: Starting prompt
+      - `status`: Run status ('running', 'completed', 'failed')
+      - `current_iteration`: Current optimization iteration
+      - `best_score`: Best score achieved
+    - Enables automated prompt optimization
+    - Supports GEPA (Genetic-Evolutionary Prompt Architecture)
+
+15. **PromptCandidate**
+    - Represents a candidate prompt during optimization
+    - Key attributes:
+      - `id`: Unique identifier
+      - `run_id`: Reference to the optimization run
+      - `prompt_text`: The candidate prompt
+      - `iteration`: Iteration when created
+      - `score`: Evaluation score
+    - Tracks prompt variations during optimization
+    - Enables comparison of prompt performance
+
+16. **SessionStats**
+    - Tracks statistics for a conversation session
+    - Key attributes:
+      - `id`: Unique identifier
+      - `conversation_id`: Reference to the conversation
+      - `message_count`: Total messages in session
+      - `tool_use_count`: Number of tool uses
+      - `memory_retrieval_count`: Number of memory retrievals
+      - `total_tokens`: Total tokens used
+    - Enables usage analytics
+    - Supports cost tracking and optimization
+
 #### Domain Services
 
-1. **ConversationService** ✅
+1. **ConversationService**
    - Core service for managing conversations
    - Handles conversation state and context
    - Key responsibilities:
@@ -182,7 +273,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Ensures conversation integrity and consistency
    - Implements the real-time conversation logic
 
-2. **TranscriptionService** ✅
+2. **TranscriptionService**
    - Manages audio transcription from user speech
    - Handles real-time speech-to-text conversion
    - Key responsibilities:
@@ -193,7 +284,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Critical for voice input capabilities
    - Enables real-time user speech processing
 
-3. **ResponseService** ✅
+3. **ResponseService**
    - Manages the assistant's response generation
    - Handles LLM interaction and response streaming
    - Key responsibilities:
@@ -204,10 +295,8 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Core service for AI response generation
    - Implements streaming response capabilities
 
-4. **MemoryService** ✅
+4. **MemoryService**
    - Manages retrieval and storage of memories
-   - **Status**: Fully implemented and integrated into conversation flow
-   - **Implementation**: Memory retrieval is integrated in `generate_response.go:106-122`
    - Handles memory importance scoring and relevance
    - Key responsibilities:
      - Storing new memories from conversations
@@ -219,7 +308,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Enables the assistant to recall previous information
    - Implements the "Persistent Conversation Memory" user story
 
-5. **ToolService** ✅
+5. **ToolService**
    - Manages external tool execution
    - Handles tool discovery and invocation
    - Key responsibilities:
@@ -231,7 +320,7 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Enables integration with external systems
    - Supports the "Tool Integration" user story
 
-6. **AudioService** ✅
+6. **AudioService**
    - Handles audio processing workflows
    - Manages audio streaming and synchronization
    - Key responsibilities:
@@ -245,13 +334,35 @@ The Domain Layer contains the core business logic and entities of the applicatio
    - Supports multilingual translation features
    - Implements the "Real-time Voice Conversation" user story
 
+7. **OptimizationService**
+   - Manages prompt optimization using GEPA
+   - Handles optimization runs and candidate evaluation
+   - Key responsibilities:
+     - Starting and managing optimization runs
+     - Tracking prompt candidates and scores
+     - Recording evaluation results
+     - Managing dimension weights for multi-objective optimization
+     - Retrieving optimized prompts
+   - Enables automated prompt improvement
+   - Integrates with feedback system for continuous learning
+   - Implements the GEPA prompt optimization framework
+
+8. **ValidationService**
+   - Provides input validation utilities
+   - Key responsibilities:
+     - Validating IDs and required fields
+     - Checking entity state (deleted, archived)
+     - Ensuring data integrity
+   - Centralizes validation logic
+   - Prevents invalid state transitions
+
 #### Ports (Interfaces)
 
 The ports define the interfaces through which the domain interacts with external systems, following the dependency inversion principle.
 
 ##### Input Ports
 
-1. **LiveKitEventPort** ✅
+1. **LiveKitEventPort**
    - Interface for receiving LiveKit room events
    - Key events:
      - `ParticipantConnected(participant Participant)`
@@ -263,7 +374,7 @@ The ports define the interfaces through which the domain interacts with external
    - Abstracts LiveKit's event system
    - Primary input mechanism for user interactions
 
-2. **TokenRequestPort** ✅
+2. **TokenRequestPort**
    - Interface for handling access token requests
    - Key operations:
      - `GenerateToken(identity string, roomName string, metadata TokenMetadata) (Token, error)`
@@ -274,7 +385,7 @@ The ports define the interfaces through which the domain interacts with external
 
 ##### Output Ports
 
-1. **MessageRepository** ✅
+1. **MessageRepository**
    - Interface for storing and retrieving messages
    - Key methods:
      - `SaveMessage(message Message) error`
@@ -285,7 +396,7 @@ The ports define the interfaces through which the domain interacts with external
    - Abstracts the database implementation details
    - Allows for different storage backends
 
-2. **ConversationRepository** ✅
+2. **ConversationRepository**
    - Interface for storing and retrieving conversations
    - Key methods:
      - `SaveConversation(conversation Conversation) error`
@@ -296,7 +407,7 @@ The ports define the interfaces through which the domain interacts with external
    - Supports conversation history management
    - Enables multi-platform synchronization
 
-3. **AudioRepository** ✅
+3. **AudioRepository**
    - Interface for storing and retrieving audio data
    - Key methods:
      - `SaveAudio(audio Audio) error`
@@ -306,7 +417,7 @@ The ports define the interfaces through which the domain interacts with external
    - Supports efficient retrieval for playback
    - Enables offline mode with audio caching
 
-4. **MemoryRepository** ✅
+4. **MemoryRepository**
    - Interface for storing and retrieving memories
    - Includes vector search capabilities
    - Key methods:
@@ -318,7 +429,96 @@ The ports define the interfaces through which the domain interacts with external
    - Critical for the retrieval-augmented generation
    - Abstracts the vector database implementation
 
-5. **ASRPort** ✅
+5. **SentenceRepository**
+   - Interface for storing and retrieving sentences
+   - Key methods:
+     - `Create(sentence Sentence) error`
+     - `GetByMessage(messageID string) ([]Sentence, error)`
+     - `GetNextSequenceNumber(messageID string) (int, error)`
+   - Enables sentence-level persistence
+   - Supports streaming response tracking
+
+6. **ToolRepository**
+   - Interface for tool registration and management
+   - Key methods:
+     - `Create(tool Tool) error`
+     - `GetByName(name string) (Tool, error)`
+     - `ListEnabled() ([]Tool, error)`
+   - Manages tool definitions
+   - Supports dynamic tool registration
+
+7. **ToolUseRepository**
+   - Interface for tracking tool usage
+   - Key methods:
+     - `Create(toolUse ToolUse) error`
+     - `GetByMessage(messageID string) ([]ToolUse, error)`
+     - `Update(toolUse ToolUse) error`
+   - Tracks tool execution history
+   - Enables tool result persistence
+
+8. **ReasoningStepRepository**
+   - Interface for storing reasoning steps
+   - Key methods:
+     - `Create(step ReasoningStep) error`
+     - `GetByMessage(messageID string) ([]ReasoningStep, error)`
+   - Enables reasoning chain persistence
+   - Supports chain-of-thought display
+
+9. **VoteRepository**
+   - Interface for user feedback storage
+   - Key methods:
+     - `Create(vote Vote) error`
+     - `GetByTarget(targetType, targetID string) ([]Vote, error)`
+     - `GetAggregates(targetType, targetID string) (VoteAggregates, error)`
+   - Enables feedback collection
+   - Supports quality metrics
+
+10. **NoteRepository**
+    - Interface for user annotations
+    - Key methods:
+      - `Create(note Note) error`
+      - `GetByMessage(messageID string) ([]Note, error)`
+      - `Update(ctx context.Context, id, content string) error`
+    - Enables user notes on content
+    - Supports conversation augmentation
+
+11. **MemoryUsageRepository**
+    - Interface for memory usage tracking
+    - Key methods:
+      - `Create(usage MemoryUsage) error`
+      - `GetByMessage(messageID string) ([]MemoryUsage, error)`
+      - `GetUsageStats(memoryID string) (MemoryUsageStats, error)`
+    - Enables memory analytics
+    - Supports importance recalculation
+
+12. **MCPServerRepository**
+    - Interface for MCP server configuration
+    - Key methods:
+      - `Create(server MCPServer) error`
+      - `GetByName(name string) (MCPServer, error)`
+      - `List() ([]MCPServer, error)`
+    - Manages MCP server configs
+    - Supports dynamic tool integration
+
+13. **PromptOptimizationRepository**
+    - Interface for optimization persistence
+    - Key methods:
+      - `CreateRun(run OptimizationRun) error`
+      - `SaveCandidate(runID string, candidate PromptCandidate) error`
+      - `GetBestCandidate(runID string) (PromptCandidate, error)`
+    - Enables optimization tracking
+    - Supports GEPA persistence
+
+14. **SessionStatsRepository**
+    - Interface for session statistics
+    - Key methods:
+      - `Create(stats SessionStats) error`
+      - `GetByConversation(conversationID string) (SessionStats, error)`
+      - `Update(stats SessionStats) error`
+    - Enables usage analytics
+    - Supports cost tracking
+
+15. **ASRPort**
    - Interface for speech recognition services
    - Key methods:
      - `TranscribeAudio(audioData []byte, format string) (string, error)`
@@ -327,7 +527,7 @@ The ports define the interfaces through which the domain interacts with external
    - Supports both batch and streaming transcription
    - Enables real-time voice input processing
 
-6. **LLMPort** ✅
+16. **LLMPort**
    - Interface for language model services
    - Key methods:
      - `GenerateResponse(prompt string, options GenerationOptions) (string, error)`
@@ -337,7 +537,7 @@ The ports define the interfaces through which the domain interacts with external
    - Abstracts the specific LLM implementation
    - Supports both complete and streaming generation
 
-7. **TTSPort** ✅
+17. **TTSPort**
    - Interface for text-to-speech services
    - Key methods:
      - `SynthesizeSpeech(text string, voice string) ([]byte, error)`
@@ -346,7 +546,7 @@ The ports define the interfaces through which the domain interacts with external
    - Supports different voices and languages
    - Abstracts the TTS implementation details
 
-8. **ToolPort** ✅
+18. **ToolPort**
    - Interface for external tool integration
    - Key methods:
      - `ExecuteTool(name string, parameters map[string]interface{}) (interface{}, error)`
@@ -356,7 +556,17 @@ The ports define the interfaces through which the domain interacts with external
    - Provides a unified interface for diverse tools
    - Supports dynamic tool discovery and execution
 
-9. **LiveKitRoomPort** ✅
+19. **EmbeddingPort**
+   - Interface for generating text embeddings
+   - Key methods:
+     - `Embed(text string) (EmbeddingResult, error)`
+     - `EmbedBatch(texts []string) ([]EmbeddingResult, error)`
+     - `GetDimensions() int`
+   - Enables semantic search capabilities
+   - Abstracts embedding model implementation
+   - Critical for memory retrieval
+
+20. **LiveKitRoomPort**
    - Interface for LiveKit room operations
    - Key methods:
      - `PublishData(data []byte, reliable bool, destinationIdentities []string) error`
@@ -374,7 +584,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
 
 #### Use Cases
 
-1. **StartConversationUseCase** ✅
+1. **StartConversationUseCase**
    - Initializes a new conversation
    - Key operations:
      - Creating a new conversation record
@@ -385,7 +595,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Handles conversation initialization logic
    - Sets up the foundation for the conversation flow
 
-2. **ProcessUserMessageUseCase** ✅
+2. **ProcessUserMessageUseCase**
    - Handles incoming user messages
    - Orchestrates the flow from user input to assistant response
    - Key operations:
@@ -397,7 +607,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Handles both text and audio input paths
    - Ensures proper sequencing of operations
 
-3. **GenerateAssistantResponseUseCase** ✅
+3. **GenerateAssistantResponseUseCase**
    - Generates the assistant's response to a user message
    - Coordinates between LLM, memory, and tools
    - Key operations:
@@ -410,7 +620,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Implements the streaming response capability
    - Coordinates complex interactions between services
 
-4. **TranscribeAudioUseCase** ✅
+4. **TranscribeAudioUseCase**
    - Converts audio input to text using ASR
    - Key operations:
      - Processing audio chunks from LiveKit tracks
@@ -421,7 +631,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Supports real-time transcription feedback
    - Handles different audio formats and qualities
 
-5. **SynthesizeSpeechUseCase** ✅
+5. **SynthesizeSpeechUseCase**
    - Converts text to speech using TTS
    - Key operations:
      - Breaking text into sentences
@@ -432,10 +642,9 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Supports different voices and languages
    - Implements the streaming audio response feature
 
-6. **RetrieveMemoryUseCase** ✅
+6. **RetrieveMemoryUseCase**
    - Retrieves relevant memories for the current context
-   - **Status**: Fully implemented and integrated into conversation flow
-   - **Implementation**: Called from `GenerateAssistantResponseUseCase` in `generate_response.go:106-122`
+   - Called from `GenerateAssistantResponseUseCase` in `generate_response.go:62-82`
    - Key operations:
      - Creating embeddings for the query
      - Searching the vector database
@@ -445,9 +654,8 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Implements the semantic search functionality
    - Supports the "Persistent Conversation Memory" user story
 
-7. **StoreMemoryUseCase** ✅
+7. **StoreMemoryUseCase**
    - Stores new memories from the conversation
-   - **Status**: Fully implemented and integrated into conversation flow
    - Key operations:
      - Extracting important information
      - Creating embeddings for the memory
@@ -457,7 +665,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Enables future recall of conversation details
    - Implements the memory persistence logic
 
-8. **ExecuteToolUseCase** ✅
+8. **ExecuteToolUseCase**
    - Executes external tools as needed by the assistant
    - Key operations:
      - Validating tool parameters
@@ -468,7 +676,7 @@ The Application Layer contains the use cases that orchestrate the flow of data a
    - Enables integration with external systems
    - Supports the "Tool Integration" user story
 
-9. **ManageConversationHistoryUseCase** ✅
+9. **ManageConversationHistoryUseCase**
    - Manages the user's conversation history
    - Key operations:
      - Listing conversations
@@ -485,7 +693,7 @@ The Adapters Layer connects the application to external systems, implementing th
 
 #### Input Adapters
 
-1. **LiveKitAgent** ✅
+1. **LiveKitAgent**
    - Main entry point for the Alicia assistant
    - Implements LiveKit's Agent framework
    - Key responsibilities:
@@ -524,7 +732,7 @@ The Adapters Layer connects the application to external systems, implementing th
    }
    ```
 
-2. **RESTAPIAdapter** ✅
+2. **RESTAPIAdapter**
    - Handles HTTP requests for non-streaming operations
    - Provides REST API endpoints
    - Key responsibilities:
@@ -564,7 +772,7 @@ The Adapters Layer connects the application to external systems, implementing th
 
 ##### Database Adapters
 
-1. **PostgresMessageRepository** ✅
+1. **PostgresMessageRepository**
    - Implements MessageRepository using PostgreSQL
    - Uses type-safe database access
    - Key responsibilities:
@@ -576,7 +784,7 @@ The Adapters Layer connects the application to external systems, implementing th
    - Provides efficient storage and retrieval of messages
    - Implements the database schema
 
-2. **PostgresConversationRepository** ✅
+2. **PostgresConversationRepository**
    - Implements ConversationRepository using PostgreSQL
    - Key responsibilities:
      - Managing conversation records
@@ -587,7 +795,7 @@ The Adapters Layer connects the application to external systems, implementing th
    - Supports efficient conversation retrieval
    - Enables conversation history management
 
-3. **PostgresAudioRepository** ✅
+3. **PostgresAudioRepository**
    - Implements AudioRepository using PostgreSQL
    - Key responsibilities:
      - Storing and retrieving audio data
@@ -598,7 +806,7 @@ The Adapters Layer connects the application to external systems, implementing th
    - Supports audio playback and transcription
    - Manages audio lifecycle (creation, access, deletion)
 
-4. **PgVectorMemoryRepository** ✅
+4. **PgVectorMemoryRepository**
    - Implements MemoryRepository using pgvector
    - Provides vector search capabilities
    - Key responsibilities:
@@ -612,7 +820,7 @@ The Adapters Layer connects the application to external systems, implementing th
 
 ##### External Service Adapters
 
-1. **SpeachesASRAdapter** ✅
+1. **ASRAdapter**
    - Implements ASRPort using speaches server (OpenAI-compatible API)
    - Handles streaming audio transcription
    - Key responsibilities:
@@ -626,12 +834,12 @@ The Adapters Layer connects the application to external systems, implementing th
    - Optimized for low-latency operation
 
    ```go
-   type SpeachesASRAdapter struct {
+   type ASRAdapter struct {
        client *openai.Client
        model  string
    }
 
-   func (s *SpeachesASRAdapter) StreamingTranscribe(ctx context.Context, audioStream <-chan []byte) (<-chan string, error) {
+   func (s *ASRAdapter) StreamingTranscribe(ctx context.Context, audioStream <-chan []byte) (<-chan string, error) {
        results := make(chan string)
 
        go func() {
@@ -649,7 +857,7 @@ The Adapters Layer connects the application to external systems, implementing th
    }
    ```
 
-2. **LiteLLMAdapter** ✅
+2. **LiteLLMAdapter**
    - Implements LLMPort using LiteLLM (OpenAI-compatible API)
    - Handles language understanding and generation via vLLM backend
    - Key responsibilities:
@@ -690,7 +898,7 @@ The Adapters Layer connects the application to external systems, implementing th
    }
    ```
 
-3. **SpeachesTTSAdapter** ✅
+3. **TTSAdapter**
    - Implements TTSPort using speaches server (OpenAI-compatible API)
    - Handles text-to-speech synthesis via Kokoro
    - Key responsibilities:
@@ -704,12 +912,12 @@ The Adapters Layer connects the application to external systems, implementing th
    - Optimized for sentence-by-sentence streaming
 
    ```go
-   type SpeachesTTSAdapter struct {
+   type TTSAdapter struct {
        client *openai.Client
        voice  string
    }
 
-   func (t *SpeachesTTSAdapter) StreamingSynthesize(ctx context.Context, textStream <-chan string, voice string) (<-chan []byte, error) {
+   func (t *TTSAdapter) StreamingSynthesize(ctx context.Context, textStream <-chan string, voice string) (<-chan []byte, error) {
        audioChunks := make(chan []byte)
 
        go func() {
@@ -728,7 +936,7 @@ The Adapters Layer connects the application to external systems, implementing th
    }
    ```
 
-4. **LiveKitRoomAdapter** ✅
+4. **LiveKitRoomAdapter**
    - Implements LiveKitRoomPort
    - Handles LiveKit room operations
    - Key responsibilities:
@@ -768,11 +976,9 @@ The Adapters Layer connects the application to external systems, implementing th
    }
    ```
 
-5. **ToolRegistry** ✅
-   - Manages available tools
-   - **Status**: Framework fully implemented with working tools
-   - **Implementation**: Web search tool fully functional with DuckDuckGo integration (see `docs/WEB_SEARCH_IMPLEMENTATION.md`)
-   - Routes tool requests to appropriate implementations
+5. **ToolRegistry**
+   - Manages available tools and routes tool requests to appropriate implementations
+   - Includes web search tool with DuckDuckGo integration
    - Key responsibilities:
      - Registering available tools
      - Validating tool parameters
@@ -782,6 +988,69 @@ The Adapters Layer connects the application to external systems, implementing th
    - Enables extensibility through tools
    - Supports dynamic tool discovery
    - Implements the tool execution framework
+
+6. **EmbeddingClient**
+   - Implements EmbeddingPort using OpenAI-compatible API
+   - Connects to local or remote embedding services
+   - Key responsibilities:
+     - Generating text embeddings
+     - Batch embedding for efficiency
+     - Caching embedding dimensions
+   - Enables semantic search capabilities
+   - Supports various embedding models
+   - Critical for memory retrieval
+
+7. **MCPAdapter**
+   - Implements Model Context Protocol integration
+   - Manages MCP server connections
+   - Key responsibilities:
+     - Starting and managing MCP servers
+     - Discovering available tools from servers
+     - Routing tool calls to appropriate servers
+     - Managing server lifecycle
+   - Enables external tool integration
+   - Supports stdio, SSE, and HTTP transports
+   - Dynamically extends available tools
+
+##### Infrastructure Adapters
+
+1. **CircuitBreaker**
+   - Implements circuit breaker pattern for resilience
+   - Key responsibilities:
+     - Tracking failure rates
+     - Opening circuit on threshold breach
+     - Half-open state for recovery testing
+     - Automatic recovery
+   - Prevents cascade failures
+   - Improves system resilience
+
+2. **RetryWithBackoff**
+   - Implements exponential backoff retry logic
+   - Key responsibilities:
+     - Retrying failed operations
+     - Exponential backoff between attempts
+     - HTTP-aware retry (respects status codes)
+     - Configurable max attempts
+   - Handles transient failures gracefully
+   - Improves reliability of external calls
+
+3. **PrometheusMetrics**
+   - Implements metrics collection via Prometheus
+   - Key responsibilities:
+     - Tracking request latencies
+     - Counting operation successes/failures
+     - Exposing /metrics endpoint
+   - Enables observability
+   - Supports alerting and dashboards
+
+4. **OpenTelemetryTracing**
+   - Implements distributed tracing via OpenTelemetry
+   - Key responsibilities:
+     - Creating trace spans
+     - Propagating trace context
+     - Recording span attributes
+   - Enables distributed debugging
+   - Supports trace visualization
 
 ## LiveKit Integration Architecture
 
@@ -902,31 +1171,57 @@ alicia/
 │   │   │   ├── server.go
 │   │   │   ├── handlers/   # Endpoint handlers
 │   │   │   ├── dto/        # Data transfer objects
+│   │   │   ├── encoding/   # MessagePack encoding
 │   │   │   └── middleware/ # HTTP middleware
 │   │   ├── postgres/       # Database adapters
 │   │   │   ├── conversation_repository.go
 │   │   │   ├── message_repository.go
 │   │   │   ├── memory_repository.go
 │   │   │   ├── audio_repository.go
+│   │   │   ├── sentence_repository.go
+│   │   │   ├── tool_repository.go
+│   │   │   ├── vote_repository.go
+│   │   │   ├── note_repository.go
+│   │   │   ├── optimization_repository.go
+│   │   │   ├── transaction_manager.go
 │   │   │   └── sqlc/       # Generated sqlc code
 │   │   ├── livekit/        # LiveKit integration
-│   │   │   └── audio_converter.go  # Opus codec handling
+│   │   │   ├── agent.go           # LiveKit agent
+│   │   │   ├── agent_factory.go   # Agent creation
+│   │   │   ├── worker.go          # Room dispatch worker
+│   │   │   ├── message_router.go  # Message routing
+│   │   │   ├── protocol_handler.go # Protocol handling
+│   │   │   ├── audio_converter.go # Opus codec handling
+│   │   │   └── voice_pipeline.go  # Voice processing
 │   │   ├── speech/         # ASR/TTS adapters
 │   │   ├── embedding/      # Embedding service adapter
 │   │   ├── mcp/            # Model Context Protocol
+│   │   │   ├── adapter.go  # MCP integration
+│   │   │   ├── manager.go  # Server management
+│   │   │   └── transport.go # Transport implementations
 │   │   ├── id/             # ID generation (NanoID)
-│   │   └── metrics/        # Prometheus metrics
+│   │   ├── metrics/        # Prometheus metrics
+│   │   ├── tracing/        # OpenTelemetry tracing
+│   │   ├── circuitbreaker/ # Circuit breaker pattern
+│   │   └── retry/          # Retry with backoff
 │   ├── application/        # Application layer
 │   │   ├── services/       # Application services
 │   │   │   ├── conversation.go
 │   │   │   ├── message.go
 │   │   │   ├── memory.go
 │   │   │   ├── tool.go
-│   │   │   └── audio.go
+│   │   │   ├── audio.go
+│   │   │   ├── optimization.go
+│   │   │   ├── deployment.go
+│   │   │   └── validation.go
 │   │   ├── usecases/       # Use case implementations
 │   │   │   ├── generate_response.go
 │   │   │   ├── manage_conversation.go
-│   │   │   └── handle_tool.go
+│   │   │   ├── handle_tool.go
+│   │   │   ├── process_message.go
+│   │   │   ├── synthesize_speech.go
+│   │   │   ├── stream_audio_response.go
+│   │   │   └── cleanup_orphaned_data.go
 │   │   ├── chat/           # Chat session logic
 │   │   │   └── session.go
 │   │   └── tools/          # Tool system
@@ -935,12 +1230,17 @@ alicia/
 │   ├── domain/             # Domain layer
 │   │   ├── models/         # Domain models
 │   │   │   ├── conversation.go
+│   │   │   ├── conversation_state.go
 │   │   │   ├── message.go
 │   │   │   ├── audio.go
 │   │   │   ├── memory.go
 │   │   │   ├── tool.go
 │   │   │   ├── reasoning.go
-│   │   │   └── sentence.go
+│   │   │   ├── sentence.go
+│   │   │   ├── feedback.go
+│   │   │   ├── optimization.go
+│   │   │   ├── mcp_server.go
+│   │   │   └── meta.go
 │   │   └── errors.go       # Domain-specific errors
 │   ├── ports/              # Interface definitions
 │   │   ├── services.go
@@ -948,6 +1248,8 @@ alicia/
 │   ├── llm/                # LLM client
 │   │   ├── client.go
 │   │   └── service.go
+│   ├── prompt/             # Prompt engineering
+│   │   └── memory_aware_module.go
 │   └── config/             # Configuration management
 │       └── config.go
 ├── pkg/                    # Public library code
@@ -969,6 +1271,7 @@ alicia/
 │   ├── feature/            # Feature modules
 │   └── service/            # Background services
 ├── docs/                   # Documentation (mdbook)
+├── review/                 # Implementation reviews
 └── flake.nix               # Nix flake for reproducible builds
 ```
 

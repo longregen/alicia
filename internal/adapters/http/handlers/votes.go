@@ -784,3 +784,424 @@ func (h *VoteHandler) ReasoningIssue(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, response, http.StatusOK)
 }
+
+// --- Memory Usage (Selection) Voting ---
+
+// VoteOnMemoryUsage handles POST /api/v1/memory-usages/{id}/vote
+func (h *VoteHandler) VoteOnMemoryUsage(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	memoryUsageID, ok := validateURLParam(r, w, "id", "Memory usage ID")
+	if !ok {
+		return
+	}
+
+	req, ok := decodeJSON[VoteRequest](r, w)
+	if !ok {
+		return
+	}
+
+	if req.Vote != "up" && req.Vote != "down" {
+		respondError(w, "validation_error", "Vote must be 'up' or 'down'", http.StatusBadRequest)
+		return
+	}
+
+	// Convert vote string to value
+	voteValue := models.VoteValueUp
+	if req.Vote == "down" {
+		voteValue = models.VoteValueDown
+	}
+
+	// Create vote
+	vote := models.NewVote(
+		h.idGenerator.GenerateVoteID(),
+		models.VoteTargetMemoryUsage,
+		memoryUsageID,
+		"",
+		voteValue,
+	)
+
+	if err := h.voteRepo.Create(r.Context(), vote); err != nil {
+		respondError(w, "database_error", "Failed to create vote", http.StatusInternalServerError)
+		return
+	}
+
+	// Get aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryUsage, memoryUsageID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryUsageID,
+		TargetType: "memory_usage",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   &req.Vote,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// RemoveMemoryUsageVote handles DELETE /api/v1/memory-usages/{id}/vote
+func (h *VoteHandler) RemoveMemoryUsageVote(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	memoryUsageID, ok := validateURLParam(r, w, "id", "Memory usage ID")
+	if !ok {
+		return
+	}
+
+	// Delete vote
+	if err := h.voteRepo.Delete(r.Context(), models.VoteTargetMemoryUsage, memoryUsageID); err != nil {
+		respondError(w, "database_error", "Failed to delete vote", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryUsage, memoryUsageID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryUsageID,
+		TargetType: "memory_usage",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   nil,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// GetMemoryUsageVotes handles GET /api/v1/memory-usages/{id}/votes
+func (h *VoteHandler) GetMemoryUsageVotes(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	memoryUsageID, ok := validateURLParam(r, w, "id", "Memory usage ID")
+	if !ok {
+		return
+	}
+
+	// Get aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryUsage, memoryUsageID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryUsageID,
+		TargetType: "memory_usage",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   nil,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// MemoryUsageIrrelevanceReason handles POST /api/v1/memory-usages/{id}/irrelevance-reason
+func (h *VoteHandler) MemoryUsageIrrelevanceReason(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	memoryUsageID, ok := validateURLParam(r, w, "id", "Memory usage ID")
+	if !ok {
+		return
+	}
+
+	req, ok := decodeJSON[IrrelevanceReasonRequest](r, w)
+	if !ok {
+		return
+	}
+
+	// Validate reason
+	validReasons := map[string]bool{
+		"outdated":      true,
+		"wrong_context": true,
+		"too_general":   true,
+		"too_specific":  true,
+		"incorrect":     true,
+	}
+
+	if !validReasons[req.Reason] {
+		respondError(w, "validation_error", "Invalid irrelevance reason", http.StatusBadRequest)
+		return
+	}
+
+	// Create vote with irrelevance reason as quick feedback
+	vote := models.NewVoteWithFeedback(
+		h.idGenerator.GenerateVoteID(),
+		models.VoteTargetMemoryUsage,
+		memoryUsageID,
+		"",                   // No parent message ID
+		models.VoteValueDown, // Irrelevance is negative feedback
+		req.Reason,
+		"",
+	)
+
+	if err := h.voteRepo.Create(r.Context(), vote); err != nil {
+		respondError(w, "database_error", "Failed to record irrelevance reason", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryUsage, memoryUsageID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryUsageID,
+		TargetType: "memory_usage",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   &req.Reason,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// --- Memory Extraction Voting ---
+
+// VoteOnMemoryExtraction handles POST /api/v1/messages/{messageId}/extracted-memories/{memoryId}/vote
+func (h *VoteHandler) VoteOnMemoryExtraction(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	messageID, ok := validateURLParam(r, w, "messageId", "Message ID")
+	if !ok {
+		return
+	}
+
+	memoryID, ok := validateURLParam(r, w, "memoryId", "Memory ID")
+	if !ok {
+		return
+	}
+
+	req, ok := decodeJSON[VoteRequest](r, w)
+	if !ok {
+		return
+	}
+
+	if req.Vote != "up" && req.Vote != "down" {
+		respondError(w, "validation_error", "Vote must be 'up' or 'down'", http.StatusBadRequest)
+		return
+	}
+
+	// Convert vote string to value
+	voteValue := models.VoteValueUp
+	if req.Vote == "down" {
+		voteValue = models.VoteValueDown
+	}
+
+	// Create vote (use memoryID as targetID, messageID as parent)
+	vote := models.NewVote(
+		h.idGenerator.GenerateVoteID(),
+		models.VoteTargetMemoryExtraction,
+		memoryID,
+		messageID,
+		voteValue,
+	)
+
+	if err := h.voteRepo.Create(r.Context(), vote); err != nil {
+		respondError(w, "database_error", "Failed to create vote", http.StatusInternalServerError)
+		return
+	}
+
+	// Get aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryExtraction, memoryID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryID,
+		TargetType: "memory_extraction",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   &req.Vote,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// RemoveMemoryExtractionVote handles DELETE /api/v1/messages/{messageId}/extracted-memories/{memoryId}/vote
+func (h *VoteHandler) RemoveMemoryExtractionVote(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	_, ok := validateURLParam(r, w, "messageId", "Message ID")
+	if !ok {
+		return
+	}
+
+	memoryID, ok := validateURLParam(r, w, "memoryId", "Memory ID")
+	if !ok {
+		return
+	}
+
+	// Delete vote
+	if err := h.voteRepo.Delete(r.Context(), models.VoteTargetMemoryExtraction, memoryID); err != nil {
+		respondError(w, "database_error", "Failed to delete vote", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryExtraction, memoryID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryID,
+		TargetType: "memory_extraction",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   nil,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// GetMemoryExtractionVotes handles GET /api/v1/messages/{messageId}/extracted-memories/{memoryId}/votes
+func (h *VoteHandler) GetMemoryExtractionVotes(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	_, ok := validateURLParam(r, w, "messageId", "Message ID")
+	if !ok {
+		return
+	}
+
+	memoryID, ok := validateURLParam(r, w, "memoryId", "Memory ID")
+	if !ok {
+		return
+	}
+
+	// Get aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryExtraction, memoryID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryID,
+		TargetType: "memory_extraction",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   nil,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// MemoryExtractionQualityFeedback handles POST /api/v1/messages/{messageId}/extracted-memories/{memoryId}/quality-feedback
+func (h *VoteHandler) MemoryExtractionQualityFeedback(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	messageID, ok := validateURLParam(r, w, "messageId", "Message ID")
+	if !ok {
+		return
+	}
+
+	memoryID, ok := validateURLParam(r, w, "memoryId", "Memory ID")
+	if !ok {
+		return
+	}
+
+	req, ok := decodeJSON[QuickFeedbackRequest](r, w)
+	if !ok {
+		return
+	}
+
+	// Validate feedback type
+	validFeedback := map[string]bool{
+		"accurate":     true,
+		"too_specific": true,
+		"too_generic":  true,
+		"incorrect":    true,
+		"redundant":    true,
+		"irrelevant":   true,
+	}
+
+	if !validFeedback[req.Feedback] {
+		respondError(w, "validation_error", "Invalid quality feedback type", http.StatusBadRequest)
+		return
+	}
+
+	// Determine vote value: accurate is positive, others are negative
+	voteValue := models.VoteValueDown
+	if req.Feedback == "accurate" {
+		voteValue = models.VoteValueUp
+	}
+
+	// Create vote with quality feedback
+	vote := models.NewVoteWithFeedback(
+		h.idGenerator.GenerateVoteID(),
+		models.VoteTargetMemoryExtraction,
+		memoryID,
+		messageID,
+		voteValue,
+		req.Feedback,
+		"",
+	)
+
+	if err := h.voteRepo.Create(r.Context(), vote); err != nil {
+		respondError(w, "database_error", "Failed to record quality feedback", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated aggregates
+	aggregates, err := h.voteRepo.GetAggregates(r.Context(), models.VoteTargetMemoryExtraction, memoryID)
+	if err != nil {
+		respondError(w, "database_error", "Failed to get vote aggregates", http.StatusInternalServerError)
+		return
+	}
+
+	response := &VoteResponse{
+		TargetID:   memoryID,
+		TargetType: "memory_extraction",
+		Upvotes:    aggregates.Upvotes,
+		Downvotes:  aggregates.Downvotes,
+		UserVote:   &req.Feedback,
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}

@@ -112,7 +112,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
       const envelope = protocolRef.current.decode(payload);
       const timestamp = Date.now();
 
-      // Track last seen stanza ID from server messages (negative IDs)
+      // Server sends negative stanza IDs. Convert to positive for tracking.
+      // This convention distinguishes server-originated IDs from client IDs.
       if (envelope.stanzaId < 0) {
         setLastSeenStanzaId(Math.abs(envelope.stanzaId));
       }

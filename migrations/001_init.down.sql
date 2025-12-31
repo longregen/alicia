@@ -1,7 +1,11 @@
 -- Alicia Database Schema
--- Migration 001: Rollback initial schema
+-- Migration 001: Rollback consolidated schema
 
 -- Drop triggers
+DROP TRIGGER IF EXISTS update_usage_patterns_updated_at ON tool_usage_patterns;
+DROP TRIGGER IF EXISTS update_session_stats_updated_at ON alicia_session_stats;
+DROP TRIGGER IF EXISTS update_notes_updated_at ON alicia_notes;
+DROP TRIGGER IF EXISTS update_votes_updated_at ON alicia_votes;
 DROP TRIGGER IF EXISTS update_mcp_servers_updated_at ON alicia_mcp_servers;
 DROP TRIGGER IF EXISTS update_meta_updated_at ON alicia_meta;
 DROP TRIGGER IF EXISTS update_commentaries_updated_at ON alicia_user_conversation_commentaries;
@@ -19,6 +23,17 @@ DROP TRIGGER IF EXISTS update_conversations_updated_at ON alicia_conversations;
 DROP FUNCTION IF EXISTS update_updated_at_column();
 
 -- Drop tables in reverse order of dependencies
+DROP TABLE IF EXISTS pareto_archive;
+DROP TABLE IF EXISTS tool_usage_patterns;
+DROP TABLE IF EXISTS tool_result_formatters;
+DROP TABLE IF EXISTS optimized_tools;
+DROP TABLE IF EXISTS optimized_programs;
+DROP TABLE IF EXISTS prompt_evaluations;
+DROP TABLE IF EXISTS prompt_candidates;
+DROP TABLE IF EXISTS prompt_optimization_runs;
+DROP TABLE IF EXISTS alicia_session_stats;
+DROP TABLE IF EXISTS alicia_notes;
+DROP TABLE IF EXISTS alicia_votes;
 DROP TABLE IF EXISTS alicia_mcp_servers;
 DROP TABLE IF EXISTS alicia_meta;
 DROP TABLE IF EXISTS alicia_user_conversation_commentaries;
@@ -33,6 +48,7 @@ DROP TABLE IF EXISTS alicia_messages;
 DROP TABLE IF EXISTS alicia_conversations;
 
 -- Drop enum types
+DROP TYPE IF EXISTS optimization_status;
 DROP TYPE IF EXISTS completion_status;
 DROP TYPE IF EXISTS sync_status;
 DROP TYPE IF EXISTS audio_type;

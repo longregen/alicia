@@ -66,10 +66,11 @@ data class MessageEntity(
 
     /**
      * Whether this message was generated via voice (true) or text (false).
-     * Default is true since Alicia is primarily a voice-first assistant,
-     * and most interactions are expected to be voice-based.
+     * Default is false to ensure explicit opt-in for voice messages,
+     * preventing data integrity issues where text messages could be
+     * incorrectly marked as voice messages.
      */
-    val isVoice: Boolean = true,
+    val isVoice: Boolean = false,
 
     /**
      * Optional audio file path for voice messages.

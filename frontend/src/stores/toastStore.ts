@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { immer } from 'zustand/middleware/immer';
 
 export type ToastVariant = 'default' | 'success' | 'warning' | 'error';
 
@@ -16,32 +17,37 @@ interface ToastState {
   clearToasts: () => void;
 }
 
-export const useToastStore = create<ToastState>((set) => ({
-  toasts: [],
+export const useToastStore = create<ToastState>()(
+  immer((set) => ({
+    toasts: [],
 
-  addToast: (message, variant = 'default', duration = 4000) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    set((state) => ({
-      toasts: [...state.toasts, { id, message, variant, duration }],
-    }));
+    addToast: (message, variant = 'default', duration = 4000) => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      set((state) => {
+        state.toasts.push({ id, message, variant, duration });
+      });
 
-    // Auto-remove after duration
-    if (duration > 0) {
-      setTimeout(() => {
-        set((state) => ({
-          toasts: state.toasts.filter((t) => t.id !== id),
-        }));
-      }, duration);
-    }
-  },
+      // Auto-remove after duration
+      if (duration > 0) {
+        setTimeout(() => {
+          set((state) => {
+            state.toasts = state.toasts.filter((t) => t.id !== id);
+          });
+        }, duration);
+      }
+    },
 
-  removeToast: (id) =>
-    set((state) => ({
-      toasts: state.toasts.filter((t) => t.id !== id),
-    })),
+    removeToast: (id) =>
+      set((state) => {
+        state.toasts = state.toasts.filter((t) => t.id !== id);
+      }),
 
-  clearToasts: () => set({ toasts: [] }),
-}));
+    clearToasts: () =>
+      set((state) => {
+        state.toasts = [];
+      }),
+  }))
+);
 
 // Convenience functions
 export const toast = {

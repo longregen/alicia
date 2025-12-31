@@ -126,6 +126,7 @@ export function MCPSettings() {
   };
 
   const handleRemoveServer = async (name: string) => {
+    // TODO: Replace with AlertDialog component for consistent UX
     if (!confirm(`Are you sure you want to remove the server "${name}"?`)) {
       return;
     }

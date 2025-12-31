@@ -25,6 +25,8 @@ function rowToConversation(row: unknown[]): Conversation {
     status: row[2] as 'active' | 'archived' | 'deleted',
     created_at: row[3] as string,
     updated_at: row[4] as string,
+    // These fields are required by the type but not stored in DB
+    // They're populated separately when needed for sync operations
     last_client_stanza_id: 0,
     last_server_stanza_id: 0,
   };
@@ -136,6 +138,7 @@ export const messageRepository = {
 
     values.push(id);
 
+    // updated_at is always added, so this check is for documentation clarity
     if (setClauses.length > 0) {
       db.run(
         `UPDATE messages SET ${setClauses.join(', ')} WHERE id = ?`,
@@ -164,9 +167,12 @@ export const messageRepository = {
   },
 
   upsert(message: Message): void {
-    const existing = this.findById(message.id);
+    let existing = this.findById(message.id);
+    if (!existing && message.local_id) {
+      existing = this.findByLocalId(message.local_id);
+    }
     if (existing) {
-      this.update(message.id, message);
+      this.update(existing.id, message);
     } else {
       this.insert(message);
     }
@@ -262,6 +268,7 @@ export const conversationRepository = {
 
     values.push(id);
 
+    // updated_at is always added, so this check is for documentation clarity
     if (setClauses.length > 0) {
       db.run(
         `UPDATE conversations SET ${setClauses.join(', ')} WHERE id = ?`,

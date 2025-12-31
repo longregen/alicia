@@ -148,7 +148,7 @@ const ResizableBarTextInput: React.FC<ResizableBarTextInputProps> = ({
 
     if (disabled) {
       return cls(baseClasses, [
-        'bg-transparent', // Transparent since container has the background
+        'bg-transparent', // Disabled state uses transparent background
         'cursor-not-allowed',
       ]);
     }

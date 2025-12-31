@@ -153,8 +153,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     if (onRegenerateResponse) {
       onRegenerateResponse();
     }
-    // Regenerate via LiveKit requires message ID to regenerate from
-    // This will be passed by the parent component
+    // Regeneration is handled by parent component callback
   };
 
   // Determine voice connection status text
@@ -261,6 +260,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {/* Voice controls - visible when voice mode is active */}
+      {/* TODO: Voice mode UI is placeholder - actual recording uses Silero VAD in InputArea */}
       {voiceModeActive && (
         <div className="voice-controls layout-vcenter-gap p-4 border-t border-primary-blue-glow">
           {/* VoiceVisualizer */}

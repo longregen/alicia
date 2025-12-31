@@ -39,9 +39,8 @@ Alicia requires several external services to function:
    - Provided by NixOS module
    - Must have pgvector extension enabled
 
-3. **LiveKit Server** (Optional, for real-time voice)
+3. **LiveKit Server** (Optional: Only needed if using voice features via WebRTC)
    - Can be self-hosted or use LiveKit Cloud
-   - Required for WebRTC-based voice features
 
 4. **ASR Service** (Optional, for speech recognition)
    - Speaches, OpenAI Whisper API, or compatible service
@@ -515,19 +514,11 @@ services.alicia.livekit = {
 
 **Option B: Self-Hosted LiveKit**
 
-```nix
-# Note: This is a simplified example - you'll need a proper LiveKit NixOS package
-services.livekit = {
-  enable = true;
-  settings = {
-    port = 7880;
-    rtc = {
-      port_range_start = 50000;
-      port_range_end = 60000;
-    };
-  };
-};
+Self-hosted LiveKit requires manual installation. Refer to the [LiveKit documentation](https://docs.livekit.io/home/self-hosting/deployment/) for deployment instructions.
 
+Example firewall configuration for NixOS:
+
+```nix
 # Open firewall for LiveKit
 networking.firewall = {
   allowedTCPPorts = [ 7880 ];
@@ -678,13 +669,18 @@ services.alicia = {
   user = "alicia";
   group = "alicia";
   dataDir = "/var/lib/alicia";
-  host = "127.0.0.1";
+  host = "0.0.0.0";
   port = 8080;
+  mode = "both";  # Options: "server", "agent", "both" (default: "both")
+                  # server: Run API server only
+                  # agent: Run LiveKit agent only
+                  # both: Run both server and agent
 
   database = {
     url = null;  # Direct database URL
     urlFile = "/var/secrets/alicia/database-url";  # Path to file containing URL
     autoMigrate = true;  # Auto-run migrations on startup
+    failOnMigrationError = true;  # Stop service if migrations fail (default: true)
   };
 
   llm = {

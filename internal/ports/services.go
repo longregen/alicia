@@ -227,6 +227,20 @@ type MemoryService interface {
 	Archive(ctx context.Context, id string) (*models.Memory, error)
 }
 
+// PromptVersionService defines the interface for managing system prompt versions
+type PromptVersionService interface {
+	// EnsureVersion creates a version if it doesn't exist, or returns existing
+	EnsureVersion(ctx context.Context, promptType, content, description string) (*models.SystemPromptVersion, error)
+	// GetActiveVersion returns the currently active version for a prompt type
+	GetActiveVersion(ctx context.Context, promptType string) (*models.SystemPromptVersion, error)
+	// ActivateVersion sets a version as active
+	ActivateVersion(ctx context.Context, versionID string) error
+	// GetOrCreateForConversation ensures prompt version exists and returns ID for conversation
+	GetOrCreateForConversation(ctx context.Context, systemPrompt string) (string, error)
+	// ListVersions returns versions for a prompt type
+	ListVersions(ctx context.Context, promptType string, limit int) ([]*models.SystemPromptVersion, error)
+}
+
 // OptimizationService defines the interface for prompt optimization
 type OptimizationService interface {
 	// Run management

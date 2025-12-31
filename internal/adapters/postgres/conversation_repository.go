@@ -30,9 +30,9 @@ func (r *ConversationRepository) Create(ctx context.Context, conversation *model
 
 	query := `
 		INSERT INTO alicia_conversations (
-			id, user_id, title, status, livekit_room_name, preferences, created_at, updated_at
+			id, user_id, title, status, livekit_room_name, preferences, tip_message_id, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)`
 
 	_, err = r.conn(ctx).Exec(ctx, query,
@@ -42,6 +42,7 @@ func (r *ConversationRepository) Create(ctx context.Context, conversation *model
 		conversation.Status,
 		nullString(conversation.LiveKitRoomName),
 		preferences,
+		nullStringPtr(conversation.TipMessageID),
 		conversation.CreatedAt,
 		conversation.UpdatedAt,
 	)
@@ -54,8 +55,8 @@ func (r *ConversationRepository) GetByID(ctx context.Context, id string) (*model
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE id = $1 AND deleted_at IS NULL`
@@ -68,8 +69,8 @@ func (r *ConversationRepository) GetByIDAndUserID(ctx context.Context, id, userI
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`
@@ -82,8 +83,8 @@ func (r *ConversationRepository) GetByLiveKitRoom(ctx context.Context, roomName 
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE livekit_room_name = $1 AND deleted_at IS NULL`
@@ -106,7 +107,8 @@ func (r *ConversationRepository) Update(ctx context.Context, conversation *model
 			status = $3,
 			livekit_room_name = $4,
 			preferences = $5,
-			updated_at = $6
+			tip_message_id = $6,
+			updated_at = $7
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	_, err = r.conn(ctx).Exec(ctx, query,
@@ -115,6 +117,7 @@ func (r *ConversationRepository) Update(ctx context.Context, conversation *model
 		conversation.Status,
 		nullString(conversation.LiveKitRoomName),
 		preferences,
+		nullStringPtr(conversation.TipMessageID),
 		conversation.UpdatedAt,
 	)
 
@@ -134,6 +137,36 @@ func (r *ConversationRepository) UpdateStanzaIDs(ctx context.Context, id string,
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	_, err := r.conn(ctx).Exec(ctx, query, id, clientStanza, serverStanza)
+	return err
+}
+
+// UpdateTip updates the conversation's tip_message_id pointer for message branching
+func (r *ConversationRepository) UpdateTip(ctx context.Context, conversationID, messageID string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `
+		UPDATE alicia_conversations
+		SET tip_message_id = $2,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	_, err := r.conn(ctx).Exec(ctx, query, conversationID, messageID)
+	return err
+}
+
+// UpdatePromptVersion updates the conversation's system_prompt_version_id for prompt versioning
+func (r *ConversationRepository) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `
+		UPDATE alicia_conversations
+		SET system_prompt_version_id = $2,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	_, err := r.conn(ctx).Exec(ctx, query, convID, versionID)
 	return err
 }
 
@@ -168,8 +201,8 @@ func (r *ConversationRepository) List(ctx context.Context, limit, offset int) ([
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE deleted_at IS NULL
@@ -190,8 +223,8 @@ func (r *ConversationRepository) ListByUserID(ctx context.Context, userID string
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE user_id = $1 AND deleted_at IS NULL
@@ -212,8 +245,8 @@ func (r *ConversationRepository) ListActive(ctx context.Context, limit, offset i
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE status = 'active' AND deleted_at IS NULL
@@ -234,8 +267,8 @@ func (r *ConversationRepository) ListActiveByUserID(ctx context.Context, userID 
 	defer cancel()
 
 	query := `
-		SELECT id, user_id, title, status, livekit_room_name, preferences,
-		       last_client_stanza_id, last_server_stanza_id,
+		SELECT id, user_id, title, status, livekit_room_name, preferences, tip_message_id,
+		       last_client_stanza_id, last_server_stanza_id, system_prompt_version_id,
 		       created_at, updated_at, deleted_at
 		FROM alicia_conversations
 		WHERE user_id = $1 AND status = 'active' AND deleted_at IS NULL
@@ -251,11 +284,12 @@ func (r *ConversationRepository) ListActiveByUserID(ctx context.Context, userID 
 	return r.scanConversations(rows)
 }
 
-// scanConversation scans a single conversation row
 func (r *ConversationRepository) scanConversation(row pgx.Row) (*models.Conversation, error) {
 	var c models.Conversation
 	var preferences []byte
 	var livekitRoom sql.NullString
+	var tipMessageID sql.NullString
+	var systemPromptVersionID sql.NullString
 
 	err := row.Scan(
 		&c.ID,
@@ -264,8 +298,10 @@ func (r *ConversationRepository) scanConversation(row pgx.Row) (*models.Conversa
 		&c.Status,
 		&livekitRoom,
 		&preferences,
+		&tipMessageID,
 		&c.LastClientStanzaID,
 		&c.LastServerStanzaID,
+		&systemPromptVersionID,
 		&c.CreatedAt,
 		&c.UpdatedAt,
 		&c.DeletedAt,
@@ -273,17 +309,15 @@ func (r *ConversationRepository) scanConversation(row pgx.Row) (*models.Conversa
 
 	if err != nil {
 		if checkNoRows(err) {
-			// Return a domain error for not found instead of nil, nil to prevent nil pointer issues
-			// in calling code that checks err != nil and then accesses the result
 			return nil, pgx.ErrNoRows
 		}
 		return nil, err
 	}
 
-	// Use helper to extract nullable string
 	c.LiveKitRoomName = getString(livekitRoom)
+	c.TipMessageID = getStringPtr(tipMessageID)
+	c.SystemPromptVersionID = getString(systemPromptVersionID)
 
-	// Use generic JSON unmarshaling helper
 	c.Preferences, err = unmarshalJSONPointer[models.ConversationPreferences](preferences)
 	if err != nil {
 		return nil, err
@@ -299,6 +333,8 @@ func (r *ConversationRepository) scanConversations(rows pgx.Rows) ([]*models.Con
 		var c models.Conversation
 		var preferences []byte
 		var livekitRoom sql.NullString
+		var tipMessageID sql.NullString
+		var systemPromptVersionID sql.NullString
 
 		err := rows.Scan(
 			&c.ID,
@@ -307,8 +343,10 @@ func (r *ConversationRepository) scanConversations(rows pgx.Rows) ([]*models.Con
 			&c.Status,
 			&livekitRoom,
 			&preferences,
+			&tipMessageID,
 			&c.LastClientStanzaID,
 			&c.LastServerStanzaID,
+			&systemPromptVersionID,
 			&c.CreatedAt,
 			&c.UpdatedAt,
 			&c.DeletedAt,
@@ -317,8 +355,9 @@ func (r *ConversationRepository) scanConversations(rows pgx.Rows) ([]*models.Con
 			return nil, err
 		}
 
-		// Use helpers to reduce boilerplate
 		c.LiveKitRoomName = getString(livekitRoom)
+		c.TipMessageID = getStringPtr(tipMessageID)
+		c.SystemPromptVersionID = getString(systemPromptVersionID)
 		c.Preferences, err = unmarshalJSONPointer[models.ConversationPreferences](preferences)
 		if err != nil {
 			return nil, err

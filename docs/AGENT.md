@@ -234,11 +234,11 @@ Each agent uses a worker pool for concurrent event processing:
 
 ### Token Validity
 
-Agent access tokens have configurable validity:
+Agent access tokens created by the worker have configurable validity:
 
-- Default: 24 hours
-- Determines max session duration
-- After expiry, agent must reconnect with new token
+- Worker token validity: 24 hours (configurable via TokenValidityDuration)
+- Determines max session duration before reconnection required
+- Tokens are generated when agents connect to rooms
 
 ### Room Prefix
 
@@ -256,9 +256,12 @@ Worker only handles rooms matching prefix:
 - **Voice Pipeline**: `/internal/adapters/livekit/voice_pipeline.go`
 - **Message Router**: `/internal/adapters/livekit/message_router.go`
 - **Message Dispatcher**: `/internal/adapters/livekit/message_dispatcher.go`
+- **Message Handlers**: `/internal/adapters/livekit/message_handlers.go`
+- **Protocol Handler**: `/internal/adapters/livekit/protocol_handler.go`
+- **Message Buffer**: `/internal/adapters/livekit/message_buffer.go`
 - **Generate Response Use Case**: `/internal/application/usecases/generate_response.go`
-- **Process User Message Use Case**: `/internal/application/usecases/process_user_message.go`
-- **Handle Tool Call Use Case**: `/internal/application/usecases/handle_tool_call.go`
+- **Process Message Use Case**: `/internal/application/usecases/process_message.go`
+- **Handle Tool Use Case**: `/internal/application/usecases/handle_tool.go`
 - **Agent Factory**: `/internal/adapters/livekit/agent_factory.go`
 - **Codec**: `/internal/adapters/livekit/codec.go`
 - **Audio Converter**: `/internal/adapters/livekit/audio_converter.go`
@@ -280,16 +283,17 @@ The agent logs key events:
 
 ### Health Checks
 
-Worker performs periodic health checks:
+Worker performs periodic health checks on each agent:
 
-- Every 10 seconds, verify agent still connected
-- Check if room still exists
-- Verify room has non-agent participants
-- Auto-cleanup if conditions not met
+- Every 10 seconds, verify:
+  - Agent is connected to LiveKit
+  - Room still exists in LiveKit
+  - Room has non-agent participants
+- Auto-cleanup and disconnect if any condition fails
 
-### Metrics
+### Recommended Metrics
 
-Key metrics to monitor (via Prometheus):
+Key metrics to monitor for production deployments:
 
 - Active agent count
 - Room join/leave rate
@@ -298,6 +302,8 @@ Key metrics to monitor (via Prometheus):
 - TTS synthesis latency
 - Tool execution success rate
 - Audio packet loss rate
+
+Note: Metrics collection can be integrated via Prometheus or similar monitoring systems.
 
 ## Error Handling
 
@@ -314,4 +320,4 @@ The agent implements robust error handling:
 - [CLI.md](CLI.md) - Running the agent worker
 - [SERVER.md](SERVER.md) - HTTP API for client interaction
 - [ANDROID.md](ANDROID.md) - Mobile client integration
-- [PROTOCOL.md](PROTOCOL.md) - MessagePack protocol specification
+- [protocol/index.md](protocol/index.md) - MessagePack protocol specification

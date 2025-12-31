@@ -93,6 +93,7 @@ export function useAsync<T, Args extends unknown[] = unknown[]>(
           onSuccess(result);
         }
 
+        // Ensure error is cleared on success (defensive programming)
         setError(null);
         return result;
       } catch (err) {

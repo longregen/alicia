@@ -95,9 +95,9 @@ fun ConversationItem(
 }
 
 /**
- * Thread-safe date formatter for timestamps older than a week.
- * SimpleDateFormat is not thread-safe, so we use ThreadLocal to ensure each thread
- * has its own instance.
+ * Date formatter for timestamps older than a week.
+ * Uses ThreadLocal as a defensive measure since SimpleDateFormat is not thread-safe,
+ * though Compose recomposition typically occurs on the main thread.
  */
 private val dateFormatter = ThreadLocal.withInitial {
     SimpleDateFormat("MMM d", Locale.getDefault())

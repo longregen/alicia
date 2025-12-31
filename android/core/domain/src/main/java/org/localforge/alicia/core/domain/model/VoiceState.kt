@@ -56,15 +56,16 @@ enum class VoiceState {
         get() = this in listOf(ACTIVATED, LISTENING, PROCESSING, SPEAKING)
 
     /**
-     * Check if the assistant can accept user input.
-     * Note: ACTIVATED, PROCESSING, and SPEAKING are excluded as they represent transitional states
-     * or states where the system shouldn't accept new input.
+     * Check if the assistant can accept user input or activation.
+     * IDLE accepts manual activation, LISTENING_FOR_WAKE_WORD accepts wake word,
+     * and LISTENING accepts voice input.
      */
     val canAcceptInput: Boolean
         get() = this in listOf(IDLE, LISTENING_FOR_WAKE_WORD, LISTENING)
 
     /**
      * Check if audio is being recorded.
+     * Includes both wake word detection (buffered/low-power) and active listening (full recording).
      */
     val isRecording: Boolean
         get() = this in listOf(LISTENING_FOR_WAKE_WORD, LISTENING)

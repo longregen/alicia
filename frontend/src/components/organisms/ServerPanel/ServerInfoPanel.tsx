@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { cn } from '../../../lib/utils';
+import { cls } from '../../../utils/cls';
 import { useServerInfo } from '../../../hooks/useServerInfo';
 import type { ConnectionQuality } from '../../../hooks/useServerInfo';
 import { api } from '../../../services/api';
@@ -84,7 +84,7 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
           }))
         );
 
-        // Update session stats
+        // Update session stats with server response (these are cumulative session stats)
         store.setSessionStats({
           messageCount: statsResponse.messageCount,
           toolCallCount: statsResponse.toolCallCount,
@@ -190,10 +190,10 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
   // Show loading state
   if (isLoading) {
     return (
-      <div className={cn(compact ? 'space-y-3' : 'space-y-4', className)}>
-        <div className={cn(sectionClass, 'flex', 'items-center', 'justify-center')}>
+      <div className={cls(compact ? 'space-y-3' : 'space-y-4', className)}>
+        <div className={cls(sectionClass, 'flex', 'items-center', 'justify-center')}>
           <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <span className={cn('text-sm', 'text-muted', 'ml-2')}>Loading server info...</span>
+          <span className={cls('text-sm', 'text-muted', 'ml-2')}>Loading server info...</span>
         </div>
       </div>
     );
@@ -202,14 +202,14 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
   // Show error state
   if (error) {
     return (
-      <div className={cn(compact ? 'space-y-3' : 'space-y-4', className)}>
-        <div className={cn(sectionClass, 'border-error')}>
-          <div className={cn('text-sm', 'text-error')}>
+      <div className={cls(compact ? 'space-y-3' : 'space-y-4', className)}>
+        <div className={cls(sectionClass, 'border-error')}>
+          <div className={cls('text-sm', 'text-error')}>
             {error}
           </div>
           <button
             onClick={() => window.location.reload()}
-            className={cn('text-xs', 'text-accent hover:underline mt-2')}
+            className={cls('text-xs', 'text-accent hover:underline mt-2')}
           >
             Retry
           </button>
@@ -219,13 +219,13 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
   }
 
   return (
-    <div className={cn(compact ? 'space-y-3' : 'space-y-4', className)}>
+    <div className={cls(compact ? 'space-y-3' : 'space-y-4', className)}>
       {/* Connection Status Section */}
       <div className={sectionClass}>
         <div className={labelClass}>Connection</div>
-        <div className={cn('flex', 'items-center', 'gap-2', 'flex-row')}>
+        <div className={cls('flex', 'items-center', 'gap-2', 'flex-row')}>
           <div
-            className={cn(
+            className={cls(
               'px-2 py-1 rounded-full text-xs font-medium',
               getConnectionStatusBg(),
               getConnectionStatusColor()
@@ -235,8 +235,8 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
           </div>
           {isConnected && (
             <>
-              <div className={cn('w-1 h-1 rounded-full bg-border')} />
-              <div className={cn(valueClass, getQualityColor(connectionQuality))}>
+              <div className={cls('w-1 h-1 rounded-full bg-border')} />
+              <div className={cls(valueClass, getQualityColor(connectionQuality))}>
                 {latency}ms ({connectionQuality})
               </div>
             </>
@@ -253,7 +253,7 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
           <div className={labelClass}>Model</div>
           <div className={valueClass}>
             <div className="font-medium">{modelInfo.name}</div>
-            <div className={cn('text-xs', 'text-muted')}>Provider: {modelInfo.provider}</div>
+            <div className={cls('text-xs', 'text-muted')}>Provider: {modelInfo.provider}</div>
           </div>
         </div>
       )}
@@ -261,21 +261,21 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
       {/* MCP Servers Section */}
       {mcpServers.length > 0 && (
         <div className={sectionClass}>
-          <div className={cn('flex', 'justify-between', 'items-center', 'mb-2')}>
+          <div className={cls('flex', 'justify-between', 'items-center', 'mb-2')}>
             <div className={labelClass}>MCP Servers</div>
-            <div className={cn('text-xs', 'text-muted')}>
+            <div className={cls('text-xs', 'text-muted')}>
               {mcpServerSummary.connected}/{mcpServerSummary.total} connected
             </div>
           </div>
-          <div className={cn(compact ? 'space-y-1' : 'space-y-2')}>
+          <div className={cls(compact ? 'space-y-1' : 'space-y-2')}>
             {mcpServers.map((server) => (
               <div
                 key={server.name}
-                className={cn('flex', 'justify-between', 'items-center', 'gap-2')}
+                className={cls('flex', 'justify-between', 'items-center', 'gap-2')}
               >
-                <div className={cn(valueClass, 'truncate flex-1')}>{server.name}</div>
+                <div className={cls(valueClass, 'truncate flex-1')}>{server.name}</div>
                 <div
-                  className={cn(
+                  className={cls(
                     'px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap',
                     getMCPStatusBg(server.status),
                     getMCPStatusColor(server.status)
@@ -292,22 +292,22 @@ const ServerInfoPanel: React.FC<ServerInfoPanelProps> = ({
       {/* Session Statistics Section */}
       <div className={sectionClass}>
         <div className={labelClass}>Session Statistics</div>
-        <div className={cn('grid grid-cols-2 gap-3', compact ? 'gap-2' : '')}>
+        <div className={cls('grid grid-cols-2 gap-3', compact ? 'gap-2' : '')}>
           <div>
-            <div className={cn('text-xs', 'text-muted')}>Messages</div>
-            <div className={cn(valueClass, 'font-medium')}>{sessionStats.messageCount}</div>
+            <div className={cls('text-xs', 'text-muted')}>Messages</div>
+            <div className={cls(valueClass, 'font-medium')}>{sessionStats.messageCount}</div>
           </div>
           <div>
-            <div className={cn('text-xs', 'text-muted')}>Tool Calls</div>
-            <div className={cn(valueClass, 'font-medium')}>{sessionStats.toolCallCount}</div>
+            <div className={cls('text-xs', 'text-muted')}>Tool Calls</div>
+            <div className={cls(valueClass, 'font-medium')}>{sessionStats.toolCallCount}</div>
           </div>
           <div>
-            <div className={cn('text-xs', 'text-muted')}>Memories Used</div>
-            <div className={cn(valueClass, 'font-medium')}>{sessionStats.memoriesUsed}</div>
+            <div className={cls('text-xs', 'text-muted')}>Memories Used</div>
+            <div className={cls(valueClass, 'font-medium')}>{sessionStats.memoriesUsed}</div>
           </div>
           <div>
-            <div className={cn('text-xs', 'text-muted')}>Duration</div>
-            <div className={cn(valueClass, 'font-medium')}>{formattedSessionDuration}</div>
+            <div className={cls('text-xs', 'text-muted')}>Duration</div>
+            <div className={cls(valueClass, 'font-medium')}>{formattedSessionDuration}</div>
           </div>
         </div>
       </div>

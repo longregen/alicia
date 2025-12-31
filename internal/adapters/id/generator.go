@@ -93,3 +93,11 @@ func (g *Generator) GeneratePromptCandidateID() string {
 func (g *Generator) GeneratePromptEvaluationID() string {
 	return g.generate("ape")
 }
+
+func (g *Generator) GenerateTrainingExampleID() string {
+	return g.generate("gte")
+}
+
+func (g *Generator) GenerateSystemPromptVersionID() string {
+	return g.generate("spv")
+}

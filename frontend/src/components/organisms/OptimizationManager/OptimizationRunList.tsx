@@ -51,6 +51,7 @@ export function OptimizationRunList({ onSelectRun }: OptimizationRunListProps) {
     if (statusLower === 'completed') badgeClass += 'badge-success';
     else if (statusLower === 'running') badgeClass += 'badge-warning';
     else if (statusLower === 'failed') badgeClass += 'badge-error';
+    else badgeClass += 'badge-secondary'; // Default for unknown status
     return <span className={badgeClass}>{status}</span>;
   };
 

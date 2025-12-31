@@ -67,7 +67,16 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.messageRepo.GetByConversation(r.Context(), conversationID)
+	var messages []*models.Message
+
+	// If conversation has a tip, get the chain from the tip
+	// Otherwise fall back to getting all messages (for backwards compatibility)
+	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
+		messages, err = h.messageRepo.GetChainFromTip(r.Context(), *conversation.TipMessageID)
+	} else {
+		messages, err = h.messageRepo.GetByConversation(r.Context(), conversationID)
+	}
+
 	if err != nil {
 		respondError(w, "internal_error", "Failed to list messages", http.StatusInternalServerError)
 		return
@@ -79,6 +88,128 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, response, http.StatusOK)
+}
+
+// GetSiblings returns all sibling messages (messages that branch from the same parent)
+func (h *MessagesHandler) GetSiblings(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	messageID, ok := validateURLParam(r, w, "id", "Message ID")
+	if !ok {
+		return
+	}
+
+	// Get the message to verify access
+	message, err := h.messageRepo.GetByID(r.Context(), messageID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			respondError(w, "not_found", "Message not found", http.StatusNotFound)
+		} else {
+			respondError(w, "internal_error", "Failed to retrieve message", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Verify user has access to the conversation
+	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), message.ConversationID, userID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			respondError(w, "not_found", "Conversation not found or access denied", http.StatusNotFound)
+		} else {
+			respondError(w, "internal_error", "Failed to retrieve conversation", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if !requireActiveConversation(conversation, w) {
+		return
+	}
+
+	siblings, err := h.messageRepo.GetSiblings(r.Context(), messageID)
+	if err != nil {
+		respondError(w, "internal_error", "Failed to retrieve siblings", http.StatusInternalServerError)
+		return
+	}
+
+	response := &dto.MessageListResponse{
+		Messages: dto.FromMessageModelList(siblings),
+		Total:    len(siblings),
+	}
+
+	respondJSON(w, response, http.StatusOK)
+}
+
+// SwitchBranch updates the conversation's tip to point to a different message
+func (h *MessagesHandler) SwitchBranch(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	conversationID, ok := validateURLParam(r, w, "id", "Conversation ID")
+	if !ok {
+		return
+	}
+
+	req, ok := decodeJSON[dto.SwitchBranchRequest](r, w)
+	if !ok {
+		return
+	}
+
+	if req.TipMessageID == "" {
+		respondError(w, "validation_error", "Tip message ID is required", http.StatusBadRequest)
+		return
+	}
+
+	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), conversationID, userID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			respondError(w, "not_found", "Conversation not found or access denied", http.StatusNotFound)
+		} else {
+			respondError(w, "internal_error", "Failed to retrieve conversation", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if !requireActiveConversation(conversation, w) {
+		return
+	}
+
+	// Verify the message exists and belongs to this conversation
+	message, err := h.messageRepo.GetByID(r.Context(), req.TipMessageID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			respondError(w, "not_found", "Message not found", http.StatusNotFound)
+		} else {
+			respondError(w, "internal_error", "Failed to retrieve message", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if message.ConversationID != conversationID {
+		respondError(w, "validation_error", "Message does not belong to this conversation", http.StatusBadRequest)
+		return
+	}
+
+	// Update the tip
+	if err := h.conversationRepo.UpdateTip(r.Context(), conversationID, req.TipMessageID); err != nil {
+		respondError(w, "internal_error", "Failed to update conversation tip", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the updated conversation
+	updatedConversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), conversationID, userID)
+	if err != nil {
+		respondError(w, "internal_error", "Failed to retrieve updated conversation", http.StatusInternalServerError)
+		return
+	}
+
+	respondJSON(w, updatedConversation, http.StatusOK)
 }
 
 func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
@@ -130,13 +261,19 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 	id := h.idGen.GenerateMessageID()
 	message := models.NewUserMessage(id, conversationID, sequenceNumber, req.Contents)
 
-	messages, err := h.messageRepo.GetLatestByConversation(r.Context(), conversationID, 1)
-	if err == nil && len(messages) > 0 {
-		message.SetPreviousMessage(messages[0].ID)
+	// Set previous_id to the current conversation tip for message branching
+	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
+		message.SetPreviousMessage(*conversation.TipMessageID)
 	}
 
 	if err := h.messageRepo.Create(r.Context(), message); err != nil {
 		respondError(w, "internal_error", "Failed to create message", http.StatusInternalServerError)
+		return
+	}
+
+	// Update conversation tip to point to the new message
+	if err := h.conversationRepo.UpdateTip(r.Context(), conversationID, message.ID); err != nil {
+		respondError(w, "internal_error", "Failed to update conversation tip", http.StatusInternalServerError)
 		return
 	}
 
@@ -169,11 +306,25 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 			output, err := h.generateResponseUseCase.Execute(genCtx, input)
 			if err != nil {
 				log.Printf("Failed to generate response for REST API message %s: %v", message.ID, err)
+				// Broadcast error to SSE and WebSocket subscribers
+				if h.broadcaster != nil {
+					h.broadcaster.BroadcastErrorEvent(conversationID, "generation_failed", err.Error())
+				}
+				if h.wsBroadcaster != nil {
+					h.wsBroadcaster.BroadcastError(conversationID, "generation_failed", err.Error())
+				}
 				return
 			}
 
 			if output == nil || output.Message == nil {
 				log.Printf("Generate response returned nil output or message for REST API message %s", message.ID)
+				// Broadcast error to SSE and WebSocket subscribers
+				if h.broadcaster != nil {
+					h.broadcaster.BroadcastErrorEvent(conversationID, "generation_failed", "AI response generation returned no output")
+				}
+				if h.wsBroadcaster != nil {
+					h.wsBroadcaster.BroadcastError(conversationID, "generation_failed", "AI response generation returned no output")
+				}
 				return
 			}
 

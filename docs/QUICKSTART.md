@@ -30,7 +30,7 @@ This provides all necessary tools: Go, Node.js, PostgreSQL client, migrate, sqlc
 
 If not using Nix, install these dependencies manually:
 
-1. **Go 1.21+**: [https://go.dev/dl/](https://go.dev/dl/)
+1. **Go 1.22+**: [https://go.dev/dl/](https://go.dev/dl/)
 2. **Node.js 20+**: [https://nodejs.org/](https://nodejs.org/)
 3. **PostgreSQL 15+** with **pgvector** extension
 4. **migrate**: Database migration tool ([https://github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate))
@@ -44,7 +44,7 @@ Alicia requires these external services to be running:
    - Or use LiveKit Cloud: [https://livekit.io/](https://livekit.io/)
 
 2. **LLM Server**: Language model inference (vLLM recommended)
-   - Qwen3-8B-AWQ or compatible OpenAI-compatible API
+   - Qwen/Qwen2.5-7B-Instruct-AWQ or compatible OpenAI-compatible API
    - Install vLLM: [https://docs.vllm.ai/en/latest/](https://docs.vllm.ai/en/latest/)
    - Example: `vllm serve Qwen/Qwen2.5-7B-Instruct-AWQ --port 8000`
 
@@ -161,10 +161,10 @@ The server provides the REST API for conversation management:
 
 Expected output:
 ```
-2025-12-30T12:00:00Z INFO  Starting Alicia server
-2025-12-30T12:00:00Z INFO  Database connected
-2025-12-30T12:00:00Z INFO  LiveKit service initialized url=ws://localhost:7880
-2025-12-30T12:00:00Z INFO  Server listening addr=0.0.0.0:8080
+{timestamp} INFO  Starting Alicia server
+{timestamp} INFO  Database connected
+{timestamp} INFO  LiveKit service initialized url=ws://localhost:7880
+{timestamp} INFO  Server listening addr=0.0.0.0:8080
 ```
 
 Verify server is running:
@@ -184,12 +184,12 @@ The agent handles real-time conversation processing (ASR, LLM, TTS):
 
 Expected output:
 ```
-2025-12-30T12:00:00Z INFO  Starting Alicia agent
-2025-12-30T12:00:00Z INFO  Connected to LiveKit url=ws://localhost:7880
-2025-12-30T12:00:00Z INFO  ASR service initialized url=http://localhost:8765/v1
-2025-12-30T12:00:00Z INFO  TTS service initialized url=http://localhost:8765/v1
-2025-12-30T12:00:00Z INFO  LLM service initialized url=http://localhost:8000/v1
-2025-12-30T12:00:00Z INFO  Agent ready, waiting for rooms...
+{timestamp} INFO  Starting Alicia agent
+{timestamp} INFO  Connected to LiveKit url=ws://localhost:7880
+{timestamp} INFO  ASR service initialized url=http://localhost:8765/v1
+{timestamp} INFO  TTS service initialized url=http://localhost:8765/v1
+{timestamp} INFO  LLM service initialized url=http://localhost:8000/v1
+{timestamp} INFO  Agent ready, waiting for rooms...
 ```
 
 ### 8. Start Frontend (Web UI)
@@ -264,8 +264,8 @@ Alicia: The Eiffel Tower was built between 1887 and 1889...
 
 **Tool usage** (if tools enabled):
 ```
-You: What's the weather like today?
-Alicia: [Uses weather tool] The current temperature is 72°F...
+You: What is 15% of 230?
+Alicia: [Uses calculator tool] 15% of 230 is 34.5.
 ```
 
 ### Interrupting the Agent
@@ -280,10 +280,10 @@ While the agent is speaking:
 - Click the archive icon in conversation list
 - Resume later by clicking the conversation again
 
-**Delete** (permanent):
+**Delete**:
 - Click the delete icon
 - Confirm deletion
-- Conversation is soft-deleted (recoverable from database if needed)
+- Conversation is soft-deleted (can be recovered from database if needed)
 
 ## Verifying the Setup
 

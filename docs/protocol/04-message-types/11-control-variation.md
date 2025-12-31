@@ -14,7 +14,7 @@
 
   * **`"regenerate"`** – The user wants the assistant to generate a new answer to the same user message (without changing the question). No new UserMessage follows. The server uses the existing message referenced by `targetId` to generate a fresh response, potentially using different reasoning or variation in the answer. The previous assistant response is marked as superseded or moved to a variations collection.
 
-  If this field is omitted or contains an unrecognized value, the server MUST reject the message with an Error (type 18).
+  If this field is omitted or contains an unrecognized value, the server MUST reject the message with an Error (type 1).
 
 **MessagePack Representation (Informative):**
 
@@ -85,7 +85,7 @@ stateDiagram-v2
 
 When the server receives ControlVariation, it MUST:
 
-1. **Validate the mode**: Ensure `mode` is either "edit" or "regenerate". If not, send an Error message (type 18).
+1. **Validate the mode**: Ensure `mode` is either "edit" or "regenerate". If not, send an Error message (type 1).
 
 2. **Validate targetId**: Verify that `targetId` references an existing user message in the conversation. If not found or if it references a non-user message, send an Error message.
 

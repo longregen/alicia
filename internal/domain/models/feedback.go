@@ -28,11 +28,13 @@ type VoteAggregates struct {
 
 // Vote target types
 const (
-	VoteTargetMessage   = "message"
-	VoteTargetSentence  = "sentence"
-	VoteTargetToolUse   = "tool_use"
-	VoteTargetMemory    = "memory"
-	VoteTargetReasoning = "reasoning"
+	VoteTargetMessage          = "message"
+	VoteTargetSentence         = "sentence"
+	VoteTargetToolUse          = "tool_use"
+	VoteTargetMemory           = "memory"
+	VoteTargetMemoryUsage      = "memory_usage"
+	VoteTargetMemoryExtraction = "memory_extraction"
+	VoteTargetReasoning        = "reasoning"
 )
 
 // Vote values

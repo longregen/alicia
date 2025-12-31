@@ -62,6 +62,7 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setWakeWordSensitivity(value: Float) {
         dataStore.edit { preferences ->
+            // Clamp sensitivity to valid range [0.0, 1.0]
             preferences[PreferencesKeys.WAKE_WORD_SENSITIVITY] = value.coerceIn(0f, 1f)
         }
     }
@@ -169,6 +170,7 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setSpeechRate(value: Float) {
         dataStore.edit { preferences ->
+            // Clamp speech rate to valid range [0.5x, 2.0x]
             preferences[PreferencesKeys.SPEECH_RATE] = value.coerceIn(0.5f, 2.0f)
         }
     }
@@ -189,7 +191,8 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
 
     suspend fun setServerUrl(value: String) {
-        // Validate URL format
+        // Validate and normalize URL: trim whitespace, allow empty, require http/https prefix,
+        // remove trailing slashes, and verify valid URL structure with java.net.URL
         val trimmedUrl = value.trim()
 
         // Allow empty string (user can clear the URL)

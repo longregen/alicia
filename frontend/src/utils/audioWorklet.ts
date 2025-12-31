@@ -81,13 +81,13 @@ export async function loadAudioWorklet(
     // Create typed postMessage helper
     const postMessage = (message: WorkletMessage): void => {
       try {
-        // Transfer Float32Array buffer for performance
+        // Transfer underlying ArrayBuffer for zero-copy performance
         const transferable = message.data.buffer;
         node.port.postMessage(message, [transferable]);
       } catch (error) {
-        // If transfer fails (e.g., buffer already transferred), send without transfer
-        console.warn('Failed to transfer audio buffer, sending copy:', error);
-        node.port.postMessage(message);
+        // If transfer fails (buffer already detached), clone the data
+        console.warn('Failed to transfer audio buffer, cloning data:', error);
+        node.port.postMessage({ ...message, data: new Float32Array(message.data) });
       }
     };
 

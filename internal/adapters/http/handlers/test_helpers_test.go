@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
 	"github.com/longregen/alicia/internal/domain/models"
+	"github.com/longregen/alicia/internal/ports"
 )
 
 // Helper function to add user context to requests
@@ -38,24 +39,26 @@ func (m *MockIDGenerator) nextID(prefix string) string {
 	return fmt.Sprintf("%s_test_%d", prefix, m.counter)
 }
 
-func (m *MockIDGenerator) GenerateConversationID() string     { return m.nextID("conv") }
-func (m *MockIDGenerator) GenerateMessageID() string          { return m.nextID("msg") }
-func (m *MockIDGenerator) GenerateSentenceID() string         { return m.nextID("sent") }
-func (m *MockIDGenerator) GenerateAudioID() string            { return m.nextID("audio") }
-func (m *MockIDGenerator) GenerateMemoryID() string           { return m.nextID("mem") }
-func (m *MockIDGenerator) GenerateMemoryUsageID() string      { return m.nextID("memuse") }
-func (m *MockIDGenerator) GenerateToolID() string             { return m.nextID("tool") }
-func (m *MockIDGenerator) GenerateToolUseID() string          { return m.nextID("tooluse") }
-func (m *MockIDGenerator) GenerateReasoningStepID() string    { return m.nextID("reason") }
-func (m *MockIDGenerator) GenerateCommentaryID() string       { return m.nextID("comment") }
-func (m *MockIDGenerator) GenerateMetaID() string             { return m.nextID("meta") }
-func (m *MockIDGenerator) GenerateMCPServerID() string        { return m.nextID("mcp") }
-func (m *MockIDGenerator) GenerateVoteID() string             { return m.nextID("vote") }
-func (m *MockIDGenerator) GenerateNoteID() string             { return m.nextID("note") }
-func (m *MockIDGenerator) GenerateSessionStatsID() string     { return m.nextID("stats") }
-func (m *MockIDGenerator) GenerateOptimizationRunID() string  { return m.nextID("opt") }
-func (m *MockIDGenerator) GeneratePromptCandidateID() string  { return m.nextID("cand") }
-func (m *MockIDGenerator) GeneratePromptEvaluationID() string { return m.nextID("eval") }
+func (m *MockIDGenerator) GenerateConversationID() string        { return m.nextID("conv") }
+func (m *MockIDGenerator) GenerateMessageID() string             { return m.nextID("msg") }
+func (m *MockIDGenerator) GenerateSentenceID() string            { return m.nextID("sent") }
+func (m *MockIDGenerator) GenerateAudioID() string               { return m.nextID("audio") }
+func (m *MockIDGenerator) GenerateMemoryID() string              { return m.nextID("mem") }
+func (m *MockIDGenerator) GenerateMemoryUsageID() string         { return m.nextID("memuse") }
+func (m *MockIDGenerator) GenerateToolID() string                { return m.nextID("tool") }
+func (m *MockIDGenerator) GenerateToolUseID() string             { return m.nextID("tooluse") }
+func (m *MockIDGenerator) GenerateReasoningStepID() string       { return m.nextID("reason") }
+func (m *MockIDGenerator) GenerateCommentaryID() string          { return m.nextID("comment") }
+func (m *MockIDGenerator) GenerateMetaID() string                { return m.nextID("meta") }
+func (m *MockIDGenerator) GenerateMCPServerID() string           { return m.nextID("mcp") }
+func (m *MockIDGenerator) GenerateVoteID() string                { return m.nextID("vote") }
+func (m *MockIDGenerator) GenerateNoteID() string                { return m.nextID("note") }
+func (m *MockIDGenerator) GenerateSessionStatsID() string        { return m.nextID("stats") }
+func (m *MockIDGenerator) GenerateOptimizationRunID() string     { return m.nextID("opt") }
+func (m *MockIDGenerator) GeneratePromptCandidateID() string     { return m.nextID("cand") }
+func (m *MockIDGenerator) GeneratePromptEvaluationID() string    { return m.nextID("eval") }
+func (m *MockIDGenerator) GenerateSystemPromptVersionID() string { return m.nextID("spv") }
+func (m *MockIDGenerator) GenerateTrainingExampleID() string     { return m.nextID("tex") }
 
 // MockVoteRepository is a mock vote repository for testing
 type MockVoteRepository struct {
@@ -98,4 +101,24 @@ func (m *MockVoteRepository) GetAggregates(ctx context.Context, targetType strin
 		Upvotes:    0,
 		Downvotes:  0,
 	}, nil
+}
+
+func (m *MockVoteRepository) CountByTargetType(ctx context.Context, targetType string) (int, error) {
+	return 0, nil
+}
+
+func (m *MockVoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithExtractionContext, error) {
+	return nil, nil
+}
+
+func (m *MockVoteRepository) GetToolUseVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithToolContext, error) {
+	return nil, nil
+}
+
+func (m *MockVoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithMemoryContext, error) {
+	return nil, nil
+}
+
+func (m *MockVoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithMemoryContext, error) {
+	return nil, nil
 }

@@ -78,7 +78,7 @@ interface MessageDao {
 
     /**
      * Search messages by content.
-     * @param query Search query (wildcards are added automatically by the SQL query)
+     * @param query Search query (query will be wrapped with wildcards for partial matching)
      * @return Flow of matching messages ordered by most recent.
      */
     @Query("SELECT * FROM messages WHERE content LIKE '%' || :query || '%' ORDER BY createdAt DESC")
@@ -87,7 +87,7 @@ interface MessageDao {
     /**
      * Search messages by content within a specific conversation.
      * @param conversationId Conversation ID
-     * @param query Search query (wildcards are added automatically by the SQL query)
+     * @param query Search query (query will be wrapped with wildcards for partial matching)
      * @return Flow of matching messages in this conversation.
      */
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND content LIKE '%' || :query || '%' ORDER BY createdAt DESC")
@@ -132,9 +132,10 @@ interface MessageDao {
 
     /**
      * Delete all messages in a conversation.
-     * While CASCADE delete is configured on the foreign key, this method provides explicit
-     * deletion capability which is needed for selective operations (e.g., clearing messages
-     * without deleting the conversation) and for better transaction control.
+     * This method explicitly deletes messages without deleting the conversation itself.
+     * Note: CASCADE delete on the foreign key will automatically delete messages when their
+     * parent conversation is deleted, but this method is needed for selective operations
+     * (e.g., clearing messages while keeping the conversation).
      * @param conversationId Conversation ID
      */
     @Query("DELETE FROM messages WHERE conversationId = :conversationId")

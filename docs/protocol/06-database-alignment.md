@@ -9,13 +9,17 @@ The Alicia protocol is designed hand-in-hand with the Alicia conversation databa
 This table stores conversation metadata and LiveKit integration details.
 
 **Key Fields:**
-* `id` (NanoID) — The unique conversation identifier, also used as the LiveKit room name
+* `id` (TEXT) — The unique conversation identifier, also used as the LiveKit room name
 * `user_id` — The user who owns this conversation
 * `livekit_room_name` — The LiveKit room identifier (typically matches the conversation id)
+* `title` — Conversation title
+* `status` — Conversation state: active, archived, or deleted
+* `preferences` — JSON object containing conversation preferences
+* `last_client_stanza_id` — Last stanza ID received from client (for reconnection)
+* `last_server_stanza_id` — Last stanza ID sent by server (for reconnection)
 * `created_at` — When the conversation started
 * `updated_at` — Last activity timestamp
-* `status` — Active, archived, or expired
-* `language` — Preferred language for the conversation
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 * When a client sends a Configuration message with no `conversationId`, the server creates a new row in this table
@@ -28,78 +32,108 @@ This table stores conversation metadata and LiveKit integration details.
 This table stores all user and assistant messages in conversations.
 
 **Key Fields:**
-* `id` (NanoID) — The unique message identifier
+* `id` (TEXT) — The unique message identifier
 * `conversation_id` — Foreign key to `alicia_conversations`
-* `previous_message_id` — Foreign key to the previous message (forms the conversation chain)
-* `role` — 'user' or 'assistant'
-* `content` — The message text content
+* `sequence_number` — Sequential ordering within conversation
+* `previous_id` — Foreign key to the previous message (forms the conversation chain)
+* `message_role` — 'user', 'assistant', or 'system'
+* `contents` — The message text content
+* `local_id` — Client-generated ID before server assignment (for offline support)
+* `server_id` — Canonical server-assigned ID (for offline support)
+* `sync_status` — Synchronization state: pending, synced, or conflict
+* `synced_at` — Timestamp when message was last synced
+* `completion_status` — Message completion state: pending, streaming, completed, or failed
 * `created_at` — Message timestamp
-* `stanza_sequence` — Absolute value of stanzaId for ordering
-* `status` — Active, edited, replaced, or deleted
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
 **UserMessage (type 2):**
-* Creates a new row with `role='user'`
+* Creates a new row with `message_role='user'`
 * `id` field from protocol maps to `id` in database
-* `previousId` field maps to `previous_message_id`
-* `content` field maps to `content`
-* `stanza_sequence` stores absolute value of the stanzaId
+* `previousId` field maps to `previous_id`
+* `content` field maps to `contents`
+* `completion_status` set to 'completed'
 
 **AssistantMessage (type 3):**
-* Creates a new row with `role='assistant'`
+* Creates a new row with `message_role='assistant'`
 * `id` field from protocol maps to `id` in database
-* `previousId` field maps to `previous_message_id` (references the UserMessage it responds to)
-* `content` field maps to `content`
+* `previousId` field maps to `previous_id` (references the UserMessage it responds to)
+* `content` field maps to `contents`
+* `completion_status` set to 'completed'
 
 **StartAnswer (type 13) + AssistantSentence (type 16):**
 
 When the server uses streaming:
 
-1. **StartAnswer** triggers insertion of a row with `role='assistant'`, `id` from the message, `previous_message_id` referencing the user message, and `content` initially set to empty string or placeholder like "[streaming]"
-2. As **AssistantSentence** chunks arrive, they are stored in `alicia_sentences` (see below) and the content field is built up
-3. When the final AssistantSentence arrives (`isFinal=true`), the assembled full content replaces any placeholder in `alicia_messages.content`
+1. **StartAnswer** triggers insertion of a row with `message_role='assistant'`, `id` from the message, `previous_id` referencing the user message, `contents` initially set to empty string, and `completion_status='streaming'`
+2. As **AssistantSentence** chunks arrive, they are stored in `alicia_sentences` (see below) and the contents field is built up
+3. When the final AssistantSentence arrives (indicated by the sentence being marked final), the assembled full content is stored in `alicia_messages.contents` and `completion_status` is set to 'completed'
 
 This approach ensures the assistant message is visible in the database immediately, even during streaming.
 
 ### `alicia_sentences`
 
-This table stores individual sentence chunks for streaming assistant responses.
+This table stores individual sentence chunks for streaming assistant responses, along with associated audio data.
 
 **Key Fields:**
-* `id` (auto-generated or derived from stanzaId)
+* `id` (TEXT) — The unique sentence identifier
 * `message_id` — Foreign key to `alicia_messages` (the assistant message being streamed)
-* `conversation_id` — Foreign key to `alicia_conversations`
-* `sequence` — The sentence sequence number within this message
-* `text` — The sentence content
-* `is_final` — Boolean indicating if this is the final sentence
-* `created_at` — Timestamp
+* `sentence_sequence_number` — The sentence sequence number within this message
+* `text` — The sentence text content
+* `audio_type` — Type of audio: 'input' or 'output'
+* `audio_format` — Audio format specification (e.g., "pcm_s16le_24000")
+* `duration_ms` — Audio duration in milliseconds
+* `audio_bytesize` — Size of audio data in bytes
+* `audio_data` — Binary audio data (BYTEA)
+* `meta` — JSON object for additional metadata
+* `completion_status` — Sentence completion state: pending, streaming, completed, or failed
+* `created_at` — Creation timestamp
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
 Each **AssistantSentence (type 16)** message maps to a row:
 * `previousId` in the protocol indicates which assistant message this sentence belongs to (maps to `message_id`)
-* `sequence` field maps directly to `sequence`
+* `sequence` field maps to `sentence_sequence_number`
 * `text` field maps to `text`
-* `isFinal` field maps to `is_final`
+* When marked as final, `completion_status` is set to 'completed'
+
+Audio data from **AudioChunk (type 10)** messages is associated with sentences:
+* `format` field maps to `audio_format`
+* `duration` field maps to `duration_ms`
+* Binary audio data maps to `audio_data`
+* Audio size maps to `audio_bytesize`
 
 This table allows the system to:
 * Replay streaming responses chunk by chunk on reconnection
+* Store and retrieve sentence-level audio for playback
 * Analyze streaming patterns and latency
 * Reconstruct the exact streaming sequence for debugging
 
 ### `alicia_memory`
 
-This table stores memory items (facts, preferences, context) that can be retrieved during conversations.
+This table stores memory items (facts, preferences, context) that can be retrieved during conversations using semantic search.
 
 **Key Fields:**
-* `id` (NanoID) — The unique memory identifier
-* `user_id` — The user this memory belongs to
-* `memory_type` — Category: 'profile', 'fact', 'preference', 'context'
+* `id` (TEXT) — The unique memory identifier
 * `content` — The memory content (text)
-* `embedding` — Vector embedding for semantic search
+* `embeddings` — Vector embedding for semantic search (1024 dimensions)
+* `embeddings_info` — JSON metadata about the embeddings
+* `importance` — Importance score (0.0 to 1.0, default 0.5)
+* `confidence` — Confidence score (0.0 to 1.0, default 1.0)
+* `user_rating` — Optional user rating (1-5 stars)
+* `created_by` — Identifier of who created this memory
+* `source_type` — Type of source that generated this memory
+* `source_info` — JSON metadata about the memory source
+* `tags` — Array of tags for categorization
+* `pinned` — Whether this memory is pinned for priority access
+* `archived` — Whether this memory is archived and hidden from normal views
 * `created_at` — When this memory was stored
-* `accessed_at` — Last time this memory was retrieved
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
@@ -112,172 +146,172 @@ This table is queried during conversation processing (not directly created by pr
 
 ### `alicia_memory_used`
 
-This table logs which memories were used in which conversations and messages.
+This table logs which memories were retrieved and used in which conversations and messages.
 
 **Key Fields:**
-* `id` (NanoID) — Unique usage record identifier
+* `id` (TEXT) — Unique usage record identifier
 * `conversation_id` — Foreign key to `alicia_conversations`
 * `message_id` — Foreign key to `alicia_messages` (which message triggered this retrieval)
 * `memory_id` — Foreign key to `alicia_memory` (which memory was used)
-* `memory_type` — Category of memory used
-* `content_snippet` — Brief excerpt of the memory content
-* `usage` — How it was used: 'retrieved', 'injected', 'referenced'
-* `created_at` — Timestamp
+* `query_prompt` — The query prompt used to retrieve this memory
+* `query_prompt_meta` — JSON metadata about the query prompt
+* `similarity_score` — Cosine similarity score from vector search
+* `meta` — JSON object for additional metadata
+* `position_in_results` — Position of this memory in retrieval results
+* `created_at` — Creation timestamp
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
 Each **MemoryTrace (type 14)** message creates a row:
 * `id` from protocol maps to `id`
-* `previousId` indicates the message context (maps to `message_id`)
+* `messageId` indicates the message context (maps to `message_id`)
 * `memoryId` maps to `memory_id`
-* `memoryType` maps to `memory_type`
-* `content` maps to `content_snippet`
-* `usage` maps to `usage`
+* `relevance` score maps to `similarity_score`
+* Retrieval context is stored in `meta`
 
 This enables:
 * Tracking which memories influenced which responses
 * Debugging memory retrieval issues
-* Analyzing memory effectiveness over time
+* Analyzing memory effectiveness and relevance over time
+* Understanding query patterns and memory access patterns
 
-### `alicia_commentaries`
+### `alicia_user_conversation_commentaries`
 
-This table stores user feedback, system notes, and commentary on messages.
+This table stores user notes and commentary on messages within conversations.
 
 **Key Fields:**
-* `id` (NanoID) — Unique commentary identifier
-* `conversation_id` — Foreign key to `alicia_conversations`
-* `message_id` — Foreign key to `alicia_messages` (the message being commented on)
-* `author_role` — 'user' or 'system'
-* `comment_type` — 'feedback', 'correction', 'system_note', 'evaluation'
+* `id` (TEXT) — Unique commentary identifier
 * `content` — The commentary text
-* `created_at` — Timestamp
+* `conversation_id` — Foreign key to `alicia_conversations`
+* `message_id` — Foreign key to `alicia_messages` (the message being commented on, nullable)
+* `created_by` — Identifier of who created this commentary
+* `meta` — JSON object for additional metadata
+* `created_at` — Creation timestamp
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
-Each **Commentary (type 15)** message creates a row:
+User notes are created via **UserNote** protocol messages and stored in this table:
 * `id` from protocol maps to `id`
-* `previousId` indicates the message being commented on (maps to `message_id`)
-* `authorRole` maps to `author_role`
-* `commentType` maps to `comment_type`
 * `content` maps to `content`
+* `messageId` indicates the message being commented on (maps to `message_id`)
+* User context is stored in `created_by`
+* Additional metadata is stored in `meta`
 
 This supports:
-* User feedback collection ("This answer was helpful")
-* System-generated evaluations of response quality
-* Corrections or follow-up notes
+* User feedback and notes on specific messages
+* Context annotations for improving responses
+* Conversational metadata tracking
 
 ### `alicia_tool_uses`
 
 This table logs all tool invocations during conversations.
 
 **Key Fields:**
-* `id` (NanoID) — Unique tool use identifier
-* `conversation_id` — Foreign key to `alicia_conversations`
+* `id` (TEXT) — Unique tool use identifier
 * `message_id` — Foreign key to `alicia_messages` (which message triggered this tool use)
 * `tool_name` — The tool that was invoked
-* `needs_response` — Boolean indicating if response was expected
-* `parameters` — JSON object with tool parameters
-* `result_data` — JSON object with tool results (populated when result arrives)
-* `success` — Boolean indicating if tool execution succeeded
-* `status` — 'requested', 'completed', 'failed'
-* `created_at` — Request timestamp
+* `tool_arguments` — JSON object with tool parameters
+* `tool_result` — JSON object with tool results (populated when result arrives)
+* `status` — Tool execution status: pending, running, success, error, or cancelled
+* `error_message` — Error message if execution failed
+* `sequence_number` — Sequential ordering of tool uses within a message
 * `completed_at` — Result timestamp
+* `created_at` — Request timestamp
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
 **ToolUseRequest (type 6):**
-* Creates a new row with `status='requested'`
+* Creates a new row with `status='pending'`
 * `id` from protocol maps to `id`
-* `previousId` indicates context (maps to `message_id`)
+* `messageId` indicates context (maps to `message_id`)
 * `toolName` maps to `tool_name`
-* `needsResponse` maps to `needs_response`
-* `parameters` maps to `parameters` (JSON)
+* `parameters` maps to `tool_arguments` (JSON)
 
 **ToolUseResult (type 7):**
-* Updates the existing row (matched by finding the request with matching `id` or by `previousId` referencing the request)
-* `success` from protocol maps to `success`
-* `data` maps to `result_data` (JSON)
-* Sets `status='completed'` or `status='failed'`
+* Updates the existing row (matched by `requestId` referencing the tool use `id`)
+* If successful: `status` set to 'success', `result` maps to `tool_result` (JSON)
+* If failed: `status` set to 'error', error information maps to `error_message`
 * Sets `completed_at` to current timestamp
 
-### `alicia_transcriptions`
+### `alicia_audio`
 
-This table stores transcription events for voice input.
+This table stores audio recordings and transcriptions for voice conversations.
 
 **Key Fields:**
-* `id` (auto-generated)
-* `conversation_id` — Foreign key to `alicia_conversations`
-* `user_message_id` — Foreign key to `alicia_messages` (the user message this contributes to, may be null for partials)
-* `text` — The transcribed text
-* `is_final` — Boolean indicating if this is the final transcription
-* `confidence` — Transcription confidence score (0.0 to 1.0)
-* `created_at` — Timestamp
+* `id` (TEXT) — Unique audio record identifier
+* `message_id` — Foreign key to `alicia_messages` (nullable, the message associated with this audio)
+* `audio_type` — Type of audio: 'input' (user speech) or 'output' (assistant speech)
+* `audio_format` — Audio format specification (e.g., "pcm_s16le_24000", "opus_48000")
+* `audio_data` — Binary audio data (BYTEA, nullable)
+* `duration_ms` — Audio duration in milliseconds
+* `transcription` — Transcribed text (for input audio)
+* `livekit_track_sid` — LiveKit track session ID
+* `transcription_meta` — JSON metadata about transcription (confidence, etc.)
+* `created_at` — Creation timestamp
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
-Each **Transcription (type 9)** message creates a row:
-* `text` field maps to `text`
-* `isFinal` field maps to `is_final`
-* When `isFinal=true`, the transcription is typically finalized into a UserMessage, which references this table entry
+**Transcription (type 9)** messages update or create records:
+* `text` field maps to `transcription`
+* Confidence and metadata map to `transcription_meta`
+* When final, the transcription is associated with a UserMessage via `message_id`
+
+**AudioChunk (type 10)** messages can create records:
+* `trackSid` maps to `livekit_track_sid`
+* `format` field maps to `audio_format`
+* `durationMs` field maps to `duration_ms`
+* Binary audio data maps to `audio_data`
 
 This table is useful for:
+* Storing complete audio recordings for playback
 * Debugging ASR accuracy
-* Showing real-time transcription progress in the UI
-* Analyzing transcription latency
+* Associating transcriptions with audio
+* Analyzing audio quality and latency
 
 ### `alicia_meta`
 
-This table stores arbitrary key-value metadata for conversations and messages.
+This table stores arbitrary key-value metadata for any entity in the system using a generic reference system.
 
 **Key Fields:**
-* `id` (auto-generated)
-* `conversation_id` — Foreign key to `alicia_conversations`
-* `message_id` — Foreign key to `alicia_messages` (nullable, for conversation-level meta)
+* `id` (TEXT) — Unique metadata record identifier
+* `ref` — Reference to the entity this metadata belongs to (can reference any table's ID)
 * `key` — The metadata key (e.g., "messaging.trace_id", "source", "model")
 * `value` — The metadata value (text)
-* `created_at` — Timestamp
+* `created_at` — Creation timestamp
+* `updated_at` — Last modification timestamp
+* `deleted_at` — Soft deletion timestamp (nullable)
 
 **Protocol Mapping:**
 
-The `meta` field in the protocol envelope maps to rows in this table:
+The `meta` field in protocol envelopes maps to rows in this table:
 * Each key-value pair in the `meta` map creates a row
-* `conversation_id` is derived from the conversationId in the envelope
-* `message_id` is derived from the message `id` if applicable
+* `ref` is set to the relevant entity ID (conversation ID, message ID, etc.)
 * Special keys like `messaging.trace_id` and `messaging.span_id` are stored here for distributed tracing
 
 Examples:
-* `meta: {"source": "microphone"}` on a UserMessage creates a row with `key='source'`, `value='microphone'`
-* `meta: {"model": "gpt-4", "responseTime": "123ms"}` on an AssistantMessage creates two rows
+* `meta: {"source": "microphone"}` on a UserMessage creates a row with `ref=<message_id>`, `key='source'`, `value='microphone'`
+* `meta: {"model": "claude-3-opus", "responseTime": "123ms"}` on an AssistantMessage creates two rows with `ref=<message_id>`
 
 This flexible structure allows:
 * Storing OpenTelemetry trace IDs for debugging
 * Tracking model versions and parameters
 * Recording client versions and platforms
 * Custom application-specific metadata
+* Associating metadata with any entity type
 
-### `alicia_audio_chunks`
+Note: Audio data is primarily stored in two locations:
+1. **Message-level audio**: Complete audio recordings are stored in the `alicia_audio` table (described above)
+2. **Sentence-level audio**: Audio for individual streaming sentences is stored directly in the `alicia_sentences` table
 
-This table stores audio chunks for voice conversations (optional, depending on whether audio is persisted).
-
-**Key Fields:**
-* `id` (auto-generated)
-* `conversation_id` — Foreign key to `alicia_conversations`
-* `message_id` — Foreign key to `alicia_messages` (if associated with a specific message)
-* `sequence` — Chunk sequence number
-* `audio_data` — Binary audio data (or reference to object storage)
-* `format` — Audio format (e.g., "audio/pcm", "audio/opus")
-* `sample_rate` — Sample rate in Hz
-* `created_at` — Timestamp
-
-**Protocol Mapping:**
-
-Each **AudioChunk (type 10)** message can optionally create a row:
-* `previousId` indicates context (maps to `message_id`)
-* `data` field contains the binary audio
-* `format` field maps to `format`
-* `sampleRate` field maps to `sample_rate`
-
-Note: Many implementations may not persist audio chunks to the database, instead processing them in real-time and only storing transcriptions. This table is optional.
+The system does not use a separate `alicia_audio_chunks` table. Audio chunks from the protocol are processed and stored in the appropriate table based on context (either as complete audio recordings or as sentence-specific audio data).
 
 ## LiveKit Integration
 
@@ -301,11 +335,11 @@ When a client connects:
 ### Reconnection Flow
 
 When a client reconnects:
-1. Client queries local storage for `conversationId` and `lastSequenceSeen`
+1. Client queries local storage for `conversationId` and last seen stanza ID
 2. Client rejoins LiveKit room with name matching `conversationId`
 3. LiveKit handles room reconnection and track restoration
-4. Client sends Configuration message with `conversationId` and `lastSequenceSeen` over data channel
-5. Server queries `alicia_messages` table: `SELECT * FROM alicia_messages WHERE conversation_id = ? AND stanza_sequence > ? ORDER BY stanza_sequence`
+4. Client sends Configuration message with `conversationId` and last seen stanza ID over data channel
+5. Server queries conversation's stanza tracking fields (`last_client_stanza_id`, `last_server_stanza_id`) to determine what messages need to be replayed
 6. Server replays missed messages over the data channel
 7. Audio tracks are already restored by LiveKit automatically
 
@@ -315,18 +349,18 @@ Here's how a complete user question flows through protocol and database:
 
 **1. User speaks into microphone (LiveKit audio track)**
 
-Protocol: `AudioChunk` messages stream over LiveKit audio track
-Database: Optionally stored in `alicia_audio_chunks`
+Protocol: Audio streams over LiveKit audio track
+Database: Optionally stored in `alicia_audio` with `audio_type='input'`
 
 **2. Server transcribes audio (STT)**
 
-Protocol: `Transcription` messages with `isFinal=false` (partials), then `isFinal=true` (final)
-Database: Rows created in `alicia_transcriptions`
+Protocol: `Transcription` messages with `final=false` (partials), then `final=true` (final)
+Database: Transcription text stored in `alicia_audio.transcription` field
 
 **3. Final transcription becomes UserMessage**
 
 Protocol: `UserMessage` with content from final transcription
-Database: Row created in `alicia_messages` with `role='user'`
+Database: Row created in `alicia_messages` with `message_role='user'` and `completion_status='completed'`
 
 **4. Server retrieves relevant memories**
 
@@ -339,21 +373,21 @@ Database:
 
 Protocol: `StartAnswer` followed by multiple `AssistantSentence` messages
 Database:
-* `StartAnswer` creates row in `alicia_messages` with `role='assistant'`
+* `StartAnswer` creates row in `alicia_messages` with `message_role='assistant'` and `completion_status='streaming'`
 * Each `AssistantSentence` creates row in `alicia_sentences`
-* Final sentence updates `alicia_messages.content` with full text
+* Final sentence updates `alicia_messages.contents` with full text and sets `completion_status='completed'`
 
 **6. Server performs tool call if needed**
 
 Protocol: `ToolUseRequest` and `ToolUseResult`
 Database:
-* Request creates row in `alicia_tool_uses` with `status='requested'`
-* Result updates row with results and `status='completed'`
+* Request creates row in `alicia_tool_uses` with `status='pending'`
+* Result updates row with results and `status='success'` or `status='error'`
 
 **7. Server sends response audio (TTS)**
 
-Protocol: `AudioChunk` messages stream over LiveKit audio track
-Database: Optionally stored in `alicia_audio_chunks`
+Protocol: Audio streams over LiveKit audio track, with `AudioChunk` messages providing metadata
+Database: Audio data stored in `alicia_sentences` table (linked to individual sentences) or `alicia_audio` table (for complete recordings)
 
 ## Traceability and Debugging
 
@@ -366,13 +400,13 @@ By aligning protocol message IDs with database records, every event can be trace
 
 ## Summary
 
-The Alicia protocol essentially serializes database interactions in real-time over LiveKit:
+The Alicia protocol serializes database interactions in real-time over LiveKit:
 
-* **Insert** user message via `UserMessage`
-* **Insert** assistant message via `StartAnswer` + `AssistantSentence` (streaming) or `AssistantMessage` (complete)
+* **Insert** user messages via `UserMessage`
+* **Insert** assistant messages via `StartAnswer` + `AssistantSentence` (streaming) or `AssistantMessage` (complete)
 * **Log** memory usage via `MemoryTrace`
 * **Log** tool calls via `ToolUseRequest` / `ToolUseResult`
-* **Record** commentary via `Commentary`
+* **Record** user notes via `UserNote`
 * **Track** metadata via `meta` fields in envelopes
 
-The database maintains a complete, queryable record of everything that happens in the conversation, while LiveKit provides the real-time transport layer for delivering these events instantly to connected clients.
+The database maintains a complete, queryable record of all conversation activity, while LiveKit provides the real-time transport layer for delivering these events instantly to connected clients.

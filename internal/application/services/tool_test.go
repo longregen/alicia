@@ -222,6 +222,49 @@ func (m *mockMessageRepo) GetIncompleteByConversation(ctx context.Context, conve
 	return []*models.Message{}, nil
 }
 
+func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	// Simple implementation: return message chain by following PreviousID
+	var chain []*models.Message
+	currentID := tipMessageID
+
+	for currentID != "" {
+		msg, ok := m.store[currentID]
+		if !ok {
+			break
+		}
+		chain = append([]*models.Message{msg}, chain...)
+		if msg.PreviousID == "" {
+			break
+		}
+		currentID = msg.PreviousID
+	}
+
+	return chain, nil
+}
+
+func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
+	msg, ok := m.store[messageID]
+	if !ok {
+		return nil, errToolNotFound
+	}
+
+	// Find all messages with the same PreviousID
+	var siblings []*models.Message
+	for _, m := range m.store {
+		if msg.PreviousID == "" && m.PreviousID == "" {
+			if m.ID != messageID && m.ConversationID == msg.ConversationID {
+				siblings = append(siblings, m)
+			}
+		} else if msg.PreviousID != "" && m.PreviousID != "" && m.PreviousID == msg.PreviousID {
+			if m.ID != messageID {
+				siblings = append(siblings, m)
+			}
+		}
+	}
+
+	return siblings, nil
+}
+
 // Tests
 
 func TestToolService_RegisterTool(t *testing.T) {

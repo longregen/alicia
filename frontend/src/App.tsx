@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import ChatWindowBridge from './components/organisms/ChatWindowBridge';
 import { Settings, type SettingsTab } from './components/Settings';
@@ -29,6 +29,7 @@ function AppContent({
 }: AppContentProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'warning' } | null>(null);
+  const [hasTriggeredAutoCreate, setHasTriggeredAutoCreate] = useState(false);
 
   const {
     conversations,
@@ -39,7 +40,7 @@ function AppContent({
     updateConversation,
   } = useConversations();
 
-  // useMessages depends on MessageContext, so it must be called inside MessageProvider
+  // Note: useMessages requires MessageContext - this component must be inside MessageProvider
   const {
     messages,
     loading: messagesLoading,
@@ -49,10 +50,29 @@ function AppContent({
     syncError,
   } = useMessages(selectedConversationId);
 
+  const handleNewConversation = useCallback(async () => {
+    // Generate a default title - backend requires a non-empty title
+    const defaultTitle = `New Chat`;
+    const newConv = await createConversation(defaultTitle);
+    if (newConv) {
+      setSelectedConversationId(newConv.id);
+      setSidebarOpen(false);
+    }
+  }, [createConversation, setSelectedConversationId]);
+
   // Persist conversation selection
   useEffect(() => {
     storage.setSelectedConversationId(selectedConversationId);
   }, [selectedConversationId]);
+
+  // Auto-create first conversation for new users
+  useEffect(() => {
+    if (!conversationsLoading && conversations.length === 0 && !selectedConversationId && !hasTriggeredAutoCreate) {
+      // First-time user: auto-create a conversation
+      setHasTriggeredAutoCreate(true);
+      handleNewConversation();
+    }
+  }, [conversationsLoading, conversations.length, selectedConversationId, hasTriggeredAutoCreate, handleNewConversation]);
 
   // Handle missing conversations
   useEffect(() => {
@@ -64,16 +84,6 @@ function AppContent({
       }
     }
   }, [selectedConversationId, conversations, setSelectedConversationId]);
-
-  const handleNewConversation = async () => {
-    // Generate a default title - backend requires a non-empty title
-    const defaultTitle = `New Chat`;
-    const newConv = await createConversation(defaultTitle);
-    if (newConv) {
-      setSelectedConversationId(newConv.id);
-      setSidebarOpen(false);
-    }
-  };
 
   const handleDeleteConversation = async (id: string) => {
     if (id === selectedConversationId) {
@@ -121,6 +131,7 @@ function AppContent({
 
   return (
     <div className="app flex h-screen bg-app">
+      {/* Error banners - dismiss on page reload or when error clears */}
       {conversationsError && (
         <div className="fixed top-0 left-0 right-0 bg-error text-white p-3 text-center z-[1000]">
           {conversationsError}

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 
 interface SidebarState {
   isCollapsed: boolean;
@@ -16,17 +17,25 @@ const DEFAULT_WIDTH = 300;
 
 export const useSidebarStore = create<SidebarState>()(
   persist(
-    (set) => ({
+    immer((set) => ({
       isCollapsed: false,
       width: DEFAULT_WIDTH,
-      setCollapsed: (collapsed: boolean) => set({ isCollapsed: collapsed }),
-      toggleCollapsed: () => set((state) => ({ isCollapsed: !state.isCollapsed })),
+      setCollapsed: (collapsed: boolean) =>
+        set((state) => {
+          state.isCollapsed = collapsed;
+        }),
+      toggleCollapsed: () =>
+        set((state) => {
+          state.isCollapsed = !state.isCollapsed;
+        }),
       setWidth: (width: number) => {
         // Clamp width between min and max
         const clampedWidth = Math.min(Math.max(width, MIN_WIDTH), MAX_WIDTH);
-        set({ width: clampedWidth });
+        set((state) => {
+          state.width = clampedWidth;
+        });
       },
-    }),
+    })),
     {
       name: 'sidebar-storage',
     }

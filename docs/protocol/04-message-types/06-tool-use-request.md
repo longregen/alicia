@@ -10,6 +10,8 @@ The server sends ToolUseRequest messages to the client over LiveKit data channel
 
 * `id` (Text, NanoID): Unique identifier for this tool request. The corresponding ToolUseResult references this ID to correlate the response.
 
+* `messageId` (Text, NanoID): The ID of the message that triggered this tool use, typically the AssistantMessage being generated that requires this tool. This links the tool use back to the conversation context.
+
 * `toolName` (Text): The name or identifier of the tool to invoke. Examples include `"web_search"`, `"calculator"`, `"read_local_file"`, or `"database_query"`. Both client and server must share a common understanding of available tool names.
 
 * `parameters` (Map): The parameters for the tool invocation. This is a structured object containing the tool-specific parameters needed for execution. In MessagePack, this is represented as a map where keys are parameter names and values are the parameter values (strings, numbers, booleans, arrays, or nested maps).
@@ -37,6 +39,7 @@ Server-executed tool example:
 ```json
 {
   "id": "toolreq_abc123",
+  "messageId": "msg_a9X8Y",
   "toolName": "web_search",
   "execution": "server",
   "parameters": {
@@ -51,6 +54,7 @@ Client-executed tool example:
 ```json
 {
   "id": "toolreq_xyz789",
+  "messageId": "msg_a9X8Y",
   "toolName": "read_local_file",
   "execution": "client",
   "parameters": {
@@ -113,4 +117,4 @@ The client MUST NOT silently ignore tool requests. Every ToolUseRequest with `ex
 
 **LiveKit Integration:**
 
-ToolUseRequest messages flow over LiveKit data channels as MessagePack-encoded payloads. The reliable data channel ensures that tool requests are delivered in order and without loss. Both client and server maintain the correlation between requests (via `id`) and results (via `requestId` in ToolUseResult) to track the conversation flow and tool execution state.
+ToolUseRequest messages flow over LiveKit data channels as MessagePack-encoded payloads. The reliable data channel ensures that tool requests are delivered in order and without loss. Both client and server maintain the correlation between requests (via `id`) and results (via `id` in ToolUseResult) to track the conversation flow and tool execution state.

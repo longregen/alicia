@@ -109,7 +109,7 @@ export function useNotes(targetType: 'message' | 'tool_use' | 'reasoning', targe
       // First add to local store for immediate UI update
       addNoteToStore(targetId, content, category);
 
-      // Then persist to server (fire and forget for now)
+      // Then persist to server
       await createNoteOnServer(content, category);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create note');

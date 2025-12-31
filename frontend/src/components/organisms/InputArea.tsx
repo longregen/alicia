@@ -52,8 +52,8 @@ const InputArea: React.FC<InputAreaProps> = ({
     },
     onSpeechEnd: (audioData: Float32Array) => {
       console.log('Speech segment captured:', audioData.length, 'samples');
-      // Audio is automatically streamed to LiveKit via the bridge
-      // Server will send back Transcription protocol messages
+      // Speech segment captured - audio streaming handled by VAD bridge
+      // Server responds with Transcription protocol messages
     },
     onTrackReady: useCallback(async (track: MediaStreamTrack) => {
       // Publish the audio track to LiveKit when ready

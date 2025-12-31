@@ -148,7 +148,6 @@ class AliciaTileService : TileService() {
      * Currently defaults to inactive state.
      *
      * TODO: Integrate with VoiceService to display real-time listening or active status.
-     *       See: https://github.com/localforge/alicia/issues/TODO
      */
     private fun updateTileBasedOnServiceState() {
         updateTile(STATE_INACTIVE, LABEL_INACTIVE)
@@ -179,7 +178,7 @@ class AliciaTileService : TileService() {
         )
 
         tile.subtitle = when (state) {
-            STATE_ACTIVE -> "Active - tap to disable"
+            STATE_ACTIVE -> "Active"
             STATE_INACTIVE -> "Ready"
             else -> "Unavailable"
         }
@@ -191,10 +190,10 @@ class AliciaTileService : TileService() {
     }
 
     /**
-     * Public method to update tile state from external components
-     * Can be called via binding to the service
+     * Update tile state based on assistant status.
+     * Called internally when state changes are detected.
      */
-    fun updateState(isListening: Boolean, isActive: Boolean) {
+    private fun updateState(isListening: Boolean, isActive: Boolean) {
         when {
             isListening -> updateTile(STATE_ACTIVE, LABEL_LISTENING)
             isActive -> updateTile(STATE_ACTIVE, LABEL_ACTIVE)

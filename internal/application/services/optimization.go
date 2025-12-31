@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/XiaoConstantine/dspy-go/pkg/optimizers"
@@ -10,6 +12,7 @@ import (
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
 	"github.com/longregen/alicia/internal/prompt"
+	"github.com/longregen/alicia/internal/prompt/baselines"
 )
 
 // OptimizationConfig configures the optimization service
@@ -41,6 +44,20 @@ func DefaultOptimizationConfig() OptimizationConfig {
 	}
 }
 
+// OptimizationProgressEvent represents a progress update during optimization
+type OptimizationProgressEvent struct {
+	Type            string             `json:"type"`
+	RunID           string             `json:"run_id"`
+	Iteration       int                `json:"iteration"`
+	MaxIterations   int                `json:"max_iterations"`
+	CurrentScore    float64            `json:"current_score"`
+	BestScore       float64            `json:"best_score"`
+	DimensionScores map[string]float64 `json:"dimension_scores,omitempty"`
+	Status          string             `json:"status"`
+	Message         string             `json:"message,omitempty"`
+	Timestamp       string             `json:"timestamp"`
+}
+
 // OptimizationService manages prompt optimization using DSPy/GEPA
 type OptimizationService struct {
 	repo         ports.PromptOptimizationRepository
@@ -48,6 +65,10 @@ type OptimizationService struct {
 	reflectionLM ports.LLMService // Strong model for GEPA reflection
 	idGenerator  ports.IDGenerator
 	config       OptimizationConfig
+
+	// Progress channel infrastructure for push-based updates
+	progressChannels map[string][]chan OptimizationProgressEvent
+	progressMu       sync.RWMutex
 }
 
 // NewOptimizationService creates a new optimization service
@@ -58,10 +79,11 @@ func NewOptimizationService(
 	config OptimizationConfig,
 ) *OptimizationService {
 	return &OptimizationService{
-		repo:        repo,
-		llmService:  llmService,
-		idGenerator: idGenerator,
-		config:      config,
+		repo:             repo,
+		llmService:       llmService,
+		idGenerator:      idGenerator,
+		config:           config,
+		progressChannels: make(map[string][]chan OptimizationProgressEvent),
 	}
 }
 
@@ -407,6 +429,90 @@ func (s *OptimizationService) SetDimensionWeights(weights map[string]float64) {
 	s.config.DimensionWeights = dw
 }
 
+// SubscribeProgress subscribes to progress updates for a given run ID
+// Returns a channel that will receive progress events
+func (s *OptimizationService) SubscribeProgress(runID string) <-chan OptimizationProgressEvent {
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+
+	// Create a buffered channel to prevent blocking the publisher
+	ch := make(chan OptimizationProgressEvent, 100)
+	s.progressChannels[runID] = append(s.progressChannels[runID], ch)
+	return ch
+}
+
+// UnsubscribeProgress removes a subscription for a given run ID
+func (s *OptimizationService) UnsubscribeProgress(runID string, ch <-chan OptimizationProgressEvent) {
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+
+	channels := s.progressChannels[runID]
+	for i, subscriberCh := range channels {
+		if subscriberCh == ch {
+			// Remove this channel from the slice
+			s.progressChannels[runID] = append(channels[:i], channels[i+1:]...)
+			close(subscriberCh)
+			break
+		}
+	}
+
+	// Clean up the map entry if no more subscribers
+	if len(s.progressChannels[runID]) == 0 {
+		delete(s.progressChannels, runID)
+	}
+}
+
+// publishProgress publishes a progress event to all subscribers of a run
+func (s *OptimizationService) publishProgress(runID string, event OptimizationProgressEvent) {
+	s.progressMu.RLock()
+	defer s.progressMu.RUnlock()
+
+	channels := s.progressChannels[runID]
+	for _, ch := range channels {
+		// Non-blocking send to prevent slow subscribers from blocking the optimization
+		select {
+		case ch <- event:
+		default:
+			// Channel buffer is full, skip this update
+		}
+	}
+}
+
+// OptimizeFromVotes runs GEPA optimization using vote-derived training data
+func (s *OptimizationService) OptimizeFromVotes(
+	ctx context.Context,
+	taskType string,
+	trainingBuilder *TrainingSetBuilderService,
+) (*models.OptimizationRun, error) {
+	var sig prompt.Signature
+	var metric prompt.Metric
+	var trainset, valset []prompt.Example
+	var err error
+
+	switch taskType {
+	case models.TaskTypeToolSelection:
+		sig = baselines.ToolSelectionSignature
+		metric = baselines.NewToolSelectionMetric(nil)
+		trainset, valset, err = trainingBuilder.GetOrBuildToolSelectionDataset(ctx)
+	case models.TaskTypeMemorySelection:
+		sig = baselines.MemorySelectionSignature
+		metric = baselines.NewMemorySelectionMetric(nil)
+		trainset, valset, err = trainingBuilder.GetOrBuildMemorySelectionDataset(ctx)
+	case models.TaskTypeMemoryExtraction:
+		sig = baselines.MemoryExtractionSignature
+		metric = baselines.NewMemoryExtractionMetric(nil)
+		trainset, valset, err = trainingBuilder.GetOrBuildMemoryExtractionDataset(ctx)
+	default:
+		return nil, domain.NewDomainError(domain.ErrInvalidState, fmt.Sprintf("unknown task type: %s", taskType))
+	}
+
+	if err != nil {
+		return nil, domain.NewDomainError(err, fmt.Sprintf("failed to build dataset for task type %s", taskType))
+	}
+
+	return s.OptimizeSignature(ctx, sig, trainset, valset, metric)
+}
+
 // OptimizeSignature runs GEPA optimization on a signature
 // This is the main entry point for automatic prompt optimization
 func (s *OptimizationService) OptimizeSignature(
@@ -470,7 +576,17 @@ func (s *OptimizationService) OptimizeSignature(
 
 		defer func() {
 			if r := recover(); r != nil {
-				_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("optimization panicked: %v", r))
+				reason := fmt.Sprintf("optimization panicked: %v", r)
+				_ = s.FailRun(optimizeCtx, run.ID, reason)
+
+				// Publish failure event to subscribers
+				s.publishProgress(run.ID, OptimizationProgressEvent{
+					Type:      "failed",
+					RunID:     run.ID,
+					Status:    string(models.OptimizationStatusFailed),
+					Message:   reason,
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
 			}
 		}()
 
@@ -504,14 +620,34 @@ func (s *OptimizationService) OptimizeSignature(
 		// Create the GEPA optimizer
 		gepaOptimizer, err := optimizers.NewGEPA(gepaConfig)
 		if err != nil {
-			_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("failed to create GEPA optimizer: %v", err))
+			reason := fmt.Sprintf("failed to create GEPA optimizer: %v", err)
+			_ = s.FailRun(optimizeCtx, run.ID, reason)
+
+			// Publish failure event to subscribers
+			s.publishProgress(run.ID, OptimizationProgressEvent{
+				Type:      "failed",
+				RunID:     run.ID,
+				Status:    string(models.OptimizationStatusFailed),
+				Message:   reason,
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
 			return
 		}
 
 		// Run GEPA optimization
 		optimizedProgram, err := gepaOptimizer.Compile(optimizeCtx, program, dataset, coreMetric)
 		if err != nil {
-			_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("GEPA optimization failed: %v", err))
+			reason := fmt.Sprintf("GEPA optimization failed: %v", err)
+			_ = s.FailRun(optimizeCtx, run.ID, reason)
+
+			// Publish failure event to subscribers
+			s.publishProgress(run.ID, OptimizationProgressEvent{
+				Type:      "failed",
+				RunID:     run.ID,
+				Status:    string(models.OptimizationStatusFailed),
+				Message:   reason,
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
 			return
 		}
 
@@ -527,16 +663,28 @@ func (s *OptimizationService) OptimizeSignature(
 			bestPrompt = gepaState.BestCandidate.Instruction
 			bestScore = gepaState.BestCandidate.Fitness
 
-			// Map GEPA's multi-objective fitness to Alicia's dimension scores
-			// GEPA tracks these internally through its MultiObjectiveFitness
-			bestDimScores = prompt.DimensionScores{
-				SuccessRate:    bestScore, // Base fitness maps to success
-				Quality:        bestScore * 0.9,
-				Efficiency:     0.8,
-				Robustness:     bestScore * 0.85,
-				Generalization: bestScore * 0.8,
-				Diversity:      0.5,
-				Innovation:     0.3,
+			// Extract GEPA's multi-objective fitness for the best candidate
+			if moFitness, ok := gepaState.MultiObjectiveFitnessMap[gepaState.BestCandidate.ID]; ok && moFitness != nil {
+				bestDimScores = prompt.DimensionScores{
+					SuccessRate:    moFitness.SuccessRate,
+					Quality:        moFitness.OutputQuality,
+					Efficiency:     moFitness.Efficiency,
+					Robustness:     moFitness.Robustness,
+					Generalization: moFitness.Generalization,
+					Diversity:      moFitness.Diversity,
+					Innovation:     moFitness.Innovation,
+				}
+			} else {
+				// Fallback to basic fitness if multi-objective data unavailable
+				bestDimScores = prompt.DimensionScores{
+					SuccessRate:    bestScore,
+					Quality:        bestScore * 0.9,
+					Efficiency:     0.8,
+					Robustness:     bestScore * 0.85,
+					Generalization: bestScore * 0.8,
+					Diversity:      0.5,
+					Innovation:     0.3,
+				}
 			}
 		}
 
@@ -554,14 +702,29 @@ func (s *OptimizationService) OptimizeSignature(
 			}
 
 			// Record evaluation for this candidate
-			candidateDimScores := prompt.DimensionScores{
-				SuccessRate:    candidate.Fitness,
-				Quality:        candidate.Fitness * 0.9,
-				Efficiency:     0.8,
-				Robustness:     candidate.Fitness * 0.85,
-				Generalization: candidate.Fitness * 0.8,
-				Diversity:      0.5,
-				Innovation:     0.3,
+			// Extract multi-objective fitness from archive fitness map
+			candidateDimScores := prompt.DimensionScores{}
+			if moFitness, ok := gepaState.ArchiveFitnessMap[candidate.ID]; ok && moFitness != nil {
+				candidateDimScores = prompt.DimensionScores{
+					SuccessRate:    moFitness.SuccessRate,
+					Quality:        moFitness.OutputQuality,
+					Efficiency:     moFitness.Efficiency,
+					Robustness:     moFitness.Robustness,
+					Generalization: moFitness.Generalization,
+					Diversity:      moFitness.Diversity,
+					Innovation:     moFitness.Innovation,
+				}
+			} else {
+				// Fallback to basic fitness
+				candidateDimScores = prompt.DimensionScores{
+					SuccessRate:    candidate.Fitness,
+					Quality:        candidate.Fitness * 0.9,
+					Efficiency:     0.8,
+					Robustness:     candidate.Fitness * 0.85,
+					Generalization: candidate.Fitness * 0.8,
+					Diversity:      0.5,
+					Innovation:     0.3,
+				}
 			}
 
 			_, _ = s.RecordEvaluationWithDimensions(
@@ -578,6 +741,27 @@ func (s *OptimizationService) OptimizeSignature(
 			// Update progress periodically
 			if i%5 == 0 {
 				_ = s.UpdateProgressWithDimensions(optimizeCtx, run.ID, i, candidateDimScores)
+
+				// Publish progress event to subscribers
+				s.publishProgress(run.ID, OptimizationProgressEvent{
+					Type:          "progress",
+					RunID:         run.ID,
+					Iteration:     i,
+					MaxIterations: run.MaxIterations,
+					CurrentScore:  candidate.Fitness,
+					BestScore:     bestScore,
+					DimensionScores: map[string]float64{
+						"successRate":    candidateDimScores.SuccessRate,
+						"quality":        candidateDimScores.Quality,
+						"efficiency":     candidateDimScores.Efficiency,
+						"robustness":     candidateDimScores.Robustness,
+						"generalization": candidateDimScores.Generalization,
+						"diversity":      candidateDimScores.Diversity,
+						"innovation":     candidateDimScores.Innovation,
+					},
+					Status:    string(models.OptimizationStatusRunning),
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
 			}
 		}
 
@@ -648,6 +832,27 @@ func (s *OptimizationService) OptimizeSignature(
 			}
 			run.MarkCompleted()
 			_ = s.repo.UpdateRun(optimizeCtx, run)
+
+			// Publish completion event to subscribers
+			s.publishProgress(run.ID, OptimizationProgressEvent{
+				Type:          "completed",
+				RunID:         run.ID,
+				Iteration:     run.Iterations,
+				MaxIterations: run.MaxIterations,
+				CurrentScore:  bestScore,
+				BestScore:     bestScore,
+				DimensionScores: map[string]float64{
+					"successRate":    bestDimScores.SuccessRate,
+					"quality":        bestDimScores.Quality,
+					"efficiency":     bestDimScores.Efficiency,
+					"robustness":     bestDimScores.Robustness,
+					"generalization": bestDimScores.Generalization,
+					"diversity":      bestDimScores.Diversity,
+					"innovation":     bestDimScores.Innovation,
+				},
+				Status:    string(models.OptimizationStatusCompleted),
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
 		}
 
 		// Suppress unused variable warning for optimizedProgram
@@ -766,7 +971,17 @@ func (s *OptimizationService) OptimizeSignatureWithMemory(
 
 		defer func() {
 			if r := recover(); r != nil {
-				_ = s.FailRun(optimizeCtx, run.ID, fmt.Sprintf("optimization panicked: %v", r))
+				reason := fmt.Sprintf("optimization panicked: %v", r)
+				_ = s.FailRun(optimizeCtx, run.ID, reason)
+
+				// Publish failure event to subscribers
+				s.publishProgress(run.ID, OptimizationProgressEvent{
+					Type:      "failed",
+					RunID:     run.ID,
+					Status:    string(models.OptimizationStatusFailed),
+					Message:   reason,
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
 			}
 		}()
 
@@ -821,15 +1036,28 @@ func (s *OptimizationService) OptimizeSignatureWithMemory(
 			bestPrompt = gepaState.BestCandidate.Instruction
 			bestScore = gepaState.BestCandidate.Fitness
 
-			// Map GEPA's multi-objective fitness to Alicia's dimension scores
-			bestDimScores = prompt.DimensionScores{
-				SuccessRate:    bestScore,
-				Quality:        bestScore * 0.9,
-				Efficiency:     0.8,
-				Robustness:     bestScore * 0.85,
-				Generalization: bestScore * 0.8,
-				Diversity:      0.5,
-				Innovation:     0.3,
+			// Extract GEPA's multi-objective fitness for the best candidate
+			if moFitness, ok := gepaState.MultiObjectiveFitnessMap[gepaState.BestCandidate.ID]; ok && moFitness != nil {
+				bestDimScores = prompt.DimensionScores{
+					SuccessRate:    moFitness.SuccessRate,
+					Quality:        moFitness.OutputQuality,
+					Efficiency:     moFitness.Efficiency,
+					Robustness:     moFitness.Robustness,
+					Generalization: moFitness.Generalization,
+					Diversity:      moFitness.Diversity,
+					Innovation:     moFitness.Innovation,
+				}
+			} else {
+				// Fallback to basic fitness if multi-objective data unavailable
+				bestDimScores = prompt.DimensionScores{
+					SuccessRate:    bestScore,
+					Quality:        bestScore * 0.9,
+					Efficiency:     0.8,
+					Robustness:     bestScore * 0.85,
+					Generalization: bestScore * 0.8,
+					Diversity:      0.5,
+					Innovation:     0.3,
+				}
 			}
 		}
 
@@ -847,14 +1075,29 @@ func (s *OptimizationService) OptimizeSignatureWithMemory(
 			}
 
 			// Record evaluation for this candidate
-			candidateDimScores := prompt.DimensionScores{
-				SuccessRate:    candidate.Fitness,
-				Quality:        candidate.Fitness * 0.9,
-				Efficiency:     0.8,
-				Robustness:     candidate.Fitness * 0.85,
-				Generalization: candidate.Fitness * 0.8,
-				Diversity:      0.5,
-				Innovation:     0.3,
+			// Extract multi-objective fitness from archive fitness map
+			candidateDimScores := prompt.DimensionScores{}
+			if moFitness, ok := gepaState.ArchiveFitnessMap[candidate.ID]; ok && moFitness != nil {
+				candidateDimScores = prompt.DimensionScores{
+					SuccessRate:    moFitness.SuccessRate,
+					Quality:        moFitness.OutputQuality,
+					Efficiency:     moFitness.Efficiency,
+					Robustness:     moFitness.Robustness,
+					Generalization: moFitness.Generalization,
+					Diversity:      moFitness.Diversity,
+					Innovation:     moFitness.Innovation,
+				}
+			} else {
+				// Fallback to basic fitness
+				candidateDimScores = prompt.DimensionScores{
+					SuccessRate:    candidate.Fitness,
+					Quality:        candidate.Fitness * 0.9,
+					Efficiency:     0.8,
+					Robustness:     candidate.Fitness * 0.85,
+					Generalization: candidate.Fitness * 0.8,
+					Diversity:      0.5,
+					Innovation:     0.3,
+				}
 			}
 
 			_, _ = s.RecordEvaluationWithDimensions(
@@ -871,6 +1114,27 @@ func (s *OptimizationService) OptimizeSignatureWithMemory(
 			// Update progress periodically
 			if i%5 == 0 {
 				_ = s.UpdateProgressWithDimensions(optimizeCtx, run.ID, i, candidateDimScores)
+
+				// Publish progress event to subscribers
+				s.publishProgress(run.ID, OptimizationProgressEvent{
+					Type:          "progress",
+					RunID:         run.ID,
+					Iteration:     i,
+					MaxIterations: run.MaxIterations,
+					CurrentScore:  candidate.Fitness,
+					BestScore:     bestScore,
+					DimensionScores: map[string]float64{
+						"successRate":    candidateDimScores.SuccessRate,
+						"quality":        candidateDimScores.Quality,
+						"efficiency":     candidateDimScores.Efficiency,
+						"robustness":     candidateDimScores.Robustness,
+						"generalization": candidateDimScores.Generalization,
+						"diversity":      candidateDimScores.Diversity,
+						"innovation":     candidateDimScores.Innovation,
+					},
+					Status:    string(models.OptimizationStatusRunning),
+					Timestamp: time.Now().Format(time.RFC3339),
+				})
 			}
 		}
 

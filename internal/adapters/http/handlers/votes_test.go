@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/longregen/alicia/internal/domain/models"
+	"github.com/longregen/alicia/internal/ports"
 )
 
 // Mock VoteRepository
@@ -72,6 +73,26 @@ func (m *mockVoteRepo) GetByTarget(ctx context.Context, targetType string, targe
 
 func (m *mockVoteRepo) GetByMessage(ctx context.Context, messageID string) ([]*models.Vote, error) {
 	return m.GetByTarget(ctx, "message", messageID)
+}
+
+func (m *mockVoteRepo) CountByTargetType(ctx context.Context, targetType string) (int, error) {
+	return 0, nil
+}
+
+func (m *mockVoteRepo) GetMemoryExtractionVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithExtractionContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepo) GetToolUseVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithToolContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepo) GetMemoryVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithMemoryContext, error) {
+	return nil, nil
+}
+
+func (m *mockVoteRepo) GetMemoryUsageVotesWithContext(ctx context.Context, limit int) ([]*ports.VoteWithMemoryContext, error) {
+	return nil, nil
 }
 
 // Tests for VoteHandler.VoteOnMessage

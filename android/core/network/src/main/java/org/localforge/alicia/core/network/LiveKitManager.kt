@@ -58,9 +58,8 @@ class LiveKitManager @Inject constructor(
      *
      * @param url LiveKit server URL
      * @param token Authentication token
-     * @param roomName Name of the room to join (used for logging only)
      */
-    suspend fun connect(url: String, token: String, roomName: String) {
+    suspend fun connect(url: String, token: String) {
         try {
             _connectionState.value = ConnectionState.Connecting
 
@@ -134,7 +133,7 @@ class LiveKitManager @Inject constructor(
             // Connect to the room - this suspends until connection is established
             newRoom.connect(url, token)
 
-            Timber.i("LiveKit: Connected to room $roomName")
+            Timber.i("LiveKit: Connected to room ${room?.name}")
             setupAudioTracks()
 
         } catch (e: Exception) {
@@ -215,25 +214,27 @@ class LiveKitManager @Inject constructor(
     }
 
     /**
-     * Mute/unmute the local microphone
+     * Mute or unmute the local microphone.
      *
-     * @param muted true to mute the microphone, false to unmute
+     * When muted, audio data stops being transmitted to the server and remote
+     * participants are notified via TrackMutedEvent. The track remains active
+     * and can be unmuted without reinitialization.
+     *
+     * @param muted true to mute (stops transmission), false to unmute (resumes transmission)
      */
-    fun setMicrophoneMuted(muted: Boolean) {
-        localAudioTrack?.let { track ->
-            if (muted) {
-                track.stop()
-            } else {
-                track.start()
-            }
+    suspend fun setMicrophoneMuted(muted: Boolean) {
+        room?.localParticipant?.let { participant ->
+            participant.setMicrophoneEnabled(!muted)
             Timber.d("LiveKit: Microphone ${if (muted) "muted" else "unmuted"}")
+        } ?: run {
+            Timber.w("LiveKit: Cannot mute - not connected to room")
         }
     }
 
     /**
      * Check if currently connected
      *
-     * @return true if the connection state is Connected, false otherwise
+     * @return true if connection state is Connected, false for Disconnected/Connecting/Failed states
      */
     fun isConnected(): Boolean {
         return _connectionState.value is ConnectionState.Connected

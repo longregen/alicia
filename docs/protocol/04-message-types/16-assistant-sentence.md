@@ -52,7 +52,7 @@ The client appends these texts in order to display the full answer progressively
 
 **Relationship to AssistantMessage:** When not streaming, the server sends one AssistantMessage (type 3). When streaming, it uses StartAnswer + AssistantSentence. These modes are mutually exclusive for the same user query. A server could theoretically send a complete AssistantMessage at the very end with the entire content as a single message for integrity checking or storage, but this is redundant for the client. The database can reconstruct the full answer from the pieces, making a separate AssistantMessage unnecessary.
 
-**Database Alignment:** AssistantSentence messages themselves are typically not individually stored in the database. Instead, the whole assembled answer is stored as one entry (the assistant message with id given in StartAnswer). Individual sentences might be stored in a separate table for debugging purposes, but this is not typical.
+**Database Alignment:** Each AssistantSentence message is stored individually in the `alicia_sentences` table (as documented in [Database Alignment](../06-database-alignment.md)). The full assembled answer is also stored in the `alicia_messages` table (with the id given in StartAnswer), allowing both sentence-level access (for streaming replay and audio retrieval) and complete message reconstruction.
 
 The database stores the answer id X with content representing the concatenation of all sentences. Any commentary or memory usage referencing that answer has the id available from the start (via StartAnswer).
 

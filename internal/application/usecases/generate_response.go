@@ -12,17 +12,18 @@ import (
 )
 
 type GenerateResponse struct {
-	messageRepo       ports.MessageRepository
-	sentenceRepo      ports.SentenceRepository
-	toolUseRepo       ports.ToolUseRepository
-	toolRepo          ports.ToolRepository
-	reasoningStepRepo ports.ReasoningStepRepository
-	conversationRepo  ports.ConversationRepository
-	llmService        ports.LLMService
-	toolService       ports.ToolService
-	memoryService     ports.MemoryService
-	idGenerator       ports.IDGenerator
-	txManager         ports.TransactionManager
+	messageRepo          ports.MessageRepository
+	sentenceRepo         ports.SentenceRepository
+	toolUseRepo          ports.ToolUseRepository
+	toolRepo             ports.ToolRepository
+	reasoningStepRepo    ports.ReasoningStepRepository
+	conversationRepo     ports.ConversationRepository
+	llmService           ports.LLMService
+	toolService          ports.ToolService
+	memoryService        ports.MemoryService
+	promptVersionService ports.PromptVersionService
+	idGenerator          ports.IDGenerator
+	txManager            ports.TransactionManager
 }
 
 func NewGenerateResponse(
@@ -35,25 +36,33 @@ func NewGenerateResponse(
 	llmService ports.LLMService,
 	toolService ports.ToolService,
 	memoryService ports.MemoryService,
+	promptVersionService ports.PromptVersionService,
 	idGenerator ports.IDGenerator,
 	txManager ports.TransactionManager,
 ) *GenerateResponse {
 	return &GenerateResponse{
-		messageRepo:       messageRepo,
-		sentenceRepo:      sentenceRepo,
-		toolUseRepo:       toolUseRepo,
-		toolRepo:          toolRepo,
-		reasoningStepRepo: reasoningStepRepo,
-		conversationRepo:  conversationRepo,
-		llmService:        llmService,
-		toolService:       toolService,
-		memoryService:     memoryService,
-		idGenerator:       idGenerator,
-		txManager:         txManager,
+		messageRepo:          messageRepo,
+		sentenceRepo:         sentenceRepo,
+		toolUseRepo:          toolUseRepo,
+		toolRepo:             toolRepo,
+		reasoningStepRepo:    reasoningStepRepo,
+		conversationRepo:     conversationRepo,
+		llmService:           llmService,
+		toolService:          toolService,
+		memoryService:        memoryService,
+		promptVersionService: promptVersionService,
+		idGenerator:          idGenerator,
+		txManager:            txManager,
 	}
 }
 
 func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateResponseInput) (*ports.GenerateResponseOutput, error) {
+	// Get conversation for prompt version tracking
+	conversation, err := uc.conversationRepo.GetByID(ctx, input.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+
 	messages, err := uc.messageRepo.GetLatestByConversation(ctx, input.ConversationID, 20)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation history: %w", err)
@@ -81,7 +90,7 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 		}
 	}
 
-	llmMessages := uc.buildLLMContext(messages, relevantMemories)
+	llmMessages := uc.buildLLMContext(ctx, conversation, messages, relevantMemories)
 
 	var tools []*models.Tool
 	if input.EnableTools {
@@ -117,25 +126,41 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 	return uc.executeNonStreaming(ctx, input, message, llmMessages, tools)
 }
 
-func (uc *GenerateResponse) buildLLMContext(messages []*models.Message, memories []*models.Memory) []ports.LLMMessage {
+func (uc *GenerateResponse) buildLLMContext(ctx context.Context, conversation *models.Conversation, messages []*models.Message, memories []*models.Memory) []ports.LLMMessage {
 	llmMessages := []ports.LLMMessage{}
 
+	// Build system prompt
+	var systemPrompt string
 	if len(memories) > 0 {
 		var memoryContent strings.Builder
 		memoryContent.WriteString("You are Alicia, a helpful AI assistant. Here are some relevant memories from our previous conversations:\n\n")
 		for i, memory := range memories {
 			memoryContent.WriteString(fmt.Sprintf("%d. %s\n", i+1, memory.Content))
 		}
-		llmMessages = append(llmMessages, ports.LLMMessage{
-			Role:    "system",
-			Content: memoryContent.String(),
-		})
+		systemPrompt = memoryContent.String()
 	} else {
-		llmMessages = append(llmMessages, ports.LLMMessage{
-			Role:    "system",
-			Content: "You are Alicia, a helpful AI assistant.",
-		})
+		systemPrompt = "You are Alicia, a helpful AI assistant."
 	}
+
+	// Track the prompt version if promptVersionService is available
+	if uc.promptVersionService != nil && conversation.SystemPromptVersionID == "" {
+		versionID, err := uc.promptVersionService.GetOrCreateForConversation(ctx, systemPrompt)
+		if err == nil {
+			// Update conversation with version ID
+			if err := uc.conversationRepo.UpdatePromptVersion(ctx, conversation.ID, versionID); err != nil {
+				log.Printf("warning: failed to update conversation prompt version: %v\n", err)
+			} else {
+				conversation.SystemPromptVersionID = versionID
+			}
+		} else {
+			log.Printf("warning: failed to create prompt version: %v\n", err)
+		}
+	}
+
+	llmMessages = append(llmMessages, ports.LLMMessage{
+		Role:    "system",
+		Content: systemPrompt,
+	})
 
 	for _, msg := range messages {
 		role := string(msg.Role)

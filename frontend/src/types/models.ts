@@ -26,8 +26,13 @@ export interface Conversation {
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system';
+/** Sync status for offline-first operations. Canonical definition - import from here. */
 export type SyncStatus = 'pending' | 'synced' | 'conflict';
 
+/**
+ * Message domain model. Uses snake_case to match database schema.
+ * For normalized/streaming use, see NormalizedMessage in streaming.ts
+ */
 export interface Message {
   id: string;
   conversation_id: string;

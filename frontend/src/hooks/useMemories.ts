@@ -35,6 +35,25 @@ export interface SearchResultsResponse {
 }
 
 /**
+ * Convert API response to store memory format.
+ * Moved outside hook since it has no dependencies on hook state.
+ */
+function apiToStoreMemory(apiMemory: MemoryAPIResponse): Partial<Memory> {
+  // Map tags to category (use first tag or default to 'fact')
+  const category: MemoryCategory = apiMemory.tags[0] as MemoryCategory || 'fact';
+
+  return {
+    id: apiMemory.id,
+    content: apiMemory.content,
+    category,
+    createdAt: apiMemory.created_at * 1000, // Convert to milliseconds
+    updatedAt: apiMemory.updated_at * 1000,
+    pinned: apiMemory.pinned || false,
+    archived: apiMemory.archived || false,
+  };
+}
+
+/**
  * Hook for managing global memories with API integration.
  * Wraps the memoryStore with CRUD operations and server synchronization.
  *
@@ -76,22 +95,6 @@ export function useMemories() {
     [rawMemories]
   );
 
-  // Convert API response to store memory format (stable function, no dependencies)
-  const apiToStoreMemory = (apiMemory: MemoryAPIResponse): Partial<Memory> => {
-    // Map tags to category (use first tag or default to 'fact')
-    const category: MemoryCategory = apiMemory.tags[0] as MemoryCategory || 'fact';
-
-    return {
-      id: apiMemory.id,
-      content: apiMemory.content,
-      category,
-      createdAt: apiMemory.created_at * 1000, // Convert to milliseconds
-      updatedAt: apiMemory.updated_at * 1000,
-      pinned: apiMemory.pinned || false,
-      archived: apiMemory.archived || false,
-    };
-  };
-
   // Fetch all memories from server
   const fetchMemories = useCallback(async () => {
     setIsFetching(true);
@@ -126,7 +129,7 @@ export function useMemories() {
   useEffect(() => {
     fetchMemories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Only fetch on mount
 
   // Create new memory
   const create = useCallback(async (content: string, category: MemoryCategory) => {

@@ -15,6 +15,8 @@ type ConversationRepository interface {
 	GetByLiveKitRoom(ctx context.Context, roomName string) (*models.Conversation, error)
 	Update(ctx context.Context, conversation *models.Conversation) error
 	UpdateStanzaIDs(ctx context.Context, id string, clientStanza, serverStanza int32) error
+	UpdateTip(ctx context.Context, conversationID, messageID string) error
+	UpdatePromptVersion(ctx context.Context, convID, versionID string) error
 	Delete(ctx context.Context, id string) error
 	DeleteByIDAndUserID(ctx context.Context, id, userID string) error
 	List(ctx context.Context, limit, offset int) ([]*models.Conversation, error)
@@ -33,6 +35,8 @@ type MessageRepository interface {
 	GetLatestByConversation(ctx context.Context, conversationID string, limit int) ([]*models.Message, error)
 	GetNextSequenceNumber(ctx context.Context, conversationID string) (int, error)
 	GetAfterSequence(ctx context.Context, conversationID string, afterSequence int) ([]*models.Message, error)
+	GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error)
+	GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error)
 	// Offline sync support
 	GetPendingSync(ctx context.Context, conversationID string) ([]*models.Message, error)
 	GetByLocalID(ctx context.Context, localID string) (*models.Message, error)
@@ -180,6 +184,49 @@ type VoteRepository interface {
 	GetByTarget(ctx context.Context, targetType string, targetID string) ([]*models.Vote, error)
 	GetByMessage(ctx context.Context, messageID string) ([]*models.Vote, error)
 	GetAggregates(ctx context.Context, targetType string, targetID string) (*models.VoteAggregates, error)
+
+	// GetToolUseVotesWithContext returns tool_use votes with full context for training
+	GetToolUseVotesWithContext(ctx context.Context, limit int) ([]*VoteWithToolContext, error)
+
+	// GetMemoryVotesWithContext returns memory votes with full context for training
+	GetMemoryVotesWithContext(ctx context.Context, limit int) ([]*VoteWithMemoryContext, error)
+
+	// GetMemoryUsageVotesWithContext returns memory_usage votes with full context for training
+	GetMemoryUsageVotesWithContext(ctx context.Context, limit int) ([]*VoteWithMemoryContext, error)
+
+	// GetMemoryExtractionVotesWithContext returns memory_extraction votes with full context for training
+	GetMemoryExtractionVotesWithContext(ctx context.Context, limit int) ([]*VoteWithExtractionContext, error)
+
+	// CountByTargetType returns count of votes for a target type
+	CountByTargetType(ctx context.Context, targetType string) (int, error)
+}
+
+// VoteWithToolContext holds a vote with tool use context for training set building
+type VoteWithToolContext struct {
+	Vote           *models.Vote
+	ToolUse        *models.ToolUse
+	UserMessage    string // contents of the user message that triggered tool use
+	ConversationID string
+	AvailableTools []*models.Tool // tools available at the time
+}
+
+// VoteWithMemoryContext holds a vote with memory context for training set building
+type VoteWithMemoryContext struct {
+	Vote              *models.Vote
+	Memory            *models.Memory
+	MemoryUsage       *models.MemoryUsage
+	UserMessage       string
+	ConversationID    string
+	SimilarityScore   float32
+	CandidateMemories []*models.Memory // other memories from same query
+}
+
+// VoteWithExtractionContext holds a vote with memory extraction context for training set building
+type VoteWithExtractionContext struct {
+	Vote           *models.Vote
+	Memory         *models.Memory  // The extracted memory
+	SourceMessage  *models.Message // Message it was extracted from
+	ConversationID string
 }
 
 // NoteRepository handles note persistence
@@ -216,6 +263,56 @@ type PromptOptimizationRepository interface {
 	GetBestCandidate(ctx context.Context, runID string) (*models.PromptCandidate, error)
 	SaveEvaluation(ctx context.Context, eval *models.PromptEvaluation) error
 	GetEvaluations(ctx context.Context, candidateID string) ([]*models.PromptEvaluation, error)
+}
+
+// TrainingExampleRepository manages GEPA training examples
+type TrainingExampleRepository interface {
+	Create(ctx context.Context, example *models.TrainingExample) error
+	GetByID(ctx context.Context, id string) (*models.TrainingExample, error)
+	ListByTaskType(ctx context.Context, taskType string, limit, offset int) ([]*models.TrainingExample, error)
+	CountByTaskType(ctx context.Context, taskType string) (int, error)
+	CountPositiveByTaskType(ctx context.Context, taskType string) (int, error)
+	Delete(ctx context.Context, id string) error
+	DeleteByVoteID(ctx context.Context, voteID string) error
+}
+
+// SystemPromptVersionRepository manages system prompt versions
+type SystemPromptVersionRepository interface {
+	Create(ctx context.Context, version *models.SystemPromptVersion) error
+	GetByID(ctx context.Context, id string) (*models.SystemPromptVersion, error)
+	GetActiveByType(ctx context.Context, promptType string) (*models.SystemPromptVersion, error)
+	GetByHash(ctx context.Context, promptType, hash string) (*models.SystemPromptVersion, error)
+	SetActive(ctx context.Context, id string) error
+	List(ctx context.Context, promptType string, limit int) ([]*models.SystemPromptVersion, error)
+	GetLatestByType(ctx context.Context, promptType string) (*models.SystemPromptVersion, error)
+}
+
+// OptimizedTool represents a GEPA-optimized tool with enhanced schema and examples
+type OptimizedTool struct {
+	ID                   string
+	ToolID               string
+	OptimizedDescription string
+	OptimizedSchema      map[string]any
+	ResultTemplate       string
+	Examples             []map[string]any
+	Version              int
+	Score                *float64
+	OptimizedAt          time.Time
+	Active               bool
+	DeletedAt            *time.Time
+}
+
+// ToolResultFormatter represents formatting rules for tool results
+type ToolResultFormatter struct {
+	ID            string
+	ToolName      string
+	Template      string
+	MaxLength     int
+	SummarizeAt   int
+	SummaryPrompt string
+	KeyFields     []string
+	CreatedAt     time.Time
+	DeletedAt     *time.Time
 }
 
 // TransactionManager handles database transactions
@@ -281,6 +378,12 @@ type IDGenerator interface {
 
 	// GeneratePromptEvaluationID generates a new prompt evaluation ID (ape_xxx)
 	GeneratePromptEvaluationID() string
+
+	// GenerateTrainingExampleID generates a new training example ID (gte_xxx)
+	GenerateTrainingExampleID() string
+
+	// GenerateSystemPromptVersionID generates a new system prompt version ID (spv_xxx)
+	GenerateSystemPromptVersionID() string
 }
 
 // ToolExecutor executes tools with given arguments

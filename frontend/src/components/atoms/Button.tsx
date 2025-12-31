@@ -1,7 +1,7 @@
 import React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 
 /**
  * Base button component with support for different variants and sizes.
@@ -51,7 +51,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cls(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
         data-slot="button"

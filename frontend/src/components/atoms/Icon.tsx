@@ -1,6 +1,6 @@
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 
 /**
  * Icon wrapper component for consistent icon sizing and styling.
@@ -46,7 +46,7 @@ const Icon = React.forwardRef<HTMLSpanElement, IconProps>(
     return (
       <span
         ref={ref}
-        className={cn(iconVariants({ size, color }), spin && 'animate-spin', className)}
+        className={cls(iconVariants({ size, color }), spin && 'animate-spin', className)}
         {...props}
       >
         <IconComponent className="size-full" />

@@ -12,8 +12,9 @@ import { api, type VoteResponse } from '../services/api';
  * Wraps the feedbackStore with additional logic and convenience methods.
  * Makes API calls to persist votes on the server.
  *
- * @param targetType - Type of votable element (message, tool_use, memory, reasoning)
+ * @param targetType - Type of votable element (message, tool_use, memory, reasoning, memory_usage, memory_extraction)
  * @param targetId - Unique ID of the target element
+ *                   For memory_extraction, use format "messageId:memoryId"
  * @returns Object with vote state, handlers, and aggregate counts
  *
  * @example
@@ -92,6 +93,13 @@ export function useFeedback(targetType: VotableType, targetId: string) {
         return api.getMemoryVotes(targetId);
       case 'reasoning':
         return api.getReasoningVotes(targetId);
+      case 'memory_usage':
+        return api.getMemoryUsageVotes(targetId);
+      case 'memory_extraction': {
+        // For memory_extraction, targetId should be in format "messageId:memoryId"
+        const [messageId, memoryId] = targetId.split(':');
+        return api.getMemoryExtractionVotes(messageId, memoryId);
+      }
     }
   }, [targetType, targetId]);
 
@@ -106,6 +114,13 @@ export function useFeedback(targetType: VotableType, targetId: string) {
         return api.voteOnMemory(targetId, vote);
       case 'reasoning':
         return api.voteOnReasoning(targetId, vote as 'up' | 'down');
+      case 'memory_usage':
+        return api.voteOnMemoryUsage(targetId, vote as 'up' | 'down');
+      case 'memory_extraction': {
+        // For memory_extraction, targetId should be in format "messageId:memoryId"
+        const [messageId, memoryId] = targetId.split(':');
+        return api.voteOnMemoryExtraction(messageId, memoryId, vote as 'up' | 'down');
+      }
     }
   }, [targetType, targetId]);
 
@@ -119,6 +134,13 @@ export function useFeedback(targetType: VotableType, targetId: string) {
         return api.removeMemoryVote(targetId);
       case 'reasoning':
         return api.removeReasoningVote(targetId);
+      case 'memory_usage':
+        return api.removeMemoryUsageVote(targetId);
+      case 'memory_extraction': {
+        // For memory_extraction, targetId should be in format "messageId:memoryId"
+        const [messageId, memoryId] = targetId.split(':');
+        return api.removeMemoryExtractionVote(messageId, memoryId);
+      }
     }
   }, [targetType, targetId]);
 

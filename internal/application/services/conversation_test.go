@@ -119,6 +119,22 @@ func (m *mockConversationRepo) UpdateStanzaIDs(ctx context.Context, id string, c
 	return ErrNotFound
 }
 
+func (m *mockConversationRepo) UpdateTip(ctx context.Context, conversationID, messageID string) error {
+	if c, ok := m.store[conversationID]; ok {
+		c.TipMessageID = &messageID
+		return nil
+	}
+	return ErrNotFound
+}
+
+func (m *mockConversationRepo) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
+	if c, ok := m.store[convID]; ok {
+		c.SystemPromptVersionID = versionID
+		return nil
+	}
+	return ErrNotFound
+}
+
 func (m *mockConversationRepo) DeleteByIDAndUserID(ctx context.Context, id, userID string) error {
 	if c, ok := m.store[id]; ok {
 		now := time.Now()

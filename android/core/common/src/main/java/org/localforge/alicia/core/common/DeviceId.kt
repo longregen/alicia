@@ -15,7 +15,8 @@ object DeviceId {
     private var cachedDeviceId: String? = null
 
     /**
-     * Generate a random device ID
+     * Generate a structured device ID in the format: android_{timestamp}_{12-char-random}
+     * The random component is the first 12 characters of a UUID (without hyphens).
      */
     private fun generateDeviceId(): String {
         val timestamp = System.currentTimeMillis()
@@ -24,7 +25,7 @@ object DeviceId {
     }
 
     /**
-     * Get or create persistent device ID from SharedPreferences
+     * Get or create persistent device ID, checking in-memory cache first, then SharedPreferences
      */
     @Synchronized
     fun get(context: Context): String {

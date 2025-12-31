@@ -6,9 +6,9 @@ Alicia is a self-hosted personal AI voice assistant that enables natural, real-t
 
 Alicia transforms how you interact with AI through voice, providing a fluid, human-like conversation experience:
 
-### Implemented Features ✅
+### Features
 
-- **Real-time Voice Conversations**: Full voice pipeline with Whisper STT → Qwen3 LLM → Kokoro TTS
+- **Real-time Voice Conversations**: Full voice pipeline with Whisper STT → Qwen2.5-7B-Instruct-AWQ LLM → Kokoro TTS
 - **LiveKit Integration**: Real-time audio streaming through LiveKit for all clients
 - **Web Frontend**: React-based interface with voice and text conversations, conversation management
 - **Android App**: Native Kotlin/Compose app with LiveKit integration and Porcupine wake word detection
@@ -20,13 +20,6 @@ Alicia transforms how you interact with AI through voice, providing a fluid, hum
 - **Message History**: Persistent storage of conversation history with offline sync support
 - **Privacy-First**: All processing happens locally on your hardware
 - **Extensible Architecture**: Hexagonal architecture with clean separation of concerns
-
-### Planned Features 🚧
-
-- **Enhanced Frontend UX**: Comprehensive user feedback system with granular voting on messages, tool usage, memories, and reasoning steps. User notes, memory management, and server information panels. See the [Frontend UX Enhancement Plan](frontend-ux-plan.md) for full details.
-- **DSPy + GEPA Optimization**: Automatic prompt improvement using Stanford's DSPy framework and GEPA optimizer. Tool usage optimization, memory-aware learning, and continuous improvement from user feedback. See the [DSPy + GEPA Implementation Plan](dspy-gepa-implementation-plan.md) for architecture and implementation details.
-- **Silero VAD (Voice Activity Detection)**: Automatic speech detection in the web frontend using Silero VAD, eliminating the need for push-to-talk buttons.
-- **Personal Knowledge Integration**: Full integration with personal knowledge database systems.
 
 ## Architecture
 
@@ -41,7 +34,7 @@ Alicia uses **LiveKit** as its real-time communication layer for audio streaming
 
 ### Conversation Protocol
 
-Alicia implements a **MessagePack-based protocol** over LiveKit data channels with 16 message types:
+Alicia implements a **MessagePack-based protocol** over LiveKit data channels with 27 message types (with reserved types up to 31):
 
 - User and assistant messages
 - Audio chunks and transcriptions
@@ -57,7 +50,7 @@ This separation keeps audio transport (LiveKit tracks) independent from conversa
 All AI processing happens locally on your machine, with no cloud dependencies:
 
 - **Speech Recognition**: Whisper for real-time transcription across multiple languages
-- **Language Understanding**: Qwen3 via vLLM for intelligent, contextual responses
+- **Language Understanding**: Qwen2.5-7B-Instruct-AWQ via vLLM for intelligent, contextual responses
 - **Voice Synthesis**: Kokoro for natural-sounding speech output
 - **Embeddings**: pgvector for semantic memory search
 
@@ -78,7 +71,7 @@ All platforms support text-only mode where you can type messages and receive tex
 
 ## Multi-Platform Support
 
-### Web Frontend ✅
+### Web Frontend
 
 A React-based web interface with full feature support:
 
@@ -88,7 +81,7 @@ A React-based web interface with full feature support:
 - MCP server configuration
 - Audio input/output controls
 
-### Android App ✅
+### Android App
 
 A native Kotlin/Jetpack Compose application:
 
@@ -98,7 +91,7 @@ A native Kotlin/Jetpack Compose application:
 - Background voice service
 - Hilt dependency injection
 
-### CLI Tool ✅
+### CLI Tool
 
 A Go-based command-line interface:
 
@@ -120,7 +113,7 @@ Alicia runs entirely on standard consumer devices - no cloud services required. 
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Go 1.25, Chi, pgx, LiveKit Server SDK |
+| Backend | Go 1.22+, Chi, pgx, LiveKit Server SDK |
 | Frontend | React 19, TypeScript, Vite 7, LiveKit Components |
 | Android | Kotlin, Jetpack Compose, Hilt, Room, LiveKit SDK |
 | Database | PostgreSQL with pgvector |

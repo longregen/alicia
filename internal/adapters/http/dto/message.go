@@ -11,6 +11,11 @@ type SendMessageRequest struct {
 	Contents string `json:"contents" msgpack:"contents"`
 }
 
+// SwitchBranchRequest represents a request to switch the conversation tip to a different message
+type SwitchBranchRequest struct {
+	TipMessageID string `json:"tip_message_id" msgpack:"tipMessageId"`
+}
+
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
 	ID             string `json:"id" msgpack:"id"`

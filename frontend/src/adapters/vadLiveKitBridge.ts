@@ -1,5 +1,6 @@
 /**
  * VAD-LiveKit Bridge Adapter
+ * Audio processing worklet: see public/vad-processor.js
  *
  * Converts Float32Array audio frames from Silero VAD to a MediaStreamTrack
  * that can be published to LiveKit for server-side transcription.
@@ -31,8 +32,8 @@ export class VADLiveKitBridge {
     }
 
     try {
-      // Create AudioContext with 16kHz sample rate (matches VAD output)
-      this.audioContext = new AudioContext({ sampleRate: 16000 });
+      // TODO: Consider making sample rate configurable or detecting from VAD config
+      this.audioContext = new AudioContext({ sampleRate: 16000 }); // Must match VAD output
 
       // Create destination node that provides a MediaStream
       this.destination = this.audioContext.createMediaStreamDestination();
@@ -61,10 +62,8 @@ export class VADLiveKitBridge {
   }
 
   /**
-   * Push an audio frame from VAD to the LiveKit stream
+   * Push a single audio frame from VAD (typically 512 samples at 16kHz)
    * Called by Silero VAD onFrameProcessed callback
-   *
-   * @param audioData Float32Array audio samples from VAD
    */
   pushAudioFrame(audioData: Float32Array): void {
     if (!this.isInitialized || !this.workletNode) {
@@ -86,6 +85,9 @@ export class VADLiveKitBridge {
   /**
    * Push a complete speech segment from VAD to the LiveKit stream
    * Called by Silero VAD onSpeechEnd callback
+   *
+   * pushAudioFrame: incremental updates during active speech
+   * pushSpeechSegment: complete utterance after speech end detected
    *
    * @param audioData Float32Array complete speech segment
    */
@@ -110,6 +112,7 @@ export class VADLiveKitBridge {
    * Clean up resources and release the audio pipeline
    */
   cleanup(): void {
+    this.isInitialized = false; // Mark as not initialized immediately
     try {
       if (this.workletNode) {
         this.workletNode.disconnect();
@@ -126,8 +129,6 @@ export class VADLiveKitBridge {
         this.audioContext.close();
         this.audioContext = null;
       }
-
-      this.isInitialized = false;
     } catch (error) {
       console.error('Error during VADLiveKitBridge cleanup:', error);
     }

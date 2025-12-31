@@ -37,8 +37,6 @@ class SyncWebSocket @Inject constructor(
     private val _incomingMessages = MutableSharedFlow<Envelope>(replay = 0, extraBufferCapacity = 64)
     val incomingMessages: SharedFlow<Envelope> = _incomingMessages
 
-    private var sessionId: String? = null
-
     // Reconnection logic
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var reconnectJob: Job? = null
@@ -83,9 +81,7 @@ class SyncWebSocket @Inject constructor(
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Timber.d("WebSocket connection opened")
-                sessionId = response.header("X-Session-ID") ?: generateSessionId()
-                _connectionState.value = WebSocketState.Connected(sessionId!!)
-                // Reset reconnection attempts on successful connection
+                _connectionState.value = WebSocketState.Connected
                 reconnectAttempts = 0
             }
 
@@ -112,7 +108,6 @@ class SyncWebSocket @Inject constructor(
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Timber.d("WebSocket closed: code=$code, reason=$reason")
                 _connectionState.value = WebSocketState.Disconnected
-                sessionId = null
 
                 // Schedule reconnection if not intentionally disconnected
                 if (!isIntentionalDisconnect && lastUrl != null && lastToken != null) {
@@ -123,7 +118,6 @@ class SyncWebSocket @Inject constructor(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Timber.e(t, "WebSocket connection failed: ${response?.message}")
                 _connectionState.value = WebSocketState.Error(t)
-                sessionId = null
 
                 // Schedule reconnection if not intentionally disconnected
                 if (!isIntentionalDisconnect && lastUrl != null && lastToken != null) {
@@ -150,7 +144,6 @@ class SyncWebSocket @Inject constructor(
         webSocket?.close(code, reason)
         webSocket = null
         _connectionState.value = WebSocketState.Disconnected
-        sessionId = null
     }
 
     /**
@@ -184,11 +177,6 @@ class SyncWebSocket @Inject constructor(
      * Check if the WebSocket is currently connected.
      */
     fun isConnected(): Boolean = _connectionState.value is WebSocketState.Connected
-
-    /**
-     * Get the current session ID.
-     */
-    fun getSessionId(): String? = sessionId
 
     /**
      * Schedule automatic reconnection with exponential backoff.
@@ -226,11 +214,6 @@ class SyncWebSocket @Inject constructor(
         webSocket = null
         scope.cancel()
     }
-
-    private fun generateSessionId(): String {
-        // Generate a simple session ID based on timestamp
-        return "session_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}"
-    }
 }
 
 /**
@@ -249,9 +232,8 @@ sealed class WebSocketState {
 
     /**
      * WebSocket is connected and ready for communication.
-     * @param sessionId Unique session identifier for this connection
      */
-    data class Connected(val sessionId: String) : WebSocketState()
+    object Connected : WebSocketState()
 
     /**
      * WebSocket encountered an error.

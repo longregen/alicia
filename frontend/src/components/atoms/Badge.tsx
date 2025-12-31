@@ -1,6 +1,6 @@
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../lib/utils';
+import { cls } from '../../utils/cls';
 
 /**
  * Base Badge component for displaying status, scores, and counts.
@@ -34,7 +34,7 @@ export interface BadgeProps
   icon?: React.ReactNode;
   /** Optional dot indicator */
   showDot?: boolean;
-  /** Dot color (only shown if showDot is true) */
+  /** Dot color class name (Tailwind class, only shown if showDot is true) */
   dotColor?: string;
 }
 
@@ -45,12 +45,12 @@ const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
     return (
       <div
         ref={ref}
-        className={cn(badgeVariants({ variant }), className)}
+        className={cls(badgeVariants({ variant }), className)}
         data-slot="badge"
         {...props}
       >
         {showDot && (
-          <span className={cn('w-1.5 h-1.5 rounded-full', dotColorClass)} />
+          <span className={cls('w-1.5 h-1.5 rounded-full', dotColorClass)} />
         )}
         {icon && <span className="flex items-center">{icon}</span>}
         {children}

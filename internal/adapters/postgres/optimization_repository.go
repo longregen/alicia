@@ -165,7 +165,6 @@ func (r *OptimizationRepository) ListRuns(ctx context.Context, opts ports.ListOp
 	return r.scanRuns(rows)
 }
 
-// scanRuns scans multiple optimization runs
 func (r *OptimizationRepository) scanRuns(rows pgx.Rows) ([]*models.OptimizationRun, error) {
 	runs := make([]*models.OptimizationRun, 0)
 
@@ -339,7 +338,6 @@ func (r *OptimizationRepository) GetEvaluations(ctx context.Context, candidateID
 	return r.scanEvaluations(rows)
 }
 
-// scanRun scans a single optimization run
 func (r *OptimizationRepository) scanRun(row pgx.Row) (*models.OptimizationRun, error) {
 	var run models.OptimizationRun
 	var config []byte
@@ -392,7 +390,6 @@ func (r *OptimizationRepository) scanRun(row pgx.Row) (*models.OptimizationRun, 
 	return &run, nil
 }
 
-// scanCandidate scans a single prompt candidate
 func (r *OptimizationRepository) scanCandidate(row pgx.Row) (*models.PromptCandidate, error) {
 	var candidate models.PromptCandidate
 	var demos []byte
@@ -434,7 +431,6 @@ func (r *OptimizationRepository) scanCandidate(row pgx.Row) (*models.PromptCandi
 	return &candidate, nil
 }
 
-// scanCandidates scans multiple prompt candidates
 func (r *OptimizationRepository) scanCandidates(rows pgx.Rows) ([]*models.PromptCandidate, error) {
 	candidates := make([]*models.PromptCandidate, 0)
 
@@ -478,7 +474,6 @@ func (r *OptimizationRepository) scanCandidates(rows pgx.Rows) ([]*models.Prompt
 	return candidates, rows.Err()
 }
 
-// scanEvaluations scans multiple prompt evaluations
 func (r *OptimizationRepository) scanEvaluations(rows pgx.Rows) ([]*models.PromptEvaluation, error) {
 	evaluations := make([]*models.PromptEvaluation, 0)
 

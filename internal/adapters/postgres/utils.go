@@ -21,7 +21,6 @@ func withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, DefaultQueryTimeout)
 }
 
-// Nullable field converters - from Go to SQL
 func nullString(s string) sql.NullString {
 	if s == "" {
 		return sql.NullString{Valid: false}
@@ -50,6 +49,13 @@ func nullTime(t *time.Time) sql.NullTime {
 	return sql.NullTime{Time: *t, Valid: true}
 }
 
+func nullStringPtr(s *string) sql.NullString {
+	if s == nil || *s == "" {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: *s, Valid: true}
+}
+
 func ptrIntToInt(ptr *int) int {
 	if ptr == nil {
 		return 0
@@ -57,10 +63,6 @@ func ptrIntToInt(ptr *int) int {
 	return *ptr
 }
 
-// Nullable field extractors - from SQL to Go
-// These reduce boilerplate when scanning nullable fields
-
-// getString extracts a string from sql.NullString, returning empty string if null
 func getString(ns sql.NullString) string {
 	if ns.Valid {
 		return ns.String
@@ -68,7 +70,6 @@ func getString(ns sql.NullString) string {
 	return ""
 }
 
-// getInt extracts an int from sql.NullInt32, returning 0 if null
 func getInt(ni sql.NullInt32) int {
 	if ni.Valid {
 		return int(ni.Int32)
@@ -76,7 +77,6 @@ func getInt(ni sql.NullInt32) int {
 	return 0
 }
 
-// getTimePtr extracts a *time.Time from sql.NullTime, returning nil if null
 func getTimePtr(nt sql.NullTime) *time.Time {
 	if nt.Valid {
 		return &nt.Time
@@ -84,17 +84,17 @@ func getTimePtr(nt sql.NullTime) *time.Time {
 	return nil
 }
 
-// Error handling helpers
+func getStringPtr(ns sql.NullString) *string {
+	if ns.Valid {
+		return &ns.String
+	}
+	return nil
+}
 
-// checkNoRows returns true if the error is pgx.ErrNoRows (indicating no result found)
 func checkNoRows(err error) bool {
 	return errors.Is(err, pgx.ErrNoRows)
 }
 
-// JSON helpers
-
-// unmarshalJSONField unmarshals a JSON byte slice into the target pointer
-// Returns nil if data is empty (no error for empty data)
 func unmarshalJSONField[T any](data []byte, target *T) error {
 	if len(data) == 0 {
 		return nil
@@ -102,8 +102,6 @@ func unmarshalJSONField[T any](data []byte, target *T) error {
 	return json.Unmarshal(data, target)
 }
 
-// unmarshalJSONPointer unmarshals JSON data into a new pointer of type T
-// Returns nil pointer if data is empty
 func unmarshalJSONPointer[T any](data []byte) (*T, error) {
 	if len(data) == 0 {
 		return nil, nil
@@ -115,8 +113,6 @@ func unmarshalJSONPointer[T any](data []byte) (*T, error) {
 	return &result, nil
 }
 
-// marshalJSONField marshals a value to JSON, handling nil pointers
-// Returns nil byte slice for nil pointers
 func marshalJSONField[T any](value *T) ([]byte, error) {
 	if value == nil {
 		return nil, nil
@@ -124,8 +120,6 @@ func marshalJSONField[T any](value *T) ([]byte, error) {
 	return json.Marshal(value)
 }
 
-// unmarshalJSONSlice unmarshals JSON data into a slice of type T
-// Returns nil slice if data is empty
 func unmarshalJSONSlice[T any](data []byte) ([]T, error) {
 	if len(data) == 0 {
 		return nil, nil
@@ -137,8 +131,4 @@ func unmarshalJSONSlice[T any](data []byte) ([]T, error) {
 	return result, nil
 }
 
-// Row scanner - reduces duplicate scanning logic
-
-// ScanRow is a generic helper that handles common error patterns for single-row queries
-// It executes the provided scanner function and standardizes error handling
 type RowScanner[T any] func(row pgx.Row) (*T, error)

@@ -60,6 +60,20 @@ func (m *mockConversationRepo) UpdateStanzaIDs(ctx context.Context, id string, c
 	return nil
 }
 
+func (m *mockConversationRepo) UpdateTip(ctx context.Context, conversationID, messageID string) error {
+	if conv, ok := m.conversations[conversationID]; ok {
+		conv.TipMessageID = &messageID
+	}
+	return nil
+}
+
+func (m *mockConversationRepo) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
+	if conv, ok := m.conversations[convID]; ok {
+		conv.SystemPromptVersionID = versionID
+	}
+	return nil
+}
+
 func (m *mockConversationRepo) Delete(ctx context.Context, id string) error {
 	if m.deleteErr != nil {
 		return m.deleteErr
@@ -218,6 +232,14 @@ func (m *mockIDGenerator) GeneratePromptCandidateID() string {
 
 func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
 	return "ape_test123"
+}
+
+func (m *mockIDGenerator) GenerateTrainingExampleID() string {
+	return "gte_test123"
+}
+
+func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
+	return "spv_test123"
 }
 
 // Tests for ConversationsHandler.Create

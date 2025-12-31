@@ -28,9 +28,34 @@ private const val ENV_SEPARATOR = "="
  */
 private const val ENV_PARTS_LIMIT = 2
 
+/**
+ * Validates environment variable lines and returns valid entries and warnings for invalid lines.
+ */
+private fun validateEnvLines(envText: String): Pair<Map<String, String>, List<String>> {
+    if (envText.isBlank()) return emptyMap<String, String>() to emptyList()
+
+    val validEntries = mutableMapOf<String, String>()
+    val invalidLines = mutableListOf<String>()
+
+    envText.lines().forEachIndexed { index, line ->
+        val trimmedLine = line.trim()
+        if (trimmedLine.isEmpty()) return@forEachIndexed
+
+        val parts = trimmedLine.split("=", limit = 2)
+        if (parts.size == 2 && parts[0].isNotBlank()) {
+            validEntries[parts[0].trim()] = parts[1].trim()
+        } else {
+            invalidLines.add("Line ${index + 1}: \"$trimmedLine\"")
+        }
+    }
+
+    return validEntries to invalidLines
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddServerDialog(
+    existingServerNames: Set<String> = emptySet(),
     onDismiss: () -> Unit,
     onConfirm: (MCPServerConfig) -> Unit
 ) {
@@ -42,6 +67,7 @@ fun AddServerDialog(
     var envText by remember { mutableStateOf("") }
     var nameError by remember { mutableStateOf<String?>(null) }
     var commandError by remember { mutableStateOf<String?>(null) }
+    var envWarnings by remember { mutableStateOf<List<String>>(emptyList()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -122,10 +148,24 @@ fun AddServerDialog(
                 // Environment Variables
                 OutlinedTextField(
                     value = envText,
-                    onValueChange = { envText = it },
+                    onValueChange = { newValue ->
+                        envText = newValue
+                        val (_, warnings) = validateEnvLines(newValue)
+                        envWarnings = warnings
+                    },
                     label = { Text("Environment Variables") },
                     placeholder = { Text("KEY1=value1\nKEY2=value2") },
-                    supportingText = { Text("One per line: KEY=value") },
+                    isError = envWarnings.isNotEmpty(),
+                    supportingText = {
+                        if (envWarnings.isNotEmpty()) {
+                            Text(
+                                text = "Invalid format (will be skipped): ${envWarnings.take(2).joinToString(", ")}",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Text("One per line: KEY=value")
+                        }
+                    },
                     minLines = 3,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth()
@@ -140,6 +180,9 @@ fun AddServerDialog(
 
                     if (name.isBlank()) {
                         nameError = "Server name is required"
+                        hasError = true
+                    } else if (existingServerNames.contains(name.trim())) {
+                        nameError = "A server with this name already exists"
                         hasError = true
                     }
 
@@ -160,34 +203,15 @@ fun AddServerDialog(
                     }
 
                     // Parse env
-                    val env = if (envText.isNotBlank()) {
-                        envText.lines()
-                            .mapNotNull { line ->
-                                val trimmedLine = line.trim()
-                                if (trimmedLine.isEmpty()) {
-                                    return@mapNotNull null
-                                }
-                                val parts = trimmedLine.split(ENV_SEPARATOR, limit = ENV_PARTS_LIMIT)
-                                if (parts.size == ENV_PARTS_LIMIT && parts[0].isNotBlank()) {
-                                    parts[0].trim() to parts[1].trim()
-                                } else {
-                                    // Log invalid environment variable lines
-                                    logger.w("Invalid environment variable format: '$trimmedLine'. Expected format: KEY=value")
-                                    null
-                                }
-                            }
-                            .toMap()
-                            .takeIf { it.isNotEmpty() }
-                    } else {
-                        null
-                    }
+                    val (env, _) = validateEnvLines(envText)
+                    val envMap = env.takeIf { it.isNotEmpty() }
 
                     val config = MCPServerConfig(
                         name = name.trim(),
                         transport = transport,
                         command = command.trim(),
                         args = args,
-                        env = env
+                        env = envMap
                     )
 
                     onConfirm(config)

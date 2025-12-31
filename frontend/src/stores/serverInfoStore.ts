@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
+// Note: This is a simplified status type for server info display.
+// See connectionStore.ts for the full ConnectionStatus enum used for WebSocket state.
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'reconnecting';
 export type MCPServerStatus = 'connected' | 'disconnected' | 'error';
 

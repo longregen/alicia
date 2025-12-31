@@ -5,7 +5,7 @@ import {
   SentenceId,
   ToolCallId,
   ConversationId,
-  Message,
+  NormalizedMessage,
   MessageSentence,
   ToolCall,
   AudioRef,
@@ -16,8 +16,9 @@ import {
 
 interface ConversationStoreActions {
   // Message actions
-  addMessage: (message: Message) => void;
+  addMessage: (message: NormalizedMessage) => void;
   updateMessageStatus: (id: MessageId, status: MessageStatus) => void;
+  updateMessageContent: (id: MessageId, content: string) => void;
 
   // Sentence actions
   addSentence: (sentence: MessageSentence) => void;
@@ -39,7 +40,8 @@ interface ConversationStoreActions {
 
   // Bulk operations
   clearConversation: () => void;
-  loadConversation: (conversationId: ConversationId, messages: Message[]) => void;
+  loadConversation: (conversationId: ConversationId, messages: NormalizedMessage[]) => void;
+  mergeMessages: (conversationId: ConversationId, messages: NormalizedMessage[]) => void;
 
   // Selectors (computed helpers)
   getMessageSentences: (messageId: MessageId) => MessageSentence[];
@@ -73,6 +75,13 @@ export const useConversationStore = create<ConversationStore>()(
       set((state) => {
         if (state.messages[id]) {
           state.messages[id].status = status;
+        }
+      }),
+
+    updateMessageContent: (id, content) =>
+      set((state) => {
+        if (state.messages[id]) {
+          state.messages[id].content = content;
         }
       }),
 
@@ -155,6 +164,80 @@ export const useConversationStore = create<ConversationStore>()(
         });
       }),
 
+    mergeMessages: (conversationId, messages) =>
+      set((state) => {
+        // Get the set of message IDs that should exist
+        const newMessageIds = new Set(messages.map((m) => m.id));
+
+        // Find messages to remove (in this conversation but not in new set)
+        const messagesToRemove = Object.values(state.messages).filter(
+          (m) => m.conversationId === conversationId && !newMessageIds.has(m.id)
+        );
+
+        // Collect all related IDs from removed messages for cleanup
+        const sentenceIdsToRemove = new Set<SentenceId>();
+        const toolCallIdsToRemove = new Set<ToolCallId>();
+        const memoryTraceIdsToRemove = new Set<string>();
+
+        for (const msg of messagesToRemove) {
+          msg.sentenceIds.forEach((id) => sentenceIdsToRemove.add(id));
+          msg.toolCallIds.forEach((id) => toolCallIdsToRemove.add(id));
+          msg.memoryTraceIds.forEach((id) => memoryTraceIdsToRemove.add(id));
+          delete state.messages[msg.id];
+        }
+
+        // Collect audioRefIds from sentences being removed
+        const audioRefIdsToRemove = new Set<string>();
+        for (const sentenceId of sentenceIdsToRemove) {
+          const sentence = state.sentences[sentenceId];
+          if (sentence?.audioRefId) {
+            audioRefIdsToRemove.add(sentence.audioRefId);
+          }
+          delete state.sentences[sentenceId];
+        }
+
+        // Clean up tool calls
+        for (const toolCallId of toolCallIdsToRemove) {
+          delete state.toolCalls[toolCallId];
+        }
+
+        // Clean up memory traces
+        for (const traceId of memoryTraceIdsToRemove) {
+          delete state.memoryTraces[traceId];
+        }
+
+        // Only remove audioRefs that are not referenced by any remaining sentence
+        const referencedAudioRefIds = new Set<string>();
+        for (const sentence of Object.values(state.sentences)) {
+          if (sentence.audioRefId) {
+            referencedAudioRefIds.add(sentence.audioRefId);
+          }
+        }
+        for (const audioRefId of audioRefIdsToRemove) {
+          if (!referencedAudioRefIds.has(audioRefId)) {
+            delete state.audioRefs[audioRefId];
+          }
+        }
+
+        // Add/update messages from the new set
+        // PRESERVE existing streaming state (sentenceIds, toolCallIds, memoryTraceIds)
+        for (const msg of messages) {
+          const existing = state.messages[msg.id];
+          if (existing) {
+            // Merge new message data while preserving streaming arrays
+            state.messages[msg.id] = {
+              ...msg,
+              sentenceIds: existing.sentenceIds,
+              toolCallIds: existing.toolCallIds,
+              memoryTraceIds: existing.memoryTraceIds,
+            };
+          } else {
+            // New message - just add it
+            state.messages[msg.id] = msg;
+          }
+        }
+      }),
+
     // Selectors
     getMessageSentences: (messageId) => {
       const state = get();
@@ -188,8 +271,8 @@ export const useConversationStore = create<ConversationStore>()(
 );
 
 // Utility selectors for common patterns
-// Note: These return raw state references. Components should use useMemo or
-// Zustand's shallow comparison to avoid unnecessary re-renders.
+// Note: These selectors return derived state. Components will re-render when
+// the selected value changes (using Object.is comparison by default).
 export const selectMessages = (state: ConversationStore) => state.messages;
 export const selectSentences = (state: ConversationStore) => state.sentences;
 

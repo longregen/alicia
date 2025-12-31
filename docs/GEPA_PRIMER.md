@@ -16,6 +16,8 @@ The algorithm maintains a population of candidate prompts and iteratively improv
 
 GEPA's reflective mutation differs fundamentally from random perturbation. When a prompt fails, the reflection model receives the full context: the current instruction, the input that caused failure, the model's reasoning, and the expected outcome. It then generates a revised prompt that addresses the specific failure mode—effectively learning high-level rules from trial and error.
 
+Alicia's implementation extends GEPA with **7-dimensional multi-objective optimization** spanning success rate, quality, efficiency, robustness, generalization, diversity, and innovation. The OptimizationService orchestrates runs, manages Pareto archives, and provides streaming progress updates for real-time monitoring.
+
 ### Key use cases and problem domains
 
 GEPA excels in compound AI systems with multiple LLM modules where traditional RL struggles to assign credit. Primary applications include:
@@ -70,7 +72,7 @@ gepa = dspy.GEPA(
 optimized_program = gepa.compile(student, trainset=trainset, valset=valset)
 ```
 
-The adapter captures full traces of DSPy module execution, identifies trace segments corresponding to specific predictors, and reflects on predictor behavior to propose new instructions. For `dspy.ReAct` modules, GEPA can jointly optimize tools and prompts via `enable_tool_optimization=True`.
+The adapter captures full traces of DSPy module execution, identifies trace segments corresponding to specific predictors, and reflects on predictor behavior to propose new instructions. For `dspy.ReAct` modules, GEPA jointly optimizes tools and prompts via `enable_tool_optimization=True`.
 
 ### GEPA versus reinforcement learning
 
@@ -157,107 +159,144 @@ GEPA(goldens, metrics, iterations, pareto_size, minibatch_size):
    RETURN argmax(aggregate, tie_breaker=PREFER_CHILD)
 ```
 
-### Python implementation architecture
+### Go implementation in Alicia
 
-The official `gepa` package structures optimization through several key classes:
+Alicia implements GEPA in Go using the dspy-go library (`github.com/XiaoConstantine/dspy-go`), providing production-grade optimization with **7-dimensional multi-objective fitness**. The implementation spans four key modules in `/internal/prompt/`:
 
-**Core optimizer entry point:**
-```python
-from gepa import optimize, GEPAResult
-
-result = optimize(
-    seed_candidate={"system_prompt": "You are a helpful assistant."},
-    trainset=train_examples,
-    valset=val_examples,
-    adapter=my_adapter,
-    reflection_lm=lambda x: lm(x)[0],
-    max_metric_calls=1000,
-)
-```
-
-**GEPAAdapter interface** enables plugging GEPA into any system:
-```python
-class GEPAAdapter:
-    def evaluate(self, candidate: dict[str, str], batch: list[Example]) 
-        -> tuple[list[float], list[Trace]]:
-        """Evaluate candidate on batch, return scores and traces."""
-    
-    def extract_traces_for_reflection(self, traces: list[Trace]) -> str:
-        """Convert traces to textual format for reflection."""
-```
-
-**Score matrix management** tracks candidates × tasks:
-```python
-S: np.ndarray  # Shape: (num_candidates, num_tasks)
-per_val_instance_best_candidates: list[set[int]]  # Pareto tracking
-```
-
-**Budget enforcement** gates expensive full evaluations:
-```python
-def auto_budget(num_preds, num_candidates, valset_size, 
-                minibatch_size=35, full_eval_steps=5) -> int:
-    total = valset_size  # Initial eval
-    total += num_candidates * 5  # Bootstrapping
-    total += num_trials * minibatch_size  # Minibatch evals
-    total += periodic_fulls * valset_size  # Periodic full evals
-    return total
-```
-
-### Go implementation in dspy-go
-
-The dspy-go implementation (`pkg/optimizers/gepa.go`) provides a production-grade, thread-safe optimizer with **7-dimensional multi-objective fitness**:
-
+**Dimension weights and scores** (`dimensions.go`):
 ```go
-type MultiObjectiveFitness struct {
-    SuccessRate    float64  // Objective 1: Task completion
-    OutputQuality  float64  // Objective 2: Response quality
-    Efficiency     float64  // Objective 3: Token/cost efficiency
-    Robustness     float64  // Objective 4: Consistency across inputs
-    Generalization float64  // Objective 5: Out-of-distribution performance
-    Diversity      float64  // Meta: Population diversity contribution
-    Innovation     float64  // Meta: Novel solution characteristics
-    WeightedScore  float64  // Aggregated backward compatibility
+// DimensionWeights configures relative importance (must sum to 1.0)
+type DimensionWeights struct {
+    SuccessRate    float64  // Default: 0.25 - Task completion rate
+    Quality        float64  // Default: 0.20 - Response quality
+    Efficiency     float64  // Default: 0.15 - Token/cost efficiency
+    Robustness     float64  // Default: 0.15 - Consistency across inputs
+    Generalization float64  // Default: 0.10 - Out-of-distribution performance
+    Diversity      float64  // Default: 0.10 - Population diversity contribution
+    Innovation     float64  // Default: 0.05 - Novel solution characteristics
 }
+
+// DimensionScores holds per-dimension performance metrics
+type DimensionScores struct {
+    SuccessRate, Quality, Efficiency, Robustness,
+    Generalization, Diversity, Innovation float64
+}
+
+// WeightedScore calculates aggregate score using configured weights
+func (s *DimensionScores) WeightedScore(weights DimensionWeights) float64
 ```
 
-**Configuration structure** with sensible defaults:
+**Pareto archive management** (`pareto.go`) implementing NSGA-II-style diversity preservation:
 ```go
-type GEPAConfig struct {
-    PopulationSize    int     // Default: 20
-    MaxGenerations    int     // Default: 10
-    MutationRate      float64 // Default: 0.3
-    CrossoverRate     float64 // Default: 0.7
-    ElitismRate       float64 // Default: 0.1
-    ReflectionFreq    int     // Default: 2
-    ReflectionDepth   int     // Default: 3
-    SelectionStrategy string  // "tournament"|"roulette"|"pareto"|"adaptive_pareto"
-    ConcurrencyLevel  int     // Default: 3
+type EliteSolution struct {
+    ID           string
+    Instructions string
+    Demos        []Example
+    Scores       DimensionScores
+    Generation   int
+    Coverage     int  // Number of examples this solution solves best
+    CreatedAt    time.Time
 }
+
+type ParetoArchive struct {
+    Solutions []*EliteSolution
+    MaxSize   int
+    mu        sync.RWMutex
+}
+
+// Add inserts non-dominated solutions, removes dominated ones
+func (p *ParetoArchive) Add(solution *EliteSolution) bool
+
+// SelectByCoverage implements GEPA's coverage-based selection
+func (p *ParetoArchive) SelectByCoverage() *EliteSolution
+
+// SelectByWeights returns best solution for given dimension weights
+func (p *ParetoArchive) SelectByWeights(weights DimensionWeights) *EliteSolution
 ```
 
-**Thread-safe state management** via `sync.RWMutex`:
+**Memory-aware optimization** (`memory_aware_module.go`) for few-shot learning:
 ```go
-type GEPAState struct {
-    ParetoArchive     []*GEPACandidate
-    ArchiveFitnessMap map[string]*MultiObjectiveFitness
-    ExecutionTraces   map[string][]ExecutionTrace
-    // ... mutex for concurrent access
+type MemoryAwareModule struct {
+    *AliciaPredict
+    memoryService ports.MemoryService
+    maxDemos      int      // Default: 5
+    threshold     float32  // Default: 0.7
 }
+
+// Process retrieves relevant memories and converts them to demonstrations
+func (m *MemoryAwareModule) Process(ctx context.Context, inputs map[string]any) (map[string]any, error)
+
+// RankMemoriesByRelevance combines similarity, importance, and recency
+func RankMemoriesByRelevance(
+    memories []*ports.MemorySearchResult,
+    categoryFilter []string,
+) []MemoryRelevanceScore
 ```
 
-### Python vs Go implementation comparison
+**Optimization service** (`internal/application/services/optimization.go`) orchestrating runs:
+```go
+type OptimizationService struct {
+    repo             ports.PromptOptimizationRepository
+    llmService       ports.LLMService
+    reflectionLM     ports.LLMService  // Separate strong model for reflection
+    idGenerator      ports.IDGenerator
+    config           OptimizationConfig
+    progressChannels map[string][]chan OptimizationProgressEvent  // Real-time updates
+}
 
-| Aspect | Python | Go |
-|--------|--------|-----|
-| Type system | Dynamic, dataclasses | Static structs with JSON tags |
-| Concurrency | AsyncIO, GIL limitations | Goroutines, sync.RWMutex |
-| Error handling | Exceptions | `(result, error)` tuples |
-| Configuration | Kwargs, functional options | Explicit config structs |
-| Interface pattern | Duck typing | Explicit interface satisfaction |
-| Multi-objective | Single weighted score | 7-dimensional fitness space |
-| Archive management | List-based | Map with mutex protection |
+// OptimizeSignature runs GEPA on a signature with training/validation sets
+func (s *OptimizationService) OptimizeSignature(
+    ctx context.Context,
+    sig prompt.Signature,
+    trainset []prompt.Example,
+    valset []prompt.Example,
+    metric prompt.Metric,
+) (*models.OptimizationRun, error)
 
-The Go implementation emphasizes **production readiness** with explicit concurrency controls, while Python prioritizes **rapid experimentation** with DSPy integration.
+// OptimizeSignatureWithMemory adds memory-augmented few-shot learning
+func (s *OptimizationService) OptimizeSignatureWithMemory(
+    ctx context.Context,
+    sig prompt.Signature,
+    trainset []prompt.Example,
+    valset []prompt.Example,
+    metric prompt.Metric,
+    memoryService ports.MemoryService,
+    memoryOptions ...prompt.MemoryAwareOption,
+) (*models.OptimizationRun, error)
+```
+
+**Configuration and execution** via dspy-go integration:
+```go
+// From OptimizationService.OptimizeSignature
+gepaConfig := &optimizers.GEPAConfig{
+    MaxGenerations:       config.MaxIterations / 10,  // Population-based evolution
+    PopulationSize:       20,
+    MutationRate:         0.3,
+    CrossoverRate:        0.7,
+    ElitismRate:          0.1,
+    ReflectionFreq:       2,   // Reflect every 2 generations
+    ReflectionDepth:      3,   // Look back 3 generations
+    SelectionStrategy:    "adaptive_pareto",  // Multi-objective Pareto
+    ConvergenceThreshold: 0.01,
+    StagnationLimit:      3,
+    EvaluationBatchSize:  config.MinibatchSize,
+    ConcurrencyLevel:     3,   // Parallel candidate evaluation
+}
+
+gepaOptimizer, _ := optimizers.NewGEPA(gepaConfig)
+optimizedProgram, _ := gepaOptimizer.Compile(ctx, program, dataset, metric)
+```
+
+**Key architectural decisions:**
+
+- **Goroutine-based concurrency**: Optimization runs asynchronously with non-blocking progress channels
+- **Thread-safe Pareto archive**: `sync.RWMutex` protects concurrent access during multi-threaded evaluation
+- **Streaming progress**: Subscribers receive real-time `OptimizationProgressEvent` updates via buffered channels
+- **Dimension-aware persistence**: Database stores per-dimension scores in JSONB for analysis
+- **Memory-augmented learning**: Optional MemoryService integration retrieves relevant examples dynamically
+- **Dual-LLM architecture**: Separate `reflectionLM` (stronger model) for GEPA reflection vs task execution
+
+The implementation prioritizes **production readiness** with explicit error handling, resource management, and observability over experimental flexibility.
 
 ### Data modeling approaches
 
@@ -265,37 +304,30 @@ For persistent GEPA optimization, model the following entities:
 
 **Candidate schema:**
 ```sql
-CREATE TABLE candidates (
+CREATE TABLE prompt_candidates (
     id UUID PRIMARY KEY,
     generation INT,
     parent_ids UUID[],
     instruction TEXT,
+    avg_score FLOAT,
     created_at TIMESTAMP,
     metadata JSONB
 );
 ```
 
-**Score matrix storage:**
+**Pareto archive with dimension scores:**
 ```sql
-CREATE TABLE scores (
-    candidate_id UUID REFERENCES candidates(id),
-    task_id UUID,
-    score FLOAT,
-    feedback TEXT,
-    trace JSONB,
-    PRIMARY KEY (candidate_id, task_id)
+CREATE TABLE pareto_archive (
+    id UUID PRIMARY KEY,
+    prompt_candidate_id UUID REFERENCES prompt_candidates(id),
+    dimension_scores JSONB,  -- Stores DimensionScores as JSON
+    coverage_count INT,
+    generation INT,
+    created_at TIMESTAMP
 );
 ```
 
-**Pareto frontier tracking:**
-```sql
-CREATE TABLE pareto_frontier (
-    iteration INT,
-    candidate_ids UUID[],
-    win_counts INT[],
-    timestamp TIMESTAMP
-);
-```
+**Note**: Alicia's implementation stores multi-dimensional scores in the `dimension_scores` JSONB column with fields like `{success_rate, quality, efficiency, robustness, generalization, diversity, innovation}`, and aggregate scores in `prompt_candidates.avg_score`.
 
 ---
 
@@ -417,6 +449,8 @@ def save_with_versioning(program, base_dir: Path, metrics: dict):
 
 ### Implementation with DSPy
 
+> **Note**: The code examples below demonstrate DSPy patterns using Python. Alicia's actual implementation uses **dspy-go** (Go), providing the same conceptual framework with production-grade concurrency and type safety. The Python examples illustrate the optimization patterns that translate to the Go implementation.
+
 The standard DSPy integration follows this pattern:
 
 ```python
@@ -424,8 +458,8 @@ import dspy
 from dspy import GEPA
 
 # 1. Configure LMs
-task_lm = dspy.LM("openai/gpt-4.1-nano", temperature=1.0)
-reflection_lm = dspy.LM("openai/gpt-5", temperature=1.0, max_tokens=32000)
+task_lm = dspy.LM("openai/gpt-4-turbo", temperature=1.0)
+reflection_lm = dspy.LM("anthropic/claude-3-5-sonnet-20241022", temperature=1.0, max_tokens=32000)
 dspy.configure(lm=task_lm)
 
 # 2. Define signatures and modules
@@ -732,68 +766,7 @@ class AdaptiveGEPADeployment:
 
 ### Evaluating alternative work paths for agents
 
-For agentic systems, GEPA can optimize decision policies by evaluating alternative trajectories:
-
-```python
-class AgentPathOptimizer:
-    def __init__(self, gepa_optimizer, path_evaluator):
-        self.gepa = gepa_optimizer
-        self.path_evaluator = path_evaluator
-    
-    def optimize_agent_strategy(self, agent: dspy.Module, scenarios: list[dict]):
-        """Optimize agent's decision-making prompts using trajectory feedback."""
-        
-        def trajectory_metric(gold, pred, trace, pred_name, pred_trace):
-            # Extract full agent trajectory from trace
-            trajectory = self._extract_trajectory(trace)
-            
-            # Evaluate trajectory quality
-            efficiency = self._compute_efficiency(trajectory)
-            correctness = gold.expected_outcome == pred.outcome
-            safety = self._check_safety_constraints(trajectory)
-            
-            score = 0.4 * correctness + 0.3 * efficiency + 0.3 * safety
-            
-            # Generate path-aware feedback
-            feedback = self._generate_trajectory_feedback(
-                trajectory, gold.expected_outcome, pred.outcome
-            )
-            
-            return dspy.Prediction(score=score, feedback=feedback)
-        
-        # Run GEPA with trajectory-aware metric
-        optimized = self.gepa.compile(
-            agent,
-            trainset=scenarios,
-            valset=scenarios[:len(scenarios)//3],
-        )
-        
-        return optimized
-    
-    def _extract_trajectory(self, trace) -> list[dict]:
-        """Extract tool calls, reasoning steps, and decisions from trace."""
-        return [
-            {
-                "step": i,
-                "action": step.action,
-                "observation": step.observation,
-                "reasoning": step.reasoning,
-            }
-            for i, step in enumerate(trace.steps)
-        ]
-    
-    def _generate_trajectory_feedback(self, trajectory, expected, actual) -> str:
-        if expected == actual:
-            return f"Achieved goal in {len(trajectory)} steps. Good efficiency."
-        
-        # Identify divergence point
-        feedback = f"Failed to achieve expected outcome.\n"
-        feedback += f"Trajectory had {len(trajectory)} steps.\n"
-        feedback += "Consider: Did early decisions limit later options? "
-        feedback += "Were there missed opportunities for tool use?"
-        
-        return feedback
-```
+For agentic systems, GEPA can optimize decision policies by evaluating alternative trajectories.
 
 ### Runtime optimization strategies
 

@@ -56,6 +56,9 @@ class AudioManagerClass {
 
   /**
    * Store audio data in IndexedDB and create metadata in the store
+   * @param data - Audio data as ArrayBuffer or Uint8Array
+   * @param metadata - Optional partial AudioRef metadata
+   * @returns The AudioRefId for the stored audio data
    */
   async store(data: ArrayBuffer | Uint8Array, metadata?: Partial<AudioRef>): Promise<AudioRefId> {
     await this.ensureInitialized();
@@ -63,10 +66,9 @@ class AudioManagerClass {
     // Convert Uint8Array to ArrayBuffer if needed
     let arrayBuffer: ArrayBuffer;
     if (data instanceof Uint8Array) {
-      // Slice the buffer to get a copy as a regular ArrayBuffer
-      const sliced = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-      // Ensure it's an ArrayBuffer, not a SharedArrayBuffer
-      arrayBuffer = sliced instanceof ArrayBuffer ? sliced : new Uint8Array(data).buffer;
+      // Extract ArrayBuffer from Uint8Array view (creates a copy)
+      // Note: slice() always returns ArrayBuffer even if source is SharedArrayBuffer
+      arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
     } else {
       arrayBuffer = data;
     }
@@ -124,7 +126,7 @@ class AudioManagerClass {
   }
 
   /**
-   * Cleanup old audio chunks (optional utility)
+   * Cleanup old audio chunks (deletes audio older than 7 days)
    */
   async cleanup(): Promise<void> {
     await this.ensureInitialized();

@@ -1,5 +1,7 @@
 # Conversation Workflow
 
+**Last updated:** 2026-01-02 (synchronized with codebase implementation)
+
 This document describes the end-to-end flow of a conversation in Alicia, from initiation through message exchange to session termination. It covers the complete lifecycle including state transitions, message processing, and error handling.
 
 ## Overview
@@ -285,8 +287,8 @@ func (uc *GenerateResponse) retrieveRelevantMemories(
     results, err := uc.memoryService.Search(ctx, &ports.MemorySearchInput{
         ConversationID: conversationID,
         Query:          msg.Contents,
-        Limit:          5,
-        MinScore:       0.7,  // Cosine similarity threshold
+        Limit:          5,      // Retrieve top 5 most relevant memories
+        MinScore:       0.7,    // Minimum similarity threshold for relevance
     })
 
     return results, err
@@ -310,6 +312,7 @@ func (uc *GenerateResponse) buildLLMContext(
     })
 
     // Conversation history (last 20 messages)
+    // Limited to maintain reasonable context window size
     for _, msg := range messages {
         llmMessages = append(llmMessages, &ports.LLMMessage{
             Role:    string(msg.Role),
@@ -334,8 +337,8 @@ func (uc *GenerateResponse) streamResponse(
     stream, err := uc.llmService.StreamCompletion(ctx, &ports.LLMCompletionInput{
         Messages:    llmMessages,
         Tools:       tools,
-        Temperature: 0.7,
-        MaxTokens:   2048,
+        Temperature: 0.7,   // Balance between creativity and consistency
+        MaxTokens:   2048,  // Maximum response length
     })
     if err != nil {
         return err
@@ -350,11 +353,18 @@ func (uc *GenerateResponse) streamResponse(
         // Accumulate tokens
         sentenceBuffer += delta.Content
 
-        // Check for sentence boundary
-        if isSentenceComplete(sentenceBuffer) {
-            // Send complete sentence
-            callbacks.OnSentence(ctx, sentenceBuffer)
-            sentenceBuffer = ""
+        // Check for sentence boundary using extractNextSentence
+        // which searches for .!? punctuation, handles abbreviations
+        // (Dr., Mr., Mrs., etc.), and forces boundaries at max length
+        sentenceText, remaining := extractNextSentence(sentenceBuffer, maxLength)
+        if sentenceText != "" {
+            // Sentences are sent via ResponseStreamChunk objects to an output channel
+            outputChan <- &ports.ResponseStreamChunk{
+                SentenceID: sentenceID,
+                Text:       sentenceText,
+                IsFinal:    false,
+            }
+            sentenceBuffer = remaining
         }
 
         // Handle tool calls
@@ -399,6 +409,7 @@ func (rg *ResponseGenerator) OnSentence(ctx context.Context, text string) {
         rg.agent.PublishAudio(opusData)
 
         // Send audio chunk message for synchronization
+        sentenceID := sentence.ID // or however it's actually generated
         rg.sendAudioChunkMessage(ctx, sentenceID, len(opusData))
     }()
 }
@@ -520,12 +531,15 @@ func (ph *ProtocolHandler) HandleControlStop(ctx context.Context, msg *protocol.
 
 ### Agent Detects User Speaking
 
-When user starts speaking during agent response:
+**Note: This section describes planned functionality not yet implemented.**
+
+When user starts speaking during agent response (planned):
 
 ```go
 func (vp *VoicePipeline) ProcessAudioFrame(frame []byte) {
     rms := calculateRMS(frame)
 
+    // agentIsSpeaking flag initialized in VoicePipeline struct
     if rms > SilenceThreshold && vp.agentIsSpeaking {
         // User interrupted - stop agent audio
         vp.stopAgentAudio()

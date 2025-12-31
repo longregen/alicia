@@ -6,7 +6,7 @@ This document describes the offline mode capabilities and synchronization protoc
 
 Alicia supports offline mode, allowing clients to create and store messages locally when disconnected from the server. When the connection is restored, the client can sync these messages to the server using the sync API.
 
-This is different from the real-time reconnection semantics described in `protocol/05-reconnection-semantics.md`. The reconnection protocol handles brief connection drops during active conversations, while offline sync handles longer periods of disconnection where messages are created and stored entirely offline.
+The offline sync system operates independently from the real-time reconnection semantics described in `protocol/05-reconnection-semantics.md`. The reconnection protocol handles brief connection drops during active conversations, while offline sync handles longer periods of disconnection where messages are created and stored entirely offline.
 
 ## Architecture
 
@@ -23,8 +23,8 @@ Each message in the system includes sync tracking fields to support offline oper
 
 ```
 pending  → Message exists locally but hasn't been synced to server
-synced   → Message has been successfully synchronized with the server
-conflict → A conflict was detected between local and server versions
+synced   → Message is synchronized with the server
+conflict → A conflict occurs when local and server versions differ
 ```
 
 ## Client Workflow
@@ -102,6 +102,8 @@ for (const syncedMsg of syncResult.synced_messages) {
 
 Synchronizes client messages with the server.
 
+**Content Types:** Both `application/json` and `application/msgpack` are supported. All field names use camelCase in the wire format.
+
 **Request Body:**
 ```json
 {
@@ -150,6 +152,8 @@ Synchronizes client messages with the server.
 
 Gets synchronization status for a conversation.
 
+**Content Types:** Both `application/json` and `application/msgpack` are supported. All field names use camelCase in the wire format.
+
 **Response:**
 ```json
 {
@@ -161,6 +165,31 @@ Gets synchronization status for a conversation.
 }
 ```
 
+### GET /api/v1/conversations/{id}/sync/ws
+
+Real-time WebSocket synchronization endpoint for bidirectional message sync.
+
+**Protocol:** Binary MessagePack over WebSocket
+
+**Features:**
+- Automatic sync of pending messages on connection establishment
+- Real-time broadcast of new messages to all connected clients
+- Ping/pong heartbeat for connection health monitoring
+- Cross-device message synchronization via `WebSocketBroadcaster`
+
+**Connection Flow:**
+1. Client establishes WebSocket connection
+2. Server automatically syncs all pending messages for the conversation
+3. Server broadcasts new messages to all connected WebSocket clients
+4. Client receives real-time updates from other devices/sessions
+
+**Reconnection Behavior:**
+- Exponential backoff reconnection (minimum 1 second, maximum 30 seconds)
+- Automatic pending message resync on reconnect
+- No message loss during brief disconnections
+
+**Message Format:** All messages use MessagePack binary encoding with camelCase field names. See [WebSocket Protocol Specification](protocol/index.md) for detailed message type definitions.
+
 ## Conflict Resolution
 
 ### Conflict Detection
@@ -170,9 +199,9 @@ Conflicts occur when:
 2. Sequence number collisions occur
 3. Invalid message dependencies (e.g., `previous_id` points to non-existent message)
 
-### Current Strategy: Manual Resolution
+### Manual Resolution
 
-The initial implementation uses a **manual resolution** strategy:
+The system uses a **manual resolution** strategy:
 
 1. When a conflict is detected, the server marks the message with `sync_status = 'conflict'`
 2. The conflict details are returned to the client:
@@ -190,8 +219,8 @@ The initial implementation uses a **manual resolution** strategy:
 3. The client is responsible for presenting the conflict to the user and resolving it
 4. The user can choose to:
    - Keep the local version (update server)
-   - Keep the server version (discard local changes)
-   - Merge the changes manually
+   - Keep the server version (discard local version)
+   - Merge both versions manually
 
 ## Database Schema
 
@@ -237,13 +266,14 @@ CREATE INDEX idx_messages_sync_status ON alicia_messages(conversation_id, sync_s
 |---------|--------------|------------------------|
 | Use Case | Long periods offline | Brief connection drops |
 | Message Storage | Client-side database | Server-side only |
-| Sync Direction | Client → Server | Server → Client |
+| Sync Direction | Client → Server (bidirectional via WebSocket) | Server → Client |
 | Conflict Potential | High | Low |
-| Protocol | HTTP REST | LiveKit data channel |
+| Protocol | HTTP REST + WebSocket (MessagePack) | LiveKit data channel |
 | ID Management | Local + Server IDs | Server IDs only |
 
 ## See Also
 
 - [Database Schema](DATABASE.md) - Sync-related tables
-- [Protocol Specification](protocol/index.md) - Reconnection semantics
+- [WebSocket Protocol Specification](protocol/index.md) - Detailed protocol message types and envelope format
+- [Reconnection Semantics](protocol/05-reconnection-semantics.md) - Real-time reconnection during active conversations
 

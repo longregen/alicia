@@ -10,8 +10,12 @@ export const uiPatterns = {
   // Flex layouts
   flexCenter: 'flex items-center',
   flexCenterBetween: 'flex items-center justify-between',
+  // WARNING: Dynamic class generation requires Tailwind safelist configuration
+  // Add used gap values (gap-1, gap-2, gap-3, gap-4, etc.) to tailwind.config.js safelist
   flexCenterGap: (gap: number) => `flex items-center gap-${gap}`,
   flexCol: 'flex flex-col',
+  // WARNING: Dynamic class generation requires Tailwind safelist configuration
+  // Add used gap values (gap-1, gap-2, gap-3, gap-4, etc.) to tailwind.config.js safelist
   flexColGap: (gap: number) => `flex flex-col gap-${gap}`,
 
   // Text styles
@@ -73,7 +77,7 @@ export const compositePatterns = {
   ),
 };
 
-// Export convenience functions
+// Function exports for dynamic usage - prefer direct uiPatterns.X access when possible
 export const flexCenter = () => uiPatterns.flexCenter;
 export const flexCenterBetween = () => uiPatterns.flexCenterBetween;
 export const flexCenterGap = (gap: number) => uiPatterns.flexCenterGap(gap);

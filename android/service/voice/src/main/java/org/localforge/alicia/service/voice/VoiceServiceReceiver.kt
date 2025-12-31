@@ -49,7 +49,7 @@ class VoiceServiceReceiver : BroadcastReceiver() {
     }
 
     private fun handleMuteAction(context: Context) {
-        Timber.i("Toggling mute")
+        Timber.i("Request mute toggle from service")
         val intent = Intent(context, VoiceService::class.java).apply {
             action = VoiceService.ACTION_MUTE
         }

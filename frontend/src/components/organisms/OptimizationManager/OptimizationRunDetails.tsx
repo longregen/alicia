@@ -94,6 +94,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
   if (statusLower === 'completed') badgeClass += 'badge-success';
   else if (statusLower === 'running') badgeClass += 'badge-warning';
   else if (statusLower === 'failed') badgeClass += 'badge-error';
+  else badgeClass += 'badge-secondary'; // Default for unknown status
 
   return (
     <div className="p-5">

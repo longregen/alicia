@@ -104,6 +104,14 @@ func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
 	return "ape_test"
 }
 
+func (m *mockIDGenerator) GenerateTrainingExampleID() string {
+	return "gte_test"
+}
+
+func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
+	return "spv_test"
+}
+
 type mockTransactionManager struct{}
 
 func (m *mockTransactionManager) WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error {

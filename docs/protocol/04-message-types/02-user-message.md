@@ -7,7 +7,7 @@
 **Fields:**
 
 * `id` (Text, NanoID): The unique Alicia message ID for this user message. This ID is used to reference the message in the database and by subsequent messages (e.g., an AssistantMessage references this via `previousId`).
-* `previousId` (Text, NanoID, optional): The ID of a prior message to which this user message is related. In a typical alternating conversation, `previousId` points to the last AssistantMessage's id. For the first user message in a conversation, `previousId` is null or omitted. When a UserMessage replaces an earlier message (via a ControlVariation/edit flow), `previousId` may point to the message it replaces.
+* `previousId` (Text, NanoID, optional): The ID of a prior message to which this user message is related. In a typical alternating conversation, `previousId` points to the last AssistantMessage's id. For the first user message in a conversation, `previousId` is null or omitted. In a ControlVariation/edit flow, `previousId` may point to the superseded message.
 * `conversationId` (Text): The conversation this message belongs to. Matches the envelope's conversationId and corresponds to an existing conversation record (if resuming) or a newly created one.
 * `content` (Text): The actual text content of the user's message. Can be a question, command, or any user input, potentially spanning multiple sentences or paragraphs.
 * `timestamp` (Int64 or DateTime, optional): A timestamp of when the message was created/sent (epoch milliseconds). May also be conveyed via meta data.

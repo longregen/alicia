@@ -91,7 +91,7 @@ export const PIVOT_PRESETS: PivotPreset[] = [
       diversity: 0.1,
       innovation: 0.05,
     },
-    description: 'Equal emphasis on all dimensions',
+    description: 'Moderate emphasis favoring success and quality',
   },
 ];
 

@@ -310,7 +310,6 @@ func (r *SentenceRepository) GetIncompleteByConversation(ctx context.Context, co
 	return r.scanSentences(rows)
 }
 
-// scanSentences is a helper to scan multiple sentence rows
 func (r *SentenceRepository) scanSentences(rows interface {
 	Next() bool
 	Scan(...interface{}) error

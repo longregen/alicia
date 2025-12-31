@@ -279,7 +279,12 @@ class WakeWordDetector @Inject constructor(
     }
 
     private fun getModelPath(wakeWord: WakeWord): String {
-        // Check if custom model exists in assets
+        /**
+         * Check if custom model exists in assets. If found, copy to internal storage for Porcupine access.
+         * If not found:
+         * - JARVIS/COMPUTER: Fall back to built-in Porcupine models
+         * - ALICIA/HEY_ALICIA: Throw error (require custom models in assets/models/)
+         */
         val modelPath = "models/${wakeWord.modelFileName}"
 
         return try {

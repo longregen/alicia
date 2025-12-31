@@ -8,7 +8,7 @@ import {
   createMemoryTraceId,
   createConversationId,
   MessageStatus,
-  type Message,
+  type NormalizedMessage,
   type MessageSentence,
   type ToolCall,
   type AudioRef,
@@ -23,7 +23,7 @@ describe('conversationStore', () => {
 
   describe('addMessage', () => {
     it('should add a message to the store', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'user',
@@ -43,7 +43,7 @@ describe('conversationStore', () => {
     });
 
     it('should create message with correct initial arrays', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-2'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -66,7 +66,7 @@ describe('conversationStore', () => {
 
   describe('updateMessageStatus', () => {
     it('should update message status correctly', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -86,7 +86,7 @@ describe('conversationStore', () => {
     });
 
     it('should handle status transitions from streaming to error', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-2'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -117,7 +117,7 @@ describe('conversationStore', () => {
 
   describe('addSentence', () => {
     it('should add sentence to store and update message.sentenceIds', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -147,7 +147,7 @@ describe('conversationStore', () => {
     });
 
     it('should maintain bidirectional reference integrity', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -178,7 +178,7 @@ describe('conversationStore', () => {
     });
 
     it('should not add duplicate sentenceIds to message', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -209,7 +209,7 @@ describe('conversationStore', () => {
 
   describe('addToolCall', () => {
     it('should add tool call to store and update message.toolCallIds', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -240,7 +240,7 @@ describe('conversationStore', () => {
     });
 
     it('should not add duplicate toolCallIds to message', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -272,7 +272,7 @@ describe('conversationStore', () => {
 
   describe('updateToolCall', () => {
     it('should update tool call status from pending to executing', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -302,7 +302,7 @@ describe('conversationStore', () => {
     });
 
     it('should update tool call status from executing to success with result', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -339,7 +339,7 @@ describe('conversationStore', () => {
     });
 
     it('should update tool call status from executing to error', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -418,7 +418,7 @@ describe('conversationStore', () => {
 
   describe('addMemoryTrace', () => {
     it('should add memory trace to store and update message.memoryTraceIds', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -448,7 +448,7 @@ describe('conversationStore', () => {
     });
 
     it('should not add duplicate memoryTraceIds to message', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -478,7 +478,7 @@ describe('conversationStore', () => {
 
   describe('clearConversation', () => {
     it('should reset all state to initial values', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'user',
@@ -526,7 +526,7 @@ describe('conversationStore', () => {
 
   describe('loadConversation', () => {
     it('should clear old state and load new messages', () => {
-      const oldMessage: Message = {
+      const oldMessage: NormalizedMessage = {
         id: createMessageId('old-msg'),
         conversationId: createConversationId('old-conv'),
         role: 'user',
@@ -538,7 +538,7 @@ describe('conversationStore', () => {
         memoryTraceIds: [],
       };
 
-      const newMessage1: Message = {
+      const newMessage1: NormalizedMessage = {
         id: createMessageId('new-msg-1'),
         conversationId: createConversationId('new-conv'),
         role: 'user',
@@ -550,7 +550,7 @@ describe('conversationStore', () => {
         memoryTraceIds: [],
       };
 
-      const newMessage2: Message = {
+      const newMessage2: NormalizedMessage = {
         id: createMessageId('new-msg-2'),
         conversationId: createConversationId('new-conv'),
         role: 'assistant',
@@ -595,7 +595,7 @@ describe('conversationStore', () => {
 
   describe('getMessageSentences selector', () => {
     it('should return sentences in correct sequence order', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -656,7 +656,7 @@ describe('conversationStore', () => {
     });
 
     it('should filter out missing sentence references', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -688,7 +688,7 @@ describe('conversationStore', () => {
 
   describe('getMessageToolCalls selector', () => {
     it('should return all tool calls for a message', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -740,7 +740,7 @@ describe('conversationStore', () => {
     });
 
     it('should filter out missing tool call references', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -773,7 +773,7 @@ describe('conversationStore', () => {
 
   describe('getMessageMemoryTraces selector', () => {
     it('should return memory traces sorted by relevance (descending)', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -828,7 +828,7 @@ describe('conversationStore', () => {
     });
 
     it('should filter out missing memory trace references', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -860,7 +860,7 @@ describe('conversationStore', () => {
   describe('selectMessages utility selector', () => {
     it('should return raw messages object for component-level sorting', () => {
       const now = new Date();
-      const message1: Message = {
+      const message1: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'user',
@@ -872,7 +872,7 @@ describe('conversationStore', () => {
         memoryTraceIds: [],
       };
 
-      const message2: Message = {
+      const message2: NormalizedMessage = {
         id: createMessageId('msg-2'),
         conversationId: createConversationId('conv-1'),
         role: 'user',
@@ -898,7 +898,7 @@ describe('conversationStore', () => {
 
   describe('selectCurrentStreamingMessage utility selector', () => {
     it('should return the current streaming message', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -939,7 +939,7 @@ describe('conversationStore', () => {
 
   describe('bidirectional reference integrity', () => {
     it('should maintain sentence bidirectional references', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -984,7 +984,7 @@ describe('conversationStore', () => {
     });
 
     it('should maintain tool call bidirectional references', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',
@@ -1031,7 +1031,7 @@ describe('conversationStore', () => {
     });
 
     it('should maintain memory trace bidirectional references', () => {
-      const message: Message = {
+      const message: NormalizedMessage = {
         id: createMessageId('msg-1'),
         conversationId: createConversationId('conv-1'),
         role: 'assistant',

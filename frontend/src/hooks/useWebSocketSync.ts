@@ -4,14 +4,38 @@ import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
 import { Envelope, MessageType } from '../types/protocol';
 import { SyncRequest, SyncResponse, MessageResponse, messageResponseToMessage } from '../types/sync';
-import { handleProtocolMessage } from '../adapters/protocolAdapter';
+import { handleProtocolMessage, handleConnectionLost } from '../adapters/protocolAdapter';
+
+/**
+ * Type guard to check if a message is already an Envelope.
+ * Uses structural validation to avoid fragile duck-typing.
+ */
+function isEnvelope(message: unknown): message is Envelope {
+  if (!message || typeof message !== 'object') return false;
+
+  const obj = message as Record<string, unknown>;
+
+  // Check for required envelope fields with correct types
+  return (
+    typeof obj.stanzaId === 'number' &&
+    typeof obj.type === 'number' &&
+    'body' in obj &&
+    // conversationId is required in our envelopes
+    typeof obj.conversationId === 'string'
+  );
+}
 
 /**
  * Adapter to convert backend DTO to Envelope format.
- * The backend currently sends raw DTOs, but we use Envelope internally for consistency.
- * NOTE: Backend uses camelCase for msgpack wire format (e.g., syncedMessages, localId)
+ * The backend currently sends raw DTOs (using camelCase in msgpack),
+ * but we use Envelope internally for consistent message handling.
  */
 function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
+  // Check if already an envelope to prevent double-wrapping
+  if (isEnvelope(data)) {
+    return data;
+  }
+
   // Detect message type based on DTO structure (camelCase from msgpack)
   const dto = data as Record<string, unknown>;
 
@@ -142,6 +166,10 @@ export function useWebSocketSync(
   const reconnectAttemptsRef = useRef(0);
   // Track intentional closure to prevent reconnect on cleanup
   const isCleaningUpRef = useRef(false);
+  // Heartbeat timer refs
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pongTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPongRef = useRef<number>(Date.now());
 
   // Store callbacks in refs to avoid recreating handleEnvelope/connect on every render
   const onMessageRef = useRef(onMessage);
@@ -156,7 +184,60 @@ export function useWebSocketSync(
     onSyncRef.current = onSync;
   }, [onSync]);
 
+  // Cleanup heartbeat timers
+  const clearHeartbeat = useCallback(() => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+    if (pongTimeoutRef.current) {
+      clearTimeout(pongTimeoutRef.current);
+      pongTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Start heartbeat mechanism
+  const startHeartbeat = useCallback(() => {
+    clearHeartbeat();
+    lastPongRef.current = Date.now();
+
+    // Send ping every 10 seconds
+    pingIntervalRef.current = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // Send a simple ping message
+        const pingEnvelope: Envelope = {
+          stanzaId: 0,
+          conversationId: conversationId || '',
+          type: MessageType.SyncRequest, // Use SyncRequest as ping
+          body: { messages: [] }, // Empty sync request as heartbeat
+        };
+        wsRef.current.send(pack(unwrapEnvelope(pingEnvelope)));
+
+        // Set timeout for pong response (5 seconds)
+        pongTimeoutRef.current = setTimeout(() => {
+          // No pong received, connection is stale
+          console.warn('Heartbeat timeout - closing stale connection');
+          if (wsRef.current) {
+            wsRef.current.close();
+          }
+        }, 5000);
+      }
+    }, 10000);
+  }, [conversationId, clearHeartbeat]);
+
+  // Handle pong (any message received counts as pong)
+  const handlePong = useCallback(() => {
+    lastPongRef.current = Date.now();
+    if (pongTimeoutRef.current) {
+      clearTimeout(pongTimeoutRef.current);
+      pongTimeoutRef.current = null;
+    }
+  }, []);
+
   const handleEnvelope = useCallback((envelope: Envelope) => {
+    // Any message received counts as a pong
+    handlePong();
+
     switch (envelope.type) {
       case MessageType.SyncResponse: {
         const response = envelope.body as SyncResponse;
@@ -246,7 +327,7 @@ export function useWebSocketSync(
       default:
         console.warn('Unknown envelope type:', envelope.type);
     }
-  }, []);
+  }, [handlePong]);
 
   const connect = useCallback(() => {
     if (!conversationId || !enabled) return;
@@ -269,6 +350,9 @@ export function useWebSocketSync(
         setIsConnected(true);
         setError(null);
         reconnectAttemptsRef.current = 0;
+
+        // Start heartbeat mechanism
+        startHeartbeat();
 
         // Send initial sync request to get pending messages for this conversation
         const pendingMessages = messageRepository.getPending(conversationId);
@@ -297,6 +381,8 @@ export function useWebSocketSync(
 
       ws.onclose = () => {
         console.log('WebSocket disconnected');
+        clearHeartbeat(); // Stop heartbeat
+        handleConnectionLost(); // Clean up streaming state
         setIsConnected(false);
         wsRef.current = null;
 
@@ -318,6 +404,8 @@ export function useWebSocketSync(
 
       ws.onerror = (event) => {
         console.error('WebSocket error:', event);
+        clearHeartbeat(); // Stop heartbeat
+        handleConnectionLost(); // Clean up streaming state
         setError(new Error('WebSocket connection error'));
       };
 
@@ -336,7 +424,7 @@ export function useWebSocketSync(
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to create WebSocket'));
     }
-  }, [conversationId, enabled, handleEnvelope]);
+  }, [conversationId, enabled, handleEnvelope, startHeartbeat, clearHeartbeat]);
 
   const send = useCallback((envelope: Envelope) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -381,20 +469,52 @@ export function useWebSocketSync(
       connect();
     }
 
-    return () => {
-      // Mark as intentional cleanup to prevent reconnect in onclose handler
-      isCleaningUpRef.current = true;
-
+    // Handle network online/offline events
+    const handleOnline = () => {
+      console.log('Network online - attempting immediate reconnection');
+      // Cancel any pending exponential backoff reconnection
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
+      // Reset backoff counter for fresh start
+      reconnectAttemptsRef.current = 0;
+      // Only reconnect if not already connected
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        connect();
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('Network offline - connection will be lost');
+      // We don't proactively close here; let the WebSocket detect the disconnection
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      // Mark as intentional cleanup to prevent reconnect in onclose handler
+      isCleaningUpRef.current = true;
+
+      // Remove event listeners
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+
+      // Clear timers
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      clearHeartbeat();
+
+      // Close WebSocket
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, [conversationId, enabled, connect]);
+  }, [conversationId, enabled, connect, clearHeartbeat]);
 
   return { isConnected, error, send, syncNow };
 }

@@ -92,6 +92,26 @@ func (b *WebSocketBroadcaster) BroadcastMessage(conversationID string, msg *dto.
 	b.BroadcastBinary(conversationID, data)
 }
 
+// BroadcastError broadcasts an error message to all subscribers of a conversation
+func (b *WebSocketBroadcaster) BroadcastError(conversationID string, code string, message string) {
+	errorData := map[string]interface{}{
+		"type": "error",
+		"error": map[string]string{
+			"code":    code,
+			"message": message,
+		},
+	}
+
+	// Encode error to MessagePack
+	data, err := msgpack.Marshal(errorData)
+	if err != nil {
+		log.Printf("Failed to encode error for WebSocket broadcast: %v", err)
+		return
+	}
+
+	b.BroadcastBinary(conversationID, data)
+}
+
 // GetSubscriberCount returns the number of active subscribers for a conversation
 func (b *WebSocketBroadcaster) GetSubscriberCount(conversationID string) int {
 	b.mu.RLock()

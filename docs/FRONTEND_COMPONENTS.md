@@ -4,17 +4,16 @@ This document describes the implementation of Alicia's frontend component system
 
 ## Overview
 
-The frontend is structured in two main directories:
+The frontend is structured with components, stores, hooks, and contexts:
 
-1. **`/home/usr/projects/alicia/frontend/src/`** - Main application with stores, hooks, and contexts
-2. **`/home/usr/projects/alicia/frontend/new-components/src/`** - Atomic/Molecular/Organism component library
+**`/home/usr/projects/alicia/frontend/src/`** - Main application structure
 
 ## Atomic Design Structure
 
 Components are organized by complexity level:
 
 ```
-frontend/new-components/src/components/
+frontend/src/components/
 ├── atoms/           # Smallest, indivisible components
 ├── molecules/       # Combinations of atoms
 └── organisms/       # Complete, functional UI sections
@@ -26,7 +25,7 @@ frontend/new-components/src/components/
 2. **Single Responsibility** - Each component does one thing well
 3. **Prop-Driven** - Components are controlled via props, not internal state
 4. **Type Safety** - Full TypeScript support with strict types
-5. **Storybook Integration** - Every component has a `.stories.tsx` file
+5. **Testing** - Components have corresponding `.test.tsx` files for quality assurance
 
 ## Atoms
 
@@ -34,16 +33,16 @@ Atoms are the fundamental building blocks - buttons, inputs, flags, bubbles.
 
 ### MessageBubble
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/MessageBubble.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/MessageBubble.tsx`
 
 The core message display component with type-based styling.
 
 **Props**:
 ```typescript
 interface MessageBubbleProps {
-  type?: MessageType;           // 'user' | 'assistant' | 'system'
+  type?: MessageRole;           // 'user' | 'assistant' | 'system'
   content?: React.ReactNode;    // Message content
-  state?: MessageState;         // 'completed' | 'typing' | 'error'
+  state?: MessageState;         // 'idle' | 'typing' | 'sending' | 'streaming' | 'completed' | 'error'
   timestamp?: Date;
   showTyping?: boolean;
   addons?: MessageAddon[];      // Icons, badges, etc.
@@ -73,45 +72,90 @@ interface MessageBubbleProps {
 
 ### InputSendButton
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/InputSendButton.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/InputSendButton.tsx`
 
 Send button with loading and disabled states.
 
 ### RecordingButtonForInput
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/RecordingButtonForInput.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/RecordingButtonForInput.tsx`
 
 Voice input recording button with visual feedback.
 
 ### ResizableBarTextInput
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/ResizableBarTextInput.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/ResizableBarTextInput.tsx`
 
 Auto-resizing textarea with max height constraints.
 
 ### ToggleSwitch
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/ToggleSwitch.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/ToggleSwitch.tsx`
 
 Animated toggle switch for settings.
 
 ### LanguageFlag
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/LanguageFlag.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/LanguageFlag.tsx`
 
 Language flag display using country code emojis.
 
 ### AudioAddon
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/AudioAddon.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/AudioAddon.tsx`
 
 Audio playback control addon.
 
 ### ComplexAddons
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/ComplexAddons.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/ComplexAddons.tsx`
 
 Container for multiple addon types (tools, memories, etc.).
+
+### BranchNavigator
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/BranchNavigator.tsx`
+
+Navigation controls for message branching/versioning.
+
+### FeedbackControls
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/FeedbackControls.tsx`
+
+Vote buttons (up/down/critical) for feedback submission.
+
+### FeedbackPopover
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/FeedbackPopover.tsx`
+
+Popover UI for detailed feedback with quick feedback options.
+
+### Badge Components
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/`
+
+- **ScoreBadge** - Display score values with color coding
+- **CountBadge** - Display count indicators
+- **StatusBadge** - Display status indicators
+- **SyncStatusBadge** - Display synchronization status
+
+### VoiceVisualizer
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/VoiceVisualizer.tsx`
+
+Waveform visualization for voice input/output.
+
+### Collapsible
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/Collapsible.tsx`
+
+Expandable/collapsible content container.
+
+### AlertDialog
+
+**Location**: `/home/usr/projects/alicia/frontend/src/components/atoms/AlertDialog.tsx`
+
+Modal dialog for alerts and confirmations.
 
 ## Molecules
 
@@ -119,7 +163,7 @@ Molecules combine atoms into functional units.
 
 ### ChatBubble
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/molecules/ChatBubble.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/molecules/ChatBubble.tsx`
 
 Enhanced MessageBubble with voting, tool use displays, and memory references.
 
@@ -154,13 +198,13 @@ interface ChatBubbleProps extends MessageBubbleProps {
 
 ### LanguageSelector
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/molecules/LanguageSelector.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/molecules/LanguageSelector.tsx`
 
 Dropdown language selector with flag display.
 
 ### MicrophoneVAD
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/molecules/MicrophoneVAD.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/molecules/MicrophoneVAD.tsx`
 
 Voice activity detection microphone with visual feedback.
 
@@ -174,22 +218,11 @@ Voice activity detection microphone with visual feedback.
 
 Organisms are complete, self-contained UI sections that combine molecules and atoms.
 
-### InputMessageChatComponent
+### InputArea
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/organisms/InputMessageChatComponent.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/organisms/InputArea.tsx`
 
 Complete message input interface with text, voice, and send controls.
-
-**Props**:
-```typescript
-interface InputMessageChatComponentProps {
-  onSendMessage: (message: string) => void;
-  onVoiceInput?: (audio: Blob) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  showVoiceButton?: boolean;
-}
-```
 
 **Features**:
 - Resizable text input
@@ -198,9 +231,9 @@ interface InputMessageChatComponentProps {
 - Loading states
 - Keyboard shortcuts (Enter to send, Shift+Enter for newline)
 
-### UserChatMessageInList
+### UserMessage
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/organisms/UserChatMessageInList.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/organisms/UserMessage.tsx`
 
 User message display in conversation list context.
 
@@ -210,9 +243,9 @@ User message display in conversation list context.
 - Edit/delete actions (if enabled)
 - Audio playback (if message has audio)
 
-### AssistantChatMessageInList
+### AssistantMessage
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/organisms/AssistantChatMessageInList.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/organisms/AssistantMessage.tsx`
 
 Assistant message with full voting, tool displays, and memory indicators.
 
@@ -236,9 +269,9 @@ interface AssistantChatMessageProps {
 - Copy-to-clipboard functionality
 - Markdown rendering
 
-### ChatPage
+### ChatWindow
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/organisms/ChatPage.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/organisms/ChatWindow.tsx`
 
 Complete chat interface layout.
 
@@ -249,11 +282,11 @@ Complete chat interface layout.
 - Loading states
 - Empty state display
 
-### ChatPageWithAPI
+### ChatWindowBridge
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/components/organisms/ChatPageWithAPI.tsx`
+**Location**: `/home/usr/projects/alicia/frontend/src/components/organisms/ChatWindowBridge.tsx`
 
-ChatPage integrated with backend API and stores.
+ChatWindow integrated with backend API and stores.
 
 **Features**:
 - Connects to conversation store
@@ -283,7 +316,7 @@ interface FeedbackStoreState {
 
 interface Vote {
   id: string;
-  targetType: 'message' | 'tool_use' | 'memory' | 'reasoning';
+  targetType: 'message' | 'tool_use' | 'memory' | 'reasoning' | 'memory_usage' | 'memory_extraction';
   targetId: string;
   vote: 'up' | 'down' | 'critical';
   quickFeedback?: string;
@@ -380,17 +413,16 @@ const PIVOT_PRESETS = [
     label: 'Balanced',
     icon: '⚖️',
     weights: { successRate: 0.25, quality: 0.2, ... },
-    description: 'Equal emphasis on all dimensions'
+    description: 'Moderate emphasis favoring success and quality'
   }
 ];
 ```
 
 **Actions**:
 ```typescript
-setWeights(weights: DimensionWeights)
-updateScores(scores: DimensionScores)
-applyPreset(presetId: PresetId)
-resetToDefaults()
+setCustomWeights(weights: DimensionWeights)
+setPreset(presetId: PresetId)
+resetToBalanced()
 ```
 
 **Usage**:
@@ -400,10 +432,10 @@ import { useDimensionStore } from '@/stores/dimensionStore';
 const dimensionStore = useDimensionStore();
 
 // Apply preset
-dimensionStore.applyPreset('accuracy');
+dimensionStore.setPreset('accuracy');
 
 // Custom weights
-dimensionStore.setWeights({
+dimensionStore.setCustomWeights({
   successRate: 0.3,
   quality: 0.25,
   efficiency: 0.15,
@@ -412,9 +444,6 @@ dimensionStore.setWeights({
   diversity: 0.05,
   innovation: 0.0
 });
-
-// Update scores from SSE stream
-dimensionStore.updateScores(event.dimension_scores);
 ```
 
 ### memoryStore
@@ -472,9 +501,52 @@ Tracks server capabilities and configuration.
 
 Manages WebSocket and SSE connection states.
 
+### branchStore
+
+**Location**: `/home/usr/projects/alicia/frontend/src/stores/branchStore.ts`
+
+Manages message branching and versioning.
+
+**Actions**:
+```typescript
+createBranch(messageId, content)
+switchBranch(branchId)
+mergeBranch(branchId)
+deleteBranch(branchId)
+getBranches(messageId)
+```
+
+### sidebarStore
+
+**Location**: `/home/usr/projects/alicia/frontend/src/stores/sidebarStore.ts`
+
+Manages sidebar state (open/closed, active panel, etc.).
+
+**Actions**:
+```typescript
+toggleSidebar()
+setSidebarOpen(isOpen)
+setActivePanel(panelId)
+```
+
+### toastStore
+
+**Location**: `/home/usr/projects/alicia/frontend/src/stores/toastStore.ts`
+
+Manages toast notification display.
+
+**Actions**:
+```typescript
+showToast(message, type, duration)
+hideToast(id)
+clearAllToasts()
+```
+
 ## Hooks
 
 **Location**: `/home/usr/projects/alicia/frontend/src/hooks/`
+
+**Note**: The hooks `useSSE`, `useSync`, `useDatabase`, and `useVAD` are internal implementation details and not exported from the hooks module for public use.
 
 ### useMessages
 
@@ -516,51 +588,73 @@ Local database operations for offline support.
 const { db, ready, error } = useDatabase();
 ```
 
-### Custom Component Hooks
+### useVAD
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/hooks/`
-
-#### useChat
-
-Complete chat functionality hook.
+Voice activity detection hook.
 
 ```typescript
-const {
-  messages,
-  sendMessage,
-  sendVoiceMessage,
-  loading,
-  error,
-  scrollToBottom
-} = useChat(conversationId);
+const { listening, userSpeaking, start, stop } = useVAD(options);
 ```
 
-#### useRealtimeChat
+### useFeedback
 
-Real-time chat with SSE integration.
+**Location**: `/home/usr/projects/alicia/frontend/src/hooks/useFeedback.ts`
+
+Handles feedback/voting operations for any votable entity.
 
 ```typescript
 const {
-  messages,
-  sendMessage,
-  streamingMessage,
-  isStreaming
-} = useRealtimeChat(conversationId);
+  vote,
+  isVoting,
+  submitVote,
+  removeVote,
+  aggregates
+} = useFeedback(targetType, targetId);
 ```
 
-#### useAudioPlayback
+**Features**:
+- Automatic vote submission to backend
+- Local state synchronization with feedbackStore
+- Vote aggregates fetching and caching
+- Optimistic updates
 
-Audio playback control.
+### useBranchStore
+
+Branch navigation and management hook.
 
 ```typescript
 const {
+  currentBranch,
+  branches,
+  switchBranch,
+  createBranch
+} = useBranchStore(messageId);
+```
+
+### useAudioManager
+
+**Location**: `/home/usr/projects/alicia/frontend/src/hooks/useAudioManager.ts`
+
+Audio playback and recording management.
+
+```typescript
+const {
+  recording,
   playing,
-  progress,
-  play,
-  pause,
-  seek
-} = useAudioPlayback(audioUrl);
+  currentAudioId,
+  startRecording,
+  stopRecording,
+  playAudio,
+  pauseAudio,
+  stopAudio
+} = useAudioManager();
 ```
+
+**Features**:
+- Recording state management
+- Playback controls
+- Audio queue management
+- Integration with audioStore
 
 ## Integration with Optimization System
 
@@ -569,7 +663,7 @@ const {
 Components integrate with the feedback system:
 
 ```tsx
-// In AssistantChatMessageInList
+// In AssistantMessage
 const handleVote = async (vote: VoteType, quickFeedback?: string) => {
   // Update local store
   feedbackStore.addVote('message', message.id, vote, quickFeedback);
@@ -632,7 +726,7 @@ useEffect(() => {
 ### Memory Display
 
 ```tsx
-// In AssistantChatMessageInList
+// In AssistantMessage
 {message.memories && message.memories.length > 0 && (
   <div className="memory-references">
     {message.memories.map(memory => (
@@ -650,45 +744,9 @@ useEffect(() => {
 
 All components use Tailwind CSS with a custom design system.
 
-### Design Tokens
-
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/utils/constants.ts`
-
-```typescript
-export const CSS = {
-  // Colors
-  bgPrimary: 'bg-primary-dark',
-  bgSecondary: 'bg-secondary-darker',
-  bgMessageSent: 'bg-message-sent',
-  bgMessageReceived: 'bg-message-received',
-  textPrimary: 'text-primary-light',
-  textMuted: 'text-primary-muted',
-
-  // Spacing
-  px4: 'px-4',
-  py3: 'py-3',
-  gap2: 'gap-2',
-
-  // Typography
-  textSm: 'text-sm',
-  textXs: 'text-xs',
-
-  // Layout
-  flex: 'flex',
-  flexCol: 'flex-col',
-  itemsCenter: 'items-center',
-  justifyBetween: 'justify-between',
-
-  // Animations
-  transitionAll: 'transition-all',
-  duration300: 'duration-300',
-  animateBounce: 'animate-bounce',
-};
-```
-
 ### Utility Functions
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/utils/cls.ts`
+**Location**: `/home/usr/projects/alicia/frontend/src/utils/cls.ts`
 
 ```typescript
 // Class name combiner
@@ -705,70 +763,13 @@ const className = cls([
 ]);
 ```
 
-## Storybook Development
-
-Every component has a Storybook story for isolated development and testing.
-
-**Example**: `/home/usr/projects/alicia/frontend/new-components/src/components/atoms/MessageBubble.stories.tsx`
-
-```tsx
-import type { Meta, StoryObj } from '@storybook/react';
-import MessageBubble from './MessageBubble';
-import { MESSAGE_TYPES, MESSAGE_STATES } from '~/mockData';
-
-const meta: Meta<typeof MessageBubble> = {
-  title: 'Atoms/MessageBubble',
-  component: MessageBubble,
-  parameters: {
-    layout: 'centered',
-  },
-  tags: ['autodocs'],
-};
-
-export default meta;
-type Story = StoryObj<typeof MessageBubble>;
-
-export const UserMessage: Story = {
-  args: {
-    type: MESSAGE_TYPES.USER,
-    content: 'Hello, how are you?',
-    timestamp: new Date(),
-  },
-};
-
-export const AssistantMessage: Story = {
-  args: {
-    type: MESSAGE_TYPES.ASSISTANT,
-    content: 'I\'m doing well, thank you!',
-    timestamp: new Date(),
-  },
-};
-
-export const Typing: Story = {
-  args: {
-    type: MESSAGE_TYPES.ASSISTANT,
-    state: MESSAGE_STATES.TYPING,
-    showTyping: true,
-  },
-};
-```
-
-### Running Storybook
-
-```bash
-cd frontend/new-components
-npm run storybook
-```
-
-Access at `http://localhost:6006`
-
 ## Type Definitions
 
-**Location**: `/home/usr/projects/alicia/frontend/new-components/src/types/components.ts`
+**Location**: `/home/usr/projects/alicia/frontend/src/types/components.ts`
 
 ```typescript
-export type MessageType = 'user' | 'assistant' | 'system';
-export type MessageState = 'completed' | 'typing' | 'error' | 'sending';
+export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageState = 'idle' | 'typing' | 'sending' | 'streaming' | 'completed' | 'error';
 
 export interface BaseComponentProps {
   className?: string;
@@ -800,7 +801,7 @@ export interface MemoryReference {
 export interface Message {
   id: string;
   conversationId: string;
-  type: MessageType;
+  type: MessageRole;
   content: string;
   timestamp: Date;
   toolCalls?: ToolCall[];
@@ -816,7 +817,7 @@ export interface Message {
 1. Create component file: `atoms/NewComponent.tsx`
 2. Define props interface extending `BaseComponentProps`
 3. Implement component with TypeScript
-4. Create Storybook story: `atoms/NewComponent.stories.tsx`
+4. Write tests: `atoms/NewComponent.test.tsx`
 5. Export from `atoms/index.ts`
 
 ### Adding a New Molecule
@@ -826,8 +827,7 @@ export interface Message {
 3. Import required atoms
 4. Define combined props interface
 5. Implement composition logic
-6. Create Storybook story
-7. Write integration tests if needed
+6. Write integration tests if needed
 
 ### Adding a New Organism
 
@@ -835,8 +835,8 @@ export interface Message {
 2. Create organism file: `organisms/NewOrganism.tsx`
 3. Integrate with stores and hooks
 4. Implement business logic
-5. Create Storybook story with mock data
-6. Add to ChatPageWithAPI if relevant
+5. Write integration tests if needed
+6. Add to ChatWindowBridge if relevant
 
 ## Testing Strategy
 
@@ -875,24 +875,23 @@ describe('MessageBubble', () => {
 });
 ```
 
-### Store Tests
+### Hook Tests
 
-Test Zustand stores:
+Test custom hooks with React Testing Library:
 
 ```typescript
 import { renderHook, act } from '@testing-library/react';
-import { useFeedbackStore } from './feedbackStore';
+import { useMessages } from './useMessages';
 
-describe('feedbackStore', () => {
-  it('adds vote correctly', () => {
-    const { result } = renderHook(() => useFeedbackStore());
+describe('useMessages', () => {
+  it('loads messages correctly', async () => {
+    const { result } = renderHook(() => useMessages('conv_1'));
 
-    act(() => {
-      result.current.addVote('message', 'msg_1', 'up');
+    await act(async () => {
+      await result.current.loadMessages();
     });
 
-    const vote = result.current.getVote('message', 'msg_1');
-    expect(vote.vote).toBe('up');
+    expect(result.current.messages).toHaveLength(5);
   });
 });
 ```
@@ -914,7 +913,7 @@ import { FixedSizeList } from 'react-window';
 >
   {({ index, style }) => (
     <div style={style}>
-      <AssistantChatMessageInList message={messages[index]} />
+      <AssistantMessage message={messages[index]} />
     </div>
   )}
 </FixedSizeList>
@@ -925,7 +924,7 @@ import { FixedSizeList } from 'react-window';
 Use React.memo for expensive components:
 
 ```tsx
-export const AssistantChatMessageInList = React.memo(({ message, ...props }) => {
+export const AssistantMessage = React.memo(({ message, ...props }) => {
   // Component implementation
 }, (prevProps, nextProps) => {
   // Custom comparison
@@ -934,24 +933,22 @@ export const AssistantChatMessageInList = React.memo(({ message, ...props }) => 
 });
 ```
 
-### Store Selectors
+### Selective State Access
 
-Use Zustand selectors to avoid unnecessary re-renders:
+Access only needed state to avoid unnecessary re-renders:
 
 ```tsx
-// Bad - component re-renders on any store change
-const store = useFeedbackStore();
+// Bad - component re-renders on any state change
+const conversationStore = useConversationStore();
 
-// Good - only re-renders when votes change
-const votes = useFeedbackStore(state => state.votes);
+// Good - only re-renders when conversations change
+const conversations = useConversationStore(state => state.conversations);
 ```
 
 ## Related Documentation
 
 - `/home/usr/projects/alicia/docs/OPTIMIZATION_SYSTEM.md` - Backend optimization system
-- `/home/usr/projects/alicia/docs/PHASE_6_INTEGRATION.md` - Phase 6 integration details
 - `/home/usr/projects/alicia/docs/COMPONENTS.md` - Backend component architecture
-- Storybook documentation at `http://localhost:6006`
 
 ## See Also
 

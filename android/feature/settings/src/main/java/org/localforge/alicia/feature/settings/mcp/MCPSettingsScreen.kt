@@ -126,6 +126,7 @@ fun MCPSettingsScreen(
 
     if (showAddDialog) {
         AddServerDialog(
+            existingServerNames = uiState.servers.map { it.name }.toSet(),
             onDismiss = { showAddDialog = false },
             onConfirm = { config ->
                 viewModel.addServer(config)

@@ -8,7 +8,7 @@ This project uses **Tailwind CSS 4** with a semantic color system based on OKLCH
 
 ### Critical: Component CSS Classes
 
-The following CSS component classes are defined in `src/index.css` and **must not be removed**. These provide consistent styling across the application:
+The following CSS component classes are defined in `src/index.css` and provide consistent styling across the application:
 
 | Class | Purpose |
 |-------|---------|

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getDatabase } from '../db/sqlite';
 import type { SqlValue } from 'sql.js';
 
@@ -10,6 +10,10 @@ export function useLiveQuery<T>(
   const [data, setData] = useState<T[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
+  // Use refs to capture latest values without triggering refetch on every change
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
   const refetch = useCallback(() => {
     if (!query) {
       setData([]);
@@ -18,7 +22,7 @@ export function useLiveQuery<T>(
 
     try {
       const db = getDatabase();
-      const results = db.exec(query, params);
+      const results = db.exec(query, paramsRef.current);
 
       if (results.length === 0) {
         setData([]);
@@ -43,11 +47,13 @@ export function useLiveQuery<T>(
       setError(err instanceof Error ? err : new Error('Query failed'));
       setData([]);
     }
-  }, [query, ...params, ...deps]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query]);
 
+  // Trigger refetch when query changes or when caller-provided deps change
   useEffect(() => {
     refetch();
-  }, [refetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetch, ...deps]);
 
   return { data, refetch, error };
 }

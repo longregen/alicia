@@ -15,9 +15,9 @@ import org.localforge.alicia.feature.conversations.components.ConversationItem
 /**
  * Screen displaying the user's conversation history.
  *
- * Shows a list of all conversations (sorted by updatedAt descending), with options to
- * view individual conversations, delete specific conversations, or clear all history.
- * Displays an empty state when no conversations exist.
+ * Shows a list of all conversations with options to view individual conversations,
+ * delete specific conversations, or clear all history. Sorting is handled by the
+ * repository layer (most recently updated first).
  *
  * @param viewModel ViewModel managing conversation data and operations
  * @param onNavigateBack Callback invoked when the user navigates back
