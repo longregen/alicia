@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import ChatWindowBridge from './components/organisms/ChatWindowBridge';
-import { Settings } from './components/Settings';
+import { Settings, type SettingsTab } from './components/Settings';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { useDatabase } from './hooks/useDatabase';
@@ -15,6 +15,8 @@ interface AppContentProps {
   setSelectedConversationId: (id: string | null) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  settingsTab: SettingsTab;
+  setSettingsTab: (tab: SettingsTab) => void;
 }
 
 function AppContent({
@@ -22,6 +24,8 @@ function AppContent({
   setSelectedConversationId,
   settingsOpen,
   setSettingsOpen,
+  settingsTab,
+  setSettingsTab,
 }: AppContentProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'warning' } | null>(null);
@@ -99,18 +103,20 @@ function AppContent({
     setSidebarOpen(false);
   };
 
-  const handleOpenSettings = () => {
+  const handleOpenSettings = (tab: SettingsTab = 'mcp') => {
+    setSettingsTab(tab);
     setSettingsOpen(true);
     setSidebarOpen(false);
   };
 
   const handlePanelChange = (panel: 'memory' | 'server' | 'settings') => {
-    // In this version of App, we only support settings panel
-    if (panel === 'settings') {
-      handleOpenSettings();
-    }
-    // Memory and server panels are not implemented in this version
-    // They are available in AliciaApp.tsx
+    // Map sidebar panel names to settings tabs
+    const tabMap: Record<string, SettingsTab> = {
+      memory: 'memories',
+      server: 'server',
+      settings: 'mcp',
+    };
+    handleOpenSettings(tabMap[panel] || 'mcp');
   };
 
   return (
@@ -192,6 +198,7 @@ function AppContent({
             isOpen={settingsOpen}
             onClose={() => setSettingsOpen(false)}
             conversationId={selectedConversationId}
+            defaultTab={settingsTab}
           />
         ) : (
           <ChatWindowBridge
@@ -213,6 +220,7 @@ function App() {
     return storage.getSelectedConversationId();
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('mcp');
 
   // Initialize database
   const { isReady, error: dbError } = useDatabase();
@@ -244,6 +252,8 @@ function App() {
           setSelectedConversationId={setSelectedConversationId}
           settingsOpen={settingsOpen}
           setSettingsOpen={setSettingsOpen}
+          settingsTab={settingsTab}
+          setSettingsTab={setSettingsTab}
         />
       </MessageProvider>
     </ConfigProvider>

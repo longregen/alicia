@@ -168,3 +168,86 @@
     @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
   }
 }
+
+/* Component styles */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors cursor-pointer;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent hover:bg-muted text-foreground border-0;
+  }
+
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Tabs */
+  .tab {
+    @apply px-4 py-3 text-sm font-medium text-muted-foreground cursor-pointer;
+    @apply border-b-2 border-transparent transition-colors;
+    @apply hover:text-foreground hover:bg-muted/50;
+    background: transparent;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+  }
+
+  .tab.active {
+    @apply text-primary border-b-primary;
+  }
+
+  .tab:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-card text-card-foreground rounded-lg border border-border;
+  }
+
+  .card-hover {
+    @apply hover:border-accent transition-colors;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply bg-success/20 text-success;
+  }
+
+  .badge-error {
+    @apply bg-destructive/20 text-destructive;
+  }
+
+  .badge-warning {
+    @apply bg-warning/20 text-warning;
+  }
+
+  .badge-neutral {
+    @apply bg-muted text-muted-foreground;
+  }
+}

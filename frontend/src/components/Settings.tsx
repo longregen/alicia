@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { MCPSettings } from './MCPSettings';
 import ServerInfoPanel from './organisms/ServerPanel/ServerInfoPanel';
 import { MemoryManager } from './organisms/MemoryManager';
@@ -21,13 +21,19 @@ interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
   conversationId?: string | null;
+  defaultTab?: SettingsTab;
 }
 
-type SettingsTab = 'mcp' | 'server' | 'memories' | 'notes' | 'optimization' | 'preferences';
+export type SettingsTab = 'mcp' | 'server' | 'memories' | 'notes' | 'optimization' | 'preferences';
 
-export function Settings({ isOpen, onClose, conversationId }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('mcp');
+export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }: SettingsProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
   const [audioOutputEnabled, setAudioOutputEnabled] = useState(false);
+
+  // Sync active tab when defaultTab prop changes
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [theme, setTheme] = useState('system');
   const [responseLength, setResponseLength] = useState<'concise' | 'balanced' | 'detailed'>('balanced');
