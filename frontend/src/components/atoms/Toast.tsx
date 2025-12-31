@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, Variant } from '../../types/components';
 
 /**
@@ -65,11 +64,11 @@ const Toast: React.FC<ToastProps> = ({
   }
 
   const variantStyles = {
-    default: 'bg-surface-bg text-primary-text border-gray-300 dark:border-gray-600',
-    primary: 'bg-primary-blue text-white border-primary-blue',
-    success: 'bg-green-100 dark:bg-green-900/90 text-green-800 dark:text-green-100 border-green-300 dark:border-green-700',
-    warning: 'bg-yellow-100 dark:bg-yellow-900/90 text-yellow-800 dark:text-yellow-100 border-yellow-300 dark:border-yellow-700',
-    error: 'bg-red-100 dark:bg-red-900/90 text-red-800 dark:text-red-100 border-red-300 dark:border-red-700',
+    default: 'bg-surface text-default border',
+    primary: 'bg-accent text-on-emphasis border-accent',
+    success: 'bg-success text-on-emphasis border-success',
+    warning: 'bg-warning text-on-emphasis border-warning',
+    error: 'bg-error text-on-emphasis border-error',
   };
 
   const icons = {
@@ -102,16 +101,9 @@ const Toast: React.FC<ToastProps> = ({
 
   const toastClasses = cls(
     // Base styles
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.gap3,
-    CSS.p4,
-    CSS.roundedLg,
-    CSS.border,
-    'shadow-lg',
-    'backdrop-blur-sm',
-    'min-w-[300px]',
-    'max-w-md',
+    'flex items-center gap-3 p-4',
+    'rounded-lg border shadow-lg backdrop-blur-sm',
+    'min-w-[300px] max-w-md',
 
     // Variant
     variantStyles[variant],
@@ -132,8 +124,8 @@ const Toast: React.FC<ToastProps> = ({
       </div>
 
       {/* Message */}
-      <div className={cls(CSS.flex, CSS.flexCol, 'flex-1')}>
-        <p className={cls(CSS.textSm, CSS.fontMedium)}>{message}</p>
+      <div className="flex flex-col flex-1">
+        <p className="text-sm font-medium">{message}</p>
       </div>
 
       {/* Close button */}
@@ -141,15 +133,10 @@ const Toast: React.FC<ToastProps> = ({
         <button
           onClick={handleDismiss}
           className={cls(
-            'flex-shrink-0',
-            'rounded-md',
-            'p-1',
-            CSS.transitionColors,
-            CSS.duration200,
-            'hover:bg-black/10 dark:hover:bg-white/10',
-            CSS.focusOutlineNone,
-            CSS.focusRing2,
-            CSS.focusRingAlicia500
+            'flex-shrink-0 rounded-md p-1',
+            'transition-colors duration-200',
+            'hover:bg-black/10',
+            'focus:outline-none focus:ring-2 focus:ring-accent'
           )}
           aria-label="Dismiss"
         >

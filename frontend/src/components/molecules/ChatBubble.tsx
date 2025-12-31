@@ -4,7 +4,6 @@ import ComplexAddons, { type ToolDetail } from '../atoms/ComplexAddons';
 import FeedbackControls from '../atoms/FeedbackControls';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import { useFeedback } from '../../hooks/useFeedback';
 import type {
   BaseComponentProps,
@@ -43,14 +42,14 @@ const ReasoningBlock: React.FC<ReasoningBlockProps> = ({ content, keyId, id }) =
   return (
     <div
       key={`reasoning-${keyId}`}
-      className="my-2 p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg"
+      className="my-2 p-3 bg-reasoning border-l-4 border-accent rounded-r-lg"
     >
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={cls(
           'w-full flex items-center justify-between',
-          'text-xs text-blue-600 dark:text-blue-400 font-medium mb-1',
-          'hover:text-blue-700 dark:hover:text-blue-300 transition-colors'
+          'text-xs text-reasoning font-medium mb-1',
+          'hover:text-accent transition-colors'
         )}
         aria-expanded={isExpanded}
         aria-label={isExpanded ? 'Collapse reasoning' : 'Expand reasoning'}
@@ -68,21 +67,21 @@ const ReasoningBlock: React.FC<ReasoningBlockProps> = ({ content, keyId, id }) =
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+      <div className="text-sm text-default whitespace-pre-wrap">
         {isExpanded || !hasMore ? content : previewContent}
       </div>
       {hasMore && !isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          className="text-xs text-blue-500 hover:text-blue-600 mt-1"
+          className="text-xs text-accent hover:text-accent-hover mt-1"
         >
           Show more
         </button>
       )}
       {/* Feedback controls - only show when expanded and id is available */}
       {isExpanded && id && (
-        <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
-          <div className="text-xs text-muted-text mb-1">Was this reasoning helpful?</div>
+        <div className="mt-2 pt-2 border-t border-muted">
+          <div className="text-xs text-muted mb-1">Was this reasoning helpful?</div>
           <FeedbackControls
             currentVote={currentVote as 'up' | 'down' | null}
             onVote={vote}
@@ -237,9 +236,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const getContentToDisplay = (): React.ReactNode => {
     if (state === MESSAGE_STATES.STREAMING) {
       return (
-        <div className={cls(CSS.flex, CSS.itemsCenter)}>
+        <div className="flex items-center">
           <span>{processContent(displayedContent)}</span>
-          <span className={cls('inline-block', 'w-0.5', 'h-4', 'bg-current', 'ml-1', CSS.animatePulse)} />
+          <span className="inline-block w-0.5 h-4 bg-current ml-1 animate-pulse" />
         </div>
       );
     }
@@ -263,19 +262,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const roleClass = type === MESSAGE_TYPES.USER ? 'user' : type === MESSAGE_TYPES.ASSISTANT ? 'assistant' : 'system';
 
   return (
-    <div className={cls('message-bubble', roleClass, CSS.flex, CSS.flexCol, CSS.gap2, className)}>
+    <div className={cls('flex flex-col gap-2', roleClass, className)}>
       {/* Streaming status badge */}
       {state === MESSAGE_STATES.STREAMING && type === MESSAGE_TYPES.ASSISTANT && (
-        <div className={cls(
-          'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl',
-          'mr-auto',
-          'mb-1'
-        )}>
-          <span className={cls(
-            'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-            'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          )}>
-            <span className={cls('w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5', CSS.animatePulse)} />
+        <div className="w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mr-auto mb-1">
+          <span className="badge badge-neutral">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent mr-1.5 animate-pulse" />
             Streaming
           </span>
         </div>
@@ -310,9 +302,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* Below addons */}
       {belowAddons.length > 0 && (
         <div className={cls(
-          CSS.flex,
-          CSS.flexCol,
-          CSS.gap2,
+          'flex flex-col gap-2',
           type === MESSAGE_TYPES.USER ? 'ml-4' : 'mr-4'
         )}>
           {belowAddons.map(addon => (

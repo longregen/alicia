@@ -1,48 +1,45 @@
 import React, { useState } from 'react';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 
 // Component-specific constants
 const BUTTON_BASE_CLASSES = [
   'w-10 h-10', // Medium size only
   'rounded-full',
-  CSS.transitionAll,
-  CSS.duration200,
+  'transition-all',
+  'duration-200',
   'ease-in-out',
-  CSS.flex,
-  CSS.itemsCenter,
-  CSS.justifyCenter,
-  CSS.fontMedium,
+  'flex',
+  'items-center',
+  'justify-center',
+  'font-medium',
   'relative',
   'overflow-hidden',
-  CSS.focusOutlineNone,
+  'focus:outline-none',
   'active:transform',
   'active:scale-95',
   'group',
 ] as const;
 
 const DISABLED_CLASSES = [
-  CSS.bgInactiveDisabled,
-  CSS.textMuted,
-  CSS.cursorNotAllowed,
+  'bg-sunken',
+  'text-muted',
+  'cursor-not-allowed',
 ] as const;
 
 const CANNOT_SEND_CLASSES = [
-  CSS.bgSurfaceBg,
-  CSS.textMuted,
-  'hover:bg-surface-700',
-  'hover:text-primary-blue',
+  'bg-surface',
+  'text-muted',
+  'hover:bg-sunken',
+  'hover:text-accent',
 ] as const;
 
 // Primary variant styling only
 const PRIMARY_CLASSES = [
-  CSS.bgPrimaryBlue,
-  CSS.hoverBgPrimaryBlue,
-  'active:bg-primary-blue-active',
-  CSS.textWhite,
-  'glow-primary',
-  'hover:glow-primary-hover',
+  'bg-accent',
+  'hover:bg-accent-hover',
+  'active:bg-accent-active',
+  'text-on-emphasis',
 ] as const;
 
 // Tooltip classes for "up" position only
@@ -54,12 +51,12 @@ const TOOLTIP_BASE_CLASSES = [
   '-translate-x-1/2',
   'mb-2',
   'origin-bottom',
-  CSS.px3,
+  'px-3',
   'py-1',
-  CSS.bgMainBg,
-  CSS.textPrimary,
-  CSS.textXs,
-  CSS.rounded,
+  'bg-overlay',
+  'text-on-emphasis',
+  'text-xs',
+  'rounded',
   'whitespace-nowrap',
   'opacity-0',
   'scale-50',
@@ -80,7 +77,7 @@ const TOOLTIP_ARROW_CLASSES = [
   '-translate-x-1/2',
   'border-2',
   'border-transparent',
-  'border-t-main-bg'
+  'border-t-overlay'
 ] as const;
 
 // Simplified component props interface
@@ -186,8 +183,8 @@ const InputSendButton: React.FC<InputSendButtonProps> = ({
         <div className={cls(
           "absolute inset-0 rounded-full transition-opacity duration-300",
           canSend
-            ? "bg-primary-blue-glow opacity-0 group-hover:opacity-20"
-            : "bg-primary-blue-glow opacity-0 group-hover:opacity-10"
+            ? "bg-accent-subtle opacity-0 group-hover:opacity-20"
+            : "bg-accent-subtle opacity-0 group-hover:opacity-10"
         )} />
       </button>
 

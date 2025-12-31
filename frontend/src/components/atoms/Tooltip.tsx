@@ -65,33 +65,21 @@ const Tooltip: React.FC<TooltipProps> = ({
   };
 
   const arrowClasses = {
-    top: 'top-full left-1/2 -translate-x-1/2 border-t-gray-900/95',
-    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-gray-900/95',
-    left: 'left-full top-1/2 -translate-y-1/2 border-l-gray-900/95',
-    right: 'right-full top-1/2 -translate-y-1/2 border-r-gray-900/95',
+    top: 'top-full left-1/2 -translate-x-1/2 border-t-overlay',
+    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-overlay',
+    left: 'left-full top-1/2 -translate-y-1/2 border-l-overlay',
+    right: 'right-full top-1/2 -translate-y-1/2 border-r-overlay',
   };
 
   const tooltipClasses = cls(
     'absolute',
     positionClasses[position],
-    'px-3',
-    'py-2',
-    'text-xs',
-    'text-white',
-    'bg-gray-900/95',
-    'backdrop-blur-sm',
-    'rounded-md',
-    'opacity-0',
-    'transition-opacity',
-    'duration-200',
-    'pointer-events-none',
-    'whitespace-nowrap',
-    'z-50',
-    'shadow-lg',
-    'border',
-    'border-gray-700/50',
-    'min-w-[8rem]',
-    'max-w-xs',
+    'px-3 py-2 text-xs text-on-emphasis',
+    'bg-overlay backdrop-blur-sm rounded-md',
+    'opacity-0 transition-opacity duration-200',
+    'pointer-events-none whitespace-nowrap z-50',
+    'shadow-lg border border-border-emphasis',
+    'min-w-[8rem] max-w-xs',
     isVisible ? 'opacity-100' : ''
   );
 
@@ -110,8 +98,7 @@ const Tooltip: React.FC<TooltipProps> = ({
             className={cls(
               'absolute',
               arrowClasses[position],
-              'border-4',
-              'border-transparent'
+              'border-4 border-transparent'
             )}
           />
         </div>

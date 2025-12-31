@@ -35,39 +35,39 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
   return (
     <div className={cls(
       'transition-all duration-300 ease-in-out overflow-hidden',
-      'bg-surface-bg/50 rounded-lg p-4 mt-3 border border-surface-700',
+      'bg-surface rounded-lg p-4 mt-3 border border-border',
       'max-h-64 opacity-100'
     )}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <div className="text-sm font-medium text-primary-text">{toolDetail.name}</div>
-          <div className="text-xs text-muted-text mt-1">{toolDetail.description}</div>
+          <div className="text-sm font-medium text-default">{toolDetail.name}</div>
+          <div className="text-xs text-muted mt-1">{toolDetail.description}</div>
         </div>
       </div>
 
       {toolDetail.result && (
-        <div className="text-xs text-green-400 mt-2">✓ {toolDetail.result}</div>
+        <div className="text-xs text-success mt-2">✓ {toolDetail.result}</div>
       )}
 
       {toolDetail.status === 'running' && (
-        <div className="text-xs text-primary-blue mt-2 flex items-center gap-1">
+        <div className="text-xs text-accent mt-2 flex items-center gap-1">
           <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
           Running...
         </div>
       )}
 
       {toolDetail.status === 'pending' && (
-        <div className="text-xs text-yellow-500 mt-2">⏳ Pending...</div>
+        <div className="text-xs text-warning mt-2">⏳ Pending...</div>
       )}
 
       {toolDetail.status === 'error' && (
-        <div className="text-xs text-red-500 mt-2">❌ Error occurred</div>
+        <div className="text-xs text-error mt-2">❌ Error occurred</div>
       )}
 
       {/* Feedback controls for completed tools */}
       {showFeedback && toolDetail.status === 'completed' && (
-        <div className="mt-3 pt-3 border-t border-surface-700">
-          <div className="text-xs text-muted-text mb-2">Was this tool use helpful?</div>
+        <div className="mt-3 pt-3 border-t border-border-muted">
+          <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
           <FeedbackControls
             currentVote={currentVote as 'up' | 'down' | null}
             onVote={vote}
@@ -141,7 +141,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
       return `${uiPatterns.pulseAnimation} opacity-70`;
     }
     if (toolDetail?.status === 'error') {
-      return 'text-red-500';
+      return 'text-error';
     }
     return '';
   };
@@ -177,9 +177,9 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
           className={cls(
             'relative w-6 h-6 flex items-center justify-center',
             'text-sm cursor-pointer transition-all duration-200',
-            'hover:scale-110 hover:bg-surface-bg/50 rounded-full',
+            'hover:scale-110 hover:bg-surface rounded-full',
             getAddonAnimation(addon, toolDetail),
-            isExpanded ? 'scale-110 bg-primary-blue/20' : ''
+            isExpanded ? 'scale-110 bg-accent-subtle' : ''
           )}
           onMouseEnter={() => setHoveredAddonId(addon.id)}
           onMouseLeave={() => setHoveredAddonId(null)}
@@ -194,7 +194,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
 
           {/* Status indicator for running tools */}
           {toolDetail?.status === 'running' && (
-            <div className={cls("absolute -bottom-1 -right-1 w-2 h-2 bg-primary-blue rounded-full", uiPatterns.pulseAnimation)} />
+            <div className={cls("absolute -bottom-1 -right-1 w-2 h-2 bg-accent rounded-full", uiPatterns.pulseAnimation)} />
           )}
         </button>
 
@@ -202,13 +202,13 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
         {isHovered && !isExpanded && (
           <div className={cls(
             'absolute z-20 transition-all duration-200',
-            'bg-gray-900/95 backdrop-blur-sm text-white text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
-            'pointer-events-none shadow-xl border border-gray-700/50',
+            'bg-overlay backdrop-blur-sm text-on-emphasis text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
+            'pointer-events-none shadow-xl border border-border-emphasis',
             'top-full left-1/2 transform -translate-x-1/2 mt-2'
           )}>
             <div className="font-semibold text-sm">{toolDetail?.name || addon.tooltip}</div>
             {toolDetail?.description && (
-              <div className="text-gray-300 mt-1.5 text-xs leading-relaxed">
+              <div className="text-subtle mt-1.5 text-xs leading-relaxed">
                 {toolDetail.description}
               </div>
             )}
@@ -217,9 +217,9 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
             {toolDetail?.status && (
               <div className={cls(
                 'mt-2 text-[11px] font-medium',
-                toolDetail.status === 'running' ? 'text-blue-400' : '',
-                toolDetail.status === 'completed' ? 'text-green-400' : '',
-                toolDetail.status === 'error' ? 'text-red-400' : ''
+                toolDetail.status === 'running' ? 'text-accent' : '',
+                toolDetail.status === 'completed' ? 'text-success' : '',
+                toolDetail.status === 'error' ? 'text-error' : ''
               )}>
                 {toolDetail.status === 'running' && '⚡ Currently running...'}
                 {toolDetail.status === 'completed' && '✓ Completed'}
@@ -228,7 +228,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
             )}
 
             {/* Tooltip arrow */}
-            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-gray-900/95" />
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-overlay" />
           </div>
         )}
       </div>
@@ -260,7 +260,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
         </div>
 
         {/* Right: Timestamp */}
-        <div className="text-xs text-muted-text">
+        <div className="text-xs text-muted">
           {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>

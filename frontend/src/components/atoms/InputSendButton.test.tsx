@@ -44,14 +44,14 @@ describe('InputSendButton', () => {
       render(<InputSendButton canSend={true} />);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('bg-primary-blue');
+      expect(button).toHaveClass('bg-accent');
     });
 
     it('applies muted styling when canSend is false', () => {
       render(<InputSendButton canSend={false} />);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('bg-surface-bg');
+      expect(button).toHaveClass('bg-surface');
     });
 
     it('is disabled when canSend is false', () => {
@@ -269,7 +269,7 @@ describe('InputSendButton', () => {
     it('has shine effect element', () => {
       const { container } = render(<InputSendButton canSend={true} />);
 
-      const shineEffect = container.querySelector('.bg-primary-blue-glow');
+      const shineEffect = container.querySelector('.bg-accent-subtle');
       expect(shineEffect).toBeInTheDocument();
     });
 

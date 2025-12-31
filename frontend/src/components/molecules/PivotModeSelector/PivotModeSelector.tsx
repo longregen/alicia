@@ -5,7 +5,7 @@ import {
   type PresetId,
 } from '../../../stores/dimensionStore';
 import type { DimensionWeights } from '../../../types/protocol';
-import './PivotModeSelector.css';
+import { cls } from '../../../utils/cls';
 
 // Dimension display configuration
 const DIMENSION_CONFIG: Array<{
@@ -68,32 +68,35 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
   }, [disabled, resetToBalanced, onPresetChange]);
 
   return (
-    <div className={`pivot-mode-selector ${disabled ? 'disabled' : ''}`}>
-      <div className="pivot-header">
-        <span className="pivot-icon">⚙️</span>
-        <span className="pivot-title">Response Style</span>
+    <div className={cls('bg-surface border border-default rounded-lg p-4', disabled ? 'opacity-60 pointer-events-none' : '')}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-base">⚙️</span>
+        <span className="font-semibold text-sm text-default">Response Style</span>
       </div>
 
-      <div className="pivot-presets">
+      <div className="flex flex-wrap gap-2 mb-3">
         {PIVOT_PRESETS.map((preset) => (
           <button
             key={preset.id}
-            className={`pivot-preset-button ${
-              presetId === preset.id ? 'active' : ''
-            }`}
+            className={cls(
+              'flex items-center gap-1 px-3 py-2 border rounded-md bg-elevated cursor-pointer text-sm transition-all',
+              presetId === preset.id
+                ? 'border-accent bg-accent-subtle text-accent font-medium'
+                : 'border-default text-muted hover:border-accent hover:bg-accent-subtle disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
             onClick={() => handlePresetClick(preset.id)}
             disabled={disabled}
             title={preset.description}
             aria-pressed={presetId === preset.id}
           >
-            <span className="preset-icon">{preset.icon}</span>
-            <span className="preset-label">{preset.label}</span>
+            <span className="text-sm">{preset.icon}</span>
+            <span className="text-xs">{preset.label}</span>
           </button>
         ))}
       </div>
 
       <button
-        className="pivot-advanced-toggle"
+        className="btn-ghost w-full text-xs text-center"
         onClick={() => setShowAdvanced(!showAdvanced)}
         aria-expanded={showAdvanced}
       >
@@ -101,13 +104,13 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
       </button>
 
       {showAdvanced && (
-        <div className="pivot-advanced">
-          <div className="dimension-sliders">
+        <div className="mt-3 pt-3 border-t border-default">
+          <div className="flex flex-col gap-3">
             {DIMENSION_CONFIG.map(({ key, label, icon }) => (
-              <div key={key} className="dimension-slider">
-                <label className="dimension-label">
-                  <span className="dimension-icon">{icon}</span>
-                  <span className="dimension-name">{label}</span>
+              <div key={key} className="flex items-center gap-3">
+                <label className="flex items-center gap-1 min-w-[110px] text-xs text-muted">
+                  <span className="text-sm">{icon}</span>
+                  <span className="flex-1">{label}</span>
                 </label>
                 <input
                   type="range"
@@ -118,19 +121,19 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
                     handleSliderChange(key, parseInt(e.target.value, 10) / 100)
                   }
                   disabled={disabled}
-                  className="dimension-range"
+                  className="flex-1 h-1 rounded bg-sunken appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-accent [&::-moz-range-thumb]:cursor-pointer"
                   aria-label={`${label} weight`}
                 />
-                <span className="dimension-value">
+                <span className="min-w-[40px] text-right text-xs font-medium text-default">
                   {Math.round(weights[key] * 100)}%
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="pivot-actions">
+          <div className="flex justify-end gap-2 mt-4">
             <button
-              className="pivot-reset-button"
+              className="btn btn-secondary text-xs"
               onClick={handleReset}
               disabled={disabled || presetId === 'balanced'}
             >

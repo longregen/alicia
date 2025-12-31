@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { cls } from '../../../utils/cls';
-import { CSS } from '../../../utils/constants';
 import { useNotes } from '../../../hooks/useNotes';
 import type { NoteCategory } from '../../../stores/notesStore';
 
@@ -34,10 +33,10 @@ const CATEGORY_LABELS: Record<NoteCategory, string> = {
 };
 
 const CATEGORY_COLORS: Record<NoteCategory, string> = {
-  improvement: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700',
-  correction: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700',
-  context: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700',
-  general: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
+  improvement: 'bg-accent-subtle text-accent border-accent',
+  correction: 'bg-error-subtle text-error border-error',
+  context: 'bg-warning-subtle text-warning border-warning',
+  general: 'bg-surface text-default border',
 };
 
 const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
@@ -111,38 +110,36 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
 
   return (
     <div className={cls(
-      CSS.flex,
-      CSS.flexCol,
-      CSS.gap3,
-      'bg-surface-bg',
+      'flex',
+      'flex-col',
+      'gap-3',
+      'bg-surface',
       'border',
-      'border-gray-300',
-      'dark:border-gray-600',
-      CSS.roundedLg,
-      compact ? CSS.p3 : CSS.p4,
+      'rounded-lg',
+      compact ? 'p-3' : 'p-4',
       className
     )}>
       {/* Header */}
-      <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyBetween)}>
-        <h3 className={cls(CSS.fontSemibold, compact ? CSS.textSm : CSS.textBase, CSS.textPrimary)}>
-          Notes {notes.length > 0 && <span className={CSS.textMuted}>({notes.length})</span>}
+      <div className={cls('flex', 'items-center', 'justify-between')}>
+        <h3 className={cls('font-semibold', compact ? 'text-sm' : 'text-base', 'text-default')}>
+          Notes {notes.length > 0 && <span className="text-muted">({notes.length})</span>}
         </h3>
         {!isAddingNote && (
           <button
             onClick={handleAddNoteClick}
             disabled={isLoading}
             className={cls(
-              CSS.flex,
-              CSS.itemsCenter,
-              CSS.gap1,
+              'flex',
+              'items-center',
+              'gap-1',
               'px-2 py-1',
-              CSS.textSm,
-              CSS.rounded,
-              'bg-primary-blue',
-              'text-white-text',
-              'hover:bg-primary-blue-hover',
-              CSS.transitionColors,
-              CSS.duration200,
+              'text-sm',
+              'rounded',
+              'bg-accent',
+              'text-on-emphasis',
+              'hover:bg-accent-hover',
+              'transition-colors',
+              'duration-200',
               isLoading ? 'opacity-50 cursor-not-allowed' : ''
             )}
           >
@@ -157,11 +154,11 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
       {/* Error display */}
       {error && (
         <div className={cls(
-          CSS.p2,
-          CSS.rounded,
-          'bg-red-100 dark:bg-red-900/30',
-          'text-red-700 dark:text-red-300',
-          CSS.textSm
+          'p-2',
+          'rounded',
+          'bg-error-subtle',
+          'text-error',
+          'text-sm'
         )}>
           {error}
         </div>
@@ -169,22 +166,22 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
 
       {/* Add note form */}
       {isAddingNote && (
-        <div className={cls(CSS.flex, CSS.flexCol, CSS.gap2, CSS.p3, 'bg-gray-50 dark:bg-gray-800', CSS.roundedLg)}>
-          <div className={cls(CSS.flex, CSS.gap2)}>
+        <div className={cls('flex', 'flex-col', 'gap-2', 'p-3', 'bg-sunken', 'rounded-lg')}>
+          <div className={cls('flex', 'gap-2')}>
             {(Object.keys(CATEGORY_LABELS) as NoteCategory[]).map((category) => (
               <button
                 key={category}
                 onClick={() => setNewNoteCategory(category)}
                 className={cls(
                   'px-2 py-1',
-                  CSS.textXs,
-                  CSS.rounded,
+                  'text-xs',
+                  'rounded',
                   'border',
-                  CSS.transitionColors,
-                  CSS.duration200,
+                  'transition-colors',
+                  'duration-200',
                   newNoteCategory === category
                     ? CATEGORY_COLORS[category]
-                    : 'bg-transparent border-gray-300 dark:border-gray-600 text-muted-text hover:bg-gray-100 dark:hover:bg-gray-700'
+                    : 'bg-transparent border text-muted hover:bg-surface'
                 )}
               >
                 {CATEGORY_LABELS[category]}
@@ -197,31 +194,30 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
             placeholder="Write your note here..."
             rows={3}
             className={cls(
-              CSS.wFull,
-              CSS.p2,
-              CSS.rounded,
+              'w-full',
+              'p-2',
+              'rounded',
               'border',
-              'border-gray-300 dark:border-gray-600',
-              'bg-white dark:bg-gray-900',
-              CSS.textPrimary,
-              CSS.textSm,
-              'focus:outline-none focus:ring-2 focus:ring-primary-blue'
+              'bg-surface',
+              'text-default',
+              'text-sm',
+              'focus:outline-none focus:ring-2 focus:ring-accent'
             )}
           />
-          <div className={cls(CSS.flex, CSS.gap2, CSS.justifyBetween)}>
-            <div className={cls(CSS.flex, CSS.gap2)}>
+          <div className={cls('flex', 'gap-2', 'justify-between')}>
+            <div className={cls('flex', 'gap-2')}>
               <button
                 onClick={handleSubmitAdd}
                 disabled={!newNoteContent.trim() || isLoading}
                 className={cls(
                   'px-3 py-1',
-                  CSS.textSm,
-                  CSS.rounded,
-                  'bg-primary-blue',
-                  'text-white-text',
-                  'hover:bg-primary-blue-hover',
-                  CSS.transitionColors,
-                  CSS.duration200,
+                  'text-sm',
+                  'rounded',
+                  'bg-accent',
+                  'text-on-emphasis',
+                  'hover:bg-accent-hover',
+                  'transition-colors',
+                  'duration-200',
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
               >
@@ -232,13 +228,14 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
                 disabled={isLoading}
                 className={cls(
                   'px-3 py-1',
-                  CSS.textSm,
-                  CSS.rounded,
-                  'bg-gray-200 dark:bg-gray-700',
-                  CSS.textPrimary,
-                  'hover:bg-gray-300 dark:hover:bg-gray-600',
-                  CSS.transitionColors,
-                  CSS.duration200
+                  'text-sm',
+                  'rounded',
+                  'bg-surface',
+                  'text-default',
+                  'hover:bg-sunken',
+                  'transition-colors',
+                  'duration-200',
+                  'border'
                 )}
               >
                 Cancel
@@ -250,67 +247,65 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
 
       {/* Notes list */}
       {notes.length === 0 && !isAddingNote ? (
-        <div className={cls(CSS.textCenter, CSS.textMuted, CSS.textSm, CSS.py3)}>
+        <div className={cls('text-center', 'text-muted', 'text-sm', 'py-3')}>
           No notes yet. Add one to get started.
         </div>
       ) : (
-        <div className={cls(CSS.flex, CSS.flexCol, CSS.gap2)}>
+        <div className={cls('flex', 'flex-col', 'gap-2')}>
           {notes.map((note) => (
             <div
               key={note.id}
               className={cls(
-                CSS.flex,
-                CSS.flexCol,
-                CSS.gap2,
-                CSS.p3,
+                'flex',
+                'flex-col',
+                'gap-2',
+                'p-3',
                 'border',
-                'border-gray-200 dark:border-gray-700',
-                CSS.roundedLg,
-                'bg-white dark:bg-gray-900'
+                'rounded-lg',
+                'bg-surface'
               )}
             >
               {/* Note header */}
-              <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyBetween)}>
-                <span className={cls('px-2 py-0.5', CSS.textXs, CSS.rounded, 'border', CATEGORY_COLORS[note.category])}>
+              <div className={cls('flex', 'items-center', 'justify-between')}>
+                <span className={cls('px-2 py-0.5', 'text-xs', 'rounded', 'border', CATEGORY_COLORS[note.category])}>
                   {CATEGORY_LABELS[note.category]}
                 </span>
-                <span className={cls(CSS.textXs, CSS.textMuted)}>
+                <span className={cls('text-xs', 'text-muted')}>
                   {formatTimestamp(note.createdAt)}
                 </span>
               </div>
 
               {/* Note content */}
               {editingNoteId === note.id ? (
-                <div className={cls(CSS.flex, CSS.flexCol, CSS.gap2)}>
+                <div className={cls('flex', 'flex-col', 'gap-2')}>
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
                     rows={3}
                     className={cls(
-                      CSS.wFull,
-                      CSS.p2,
-                      CSS.rounded,
+                      'w-full',
+                      'p-2',
+                      'rounded',
                       'border',
-                      'border-gray-300 dark:border-gray-600',
-                      'bg-white dark:bg-gray-900',
-                      CSS.textPrimary,
-                      CSS.textSm,
-                      'focus:outline-none focus:ring-2 focus:ring-primary-blue'
+                      'bg-surface',
+                      'text-default',
+                      'text-sm',
+                      'focus:outline-none focus:ring-2 focus:ring-accent'
                     )}
                   />
-                  <div className={cls(CSS.flex, CSS.gap2)}>
+                  <div className={cls('flex', 'gap-2')}>
                     <button
                       onClick={() => handleSubmitEdit(note.id)}
                       disabled={!editContent.trim() || isLoading}
                       className={cls(
                         'px-2 py-1',
-                        CSS.textXs,
-                        CSS.rounded,
-                        'bg-primary-blue',
-                        'text-white-text',
-                        'hover:bg-primary-blue-hover',
-                        CSS.transitionColors,
-                        CSS.duration200,
+                        'text-xs',
+                        'rounded',
+                        'bg-accent',
+                        'text-on-emphasis',
+                        'hover:bg-accent-hover',
+                        'transition-colors',
+                        'duration-200',
                         'disabled:opacity-50 disabled:cursor-not-allowed'
                       )}
                     >
@@ -320,13 +315,14 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
                       onClick={handleCancelEdit}
                       className={cls(
                         'px-2 py-1',
-                        CSS.textXs,
-                        CSS.rounded,
-                        'bg-gray-200 dark:bg-gray-700',
-                        CSS.textPrimary,
-                        'hover:bg-gray-300 dark:hover:bg-gray-600',
-                        CSS.transitionColors,
-                        CSS.duration200
+                        'text-xs',
+                        'rounded',
+                        'bg-surface',
+                        'text-default',
+                        'hover:bg-sunken',
+                        'transition-colors',
+                        'duration-200',
+                        'border'
                       )}
                     >
                       Cancel
@@ -335,36 +331,36 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
                 </div>
               ) : (
                 <>
-                  <p className={cls(CSS.textSm, CSS.textPrimary, 'whitespace-pre-wrap')}>
+                  <p className={cls('text-sm', 'text-default', 'whitespace-pre-wrap')}>
                     {note.content}
                   </p>
 
                   {/* Note actions */}
-                  <div className={cls(CSS.flex, CSS.gap2, CSS.itemsCenter)}>
+                  <div className={cls('flex', 'gap-2', 'items-center')}>
                     <button
                       onClick={() => handleStartEdit(note.id, note.content)}
                       disabled={isLoading}
                       className={cls(
-                        CSS.textXs,
-                        CSS.textMuted,
-                        'hover:text-primary-blue',
-                        CSS.transitionColors,
-                        CSS.duration200,
+                        'text-xs',
+                        'text-muted',
+                        'hover:text-accent',
+                        'transition-colors',
+                        'duration-200',
                         isLoading ? 'opacity-50 cursor-not-allowed' : ''
                       )}
                     >
                       Edit
                     </button>
-                    <span className={CSS.textMuted}>•</span>
+                    <span className="text-muted">•</span>
                     <button
                       onClick={() => handleDelete(note.id)}
                       disabled={isLoading}
                       className={cls(
-                        CSS.textXs,
-                        CSS.textMuted,
+                        'text-xs',
+                        'text-muted',
                         'hover:text-error',
-                        CSS.transitionColors,
-                        CSS.duration200,
+                        'transition-colors',
+                        'duration-200',
                         isLoading ? 'opacity-50 cursor-not-allowed' : ''
                       )}
                     >
@@ -372,8 +368,8 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
                     </button>
                     {note.updatedAt !== note.createdAt && (
                       <>
-                        <span className={CSS.textMuted}>•</span>
-                        <span className={cls(CSS.textXs, CSS.textMuted)}>
+                        <span className="text-muted">•</span>
+                        <span className={cls('text-xs', 'text-muted')}>
                           edited {formatTimestamp(note.updatedAt)}
                         </span>
                       </>
@@ -388,9 +384,9 @@ const UserNotesPanel: React.FC<UserNotesPanelProps> = ({
 
       {/* Loading indicator */}
       {isLoading && (
-        <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyCenter, CSS.gap2, CSS.py2)}>
-          <div className="w-4 h-4 border-2 border-primary-blue-glow border-t-transparent rounded-full animate-spin" />
-          <span className={cls(CSS.textSm, CSS.textMuted)}>Processing...</span>
+        <div className={cls('flex', 'items-center', 'justify-center', 'gap-2', 'py-2')}>
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <span className={cls('text-sm', 'text-muted')}>Processing...</span>
         </div>
       )}
     </div>

@@ -303,7 +303,7 @@ describe('MemorySearch', () => {
 
       const factsButtons = screen.getAllByText('Facts');
       const dropdownFactsButton = factsButtons[factsButtons.length - 1]; // Last one should be in dropdown
-      expect(dropdownFactsButton).toHaveClass('bg-primary-blue');
+      expect(dropdownFactsButton).toHaveClass('bg-accent-subtle');
     });
   });
 
@@ -484,7 +484,7 @@ describe('MemorySearch', () => {
       );
 
       const input = screen.getByPlaceholderText('Search memories...');
-      expect(input).toHaveClass('focus:border-primary-blue');
+      expect(input).toHaveClass('focus:border-accent');
     });
 
     it('applies focus styles to create button', () => {

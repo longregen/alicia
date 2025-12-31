@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 import FeedbackControls from './FeedbackControls';
 import { useFeedback } from '../../hooks/useFeedback';
@@ -54,18 +53,18 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
 
   // Get color class based on relevance threshold
   const getRelevanceColor = (relevance: number): string => {
-    if (relevance >= 0.8) return 'text-purple-400';
-    if (relevance >= 0.6) return 'text-purple-500';
-    if (relevance >= 0.4) return 'text-indigo-400';
-    return 'text-indigo-500';
+    if (relevance >= 0.8) return 'text-accent';
+    if (relevance >= 0.6) return 'text-accent';
+    if (relevance >= 0.4) return 'text-accent';
+    return 'text-muted';
   };
 
   // Get background color class based on relevance threshold
   const getRelevanceBgColor = (relevance: number): string => {
-    if (relevance >= 0.8) return 'bg-purple-500/20';
-    if (relevance >= 0.6) return 'bg-purple-500/15';
-    if (relevance >= 0.4) return 'bg-indigo-500/15';
-    return 'bg-indigo-500/10';
+    if (relevance >= 0.8) return 'bg-accent-subtle';
+    if (relevance >= 0.6) return 'bg-accent-subtle';
+    if (relevance >= 0.4) return 'bg-accent-subtle';
+    return 'bg-surface';
   };
 
   // Truncate content for preview
@@ -88,7 +87,7 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
             'hover:scale-105 hover:shadow-md',
             getRelevanceBgColor(trace.relevance),
             getRelevanceColor(trace.relevance),
-            isExpanded ? 'ring-2 ring-purple-400/50 scale-105' : ''
+            isExpanded ? 'ring-2 ring-accent scale-105' : ''
           )}
           onMouseEnter={() => setHoveredTraceId(trace.id)}
           onMouseLeave={() => setHoveredTraceId(null)}
@@ -103,22 +102,22 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
         {isHovered && !isExpanded && (
           <div className={cls(
             'absolute z-20 transition-all duration-200',
-            'bg-gray-900/95 backdrop-blur-sm text-white text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
-            'pointer-events-none shadow-xl border border-purple-700/50',
+            'bg-overlay backdrop-blur-sm text-on-emphasis text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
+            'pointer-events-none shadow-xl border border-border-emphasis',
             'top-full left-1/2 transform -translate-x-1/2 mt-2'
           )}>
-            <div className="font-semibold text-sm mb-1.5 text-purple-300">
+            <div className="font-semibold text-sm mb-1.5 text-accent">
               Memory Trace ({percentage}% relevant)
             </div>
-            <div className="text-gray-300 leading-relaxed">
+            <div className="text-subtle leading-relaxed">
               {getTruncatedContent(trace.content, 120)}
             </div>
-            <div className="text-[11px] text-gray-400 mt-2">
+            <div className="text-[11px] text-muted mt-2">
               Click to view full memory
             </div>
 
             {/* Tooltip arrow */}
-            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-gray-900/95" />
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-overlay" />
           </div>
         )}
       </div>
@@ -136,19 +135,19 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
     return (
       <div className={cls(
         'transition-all duration-300 ease-in-out overflow-hidden',
-        'bg-gradient-to-br from-purple-500/10 to-indigo-500/10 rounded-lg p-4 mt-3',
-        'border border-purple-700/30',
+        'bg-accent-subtle rounded-lg p-4 mt-3',
+        'border border-border',
         'max-h-96 opacity-100'
       )}>
         <div className={cls(
-          CSS.flex,
-          CSS.itemsCenter,
-          CSS.justifyBetween,
-          CSS.mb2
+          'flex',
+          'items-center',
+          'justify-between',
+          'mb-2'
         )}>
-          <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2)}>
+          <div className={cls('flex', 'items-center', 'gap-2')}>
             <span className="text-lg">🧠</span>
-            <span className="text-sm font-semibold text-purple-300">
+            <span className="text-sm font-semibold text-accent">
               Memory Trace
             </span>
           </div>
@@ -162,7 +161,7 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
         </div>
 
         <div className={cls(
-          'text-sm text-gray-300 leading-relaxed',
+          'text-sm text-default leading-relaxed',
           'max-h-64 overflow-y-auto',
           'pr-2 custom-scrollbar'
         )}>
@@ -171,12 +170,12 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
 
         {/* Footer with feedback controls and metadata */}
         <div className={cls(
-          CSS.flex,
-          CSS.itemsCenter,
-          CSS.justifyBetween,
-          'mt-3 pt-3 border-t border-purple-700/20'
+          'flex',
+          'items-center',
+          'justify-between',
+          'mt-3 pt-3 border-t border-border-muted'
         )}>
-          <div className="text-[11px] text-gray-500">
+          <div className="text-[11px] text-muted">
             Memory ID: {expandedTrace.id}
           </div>
           <FeedbackControls
@@ -199,7 +198,7 @@ const MemoryTraceAddon: React.FC<MemoryTraceAddonProps> = ({
   return (
     <div className={cls('w-full', className)}>
       {/* Memory badges row */}
-      <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2, 'flex-wrap')}>
+      <div className={cls('flex', 'items-center', 'gap-2', 'flex-wrap')}>
         {sortedTraces.map(renderMemoryBadge)}
       </div>
 

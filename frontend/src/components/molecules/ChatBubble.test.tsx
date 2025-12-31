@@ -206,7 +206,7 @@ describe('ChatBubble', () => {
 
       const { container } = render(<ChatBubble content={contentWithMultipleReasoning} />);
 
-      const reasoningBlocks = container.querySelectorAll('[class*="bg-blue-50"]');
+      const reasoningBlocks = container.querySelectorAll('[class*="bg-reasoning"]');
       expect(reasoningBlocks).toHaveLength(3);
 
       // Check order by looking at content

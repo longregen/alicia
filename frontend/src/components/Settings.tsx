@@ -8,7 +8,6 @@ import { EliteSolutionSelector } from './molecules/EliteSolutionSelector/EliteSo
 import { PIVOT_PRESETS, type PresetId } from '../stores/dimensionStore';
 import { sendDimensionPreference, sendEliteSelect } from '../adapters/protocolAdapter';
 import type { DimensionWeights } from '../types/protocol';
-import './Settings.css';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -59,87 +58,89 @@ export function Settings({ isOpen, onClose, conversationId }: SettingsProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="settings-modal-overlay" onClick={onClose}>
-      <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h1>Settings & Info</h1>
-          <button className="settings-close-btn" onClick={onClose} title="Close settings">
-            ×
-          </button>
-        </div>
+    <div className="flex flex-col h-full bg-app">
+      {/* Header */}
+      <div className="flex justify-between items-center p-6 md:px-8 border-b border-default bg-surface">
+        <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-default">Settings & Info</h1>
+        <button className="btn-ghost text-3xl w-10 h-10" onClick={onClose} title="Close settings">
+          ×
+        </button>
+      </div>
 
-        {/* Tab navigation */}
-        <div className="settings-tabs">
+      {/* Tab navigation - vertical on mobile, horizontal on desktop */}
+      <div className="bg-surface border-b border-default overflow-x-auto">
+        <div className="flex flex-col md:flex-row md:px-8">
           <button
-            className={`settings-tab ${activeTab === 'mcp' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'mcp' ? 'active' : ''}`}
             onClick={() => setActiveTab('mcp')}
           >
             MCP Settings
           </button>
           <button
-            className={`settings-tab ${activeTab === 'server' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'server' ? 'active' : ''}`}
             onClick={() => setActiveTab('server')}
           >
             Server Info
           </button>
           <button
-            className={`settings-tab ${activeTab === 'memories' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'memories' ? 'active' : ''}`}
             onClick={() => setActiveTab('memories')}
           >
             Memories
           </button>
           <button
-            className={`settings-tab ${activeTab === 'notes' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'notes' ? 'active' : ''}`}
             onClick={() => setActiveTab('notes')}
             disabled={!conversationId}
           >
             Notes
           </button>
           <button
-            className={`settings-tab ${activeTab === 'optimization' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'optimization' ? 'active' : ''}`}
             onClick={() => setActiveTab('optimization')}
           >
             Optimization
           </button>
         </div>
+      </div>
 
-        <div className="settings-content">
-          <div className="settings-section">
-            {activeTab === 'mcp' && <MCPSettings />}
-            {activeTab === 'server' && <ServerInfoPanel />}
-            {activeTab === 'memories' && <MemoryManager />}
-            {activeTab === 'notes' && conversationId && (
-              <UserNotesPanel
-                targetType="message"
-                targetId={conversationId}
+      {/* Content area */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="mb-8 last:mb-0">
+          {activeTab === 'mcp' && <MCPSettings />}
+          {activeTab === 'server' && <ServerInfoPanel />}
+          {activeTab === 'memories' && <MemoryManager />}
+          {activeTab === 'notes' && conversationId && (
+            <UserNotesPanel
+              targetType="message"
+              targetId={conversationId}
+            />
+          )}
+          {activeTab === 'notes' && !conversationId && (
+            <div className="text-center p-10 text-muted">
+              Please select a conversation to view notes
+            </div>
+          )}
+          {activeTab === 'optimization' && (
+            <div>
+              <PivotModeSelector
+                onPresetChange={handlePresetChange}
+                onWeightsChange={handleWeightsChange}
+                disabled={!conversationId}
               />
-            )}
-            {activeTab === 'notes' && !conversationId && (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
-                Please select a conversation to view notes
-              </div>
-            )}
-            {activeTab === 'optimization' && (
-              <div className="optimization-settings">
-                <PivotModeSelector
-                  onPresetChange={handlePresetChange}
-                  onWeightsChange={handleWeightsChange}
+              <div className="mt-6">
+                <EliteSolutionSelector
+                  onSelectElite={handleSelectElite}
                   disabled={!conversationId}
                 />
-                <div style={{ marginTop: '24px' }}>
-                  <EliteSolutionSelector
-                    onSelectElite={handleSelectElite}
-                    disabled={!conversationId}
-                  />
-                </div>
-                {!conversationId && (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#888', marginTop: '16px' }}>
-                    Select a conversation to sync optimization preferences with the server
-                  </div>
-                )}
               </div>
-            )}
-          </div>
+              {!conversationId && (
+                <div className="text-center p-5 text-muted mt-4">
+                  Select a conversation to sync optimization preferences with the server
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

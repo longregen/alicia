@@ -4,7 +4,7 @@ import {
   calculateWeightedScore,
 } from '../../../stores/dimensionStore';
 import type { DimensionScores, EliteSummary } from '../../../types/protocol';
-import './EliteSolutionSelector.css';
+import { cls } from '../../../utils/cls';
 
 // Dimension display configuration matching PivotModeSelector
 const DIMENSION_DISPLAY: Array<{
@@ -37,38 +37,35 @@ const DimensionScoreBar: React.FC<DimensionScoreBarProps> = ({
   // Convert 0-1 score to percentage
   const percentage = Math.round(score * 100);
 
-  // Color coding based on score
-  const getBarColor = (pct: number): string => {
-    if (pct >= 80) return 'var(--color-success, #22c55e)';
-    if (pct >= 60) return 'var(--color-warning, #eab308)';
-    return 'var(--color-muted, #6b7280)';
+  // Get color class based on score
+  const getBarColorClass = (pct: number): string => {
+    if (pct >= 80) return 'bg-success';
+    if (pct >= 60) return 'bg-warning';
+    return 'bg-muted';
   };
 
   if (compact) {
     return (
       <span
-        className="dimension-score-compact"
+        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-sunken rounded text-xs"
         title={`${dimension}: ${percentage}%`}
       >
-        <span className="compact-icon">{icon}</span>
-        <span className="compact-value">{percentage}%</span>
+        <span className="text-xs">{icon}</span>
+        <span className="text-muted font-medium">{percentage}%</span>
       </span>
     );
   }
 
   return (
-    <div className="dimension-score-bar">
-      <span className="score-icon">{icon}</span>
-      <div className="score-track">
+    <div className="flex items-center gap-2 w-full">
+      <span className="text-sm min-w-[18px]">{icon}</span>
+      <div className="progress-track h-1.5 flex-1">
         <div
-          className="score-fill"
-          style={{
-            width: `${percentage}%`,
-            backgroundColor: getBarColor(percentage),
-          }}
+          className={cls('progress-fill h-full transition-all duration-300', getBarColorClass(percentage))}
+          style={{ width: `${percentage}%` }}
         />
       </div>
-      <span className="score-value">{percentage}%</span>
+      <span className="min-w-[36px] text-right text-xs font-medium text-muted">{percentage}%</span>
     </div>
   );
 };
@@ -89,25 +86,25 @@ const EliteCard: React.FC<EliteCardProps> = ({
   disabled = false,
 }) => {
   return (
-    <div className={`elite-card ${isActive ? 'active' : ''}`}>
-      <div className="elite-header">
-        <span className="elite-label">
-          {isActive && <span className="active-indicator">⭐</span>}
+    <div className={`card p-3 transition-colors ${isActive ? 'border-accent bg-accent-subtle' : 'hover:border-accent'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-semibold text-[13px] text-default flex items-center gap-1">
+          {isActive && <span className="text-sm">⭐</span>}
           {elite.label}
         </span>
         {!isActive && (
           <button
-            className="elite-use-button"
+            className="btn btn-secondary text-xs px-2.5 py-1 hover:btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => onSelect(elite.id)}
             disabled={disabled}
           >
             Use
           </button>
         )}
-        {isActive && <span className="current-badge">Current</span>}
+        {isActive && <span className="badge bg-accent text-white text-[10px]">Current</span>}
       </div>
 
-      <div className="elite-scores">
+      <div className="flex flex-wrap gap-2 mb-2">
         {DIMENSION_DISPLAY.slice(0, 4).map(({ key, icon }) => (
           <DimensionScoreBar
             key={key}
@@ -135,15 +132,15 @@ const EliteCard: React.FC<EliteCardProps> = ({
         )}
       </div>
 
-      <div className="elite-description">{elite.description}</div>
+      <div className="text-xs text-muted leading-snug mb-1.5">{elite.description}</div>
 
       {elite.bestFor && (
-        <div className="elite-best-for">
-          <span className="best-for-label">Best for:</span> {elite.bestFor}
+        <div className="text-xs text-muted mb-1.5">
+          <span className="font-medium">Best for:</span> {elite.bestFor}
         </div>
       )}
 
-      <div className="elite-weighted-score">
+      <div className="text-[10px] text-muted text-right italic">
         Weighted score: {Math.round(weightedScore * 100)}%
       </div>
     </div>
@@ -183,26 +180,26 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
 
   if (isLoading) {
     return (
-      <div className="elite-selector loading">
-        <div className="elite-header-section">
-          <span className="elite-icon">🏆</span>
-          <span className="elite-title">Elite Solutions</span>
+      <div className="bg-surface border border-default rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🏆</span>
+          <span className="font-semibold text-sm text-default">Elite Solutions</span>
         </div>
-        <div className="elite-loading">Loading elite solutions...</div>
+        <div className="py-6 text-center text-muted text-[13px]">Loading elite solutions...</div>
       </div>
     );
   }
 
   if (elites.length === 0) {
     return (
-      <div className="elite-selector empty">
-        <div className="elite-header-section">
-          <span className="elite-icon">🏆</span>
-          <span className="elite-title">Elite Solutions</span>
+      <div className="bg-surface border border-default rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🏆</span>
+          <span className="font-semibold text-sm text-default">Elite Solutions</span>
         </div>
-        <div className="elite-empty">
+        <div className="py-6 text-center text-muted text-[13px]">
           <p>No elite solutions available yet.</p>
-          <p className="elite-empty-hint">
+          <p className="text-xs text-muted mt-2">
             Elite solutions are generated through prompt optimization.
           </p>
         </div>
@@ -211,17 +208,17 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
   }
 
   return (
-    <div className={`elite-selector ${disabled ? 'disabled' : ''}`}>
-      <div className="elite-header-section">
-        <span className="elite-icon">🏆</span>
-        <span className="elite-title">Elite Solutions</span>
+    <div className={`bg-surface border border-default rounded-lg p-4 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">🏆</span>
+        <span className="font-semibold text-sm text-default">Elite Solutions</span>
       </div>
 
-      <p className="elite-intro">
+      <p className="text-xs text-muted mb-3">
         Available optimized configurations:
       </p>
 
-      <div className="elite-list">
+      <div className="flex flex-col gap-3">
         {sortedElites.map((elite) => (
           <EliteCard
             key={elite.id}

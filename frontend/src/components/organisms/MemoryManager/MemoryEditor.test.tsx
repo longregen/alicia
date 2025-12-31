@@ -119,7 +119,7 @@ describe('MemoryEditor', () => {
 
       const factButton = Array.from(container.querySelectorAll('button')).find(btn =>
         btn.textContent?.includes('Fact') && btn.textContent?.includes('Factual information'));
-      expect(factButton).toHaveClass('bg-primary-blue');
+      expect(factButton).toHaveClass('bg-accent-subtle');
     });
   });
 
@@ -182,7 +182,7 @@ describe('MemoryEditor', () => {
 
       const preferenceButton = Array.from(container.querySelectorAll('button')).find(btn =>
         btn.textContent?.includes('Preference'));
-      expect(preferenceButton).toHaveClass('bg-primary-blue');
+      expect(preferenceButton).toHaveClass('bg-accent-subtle');
     });
   });
 
@@ -235,7 +235,7 @@ describe('MemoryEditor', () => {
 
       await user.click(preferenceButton!);
 
-      expect(preferenceButton).toHaveClass('bg-primary-blue');
+      expect(preferenceButton).toHaveClass('bg-accent-subtle');
     });
   });
 
@@ -417,7 +417,7 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const backdrop = container.querySelector('.fixed.inset-0.bg-black');
+      const backdrop = container.querySelector('.fixed.inset-0.bg-overlay');
       await user.click(backdrop!);
 
       expect(mockOnCancel).toHaveBeenCalled();

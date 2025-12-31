@@ -241,21 +241,21 @@ describe('ToggleSwitch', () => {
       const { container } = render(<ToggleSwitch checked={true} variant="default" />);
 
       const track = container.querySelector('[role="button"]');
-      expect(track).toHaveClass('bg-primary-blue');
+      expect(track).toHaveClass('bg-accent');
     });
 
     it('applies success variant styling when checked', () => {
       const { container } = render(<ToggleSwitch checked={true} variant="success" />);
 
       const track = container.querySelector('[role="button"]');
-      expect(track).toHaveClass('bg-active-speaking');
+      expect(track).toHaveClass('bg-success');
     });
 
     it('applies warning variant styling when checked', () => {
       const { container } = render(<ToggleSwitch checked={true} variant="warning" />);
 
       const track = container.querySelector('[role="button"]');
-      expect(track).toHaveClass('bg-tool-result');
+      expect(track).toHaveClass('bg-warning');
     });
 
     it('applies error variant styling when checked', () => {

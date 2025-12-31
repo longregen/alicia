@@ -3,7 +3,6 @@ import FeedbackControls from '../atoms/FeedbackControls';
 import ScoreBadge from '../atoms/ScoreBadge';
 import { useFeedback } from '../../hooks/useFeedback';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 
 /**
@@ -37,11 +36,11 @@ const MemoryVoting: React.FC<MemoryVotingProps> = ({
   } = useFeedback('memory', memoryId);
 
   return (
-    <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap3, className)}>
+    <div className={cls('flex items-center gap-3', className)}>
       {/* Relevance score */}
       {showRelevance && relevance !== undefined && (
-        <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap1)}>
-          <span className={cls(CSS.textXs, CSS.textMuted)}>Relevance:</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted">Relevance:</span>
           <ScoreBadge
             score={relevance}
             max={1}
@@ -57,8 +56,8 @@ const MemoryVoting: React.FC<MemoryVotingProps> = ({
       )}
 
       {/* Voting controls */}
-      <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2)}>
-        <span className={cls(CSS.textXs, CSS.textMuted)}>Relevant?</span>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted">Relevant?</span>
         <FeedbackControls
           currentVote={currentVote as 'up' | 'down' | null}
           onVote={vote}

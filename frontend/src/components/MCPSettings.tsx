@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MCPServer, MCPServerConfig, MCPTool } from '../types/mcp';
 import { api } from '../services/api';
-import './MCPSettings.css';
 
 export function MCPSettings() {
   const [servers, setServers] = useState<MCPServer[]>([]);
@@ -164,20 +163,20 @@ export function MCPSettings() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'connected':
-        return <span className="status-badge status-connected">Connected</span>;
+        return <span className="badge badge-success">Connected</span>;
       case 'error':
-        return <span className="status-badge status-error">Error</span>;
+        return <span className="badge badge-error">Error</span>;
       default:
-        return <span className="status-badge status-disconnected">Disconnected</span>;
+        return <span className="badge badge-warning">Disconnected</span>;
     }
   };
 
   return (
-    <div className="mcp-settings">
-      <div className="mcp-header">
-        <h2>MCP Server Settings</h2>
+    <div className="p-5 max-w-4xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-semibold text-default m-0">MCP Server Settings</h2>
         <button
-          className="add-server-btn"
+          className="btn btn-primary"
           onClick={() => setShowAddForm(!showAddForm)}
         >
           {showAddForm ? 'Cancel' : '+ Add Server'}
@@ -185,20 +184,23 @@ export function MCPSettings() {
       </div>
 
       {toast && (
-        <div className={`toast toast-${toast.type}`}>
+        <div className={`fixed top-5 right-5 px-5 py-3 rounded-md text-sm font-medium shadow-lg z-[1000] animate-[slideIn_0.3s_ease] ${
+          toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        }`}>
           {toast.message}
         </div>
       )}
 
       {showAddForm && (
-        <form className="add-server-form" onSubmit={handleAddServer}>
-          <h3>Add MCP Server</h3>
+        <form className="bg-elevated border border-default rounded-lg p-5 mb-6" onSubmit={handleAddServer}>
+          <h3 className="m-0 mb-4 text-lg font-semibold text-default">Add MCP Server</h3>
 
-          <div className="form-group">
-            <label htmlFor="server-name">Server Name *</label>
+          <div className="mb-4">
+            <label htmlFor="server-name" className="block mb-1.5 text-sm font-medium text-default">Server Name *</label>
             <input
               id="server-name"
               type="text"
+              className="input"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="my-mcp-server"
@@ -206,10 +208,11 @@ export function MCPSettings() {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="transport">Transport *</label>
+          <div className="mb-4">
+            <label htmlFor="transport" className="block mb-1.5 text-sm font-medium text-default">Transport *</label>
             <select
               id="transport"
+              className="input"
               value={formData.transport}
               onChange={(e) => setFormData({ ...formData, transport: e.target.value as 'stdio' | 'sse' })}
               required
@@ -219,11 +222,12 @@ export function MCPSettings() {
             </select>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="command">Command *</label>
+          <div className="mb-4">
+            <label htmlFor="command" className="block mb-1.5 text-sm font-medium text-default">Command *</label>
             <input
               id="command"
               type="text"
+              className="input"
               value={formData.command}
               onChange={(e) => setFormData({ ...formData, command: e.target.value })}
               placeholder="/path/to/executable or npx package-name"
@@ -231,21 +235,23 @@ export function MCPSettings() {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="args">Arguments (comma-separated)</label>
+          <div className="mb-4">
+            <label htmlFor="args" className="block mb-1.5 text-sm font-medium text-default">Arguments (comma-separated)</label>
             <input
               id="args"
               type="text"
+              className="input"
               value={argsInput}
               onChange={(e) => setArgsInput(e.target.value)}
               placeholder="arg1, arg2, arg3"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="env">Environment Variables (KEY=value, one per line)</label>
+          <div className="mb-4">
+            <label htmlFor="env" className="block mb-1.5 text-sm font-medium text-default">Environment Variables (KEY=value, one per line)</label>
             <textarea
               id="env"
+              className="input resize-y min-h-[60px]"
               value={envInput}
               onChange={(e) => setEnvInput(e.target.value)}
               placeholder="API_KEY=your-key&#10;DEBUG=true"
@@ -253,17 +259,17 @@ export function MCPSettings() {
             />
           </div>
 
-          <div className="form-actions">
+          <div className="flex gap-3 justify-end mt-5">
             <button
               type="button"
-              className="cancel-btn"
+              className="btn btn-secondary"
               onClick={() => setShowAddForm(false)}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="submit-btn"
+              className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={submitting}
             >
               {submitting ? 'Adding...' : 'Add Server'}
@@ -272,27 +278,27 @@ export function MCPSettings() {
         </form>
       )}
 
-      {loading && <div className="loading">Loading servers...</div>}
+      {loading && <div className="text-center text-muted py-10 px-5 text-sm">Loading servers...</div>}
 
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="bg-red-50 text-red-800 px-4 py-3 rounded-md mb-4 text-sm">{error}</div>}
 
       {!loading && !error && servers.length === 0 && (
-        <div className="empty-state">
+        <div className="text-center text-muted py-10 px-5 text-sm">
           No MCP servers configured. Click "Add Server" to get started.
         </div>
       )}
 
       {!loading && !error && servers.length > 0 && (
-        <div className="servers-list">
+        <div className="flex flex-col gap-4">
           {servers.map(server => (
-            <div key={server.name} className="server-card">
-              <div className="server-header">
-                <div className="server-info">
-                  <h3>{server.name}</h3>
+            <div key={server.name} className="card card-hover p-4">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3 flex-1">
+                  <h3 className="m-0 text-lg font-semibold text-default">{server.name}</h3>
                   {getStatusBadge(server.status)}
                 </div>
                 <button
-                  className="remove-server-btn"
+                  className="bg-transparent border-0 text-muted text-[28px] cursor-pointer p-0 w-8 h-8 flex items-center justify-center rounded transition-all hover:bg-red-50 hover:text-red-500"
                   onClick={() => handleRemoveServer(server.name)}
                   title="Remove server"
                 >
@@ -300,33 +306,33 @@ export function MCPSettings() {
                 </button>
               </div>
 
-              <div className="server-details">
-                <div className="detail-row">
-                  <span className="detail-label">Transport:</span>
-                  <span className="detail-value">{server.transport}</span>
+              <div className="flex flex-col gap-2 mb-3">
+                <div className="flex gap-2 text-sm">
+                  <span className="font-semibold text-muted min-w-[80px]">Transport:</span>
+                  <span className="text-default break-all">{server.transport}</span>
                 </div>
-                <div className="detail-row">
-                  <span className="detail-label">Command:</span>
-                  <span className="detail-value">{server.command}</span>
+                <div className="flex gap-2 text-sm">
+                  <span className="font-semibold text-muted min-w-[80px]">Command:</span>
+                  <span className="text-default break-all">{server.command}</span>
                 </div>
                 {server.args.length > 0 && (
-                  <div className="detail-row">
-                    <span className="detail-label">Args:</span>
-                    <span className="detail-value">{server.args.join(', ')}</span>
+                  <div className="flex gap-2 text-sm">
+                    <span className="font-semibold text-muted min-w-[80px]">Args:</span>
+                    <span className="text-default break-all">{server.args.join(', ')}</span>
                   </div>
                 )}
                 {server.error && (
-                  <div className="detail-row error-detail">
-                    <span className="detail-label">Error:</span>
-                    <span className="detail-value">{server.error}</span>
+                  <div className="flex gap-2 text-sm bg-red-50 p-2 rounded">
+                    <span className="font-semibold text-muted min-w-[80px]">Error:</span>
+                    <span className="text-red-800">{server.error}</span>
                   </div>
                 )}
               </div>
 
               {server.tools.length > 0 && (
-                <div className="tools-section">
+                <div className="mt-3 pt-3 border-t border-default">
                   <button
-                    className="tools-toggle"
+                    className="bg-transparent border-0 text-accent text-sm font-medium cursor-pointer py-2 px-0 flex items-center gap-2 transition-colors hover:text-accent/80"
                     onClick={() => toggleServerExpanded(server.name)}
                   >
                     {expandedServers.has(server.name) ? '▼' : '▶'}
@@ -334,12 +340,12 @@ export function MCPSettings() {
                   </button>
 
                   {expandedServers.has(server.name) && (
-                    <div className="tools-list">
+                    <div className="mt-3 flex flex-col gap-2">
                       {getServerTools(server.name).map(tool => (
-                        <div key={tool.name} className="tool-item">
-                          <div className="tool-name">{tool.name}</div>
+                        <div key={tool.name} className="bg-surface p-3 rounded-md border-l-[3px] border-accent">
+                          <div className="font-semibold text-default text-sm mb-1">{tool.name}</div>
                           {tool.description && (
-                            <div className="tool-description">{tool.description}</div>
+                            <div className="text-muted text-[13px] leading-[1.4]">{tool.description}</div>
                           )}
                         </div>
                       ))}

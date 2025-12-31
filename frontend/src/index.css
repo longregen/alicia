@@ -1,308 +1,145 @@
 @import "tailwindcss";
 
+/*
+ * Alicia Design System - Tailwind v4
+ * Colors auto-switch via light-dark() based on prefers-color-scheme
+ */
+
 @theme {
-  /* Surface colors */
-  --color-surface-50: #f8fafc;
-  --color-surface-100: #f1f5f9;
-  --color-surface-200: #e2e8f0;
-  --color-surface-300: #cbd5e1;
-  --color-surface-400: #94a3b8;
-  --color-surface-500: #64748b;
-  --color-surface-600: #475569;
-  --color-surface-700: #334155;
-  --color-surface-800: #1e293b;
-  --color-surface-900: #0f172a;
-  --color-surface-950: #020617;
+  /* Base palette - OKLCH for perceptual uniformity */
+  --color-neutral-50: oklch(0.98 0.01 250);
+  --color-neutral-100: oklch(0.96 0.01 250);
+  --color-neutral-200: oklch(0.91 0.02 250);
+  --color-neutral-400: oklch(0.65 0.04 250);
+  --color-neutral-500: oklch(0.50 0.04 250);
+  --color-neutral-600: oklch(0.40 0.04 250);
+  --color-neutral-700: oklch(0.30 0.04 250);
+  --color-neutral-800: oklch(0.22 0.04 250);
+  --color-neutral-900: oklch(0.15 0.04 250);
+  --color-neutral-950: oklch(0.10 0.03 250);
 
-  /* Background colors from STYLE.md */
-  --color-main-bg: #050e24;
-  --color-container-bg: rgba(10, 20, 50, 0.7);
-  --color-surface-bg: rgba(20, 40, 90, 0.6);
-  --color-message-received-bg: rgba(32, 124, 229, 0.2);
-  --color-message-sent-bg: #011327cc;
+  --color-blue-100: oklch(0.93 0.04 240);
+  --color-blue-200: oklch(0.86 0.08 240);
+  --color-blue-300: oklch(0.76 0.12 240);
+  --color-blue-400: oklch(0.65 0.16 240);
+  --color-blue-500: oklch(0.55 0.18 240);
+  --color-blue-600: oklch(0.48 0.18 240);
+  --color-blue-700: oklch(0.40 0.16 240);
+  --color-blue-950: oklch(0.20 0.10 240);
 
-  /* Brand colors from STYLE.md */
-  --color-primary-blue: rgba(32, 124, 229, 0.8);
-  --color-primary-blue-hover: rgba(32, 124, 229, 0.9);
-  --color-primary-blue-active: rgba(32, 125, 229, 1);
-  --color-primary-blue-glow: rgba(32, 124, 229, 0.6);
+  --color-green-100: oklch(0.93 0.05 145);
+  --color-green-400: oklch(0.65 0.17 145);
+  --color-green-500: oklch(0.55 0.18 145);
+  --color-green-950: oklch(0.20 0.08 145);
 
-  /* State colors from STYLE.md */
-  --color-active-speaking: rgba(40, 200, 80, 0.9);
-  --color-inactive-disabled: rgba(128, 128, 128, 0.8);
-  --color-error: rgba(255, 100, 100, 0.9);
+  --color-red-100: oklch(0.93 0.05 25);
+  --color-red-400: oklch(0.65 0.17 25);
+  --color-red-500: oklch(0.55 0.18 25);
+  --color-red-950: oklch(0.20 0.10 25);
 
-  /* Text colors from STYLE.md */
-  --color-primary-text: #e0e6ff;
-  --color-white-text: white;
-  --color-muted-text: rgba(255, 255, 255, 0.6);
+  --color-orange-100: oklch(0.93 0.05 70);
+  --color-orange-400: oklch(0.70 0.16 70);
+  --color-orange-500: oklch(0.65 0.17 70);
+  --color-orange-950: oklch(0.22 0.08 70);
 
-  /* Special colors from STYLE.md */
-  --color-reasoning: #9c27b0;
-  --color-tool-use: #2196f3;
-  --color-tool-result: #ff9800;
-  --color-translation-complete: #4CAF50;
+  /* Semantic tokens - auto dark/light via light-dark() */
+  --color-app: light-dark(var(--color-neutral-50), var(--color-neutral-950));
+  --color-surface: light-dark(var(--color-neutral-100), var(--color-neutral-900));
+  --color-elevated: light-dark(white, var(--color-neutral-800));
+  --color-sunken: light-dark(var(--color-neutral-200), var(--color-neutral-950));
+  --color-overlay: light-dark(oklch(0 0 0 / 0.5), oklch(0 0 0 / 0.7));
+
+  --color-default: light-dark(var(--color-neutral-900), var(--color-neutral-100));
+  --color-muted: light-dark(var(--color-neutral-600), var(--color-neutral-400));
+  --color-subtle: var(--color-neutral-500);
+  --color-on-emphasis: white;
+
+  --color-accent: light-dark(var(--color-blue-500), var(--color-blue-400));
+  --color-accent-hover: light-dark(var(--color-blue-600), var(--color-blue-300));
+  --color-accent-active: light-dark(var(--color-blue-700), var(--color-blue-200));
+  --color-accent-subtle: light-dark(var(--color-blue-100), var(--color-blue-950));
+
+  --color-success: light-dark(var(--color-green-500), var(--color-green-400));
+  --color-success-subtle: light-dark(var(--color-green-100), var(--color-green-950));
+  --color-error: light-dark(var(--color-red-500), var(--color-red-400));
+  --color-error-subtle: light-dark(var(--color-red-100), var(--color-red-950));
+  --color-warning: light-dark(var(--color-orange-500), var(--color-orange-400));
+  --color-warning-subtle: light-dark(var(--color-orange-100), var(--color-orange-950));
+
+  --color-border: light-dark(var(--color-neutral-200), var(--color-neutral-700));
+  --color-border-muted: light-dark(var(--color-neutral-100), var(--color-neutral-800));
+  --color-border-emphasis: light-dark(var(--color-neutral-400), var(--color-neutral-500));
+
+  /* Special indicators */
+  --color-reasoning: oklch(0.55 0.20 310);
+  --color-tool-use: oklch(0.60 0.18 240);
+  --color-tool-result: oklch(0.70 0.16 70);
+
+  /* Shadows - auto dark/light */
+  --shadow-sm: light-dark(0 1px 2px oklch(0 0 0 / 0.05), 0 1px 2px oklch(0 0 0 / 0.3));
+  --shadow-md: light-dark(
+    0 4px 6px oklch(0 0 0 / 0.07),
+    0 4px 6px oklch(0 0 0 / 0.4)
+  );
+  --shadow-lg: light-dark(
+    0 10px 15px oklch(0 0 0 / 0.1),
+    0 10px 15px oklch(0 0 0 / 0.5)
+  );
+  --shadow-xl: light-dark(
+    0 20px 25px oklch(0 0 0 / 0.1),
+    0 20px 25px oklch(0 0 0 / 0.6)
+  );
+
+  /* Ring */
+  --color-ring: var(--color-accent);
+
+  /* Animations */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes pulse-recording {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.05); }
+  }
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-slide-in: slide-in 0.3s ease-out;
+  --animate-pulse-recording: pulse-recording 1.5s ease-in-out infinite;
 }
 
-/* Custom CSS for smooth animations and transitions */
+/* Base styles */
 @layer base {
   html {
-    @apply text-surface-900 dark:text-surface-100;
-    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-    font-weight: 400;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color-scheme: light dark;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-surface-50 dark:bg-surface-900 transition-colors duration-300;
+    @apply bg-app text-default;
     margin: 0;
-    min-width: 320px;
     min-height: 100vh;
   }
 
-  * {
-    @apply transition-colors duration-200;
-  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-sunken; }
+  ::-webkit-scrollbar-thumb { @apply bg-muted rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-default; }
 }
 
-/* Storybook Docs overrides for dark mode */
-.docs-story,
-.sbdocs-wrapper,
-.sbdocs-content,
-.sbdocs-preview {
-  background-color: transparent !important;
-}
-
-.dark .docs-story,
-.dark .sbdocs-wrapper,
-.dark .sbdocs-content {
-  background-color: #0f172a !important;
-  color: #f1f5f9 !important;
-}
-
-.dark .sbdocs h1,
-.dark .sbdocs h2,
-.dark .sbdocs h3,
-.dark .sbdocs h4,
-.dark .sbdocs h5,
-.dark .sbdocs h6,
-.dark .sbdocs-title {
-  color: #f1f5f9 !important;
-}
-
-.dark .sbdocs p,
-.dark .sbdocs span,
-.dark .sbdocs div {
-  color: #e2e8f0 !important;
-}
-
-.dark .sbdocs pre,
-.dark .sbdocs code {
-  background-color: #1e293b !important;
-  color: #f1f5f9 !important;
-}
-
-.dark .sbdocs table {
-  color: #f1f5f9 !important;
-}
-
-.dark .sbdocs th {
-  background-color: #1e293b !important;
-  color: #f1f5f9 !important;
-}
-
-.dark .sbdocs td {
-  background-color: #0f172a !important;
-  color: #e2e8f0 !important;
-  border-color: #334155 !important;
-}
-
-/* Additional Storybook CSS class overrides */
-.dark .css-11xgcgt,
-.dark .css-1fdphfk,
-.dark .css-14m39zm,
-.dark .css-v2ifgj,
-.dark .css-4lbn0a,
-.dark .css-in3yi3,
-.dark .css-18pz2h2,
-.dark .css-1ije3e2,
-.dark .css-13nzt7e,
-.dark .css-o1d7ko,
-.dark .css-obbby0,
-.dark .css-14o1cbe,
-.dark .css-k008qs,
-.dark .css-r7fl1p,
-.dark .css-177r6r9,
-.dark .css-10lkeuu,
-.dark .css-1vgq5xr,
-.dark .css-jy82ux,
-.dark .css-wzniqs,
-.dark .css-1ofkq6d,
-.dark .css-s230ta,
-.dark .css-kdwx3d,
-.dark .css-1erac46,
-.dark .css-1j788oe,
-.dark .css-pgmbsj,
-.dark .css-1k2hs4d,
-.dark .css-1i5lbud,
-.dark .css-cmemei,
-.dark .css-1tt1zzx,
-.dark .css-9nwgnc {
-  background-color: transparent !important;
-}
-
-/* Storybook specific elements */
-.dark .docblock-argstable {
-  background-color: #1e293b !important;
-}
-
-.dark .docblock-argstable-head {
-  background-color: #334155 !important;
-}
-
-.dark .docblock-argstable-body {
-  background-color: #1e293b !important;
-}
-
-.dark .docblock-code-toggle {
-  background-color: #334155 !important;
-  color: #f1f5f9 !important;
-  border-color: #475569 !important;
-}
-
-.dark .sb-bar {
-  background-color: #1e293b !important;
-}
-
-.dark .css-1980ace {
-  background-color: #1e293b !important;
-}
-
-.dark .css-18rvurk {
-  background-color: #334155 !important;
-  color: #f1f5f9 !important;
-}
-
-.dark .css-18rvurk:hover {
-  background-color: #475569 !important;
-}
-
-/* Input and select elements */
-.dark .css-14o1cbe,
-.dark .css-r7fl1p {
-  background-color: #1e293b !important;
-  color: #f1f5f9 !important;
-  border-color: #334155 !important;
-}
-
-/* Buttons */
-.dark .css-10lkeuu,
-.dark .css-1vgq5xr,
-.dark .css-1cu29rp {
-  background-color: #334155 !important;
-  color: #f1f5f9 !important;
-  border-color: #475569 !important;
-}
-
-.dark .css-10lkeuu:hover,
-.dark .css-1vgq5xr:hover,
-.dark .css-1cu29rp:hover {
-  background-color: #475569 !important;
-}
-
-/* Story preview backgrounds */
-.dark .sb-story {
-  background-color: #0f172a !important;
-}
-
-.dark .innerZoomElementWrapper {
-  background-color: #0f172a !important;
-}
-
-@layer components {
-  .animate-recording-pulse {
-    animation: recording-pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes recording-pulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.1);
-      opacity: 0.8;
-    }
-  }
-
-  .animate-typing {
-    animation: typing 1.4s infinite;
-  }
-
-  @keyframes typing {
-    0%, 44% {
-      opacity: 1;
-    }
-    45%, 55% {
-      opacity: 0.5;
-    }
-    56%, 100% {
-      opacity: 1;
-    }
-  }
-
-  .animate-volume-bar {
-    animation: volume-pulse 0.3s ease-in-out;
-  }
-
-  @keyframes volume-pulse {
-    0% { transform: scaleY(0.3); }
-    50% { transform: scaleY(1); }
-    100% { transform: scaleY(var(--volume-height, 0.5)); }
-  }
-
-  .animate-bounce-once {
-    animation: bounce-once 0.4s ease-in-out;
-  }
-
-  @keyframes bounce-once {
-    0%, 100% {
-      transform: translateY(0%);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    50% {
-      transform: translateY(-25%);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-  }
-
-  /* Button glow effects */
-  .glow-primary {
-    box-shadow: 0 0 15px rgba(32, 124, 229, 0.5);
-  }
-
-  .glow-primary-hover {
-    box-shadow: 0 0 15px rgba(32, 124, 229, 0.7);
-  }
-
-  .glow-recording {
-    box-shadow: 0 0 20px rgba(32, 124, 229, 0.9);
-  }
-
-  .glow-success {
-    box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
-  }
-
-  .glow-error {
-    box-shadow: 0 0 15px rgba(255, 100, 100, 0.5);
-  }
-
-  /* Message effects */
-  .shadow-translation {
-    box-shadow: -2px 2px 8px rgba(30, 41, 59, 0.5), -1px 1px 4px rgba(30, 41, 59, 0.4);
+/* Utility classes */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-app;
   }
 }

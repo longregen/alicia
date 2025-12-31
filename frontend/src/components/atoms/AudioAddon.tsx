@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { AUDIO_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
-import { flexCenter, uiPatterns } from '../../utils/uiPatterns';
 import type { BaseComponentProps, AudioState } from '../../types/components';
 
 // Component props interface
@@ -95,7 +93,7 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
         );
       case AUDIO_STATES.LOADING:
         return (
-          <div className={cls(sizeClass, 'border-2', 'border-current', 'border-t-transparent', CSS.roundedFull, 'animate-spin')} />
+          <div className={cls(sizeClass, 'border-2', 'border-current', 'border-t-transparent', 'rounded-full', 'animate-spin')} />
         );
       default:
         return (
@@ -107,11 +105,11 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
   };
 
   const containerClasses = cls([
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.gap2,
+    'flex',
+    'items-center',
+    'gap-2',
     'transition-all',
-    CSS.duration300,
+    'duration-300',
     'ease-in-out',
     isExpanded ? 'w-48' : 'w-auto',
     className
@@ -120,36 +118,39 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
   const buttonClasses = cls([
     'w-8',
     'h-8',
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.justifyCenter,
-    CSS.roundedFull,
-    CSS.bgPrimaryBlue,
-    CSS.textWhite,
-    CSS.transitionColors,
-    disabled ? CSS.opacity50 : 'hover:bg-primary-blue-hover',
-    disabled ? CSS.cursorNotAllowed : CSS.cursorPointer,
-    state === AUDIO_STATES.PLAYING ? 'glow-primary' : '',
+    'flex',
+    'items-center',
+    'justify-center',
+    'rounded-full',
+    'bg-accent',
+    'text-on-emphasis',
+    'transition-colors',
+    disabled ? 'opacity-50' : 'hover:bg-accent-hover',
+    disabled ? 'cursor-not-allowed' : 'cursor-pointer',
   ]);
 
   // Compact mode: show small play/pause button with duration
   if (mode === 'compact') {
     return (
       <div className={cls(
-        flexCenter(),
+        'flex',
+        'items-center',
+        'justify-center',
         'gap-1.5',
         className
       )}>
         <button
           className={cls(
             'w-6 h-6 p-1.5',
-            flexCenter(),
+            'flex',
+            'items-center',
             'justify-center',
-            'rounded-full bg-primary-blue/20 hover:bg-primary-blue/30',
-            uiPatterns.transition,
-            disabled ? CSS.opacity50 : '',
-            disabled ? CSS.cursorNotAllowed : CSS.cursorPointer,
-            state === AUDIO_STATES.PLAYING ? 'bg-primary-blue/40' : ''
+            'rounded-full bg-accent-subtle hover:bg-accent',
+            'transition-colors',
+            'duration-300',
+            disabled ? 'opacity-50' : '',
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+            state === AUDIO_STATES.PLAYING ? 'bg-accent' : ''
           )}
           onClick={handleClick}
           disabled={disabled || state === AUDIO_STATES.LOADING}
@@ -159,8 +160,8 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
           {getIcon('small')}
         </button>
         <span className={cls(
-          'text-xs text-muted-text',
-          state === AUDIO_STATES.PLAYING ? 'text-primary-blue' : ''
+          'text-xs text-muted',
+          state === AUDIO_STATES.PLAYING ? 'text-accent' : ''
         )}>
           { state === AUDIO_STATES.PLAYING ? formatTime(currentTime) + ' / ' : ''}
           {formatTime(duration)}
@@ -182,9 +183,9 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
 
       {isExpanded && (
         <div className={cls(
-          CSS.flex,
-          CSS.itemsCenter,
-          CSS.gap2,
+          'flex',
+          'items-center',
+          'gap-2',
           'flex-1',
           'overflow-hidden'
         )}>
@@ -192,8 +193,8 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
           <div className={cls(
             'flex-1',
             'h-1',
-            CSS.bgSurfaceBg,
-            CSS.roundedFull,
+            'bg-surface',
+            'rounded-full',
             'relative',
             'overflow-hidden'
           )}>
@@ -203,8 +204,8 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
                 'top-0',
                 'left-0',
                 'h-full',
-                CSS.bgPrimaryBlue,
-                CSS.transitionAll,
+                'bg-accent',
+                'transition-all',
                 'duration-100'
               )}
               style={{ width: `${getProgressPercentage()}%` }}
@@ -212,7 +213,7 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
           </div>
 
           {/* Time display */}
-          <div className={cls(CSS.textXs, CSS.textMuted, 'min-w-[3rem]', 'text-right')}>
+          <div className={cls('text-xs', 'text-muted', 'min-w-[3rem]', 'text-right')}>
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
 
@@ -222,14 +223,14 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
               className={cls(
                 'w-6',
                 'h-6',
-                CSS.flex,
-                CSS.itemsCenter,
-                CSS.justifyCenter,
-                CSS.roundedFull,
-                CSS.textMuted,
-                'hover:text-primary-text',
-                'hover:bg-surface-bg',
-                CSS.transitionColors
+                'flex',
+                'items-center',
+                'justify-center',
+                'rounded-full',
+                'text-muted',
+                'hover:text-default',
+                'hover:bg-surface',
+                'transition-colors'
               )}
               onClick={handleStop}
               aria-label="Stop"

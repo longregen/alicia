@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, Variant, Size } from '../../types/components';
 
 /**
@@ -37,22 +36,17 @@ const Badge: React.FC<BadgeProps> = ({
   };
 
   const variantStyles = {
-    default: 'bg-surface-bg text-primary-text border-gray-300 dark:border-gray-600',
-    primary: 'bg-primary-blue-glow text-primary-blue border-primary-blue',
-    success: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-300 dark:border-green-700',
-    warning: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700',
-    error: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-300 dark:border-red-700',
+    default: 'bg-surface text-default border',
+    primary: 'bg-accent-subtle text-accent border-accent',
+    success: 'bg-success-subtle text-success border-success',
+    warning: 'bg-warning-subtle text-warning border-warning',
+    error: 'bg-error-subtle text-error border-error',
   };
 
   const badgeClasses = cls(
     // Base styles
-    'inline-flex',
-    CSS.itemsCenter,
-    CSS.gap1,
-    'rounded-full',
-    'border',
-    CSS.fontMedium,
-    'whitespace-nowrap',
+    'inline-flex items-center gap-1',
+    'rounded-full border font-medium whitespace-nowrap',
 
     // Size
     sizeClasses[size],

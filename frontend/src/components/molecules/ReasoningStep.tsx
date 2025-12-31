@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import ReasoningVoting from './ReasoningVoting';
 import GhostButton from '../atoms/GhostButton';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 
 /**
@@ -44,30 +43,19 @@ const ReasoningStep: React.FC<ReasoningStepProps> = ({
   return (
     <div
       className={cls(
-        CSS.flex,
-        CSS.flexCol,
-        CSS.gap2,
-        CSS.p3,
-        CSS.roundedLg,
-        'bg-reasoning border-l-4 border-blue-500',
+        'flex flex-col gap-2 p-3 rounded-lg',
+        'bg-reasoning border-l-4 border-accent',
         className
       )}
     >
       {/* Header */}
-      <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyBetween, CSS.gap2)}>
+      <div className="flex items-center justify-between gap-2">
         <button
           onClick={toggleExpanded}
           className={cls(
-            CSS.flex,
-            CSS.itemsCenter,
-            CSS.gap2,
-            CSS.textXs,
-            'text-blue-600 dark:text-blue-400',
-            CSS.fontMedium,
-            'hover:text-blue-700 dark:hover:text-blue-300',
-            CSS.transitionColors,
-            CSS.duration200,
-            CSS.cursorPointer
+            'flex items-center gap-2 text-xs font-medium',
+            'text-reasoning hover:text-accent',
+            'transition-colors duration-200 cursor-pointer'
           )}
           aria-expanded={isExpanded}
           aria-label={isExpanded ? 'Collapse reasoning' : 'Expand reasoning'}
@@ -95,7 +83,7 @@ const ReasoningStep: React.FC<ReasoningStepProps> = ({
       </div>
 
       {/* Content */}
-      <div className={cls(CSS.textSm, CSS.textPrimary, 'whitespace-pre-wrap')}>
+      <div className="text-sm text-default whitespace-pre-wrap">
         {isExpanded || !shouldTruncate ? content : previewContent}
       </div>
 
@@ -108,7 +96,7 @@ const ReasoningStep: React.FC<ReasoningStepProps> = ({
 
       {/* Voting controls */}
       {showVoting && isExpanded && (
-        <div className={cls('pt-2', 'border-t', 'border-blue-200 dark:border-blue-800')}>
+        <div className="pt-2 border-t border-muted">
           <ReasoningVoting reasoningId={id} compact />
         </div>
       )}

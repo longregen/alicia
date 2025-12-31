@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../services/api';
+import { cls } from '../../../utils/cls';
 import { DimensionScoresChart } from './DimensionScoresChart';
 import { ParetoArchiveViewer } from './ParetoArchiveViewer';
-import './OptimizationManager.css';
 
 interface OptimizationRun {
   id: string;
@@ -77,24 +77,30 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
   };
 
   if (loading) {
-    return <div className="optimization-loading">Loading run details...</div>;
+    return <div className="text-center py-10 text-muted">Loading run details...</div>;
   }
 
   if (error || !run) {
     return (
-      <div className="optimization-error">
+      <div className="text-center py-10 text-muted">
         <p>Error: {error || 'Run not found'}</p>
-        <button onClick={onBack}>Back to List</button>
+        <button className="btn btn-secondary" onClick={onBack}>Back to List</button>
       </div>
     );
   }
 
+  const statusLower = run.status.toLowerCase();
+  let badgeClass = 'badge ';
+  if (statusLower === 'completed') badgeClass += 'badge-success';
+  else if (statusLower === 'running') badgeClass += 'badge-warning';
+  else if (statusLower === 'failed') badgeClass += 'badge-error';
+
   return (
-    <div className="optimization-run-details">
-      <div className="details-header">
-        <button className="btn-back" onClick={onBack}>← Back</button>
-        <h2>{run.name}</h2>
-        <span className={`status-badge status-${run.status.toLowerCase()}`}>
+    <div className="p-5">
+      <div className="flex gap-5 items-center mb-5">
+        <button className="btn btn-secondary" onClick={onBack}>← Back</button>
+        <h2 className="flex-1 m-0">{run.name}</h2>
+        <span className={badgeClass}>
           {run.status}
         </span>
       </div>
@@ -120,41 +126,41 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
         </button>
       </div>
 
-      <div className="tab-content">
+      <div className="p-5 card">
         {selectedTab === 'overview' && (
-          <div className="overview-tab">
-            <div className="info-grid">
-              <div className="info-card">
-                <h3>Run Information</h3>
-                <dl>
-                  <dt>ID:</dt>
-                  <dd>{run.id}</dd>
-                  <dt>Type:</dt>
-                  <dd>{run.prompt_type}</dd>
-                  <dt>Iterations:</dt>
-                  <dd>{run.iterations} / {run.max_iterations}</dd>
-                  <dt>Started:</dt>
-                  <dd>{formatDate(run.started_at)}</dd>
+          <div>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-5 mb-7">
+              <div className="bg-surface p-5 rounded-md">
+                <h3 className="mt-0 mb-4 text-base">Run Information</h3>
+                <dl className="grid grid-cols-[auto_1fr] gap-2 m-0">
+                  <dt className="font-semibold text-muted">ID:</dt>
+                  <dd className="m-0">{run.id}</dd>
+                  <dt className="font-semibold text-muted">Type:</dt>
+                  <dd className="m-0">{run.prompt_type}</dd>
+                  <dt className="font-semibold text-muted">Iterations:</dt>
+                  <dd className="m-0">{run.iterations} / {run.max_iterations}</dd>
+                  <dt className="font-semibold text-muted">Started:</dt>
+                  <dd className="m-0">{formatDate(run.started_at)}</dd>
                   {run.completed_at && (
                     <>
-                      <dt>Completed:</dt>
-                      <dd>{formatDate(run.completed_at)}</dd>
+                      <dt className="font-semibold text-muted">Completed:</dt>
+                      <dd className="m-0">{formatDate(run.completed_at)}</dd>
                     </>
                   )}
                 </dl>
               </div>
 
-              <div className="info-card">
-                <h3>Performance</h3>
-                <dl>
-                  <dt>Best Score:</dt>
-                  <dd className="score-value">{run.best_score.toFixed(4)}</dd>
+              <div className="bg-surface p-5 rounded-md">
+                <h3 className="mt-0 mb-4 text-base">Performance</h3>
+                <dl className="grid grid-cols-[auto_1fr] gap-2 m-0">
+                  <dt className="font-semibold text-muted">Best Score:</dt>
+                  <dd className="m-0 text-2xl font-bold text-success">{run.best_score.toFixed(4)}</dd>
                   {run.baseline_score !== undefined && (
                     <>
-                      <dt>Baseline Score:</dt>
-                      <dd>{run.baseline_score.toFixed(4)}</dd>
-                      <dt>Improvement:</dt>
-                      <dd className={run.best_score > run.baseline_score ? 'positive' : 'negative'}>
+                      <dt className="font-semibold text-muted">Baseline Score:</dt>
+                      <dd className="m-0">{run.baseline_score.toFixed(4)}</dd>
+                      <dt className="font-semibold text-muted">Improvement:</dt>
+                      <dd className={cls('m-0 font-semibold', run.best_score > run.baseline_score ? 'text-success' : 'text-error')}>
                         {((run.best_score - run.baseline_score) / run.baseline_score * 100).toFixed(1)}%
                       </dd>
                     </>
@@ -164,25 +170,28 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
             </div>
 
             {run.best_dim_scores && (
-              <div className="dimension-scores-section">
-                <h3>Best Dimension Scores</h3>
+              <div className="mt-7">
+                <h3 className="mb-4">Best Dimension Scores</h3>
                 <DimensionScoresChart scores={run.best_dim_scores} weights={run.dimension_weights} />
               </div>
             )}
 
             {run.dimension_weights && (
-              <div className="dimension-weights-section">
-                <h3>Dimension Weights</h3>
-                <div className="weights-grid">
-                  {Object.entries(run.dimension_weights).map(([dim, weight]) => (
-                    <div key={dim} className="weight-item">
-                      <span className="weight-label">{dim}:</span>
-                      <span className="weight-value">{(weight * 100).toFixed(0)}%</span>
-                      <div className="weight-bar">
-                        <div className="weight-fill" style={{ width: `${weight * 100}%` }} />
+              <div className="mt-7">
+                <h3 className="mb-4">Dimension Weights</h3>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                  {Object.entries(run.dimension_weights).map(([dim, weight]) => {
+                    const widthPercent = weight * 100;
+                    return (
+                      <div key={dim} className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">{dim}:</span>
+                        <span className="text-lg font-bold text-accent">{widthPercent.toFixed(0)}%</span>
+                        <div className="h-2 bg-sunken rounded overflow-hidden">
+                          <div className="h-full bg-accent transition-all" style={{ width: `${widthPercent}%` }} />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -190,32 +199,32 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
         )}
 
         {selectedTab === 'candidates' && (
-          <div className="candidates-tab">
+          <div>
             <h3>Prompt Candidates</h3>
             {candidates.length === 0 ? (
               <p>No candidates found.</p>
             ) : (
-              <div className="candidates-list">
+              <div className="flex flex-col gap-4">
                 {candidates.map((candidate) => (
-                  <div key={candidate.id} className="candidate-card">
-                    <div className="candidate-header">
-                      <span className="candidate-iteration">Iteration {candidate.iteration}</span>
-                      <span className="candidate-score">Score: {candidate.score.toFixed(4)}</span>
+                  <div key={candidate.id} className="bg-surface p-4 rounded-md border-l-4 border-accent">
+                    <div className="flex justify-between mb-2">
+                      <span className="font-semibold">Iteration {candidate.iteration}</span>
+                      <span className="font-semibold text-success">Score: {candidate.score.toFixed(4)}</span>
                     </div>
-                    <div className="candidate-stats">
+                    <div className="flex gap-4 text-sm text-muted mb-2.5">
                       <span>Evaluations: {candidate.evaluation_count}</span>
                       <span>
                         Success Rate: {((candidate.success_count / candidate.evaluation_count) * 100).toFixed(1)}%
                       </span>
                     </div>
                     {candidate.dimension_scores && (
-                      <div className="candidate-dimensions">
+                      <div className="my-2.5">
                         <DimensionScoresChart scores={candidate.dimension_scores} compact />
                       </div>
                     )}
-                    <details className="candidate-prompt">
-                      <summary>View Prompt</summary>
-                      <pre>{candidate.prompt_text}</pre>
+                    <details className="mt-2.5">
+                      <summary className="cursor-pointer font-medium text-accent">View Prompt</summary>
+                      <pre className="mt-2.5 p-2.5 bg-elevated rounded overflow-x-auto text-xs leading-relaxed">{candidate.prompt_text}</pre>
                     </details>
                   </div>
                 ))}
@@ -225,7 +234,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
         )}
 
         {selectedTab === 'pareto' && (
-          <div className="pareto-tab">
+          <div>
             <ParetoArchiveViewer candidates={candidates} />
           </div>
         )}

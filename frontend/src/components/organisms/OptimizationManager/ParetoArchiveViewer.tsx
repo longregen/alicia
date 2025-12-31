@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import './OptimizationManager.css';
+import { cls } from '../../../utils/cls';
 
 interface PromptCandidate {
   id: string;
@@ -60,13 +60,14 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
   const paretoFrontier = getParetoFrontier();
 
   return (
-    <div className="pareto-archive-viewer">
+    <div className="p-5">
       <h3>Pareto Archive Visualization</h3>
 
-      <div className="dimension-selectors">
-        <div className="dimension-selector">
-          <label>X-Axis:</label>
+      <div className="flex gap-5 mb-5">
+        <div className="flex gap-2.5 items-center">
+          <label className="font-medium">X-Axis:</label>
           <select
+            className="input"
             value={selectedDimensions[0]}
             onChange={(e) => toggleDimension(0, e.target.value)}
           >
@@ -75,9 +76,10 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
             ))}
           </select>
         </div>
-        <div className="dimension-selector">
-          <label>Y-Axis:</label>
+        <div className="flex gap-2.5 items-center">
+          <label className="font-medium">Y-Axis:</label>
           <select
+            className="input"
             value={selectedDimensions[1]}
             onChange={(e) => toggleDimension(1, e.target.value)}
           >
@@ -88,18 +90,18 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
         </div>
       </div>
 
-      <div className="pareto-stats">
-        <p>Total Candidates: {candidates.length}</p>
-        <p>Pareto Frontier Size: {paretoFrontier.length}</p>
+      <div className="mb-5 p-2.5 bg-surface rounded">
+        <p className="my-1.5">Total Candidates: {candidates.length}</p>
+        <p className="my-1.5">Pareto Frontier Size: {paretoFrontier.length}</p>
       </div>
 
-      <div className="pareto-plot-placeholder">
-        <svg width="600" height="400" className="pareto-plot">
+      <div className="mb-7 text-center">
+        <svg width="600" height="400" className={cls('border bg-elevated')}>
           {/* Simple scatter plot - in production, use a proper charting library */}
           <g transform="translate(50, 350)">
             {/* Axes */}
-            <line x1="0" y1="0" x2="500" y2="0" stroke="#333" strokeWidth="2" />
-            <line x1="0" y1="0" x2="0" y2="-300" stroke="#333" strokeWidth="2" />
+            <line x1="0" y1="0" x2="500" y2="0" className="stroke-default" strokeWidth="2" />
+            <line x1="0" y1="0" x2="0" y2="-300" className="stroke-default" strokeWidth="2" />
 
             {/* Axis labels */}
             <text x="250" y="30" textAnchor="middle" fontSize="12">
@@ -123,9 +125,8 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
                     cx={x}
                     cy={y}
                     r={isPareto ? 6 : 4}
-                    fill={isPareto ? '#4CAF50' : '#999'}
+                    className={cls(isPareto ? 'fill-success stroke-success' : 'fill-muted stroke-none')}
                     opacity={isPareto ? 1 : 0.5}
-                    stroke={isPareto ? '#2E7D32' : 'none'}
                     strokeWidth={isPareto ? 2 : 0}
                   >
                     <title>
@@ -149,7 +150,7 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
                   })
                   .join(' ')}
                 fill="none"
-                stroke="#4CAF50"
+                className="stroke-success"
                 strokeWidth="2"
                 opacity="0.5"
               />
@@ -158,14 +159,14 @@ export function ParetoArchiveViewer({ candidates }: ParetoArchiveViewerProps) {
         </svg>
       </div>
 
-      <div className="pareto-frontier-list">
-        <h4>Pareto Frontier Candidates</h4>
+      <div>
+        <h4 className="mb-4">Pareto Frontier Candidates</h4>
         {paretoFrontier.length === 0 ? (
           <p>No candidates on the Pareto frontier.</p>
         ) : (
-          <ul>
+          <ul className="list-none p-0">
             {paretoFrontier.map((candidate) => (
-              <li key={candidate.id}>
+              <li key={candidate.id} className="p-2.5 bg-surface rounded mb-2">
                 <strong>Iteration {candidate.iteration}</strong> - Score: {candidate.score.toFixed(4)}
                 <br />
                 {selectedDimensions[0]}: {(candidate.dimension_scores![selectedDimensions[0]] || 0).toFixed(3)}

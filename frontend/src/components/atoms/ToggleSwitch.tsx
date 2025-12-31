@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, Variant } from '../../types/components';
 
 // Toggle size mapping
@@ -70,19 +69,14 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   const getTrackClasses = (): string => {
     const baseClasses = [
       TOGGLE_SIZE_MAP[size].track,
-      'relative',
-      CSS.roundedFull,
-      CSS.transitionAll,
-      CSS.duration200,
-      'ease-in-out',
-      CSS.cursorPointer,
+      'relative rounded-full',
+      'transition-all duration-200 ease-in-out',
+      'cursor-pointer',
     ];
 
     if (disabled) {
       return cls(baseClasses, [
-        CSS.bgInactiveDisabled,
-        CSS.cursorNotAllowed,
-        'opacity-60',
+        'bg-sunken cursor-not-allowed opacity-60',
       ]);
     }
 
@@ -90,29 +84,24 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
       switch (variant) {
         case 'success':
           return cls(baseClasses, [
-            CSS.bgActiveSpeaking,
-            'hover:bg-active-speaking',
+            'bg-success hover:bg-success/90',
           ]);
         case 'warning':
           return cls(baseClasses, [
-            CSS.bgToolResult,
-            'hover:bg-tool-result',
+            'bg-warning hover:bg-warning/90',
           ]);
         case 'error':
           return cls(baseClasses, [
-            CSS.bgError,
-            'hover:bg-error',
+            'bg-error hover:bg-error/90',
           ]);
         default:
           return cls(baseClasses, [
-            CSS.bgPrimaryBlue,
-            CSS.hoverBgPrimaryBlue,
+            'bg-accent hover:bg-accent-hover',
           ]);
       }
     } else {
       return cls(baseClasses, [
-        CSS.bgInactiveDisabled,
-        'hover:bg-primary-blue-glow',
+        'bg-sunken hover:bg-accent-subtle',
       ]);
     }
   };
@@ -120,16 +109,9 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   const getThumbClasses = (): string => {
     const baseClasses = [
       TOGGLE_SIZE_MAP[size].thumb,
-      CSS.bgWhite,
-      CSS.roundedFull,
-      'shadow-lg',
-      'transform',
-      CSS.transitionAll,
-      CSS.duration200,
-      'ease-in-out',
-      'absolute',
-      'top-0.5',
-      'left-0.5',
+      'bg-on-emphasis rounded-full shadow-lg',
+      'transform transition-all duration-200 ease-in-out',
+      'absolute top-0.5 left-0.5',
     ];
 
     if (isChecked) {
@@ -154,28 +136,24 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
 
   const getLabelClasses = (): string => {
     const baseClasses = [
-      CSS.textSm,
-      CSS.fontMedium,
-      CSS.selectNone,
-      CSS.cursorPointer,
+      'text-sm font-medium select-none cursor-pointer',
     ];
 
     if (disabled) {
       return cls(baseClasses, [
-        CSS.textMuted,
-        CSS.cursorNotAllowed,
+        'text-muted cursor-not-allowed',
       ]);
     }
 
     return cls(baseClasses, [
-      CSS.textPrimary,
+      'text-default',
     ]);
   };
 
   const ariaLabel = label || `Toggle switch ${isChecked ? 'on' : 'off'}`;
 
   return (
-    <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap3, className)}>
+    <div className={cls('flex items-center gap-3', className)}>
       {label && (
         <label
           className={getLabelClasses()}
