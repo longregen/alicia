@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -18,10 +18,12 @@ function getStoredTheme(): Theme {
   return 'system';
 }
 
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  const effectiveTheme = theme === 'system' ? getSystemTheme() : theme;
+function getEffectiveTheme(theme: Theme): 'light' | 'dark' {
+  return theme === 'system' ? getSystemTheme() : theme;
+}
 
+function applyTheme(effectiveTheme: 'light' | 'dark') {
+  const root = document.documentElement;
   if (effectiveTheme === 'dark') {
     root.classList.add('dark');
   } else {
@@ -33,21 +35,24 @@ export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(getStoredTheme);
 
   const setTheme = useCallback((newTheme: Theme) => {
-    setThemeState(newTheme);
     localStorage.setItem(THEME_STORAGE_KEY, newTheme);
-    applyTheme(newTheme);
+    setThemeState(newTheme);
   }, []);
 
-  // Apply theme on mount and when system preference changes
+  // Apply theme on mount and when theme changes
   useEffect(() => {
-    applyTheme(theme);
+    const effectiveTheme = getEffectiveTheme(theme);
+    applyTheme(effectiveTheme);
+  }, [theme]);
 
-    // Listen for system theme changes
+  // Listen for system theme changes when in 'system' mode
+  useEffect(() => {
+    if (theme !== 'system') return;
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
-      if (theme === 'system') {
-        applyTheme('system');
-      }
+      const effectiveTheme = getEffectiveTheme('system');
+      applyTheme(effectiveTheme);
     };
 
     mediaQuery.addEventListener('change', handleChange);
@@ -55,4 +60,11 @@ export function useTheme() {
   }, [theme]);
 
   return { theme, setTheme };
+}
+
+// Initialize theme on module load to prevent flash
+if (typeof window !== 'undefined') {
+  const initialTheme = getStoredTheme();
+  const effectiveTheme = getEffectiveTheme(initialTheme);
+  applyTheme(effectiveTheme);
 }

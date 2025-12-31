@@ -43,6 +43,7 @@ function convertToStreamingMessage(legacyMessage: Message): StreamingMessage {
     sentenceIds: [],
     toolCallIds: [],
     memoryTraceIds: [],
+    sync_status: legacyMessage.sync_status,
   };
 }
 

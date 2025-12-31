@@ -337,11 +337,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const handleKeepLocal = () => {
     console.log('Keeping local version for message:', messageId);
     // TODO: Implement API call to resolve conflict with local version
+    // This would call something like: syncApi.resolveConflict(messageId, 'local')
   };
 
   const handleKeepServer = () => {
     console.log('Keeping server version for message:', messageId);
     // TODO: Implement API call to resolve conflict with server version
+    // This would call something like: syncApi.resolveConflict(messageId, 'server')
   };
 
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
@@ -403,6 +405,31 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
               />
             </svg>
             Sync Conflict - Click to resolve
+          </Badge>
+        </div>
+      )}
+
+      {/* Sync pending badge */}
+      {syncStatus === 'pending' && (
+        <div className={cn(
+          'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mb-1',
+          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
+        )}>
+          <Badge variant="secondary" className="text-xs">
+            <svg
+              className="w-3 h-3 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            Pending sync
           </Badge>
         </div>
       )}

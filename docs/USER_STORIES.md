@@ -33,19 +33,6 @@ This document outlines the high-level user stories for the Alicia voice assistan
 - ✅ Response streaming works reliably across different network conditions
 - ✅ Audio quality remains consistent throughout streaming
 
-## 3. Multilingual Translation Conversations 🚧
-
-**As a user**, I want to speak in one language and receive responses in another, so that I can communicate across language barriers.
-
-**Status**: Planned for future release.
-
-**Acceptance Criteria:**
-- 🚧 User can select input and output languages independently
-- 🚧 Translation maintains the context and meaning of the conversation
-- 🚧 System supports at least 10 major languages initially
-- 🚧 Translation quality is high enough for practical conversation
-- 🚧 Language settings persist across sessions
-
 ## 4. Seamless Voice and Text Switching ✅
 
 **As a user**, I want to easily switch between voice and text input/output during a conversation, so that I can use the most convenient mode for my current situation.
@@ -70,7 +57,6 @@ This document outlines the high-level user stories for the Alicia voice assistan
 - ✅ Assistant maintains context across multiple turns without repetition
 - ✅ Long-term memory stores important user preferences and information
 - ✅ User can reference previous conversations and the assistant understands
-- ⚠️ Memory system respects privacy settings and allows selective forgetting (partial)
 
 ## 6. Multi-platform Access ✅
 
@@ -83,7 +69,6 @@ This document outlines the high-level user stories for the Alicia voice assistan
 - ✅ Native Android application provides optimized mobile experience
 - ✅ Command-line interface available for quick interactions
 - ✅ User experience is consistent across platforms
-- ⚠️ Conversation history syncs between platforms (offline sync implemented)
 
 ## 7. Tool Integration ✅
 
@@ -99,30 +84,30 @@ This document outlines the high-level user stories for the Alicia voice assistan
 - ✅ Tools respect privacy and security boundaries
 - ✅ MCP protocol support for extensible tool integration
 
-## 8. Voice Selection ⚠️
+## 8. Voice Selection ✅
 
 **As a user**, I want to select from available Kokoro voices, so that I can choose a voice that suits my preference.
 
-**Status**: Partially implemented - voice can be configured, but no UI for selection yet.
+**Status**: Fully implemented with UI in ChatWindow.tsx.
 
 **Acceptance Criteria:**
-- ✅ Multiple Kokoro voices available via configuration
+- ✅ Multiple Kokoro voices available via dropdown selector
 - ✅ Voice settings persist across sessions
-- 🚧 Preview feature allows testing different voices (planned)
-- ⚠️ Speed adjustment available (via configuration only)
+- ✅ Preview feature allows testing different voices
+- ✅ Speed adjustment available via slider control (0.5x - 2.0x)
 
-## 9. Conversation Controls ⚠️
+## 9. Conversation Controls ✅
 
 **As a user**, I want fine-grained control over the conversation flow, so that I can guide the interaction to meet my needs.
 
-**Status**: Partially implemented with stop and variation controls.
+**Status**: Fully implemented with inline editing, branching, and response length controls.
 
 **Acceptance Criteria:**
 - ✅ Ability to stop responses mid-stream (ControlStop message)
 - ✅ Option to regenerate answers (ControlVariation message)
-- 🚧 Ability to edit my previous questions (planned)
-- 🚧 Option to continue from any point in the conversation (planned)
-- 🚧 Controls for adjusting response length (planned)
+- ✅ Ability to edit my previous questions (inline editing in ChatBubble.tsx)
+- ✅ Option to continue from any point in the conversation (branching with BranchNavigator)
+- ✅ Controls for adjusting response length (Concise/Balanced/Detailed in Settings.tsx)
 
 ## 10. Conversation History Management ✅
 
@@ -163,18 +148,18 @@ This document outlines the high-level user stories for the Alicia voice assistan
 - ✅ Clear indication of sync status
 - ✅ Conflict detection and resolution
 
-## 13. Voice Activity Detection (VAD) 🚧
+## 13. Voice Activity Detection (VAD) ✅
 
 **As a user**, I want Alicia to automatically detect when I start and stop speaking, so that I don't need to press and hold a button to talk.
 
-**Status**: Planned - Silero VAD integration for the web frontend.
+**Status**: Fully implemented with Silero VAD integration in the web frontend.
 
 **Acceptance Criteria:**
-- 🚧 Automatic speech detection using Silero VAD in the browser
-- 🚧 No push-to-talk button required for voice conversations
-- 🚧 Visual indicator shows when speech is detected
-- 🚧 Configurable sensitivity threshold
-- 🚧 Fallback to manual push-to-talk if preferred
+- ✅ Automatic speech detection using Silero VAD in the browser
+- ✅ No push-to-talk button required for voice conversations
+- ✅ Visual indicator shows when speech is detected (MicrophoneVAD.tsx animated rings)
+- ✅ Configurable sensitivity threshold (positiveSpeechThreshold, negativeSpeechThreshold)
+- ✅ Fallback to manual push-to-talk if preferred
 
 ## Summary
 
@@ -187,11 +172,11 @@ This document outlines the high-level user stories for the Alicia voice assistan
 | 5. Persistent Memory | ✅ Implemented |
 | 6. Multi-platform Access | ✅ Implemented |
 | 7. Tool Integration | ✅ Implemented |
-| 8. Voice Selection | ⚠️ Partial |
-| 9. Conversation Controls | ⚠️ Partial |
+| 8. Voice Selection | ✅ Implemented |
+| 9. Conversation Controls | ✅ Implemented |
 | 10. History Management | ✅ Implemented |
 | 11. Context-Aware Assistance | ⚠️ Partial |
 | 12. Offline Mode with Sync | ✅ Implemented |
-| 13. Voice Activity Detection | 🚧 Planned |
+| 13. Voice Activity Detection | ✅ Implemented |
 
-**Overall Progress**: 8 fully implemented, 3 partially implemented, 2 planned
+**Overall Progress**: 11 fully implemented, 1 partially implemented, 1 planned

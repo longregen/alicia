@@ -10,13 +10,26 @@ import {
 import Button from '../atoms/Button';
 import type { ConflictDetails } from '../../types/sync';
 
+/**
+ * ConflictResolutionDialog component for resolving offline sync conflicts.
+ *
+ * Displays both local and server versions of a message side-by-side,
+ * allowing the user to choose which version to keep.
+ */
 export interface ConflictResolutionDialogProps {
+  /** Whether the dialog is open */
   open: boolean;
+  /** Callback when dialog open state changes */
   onOpenChange: (open: boolean) => void;
+  /** Local version of the message content */
   localContent: string;
+  /** Server version of the message content */
   serverContent: string;
+  /** Conflict details including reason */
   conflict?: ConflictDetails;
+  /** Callback when user chooses to keep local version */
   onKeepLocal: () => void;
+  /** Callback when user chooses to keep server version */
   onKeepServer: () => void;
 }
 
@@ -36,6 +49,11 @@ const ConflictResolutionDialog: React.FC<ConflictResolutionDialogProps> = ({
           <DialogTitle>Sync Conflict Detected</DialogTitle>
           <DialogDescription>
             This message was modified both locally and on the server. Choose which version to keep.
+            {conflict?.reason && (
+              <span className="block mt-1 text-sm">
+                Reason: {conflict.reason}
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -50,7 +68,7 @@ const ConflictResolutionDialog: React.FC<ConflictResolutionDialogProps> = ({
                 </span>
               )}
             </div>
-            <div className="rounded-lg border border-default bg-surface p-3 text-sm">
+            <div className="rounded-lg border border-default bg-surface p-3 text-sm max-h-64 overflow-y-auto">
               <pre className="whitespace-pre-wrap font-sans">{localContent}</pre>
             </div>
           </div>
@@ -65,7 +83,7 @@ const ConflictResolutionDialog: React.FC<ConflictResolutionDialogProps> = ({
                 </span>
               )}
             </div>
-            <div className="rounded-lg border border-default bg-surface p-3 text-sm">
+            <div className="rounded-lg border border-default bg-surface p-3 text-sm max-h-64 overflow-y-auto">
               <pre className="whitespace-pre-wrap font-sans">{serverContent}</pre>
             </div>
           </div>
