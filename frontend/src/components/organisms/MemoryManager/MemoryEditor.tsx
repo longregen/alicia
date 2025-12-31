@@ -98,11 +98,11 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
         onClick={(e) => e.target === e.currentTarget && handleCancel()}
       >
         <div
-          className="bg-surface shadow-2xl rounded-lg w-full max-w-2xl p-6 flex flex-col gap-4"
+          className="bg-surface shadow-2xl rounded-lg w-full max-w-2xl p-6 layout-stack-gap-4"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex justify-between items-center">
+          <div className="layout-between">
             <h2 className="text-lg font-semibold text-default">
               {memory ? 'Edit Memory' : 'Create Memory'}
             </h2>
@@ -118,9 +118,9 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="layout-stack-gap-4">
             {/* Content */}
-            <div className="flex flex-col gap-2">
+            <div className="layout-stack-gap">
               <label htmlFor="memory-content" className="text-sm font-medium text-default">
                 Content
               </label>
@@ -140,7 +140,7 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
             </div>
 
             {/* Category */}
-            <div className="flex flex-col gap-2">
+            <div className="layout-stack-gap">
               <label htmlFor="memory-category" className="text-sm font-medium text-default">
                 Category
               </label>
@@ -192,7 +192,7 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
                   'hover:bg-accent-hover transition-colors',
                   'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'flex items-center gap-2'
+                  'layout-center-gap'
                 )}
               >
                 {isLoading && (

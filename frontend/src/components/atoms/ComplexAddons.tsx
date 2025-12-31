@@ -252,7 +252,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
   return (
     <div className={cls('space-y-2 w-full', className)}>
       {/* Main addon row */}
-      <div className="flex items-center justify-between w-full">
+      <div className="layout-between w-full">
         {/* Left: All addons inline */}
         <div className={flexCenterGap(2)}>
           {/* All addons */}

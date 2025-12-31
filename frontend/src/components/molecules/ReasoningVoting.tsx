@@ -32,7 +32,7 @@ const ReasoningVoting: React.FC<ReasoningVotingProps> = ({
   } = useFeedback('reasoning', reasoningId);
 
   return (
-    <div className={cls('flex items-center gap-2', className)}>
+    <div className={cls('layout-center-gap', className)}>
       {/* Label */}
       {showLabel && (
         <span className="text-xs text-muted">

@@ -144,7 +144,7 @@ const Toast: React.FC<ToastProps> = ({
       </div>
 
       {/* Message */}
-      <div className="flex flex-col flex-1">
+      <div className="layout-stack flex-1">
         <p className="text-sm font-medium">{message}</p>
       </div>
 

@@ -62,7 +62,7 @@ export function DimensionScoresChart({ scores, weights, compact }: DimensionScor
           const widthPercent = score * 100;
 
           return (
-            <div key={dim} className="flex gap-4 items-center">
+            <div key={dim} className="layout-center-gap-4">
               <div className="min-w-[150px] text-sm">
                 <span>{label}</span>
                 {weight !== undefined && (

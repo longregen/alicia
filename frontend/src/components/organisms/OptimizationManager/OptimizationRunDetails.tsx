@@ -204,7 +204,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
             {candidates.length === 0 ? (
               <p>No candidates found.</p>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="layout-stack-gap-4">
                 {candidates.map((candidate) => (
                   <div key={candidate.id} className="bg-surface p-4 rounded-md border-l-4 border-accent">
                     <div className="flex justify-between mb-2">

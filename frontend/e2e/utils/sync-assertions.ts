@@ -96,12 +96,12 @@ export class SyncAssertions {
   ): Promise<void> {
     for (const page of pages) {
       await expect(
-        page.locator(`.message-bubble:has-text("${messageText}")`)
+        page.locator('div.user, div.assistant, div.system').filter({ hasText: messageText }).first()
       ).toBeVisible({ timeout: timeoutMs });
 
       // Verify it's marked as synced
       const syncStatus = await page
-        .locator(`.message-bubble:has-text("${messageText}")`)
+        .locator('div.user, div.assistant, div.system').filter({ hasText: messageText }).first()
         .getAttribute('data-sync-status');
 
       expect(syncStatus).toBe('synced');
@@ -156,7 +156,7 @@ export class SyncAssertions {
     expectedOrder: string[]
   ): Promise<void> {
     const messageElements = this.page.locator(
-      `[data-conversation-id="${conversationId}"] .message-bubble`
+      `[data-conversation-id="${conversationId}"] div.user, [data-conversation-id="${conversationId}"] div.assistant, [data-conversation-id="${conversationId}"] div.system`
     );
 
     const count = await messageElements.count();

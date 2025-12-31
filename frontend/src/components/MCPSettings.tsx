@@ -173,7 +173,7 @@ export function MCPSettings() {
 
   return (
     <div className="mcp-settings p-5 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="layout-between mb-6">
         <h2 className="text-2xl font-semibold text-default m-0">MCP Server Settings</h2>
         <button
           className="btn btn-primary"
@@ -289,7 +289,7 @@ export function MCPSettings() {
       )}
 
       {!loading && !error && servers.length > 0 && (
-        <div className="servers-list flex flex-col gap-4">
+        <div className="servers-list layout-stack-gap-4">
           {servers.map(server => (
             <div key={server.name} className="server-card card card-hover p-4">
               <div className="flex justify-between items-start mb-3">
@@ -306,7 +306,7 @@ export function MCPSettings() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-2 mb-3">
+              <div className="layout-stack-gap mb-3">
                 <div className="flex gap-2 text-sm">
                   <span className="font-semibold text-muted min-w-[80px]">Transport:</span>
                   <span className="detail-value text-default break-all">{server.transport}</span>
@@ -332,7 +332,7 @@ export function MCPSettings() {
               {server.tools.length > 0 && (
                 <div className="tools-section mt-3 pt-3 border-t border-default">
                   <button
-                    className="tools-toggle bg-transparent border-0 text-accent text-sm font-medium cursor-pointer py-2 px-0 flex items-center gap-2 transition-colors hover:text-accent/80"
+                    className="tools-toggle bg-transparent border-0 text-accent text-sm font-medium cursor-pointer py-2 px-0 layout-center-gap transition-colors hover:text-accent/80"
                     onClick={() => toggleServerExpanded(server.name)}
                   >
                     {expandedServers.has(server.name) ? '▼' : '▶'}
@@ -340,7 +340,7 @@ export function MCPSettings() {
                   </button>
 
                   {expandedServers.has(server.name) && (
-                    <div className="tools-list mt-3 flex flex-col gap-2">
+                    <div className="tools-list mt-3 layout-stack-gap">
                       {getServerTools(server.name).map(tool => (
                         <div key={tool.name} className="tool-item bg-surface p-3 rounded-md border-l-[3px] border-accent">
                           <div className="tool-name font-semibold text-default text-sm mb-1">{tool.name}</div>

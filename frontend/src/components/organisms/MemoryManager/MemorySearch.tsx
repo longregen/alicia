@@ -69,7 +69,7 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
       </div>
 
       {/* Category filter */}
-      <div className="flex items-center gap-2">
+      <div className="layout-center-gap">
         <span className="text-sm text-muted">Filter:</span>
         <div className="relative">
           <button
@@ -77,7 +77,7 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
             className={cls(
               'px-3 py-1 rounded border bg-surface text-default text-sm',
               'hover:bg-sunken transition-colors focus:outline-none',
-              'flex items-center gap-2 min-w-[140px]'
+              'layout-center-gap min-w-[140px]'
             )}
           >
             <span>

@@ -86,13 +86,12 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Create conversation on device 1
       await page1.click('[data-testid="new-chat-btn"]');
-      await page1.waitForSelector('.chat-window', { state: 'visible' });
 
       // Wait for conversation to be created and selected
-      await page1.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+      await page1.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
       // Get conversation ID
-      const selectedConv = await page1.locator('.conversation-item.selected').first();
+      const selectedConv = await page1.locator('.conversation-item.bg-sidebar-accent').first();
       const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
       if (!conversationId) {
@@ -111,7 +110,6 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Open conversation on device 2
       await page2.click(`[data-conversation-id="${conversationId}"]`);
-      await page2.waitForSelector('.chat-window', { state: 'visible' });
 
       // Send message from device 1
       const messageText = 'Real-time WebSocket sync test';
@@ -123,13 +121,13 @@ test.describe('WebSocket Sync Protocol', () => {
       await page1.click(submitSelector);
 
       // Verify message appears on device 1 (optimistic update)
-      await expect(page1.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+      await expect(page1.locator('div.user').filter({ hasText: messageText })).toBeVisible({
         timeout: 10000
       });
 
       // Message should appear on device 2 via WebSocket in real-time
       // Give it a bit more time for WebSocket delivery
-      await expect(page2.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+      await expect(page2.locator('div.user').filter({ hasText: messageText })).toBeVisible({
         timeout: 15000
       });
     } finally {
@@ -156,7 +154,7 @@ test.describe('WebSocket Sync Protocol', () => {
     await page.click('.input-bar button[type="submit"]');
 
     // Message should still appear locally (optimistic UI)
-    await expect(page.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+    await expect(page.locator('div.user').filter({ hasText: messageText })).toBeVisible({
       timeout: 10000
     });
 
@@ -172,7 +170,7 @@ test.describe('WebSocket Sync Protocol', () => {
     await page.waitForTimeout(3000);
 
     // Message should still be visible and eventually synced
-    await expect(page.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: messageText })).toBeVisible();
   });
 
   test.skip('should sync pending messages when connection restored', async ({ page, conversationHelpers }) => {
@@ -189,13 +187,13 @@ test.describe('WebSocket Sync Protocol', () => {
     for (const msg of offlineMessages) {
       await page.fill('.input-bar input[type="text"]', msg);
       await page.click('.input-bar button[type="submit"]');
-      await expect(page.locator('.message-bubble.user').filter({ hasText: msg })).toBeVisible();
+      await expect(page.locator('div.user').filter({ hasText: msg })).toBeVisible();
       await page.waitForTimeout(500);
     }
 
     // Verify all messages are visible locally
     for (const msg of offlineMessages) {
-      await expect(page.locator('.message-bubble.user').filter({ hasText: msg })).toBeVisible();
+      await expect(page.locator('div.user').filter({ hasText: msg })).toBeVisible();
     }
 
     // Go back online
@@ -206,7 +204,7 @@ test.describe('WebSocket Sync Protocol', () => {
 
     // All messages should still be visible and synced
     for (const msg of offlineMessages) {
-      await expect(page.locator('.message-bubble.user').filter({ hasText: msg })).toBeVisible();
+      await expect(page.locator('div.user').filter({ hasText: msg })).toBeVisible();
     }
   });
 
@@ -219,7 +217,7 @@ test.describe('WebSocket Sync Protocol', () => {
     const onlineMsg = 'Message before disconnect';
     await page.fill('.input-bar input[type="text"]', onlineMsg);
     await page.click('.input-bar button[type="submit"]');
-    await expect(page.locator('.message-bubble.user').filter({ hasText: onlineMsg })).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: onlineMsg })).toBeVisible();
 
     // Simulate connection loss
     await page.context().setOffline(true);
@@ -229,7 +227,7 @@ test.describe('WebSocket Sync Protocol', () => {
     const offlineMsg = 'Message during disconnect';
     await page.fill('.input-bar input[type="text"]', offlineMsg);
     await page.click('.input-bar button[type="submit"]');
-    await expect(page.locator('.message-bubble.user').filter({ hasText: offlineMsg })).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: offlineMsg })).toBeVisible();
 
     // Restore connection
     await page.context().setOffline(false);
@@ -238,8 +236,8 @@ test.describe('WebSocket Sync Protocol', () => {
     await page.waitForTimeout(3000);
 
     // Both messages should be visible
-    await expect(page.locator('.message-bubble.user').filter({ hasText: onlineMsg })).toBeVisible();
-    await expect(page.locator('.message-bubble.user').filter({ hasText: offlineMsg })).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: onlineMsg })).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: offlineMsg })).toBeVisible();
   });
 
   test.skip('should preserve message order during WebSocket sync', async ({ browser }) => {
@@ -256,12 +254,11 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Create conversation on device 1
       await page1.click('[data-testid="new-chat-btn"]');
-      await page1.waitForSelector('.chat-window', { state: 'visible' });
 
       // Wait for conversation to be created and selected
-      await page1.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+      await page1.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
-      const selectedConv = await page1.locator('.conversation-item.selected').first();
+      const selectedConv = await page1.locator('.conversation-item.bg-sidebar-accent').first();
       const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
       if (!conversationId) {
@@ -277,7 +274,7 @@ test.describe('WebSocket Sync Protocol', () => {
         await page1.waitForSelector(inputSelector, { state: 'visible' });
         await page1.fill(inputSelector, msg);
         await page1.click(submitSelector);
-        await page1.waitForSelector(`.message-bubble.user:has-text("${msg}")`, { timeout: 5000 });
+        await expect(page1.locator('div.user').filter({ hasText: msg }).first()).toBeVisible({ timeout: 5000 });
         await page1.waitForTimeout(500);
       }
 
@@ -288,10 +285,9 @@ test.describe('WebSocket Sync Protocol', () => {
       await page2.reload();
       await page2.waitForSelector(`[data-conversation-id="${conversationId}"]`, { state: 'visible' });
       await page2.click(`[data-conversation-id="${conversationId}"]`);
-      await page2.waitForSelector('.chat-window', { state: 'visible' });
 
       // Verify all messages appear in correct order
-      const messageBubbles = await page2.locator('.message-bubble.user').allTextContents();
+      const messageBubbles = await page2.locator('div.user').allTextContents();
 
       // Check that all messages are present
       for (const msg of messages) {
@@ -323,12 +319,11 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Create conversation on device 1
       await page1.click('[data-testid="new-chat-btn"]');
-      await page1.waitForSelector('.chat-window', { state: 'visible' });
 
       // Wait for conversation to be created and selected
-      await page1.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+      await page1.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
-      const selectedConv = await page1.locator('.conversation-item.selected').first();
+      const selectedConv = await page1.locator('.conversation-item.bg-sidebar-accent').first();
       const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
       if (!conversationId) {
@@ -342,7 +337,6 @@ test.describe('WebSocket Sync Protocol', () => {
       // Select conversation on both devices
       await page2.waitForSelector(`[data-conversation-id="${conversationId}"]`, { state: 'visible' });
       await page2.click(`[data-conversation-id="${conversationId}"]`);
-      await page2.waitForSelector('.chat-window', { state: 'visible' });
 
       // Send messages from both devices concurrently
       const msg1 = 'Concurrent message from device 1';
@@ -368,11 +362,11 @@ test.describe('WebSocket Sync Protocol', () => {
       await page2.waitForTimeout(4000);
 
       // Both messages should appear on both devices via WebSocket
-      await expect(page1.locator('.message-bubble.user').filter({ hasText: msg1 })).toBeVisible({ timeout: 10000 });
-      await expect(page1.locator('.message-bubble.user').filter({ hasText: msg2 })).toBeVisible({ timeout: 10000 });
+      await expect(page1.locator('div.user').filter({ hasText: msg1 })).toBeVisible({ timeout: 10000 });
+      await expect(page1.locator('div.user').filter({ hasText: msg2 })).toBeVisible({ timeout: 10000 });
 
-      await expect(page2.locator('.message-bubble.user').filter({ hasText: msg1 })).toBeVisible({ timeout: 10000 });
-      await expect(page2.locator('.message-bubble.user').filter({ hasText: msg2 })).toBeVisible({ timeout: 10000 });
+      await expect(page2.locator('div.user').filter({ hasText: msg1 })).toBeVisible({ timeout: 10000 });
+      await expect(page2.locator('div.user').filter({ hasText: msg2 })).toBeVisible({ timeout: 10000 });
     } finally {
       await context1.close();
       await context2.close();
@@ -391,7 +385,7 @@ test.describe('WebSocket Sync Protocol', () => {
     await page.waitForSelector(inputSelector, { state: 'visible' });
     await page.fill(inputSelector, messageText);
     await page.click(submitSelector);
-    await expect(page.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+    await expect(page.locator('div.user').filter({ hasText: messageText })).toBeVisible({
       timeout: 10000
     });
 
@@ -407,10 +401,9 @@ test.describe('WebSocket Sync Protocol', () => {
 
     // Select the conversation again
     await page.click(`[data-conversation-id="${conversationId}"]`);
-    await page.waitForSelector('.chat-window', { state: 'visible' });
 
     // Message should still be visible (loaded from SQLite)
-    await expect(page.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+    await expect(page.locator('div.user').filter({ hasText: messageText })).toBeVisible({
       timeout: 10000
     });
   });
@@ -429,12 +422,11 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Create conversation in tab 1
       await page1.click('[data-testid="new-chat-btn"]');
-      await page1.waitForSelector('.chat-window', { state: 'visible' });
 
       // Wait for conversation to be created and selected
-      await page1.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+      await page1.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
-      const selectedConv = await page1.locator('.conversation-item.selected').first();
+      const selectedConv = await page1.locator('.conversation-item.bg-sidebar-accent').first();
       const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
       if (!conversationId) {
@@ -449,7 +441,7 @@ test.describe('WebSocket Sync Protocol', () => {
       await page1.waitForSelector(inputSelector, { state: 'visible' });
       await page1.fill(inputSelector, messageText);
       await page1.click(submitSelector);
-      await expect(page1.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+      await expect(page1.locator('div.user').filter({ hasText: messageText })).toBeVisible({
         timeout: 10000
       });
 
@@ -465,10 +457,9 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Select conversation in tab 2
       await page2.click(`[data-conversation-id="${conversationId}"]`);
-      await page2.waitForSelector('.chat-window', { state: 'visible' });
 
       // Message should be visible in tab 2 (loaded from SQLite)
-      await expect(page2.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+      await expect(page2.locator('div.user').filter({ hasText: messageText })).toBeVisible({
         timeout: 10000
       });
     } finally {
@@ -490,12 +481,11 @@ test.describe('WebSocket Sync Protocol', () => {
 
       // Create conversation on device 1
       await page1.click('[data-testid="new-chat-btn"]');
-      await page1.waitForSelector('.chat-window', { state: 'visible' });
 
       // Wait for conversation to be created and selected
-      await page1.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+      await page1.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
-      const selectedConv = await page1.locator('.conversation-item.selected').first();
+      const selectedConv = await page1.locator('.conversation-item.bg-sidebar-accent').first();
       const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
       if (!conversationId) {
@@ -566,7 +556,6 @@ test.describe('WebSocket Sync Protocol', () => {
 
     // Create conversation and send message
     await page.click('[data-testid="new-chat-btn"]');
-    await page.waitForSelector('.chat-window', { state: 'visible' });
 
     const messageText = 'Testing MessagePack binary protocol';
     const inputSelector = '.input-bar input[type="text"]';
@@ -577,7 +566,7 @@ test.describe('WebSocket Sync Protocol', () => {
     await page.click(submitSelector);
 
     // Verify message appears
-    await expect(page.locator('.message-bubble.user').filter({ hasText: messageText })).toBeVisible({
+    await expect(page.locator('div.user').filter({ hasText: messageText })).toBeVisible({
       timeout: 10000
     });
 
@@ -614,7 +603,7 @@ test.describe('WebSocket Sync Protocol', () => {
 
     // All messages should appear immediately (optimistic updates)
     for (const msg of rapidMessages) {
-      await expect(page.locator('.message-bubble.user').filter({ hasText: msg })).toBeVisible({
+      await expect(page.locator('div.user').filter({ hasText: msg })).toBeVisible({
         timeout: 10000
       });
     }
@@ -625,11 +614,10 @@ test.describe('WebSocket Sync Protocol', () => {
     // Reload to verify all messages were persisted
     await page.reload();
     await page.click(`[data-conversation-id="${conversationId}"]`);
-    await page.waitForSelector('.chat-window', { state: 'visible' });
 
     // All messages should still be visible
     for (const msg of rapidMessages) {
-      await expect(page.locator('.message-bubble.user').filter({ hasText: msg })).toBeVisible({
+      await expect(page.locator('div.user').filter({ hasText: msg })).toBeVisible({
         timeout: 10000
       });
     }

@@ -22,7 +22,7 @@ const DIMENSION_CONFIG: Array<{
   { key: 'innovation', label: 'Novelty', icon: '💡' },
 ];
 
-interface PivotModeSelectorProps {
+export interface PivotModeSelectorProps {
   showAdvanced?: boolean;
   onPresetChange?: (presetId: PresetId) => void;
   onWeightsChange?: (weights: DimensionWeights) => void;
@@ -68,8 +68,8 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
   }, [disabled, resetToBalanced, onPresetChange]);
 
   return (
-    <div className={cls('bg-card rounded-lg p-4', disabled ? 'opacity-60 pointer-events-none' : '')}>
-      <div className="flex items-center gap-2 mb-3">
+    <div className={cls('bg-surface border border-default rounded-lg p-4', disabled ? 'opacity-60 pointer-events-none' : '')}>
+      <div className="layout-center-gap mb-3">
         <span className="text-base">⚙️</span>
         <span className="font-semibold text-sm text-foreground">Response Style</span>
       </div>

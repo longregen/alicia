@@ -57,7 +57,7 @@ const DimensionScoreBar: React.FC<DimensionScoreBarProps> = ({
   }
 
   return (
-    <div className="flex items-center gap-2 w-full">
+    <div className="layout-center-gap w-full">
       <span className="text-sm min-w-[18px]">{icon}</span>
       <div className="progress-track h-1.5 flex-1">
         <div
@@ -86,9 +86,9 @@ const EliteCard: React.FC<EliteCardProps> = ({
   disabled = false,
 }) => {
   return (
-    <div className={`bg-secondary rounded-lg p-3 transition-colors ${isActive ? 'ring-1 ring-accent bg-accent/10' : 'hover:bg-secondary/80'}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="font-semibold text-[13px] text-foreground flex items-center gap-1">
+    <div className={`card p-3 transition-colors ${isActive ? 'border-accent bg-accent-subtle' : 'hover:border-accent'}`}>
+      <div className="layout-between mb-2">
+        <span className="font-semibold text-[13px] text-default flex items-center gap-1">
           {isActive && <span className="text-sm">⭐</span>}
           {elite.label}
         </span>
@@ -147,7 +147,7 @@ const EliteCard: React.FC<EliteCardProps> = ({
   );
 };
 
-interface EliteSolutionSelectorProps {
+export interface EliteSolutionSelectorProps {
   onSelectElite?: (eliteId: string) => void;
   disabled?: boolean;
 }
@@ -180,8 +180,8 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
 
   if (isLoading) {
     return (
-      <div className="bg-card rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="bg-surface border border-default rounded-lg p-4">
+        <div className="layout-center-gap mb-3">
           <span className="text-lg">🏆</span>
           <span className="font-semibold text-sm text-foreground">Elite Solutions</span>
         </div>
@@ -192,8 +192,8 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
 
   if (elites.length === 0) {
     return (
-      <div className="bg-card rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="bg-surface border border-default rounded-lg p-4">
+        <div className="layout-center-gap mb-3">
           <span className="text-lg">🏆</span>
           <span className="font-semibold text-sm text-foreground">Elite Solutions</span>
         </div>
@@ -208,8 +208,8 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
   }
 
   return (
-    <div className={`bg-card rounded-lg p-4 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
-      <div className="flex items-center gap-2 mb-3">
+    <div className={`bg-surface border border-default rounded-lg p-4 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
+      <div className="layout-center-gap mb-3">
         <span className="text-lg">🏆</span>
         <span className="font-semibold text-sm text-foreground">Elite Solutions</span>
       </div>

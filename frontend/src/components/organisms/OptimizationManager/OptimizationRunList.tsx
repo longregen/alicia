@@ -74,7 +74,7 @@ export function OptimizationRunList({ onSelectRun }: OptimizationRunListProps) {
 
   return (
     <div className="p-5">
-      <div className="flex justify-between items-center mb-5">
+      <div className="layout-between mb-5">
         <h2 className="m-0 text-2xl">Optimization Runs</h2>
         <div className="flex gap-2.5 items-center">
           <label className="font-medium">Filter:</label>

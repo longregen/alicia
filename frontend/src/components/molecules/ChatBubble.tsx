@@ -5,6 +5,8 @@ import FeedbackControls from '../atoms/FeedbackControls';
 import BranchNavigator from '../atoms/BranchNavigator';
 import { Textarea } from '../atoms/Textarea';
 import Button from '../atoms/Button';
+import Badge from '../atoms/Badge';
+import ConflictResolutionDialog from './ConflictResolutionDialog';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
 import { cn } from '../../lib/utils';
@@ -18,6 +20,8 @@ import type {
   ToolData,
 } from '../../types/components';
 import type { MessageId } from '../../types/streaming';
+import type { SyncStatus } from '../../types/models';
+import type { ConflictDetails } from '../../types/sync';
 
 /**
  * Collapsible reasoning block component.
@@ -53,7 +57,7 @@ const ReasoningBlock: React.FC<ReasoningBlockProps> = ({ content, keyId, id }) =
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={cls(
-          'w-full flex items-center justify-between',
+          'w-full layout-between',
           'text-xs text-reasoning font-medium mb-1',
           'hover:text-accent transition-colors'
         )}
@@ -135,6 +139,12 @@ export interface ChatBubbleProps extends BaseComponentProps {
   messageId?: MessageId;
   /** Callback when user clicks "Continue from here" on an assistant message */
   onContinueFromHere?: (messageId: MessageId) => void;
+  /** Sync status for offline sync support */
+  syncStatus?: SyncStatus;
+  /** Server version content for conflict resolution */
+  serverContent?: string;
+  /** Conflict details if sync status is 'conflict' */
+  conflictDetails?: ConflictDetails;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -148,6 +158,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   tools = [],
   messageId,
   onContinueFromHere,
+  syncStatus,
+  serverContent,
+  conflictDetails,
   className = ''
 }) => {
   const [displayedContent, setDisplayedContent] = useState<string>('');
@@ -155,6 +168,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editedContent, setEditedContent] = useState<string>('');
   const [isHovering, setIsHovering] = useState<boolean>(false);
+  const [conflictDialogOpen, setConflictDialogOpen] = useState<boolean>(false);
 
   // Branch store for managing message versions
   const {
@@ -276,7 +290,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const getContentToDisplay = (): React.ReactNode => {
     if (state === MESSAGE_STATES.STREAMING) {
       return (
-        <div className="flex items-center">
+        <div className="layout-center">
           <span>{processContent(displayedContent)}</span>
           <span className="inline-block w-0.5 h-4 bg-current ml-1 animate-pulse" />
         </div>
@@ -314,6 +328,22 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     }
   };
 
+  const handleConflictClick = () => {
+    if (syncStatus === 'conflict') {
+      setConflictDialogOpen(true);
+    }
+  };
+
+  const handleKeepLocal = () => {
+    console.log('Keeping local version for message:', messageId);
+    // TODO: Implement API call to resolve conflict with local version
+  };
+
+  const handleKeepServer = () => {
+    console.log('Keeping server version for message:', messageId);
+    // TODO: Implement API call to resolve conflict with server version
+  };
+
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
   const belowAddons = addons.filter(addon => addon.position === 'below');
 
@@ -334,7 +364,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   return (
     <div
-      className={cls('flex flex-col gap-2', roleClass, className)}
+      className={cls('layout-stack-gap', roleClass, className)}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
@@ -348,10 +378,39 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         </div>
       )}
 
+      {/* Sync conflict badge */}
+      {syncStatus === 'conflict' && (
+        <div className={cn(
+          'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mb-1',
+          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
+        )}>
+          <Badge
+            variant="destructive"
+            className="cursor-pointer hover:opacity-80"
+            onClick={handleConflictClick}
+          >
+            <svg
+              className="w-3 h-3 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            Sync Conflict - Click to resolve
+          </Badge>
+        </div>
+      )}
+
       {/* Main message bubble or edit mode */}
       {isEditing ? (
         <div className={cn(
-          'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg',
+          'w-full message-max-width',
           type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
         )}>
           <Textarea
@@ -446,10 +505,10 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
       {/* Addons footer with timestamp and branch navigator */}
       <div className={cls(
-        'w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg',
+        'w-full message-max-width',
         type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
       )}>
-        <div className="flex items-center justify-between gap-2">
+        <div className="layout-between-gap">
           <div className="flex-1">
             <ComplexAddons
               addons={inlineAddons}
@@ -475,7 +534,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       {/* Below addons */}
       {belowAddons.length > 0 && (
         <div className={cls(
-          'flex flex-col gap-2',
+          'layout-stack-gap',
           type === MESSAGE_TYPES.USER ? 'ml-4' : 'mr-4'
         )}>
           {belowAddons.map(addon => (
@@ -484,6 +543,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Conflict resolution dialog */}
+      {syncStatus === 'conflict' && serverContent && (
+        <ConflictResolutionDialog
+          open={conflictDialogOpen}
+          onOpenChange={setConflictDialogOpen}
+          localContent={effectiveContent}
+          serverContent={serverContent}
+          conflict={conflictDetails}
+          onKeepLocal={handleKeepLocal}
+          onKeepServer={handleKeepServer}
+        />
       )}
     </div>
   );

@@ -155,16 +155,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   return (
-    <div className={cls('flex flex-col h-full bg-background', className)}>
+    <div className={cls('layout-stack h-full bg-background', className)}>
       {/* Chat Header */}
-      <header className="h-14 border-b border-border flex items-center justify-between px-4 flex-shrink-0">
+      <header className="h-14 border-b border-border layout-between px-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h2 className="font-medium text-foreground">{conversationTitle}</h2>
           <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
             {conversationId || 'No ID'}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="layout-center-gap">
           <button
             onClick={handleAudioToggle}
             className={cls(
@@ -251,14 +251,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Voice controls - visible when voice mode is active */}
       {voiceModeActive && (
-        <div className="voice-controls flex flex-col items-center gap-4 p-4 border-t border-primary-blue-glow">
+        <div className="voice-controls layout-vcenter-gap p-4 border-t border-primary-blue-glow">
           {/* VoiceVisualizer */}
           <VoiceVisualizer state={voiceState} />
 
           {/* Control buttons row */}
           <div className="flex items-center justify-center gap-4">
             {/* Audio input indicator */}
-            <div className="audio-input flex items-center gap-2 text-sm text-muted-text">
+            <div className="audio-input layout-center-gap text-sm text-muted-text">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
               </svg>
@@ -286,7 +286,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             </button>
 
             {/* Audio output indicator */}
-            <div className="audio-output flex items-center gap-2 text-sm text-muted-text">
+            <div className="audio-output layout-center-gap text-sm text-muted-text">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
               </svg>
@@ -297,10 +297,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       )}
 
       {/* Voice mode toggle button and voice selector */}
-      <div className="flex items-center justify-between p-2 border-t border-primary-blue-glow">
+      <div className="layout-between p-2 border-t border-primary-blue-glow">
         <button
           className={cls(
-            'voice-mode-toggle flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200',
+            'voice-mode-toggle layout-center-gap px-3 py-2 rounded-lg transition-all duration-200',
             voiceModeActive
               ? 'active bg-primary-blue text-white'
               : 'bg-surface-800 text-muted-text hover:bg-surface-700'
@@ -318,7 +318,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         {/* Voice selector toggle - always accessible */}
         <div className="relative">
           <button
-            className="voice-selector-toggle flex items-center gap-2 px-3 py-2 text-sm text-muted-text hover:text-primary-text transition-colors rounded-lg hover:bg-surface-700"
+            className="voice-selector-toggle layout-center-gap px-3 py-2 text-sm text-muted-text hover:text-primary-text transition-colors rounded-lg hover:bg-surface-700"
             aria-label="Select voice"
             onClick={toggleVoiceSelector}
             aria-expanded={voiceSelectorOpen}
@@ -333,7 +333,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           {voiceSelectorOpen && (
             <div className="voice-selector-panel absolute bottom-full right-0 mb-2 w-80 bg-surface-800 border border-primary-blue-glow rounded-lg shadow-lg">
               {/* Header with close button */}
-              <div className="voice-selector-header flex justify-between items-center p-3 border-b border-primary-blue-glow">
+              <div className="voice-selector-header layout-between p-3 border-b border-primary-blue-glow">
                 <h3 className="text-sm font-semibold text-primary-text">Voice Settings</h3>
                 <button
                   className="voice-selector-close w-6 h-6 flex items-center justify-center rounded hover:bg-surface-700 text-muted-text hover:text-primary-text transition-colors"
@@ -351,7 +351,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 {/* Voice selection */}
                 <div className="voice-option-group">
                   <label className="voice-label text-xs text-muted-text mb-2 block">Voice</label>
-                  <div className="flex items-center gap-2">
+                  <div className="layout-center-gap">
                     <select
                       className="voice-select flex-1 px-3 py-2 bg-surface-700 border border-primary-blue-glow rounded text-sm text-primary-text focus:outline-none focus:border-primary-blue"
                       value={selectedVoice}

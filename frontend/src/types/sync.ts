@@ -21,6 +21,14 @@ export interface ConflictDetails {
   reason: string;
   serverMessage?: MessageResponse;
   resolution: string;
+  /** When the local version was last modified */
+  localModifiedAt?: string;
+  /** When the server version was last modified */
+  serverModifiedAt?: string;
+  /** The type of conflict (content, metadata, etc.) */
+  conflictType?: 'content' | 'metadata' | 'both';
+  /** Additional context about the conflict */
+  description?: string;
 }
 
 export interface SyncedMessage {

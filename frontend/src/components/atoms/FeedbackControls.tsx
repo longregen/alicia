@@ -54,7 +54,7 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
   );
 
   return (
-    <div className={cls('flex items-center gap-2', className)}>
+    <div className={cls('layout-center-gap', className)}>
       {/* Upvote button */}
       <button
         onClick={handleUpvote}
