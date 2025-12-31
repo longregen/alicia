@@ -97,7 +97,7 @@ function AppContent({
   };
 
   return (
-    <div className="flex h-screen bg-app">
+    <div className="app flex h-screen bg-app">
       {conversationsError && (
         <div className="fixed top-0 left-0 right-0 bg-error text-white p-3 text-center z-[1000]">
           {conversationsError}

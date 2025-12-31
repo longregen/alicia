@@ -45,6 +45,8 @@ export function ToastContainer() {
             flex items-center gap-3 p-4 rounded-lg shadow-lg
             animate-slide-in backdrop-blur-sm
             ${variantStyles[toast.variant]}
+            ${toast.variant === 'success' ? 'toast-success' : ''}
+            ${toast.variant === 'error' ? 'toast-error' : ''}
           `}
           role="alert"
         >

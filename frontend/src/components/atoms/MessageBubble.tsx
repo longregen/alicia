@@ -106,6 +106,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 }) => {
   const getBubbleClasses = (): string => {
     const baseClasses = [
+      'message-bubble',
       'relative',
       'max-w-xs',
       'sm:max-w-sm',
@@ -125,6 +126,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       case MESSAGE_TYPES.USER:
         return cls([
           ...baseClasses,
+          'user',
           'bg-accent-subtle',
           'text-default',
           'ml-auto',
@@ -135,6 +137,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       case MESSAGE_TYPES.ASSISTANT:
         return cls([
           ...baseClasses,
+          'assistant',
           'bg-surface',
           'text-default',
           'mr-auto',
@@ -145,6 +148,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       case MESSAGE_TYPES.SYSTEM:
         return cls([
           ...baseClasses,
+          'system',
           'bg-surface',
           'text-muted',
           'border',
