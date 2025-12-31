@@ -92,7 +92,7 @@ test.describe('Voice Workflow (Using Helpers)', () => {
     // Send a message
     await page.fill('.input-bar input[type="text"]', 'Hello in voice mode');
     await page.click('.input-bar button[type="submit"]');
-    await expect(page.locator('.message-bubble:has-text("Hello in voice mode")')).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: 'Hello in voice mode' }).first()).toBeVisible();
 
     // Deactivate voice mode
     await voiceHelpers.deactivateVoiceMode();

@@ -13,3 +13,5 @@ export type {
   SearchResultResponse,
   SearchResultsResponse,
 } from './useMemories';
+export { useTheme } from './useTheme';
+export type { Theme } from './useTheme';

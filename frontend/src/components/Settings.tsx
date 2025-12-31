@@ -16,6 +16,19 @@ import { Kbd, KbdGroup } from './atoms/Kbd';
 import Button from './atoms/Button';
 import { Label } from './atoms/Label';
 import { cn } from '../lib/utils';
+import { useTheme } from '../hooks/useTheme';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from './atoms/AlertDialog';
+import Toast from './atoms/Toast';
 
 interface SettingsProps {
   isOpen: boolean;
@@ -26,17 +39,27 @@ interface SettingsProps {
 
 export type SettingsTab = 'mcp' | 'server' | 'memories' | 'notes' | 'optimization' | 'preferences';
 
+// Default preference values
+const DEFAULT_PREFERENCES = {
+  audioOutputEnabled: false,
+  voiceSpeed: 1.0,
+  theme: 'system' as const,
+  responseLength: 'balanced' as const,
+};
+
 export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
-  const [audioOutputEnabled, setAudioOutputEnabled] = useState(false);
+  const [audioOutputEnabled, setAudioOutputEnabled] = useState(DEFAULT_PREFERENCES.audioOutputEnabled);
 
   // Sync active tab when defaultTab prop changes
   useEffect(() => {
     setActiveTab(defaultTab);
   }, [defaultTab]);
-  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
-  const [theme, setTheme] = useState('system');
-  const [responseLength, setResponseLength] = useState<'concise' | 'balanced' | 'detailed'>('balanced');
+  const [voiceSpeed, setVoiceSpeed] = useState(DEFAULT_PREFERENCES.voiceSpeed);
+  const { theme, setTheme } = useTheme();
+  const [responseLength, setResponseLength] = useState<'concise' | 'balanced' | 'detailed'>(DEFAULT_PREFERENCES.responseLength);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   // Handle dimension preference changes - send to server via WebSocket
   const handlePresetChange = useCallback((presetId: PresetId) => {
@@ -73,6 +96,16 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
     });
   }, [conversationId]);
 
+  // Handle reset all preferences
+  const handleResetAll = useCallback(() => {
+    setAudioOutputEnabled(DEFAULT_PREFERENCES.audioOutputEnabled);
+    setVoiceSpeed(DEFAULT_PREFERENCES.voiceSpeed);
+    setTheme(DEFAULT_PREFERENCES.theme);
+    setResponseLength(DEFAULT_PREFERENCES.responseLength);
+    setShowResetDialog(false);
+    setShowToast(true);
+  }, [setTheme]);
+
   if (!isOpen) return null;
 
   return (
@@ -80,9 +113,30 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
       {/* Header */}
       <div className="flex justify-between items-center p-6 md:px-8 border-b border-default bg-surface">
         <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-default">Settings & Info</h1>
-        <button className="btn-ghost text-3xl w-10 h-10" onClick={onClose} title="Close settings">
-          ×
-        </button>
+        <div className="layout-center-gap">
+          <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                Reset All
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset all preferences?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will reset all preferences in the Preferences tab to their default values. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetAll}>Reset All</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <button className="btn-ghost text-3xl w-10 h-10" onClick={onClose} title="Close settings">
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Tab navigation - vertical on mobile, horizontal on desktop */}
@@ -230,12 +284,33 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
                 </CardContent>
               </Card>
 
+              {/* Memory Settings Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Memory</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="layout-between">
+                    <Label htmlFor="auto-pin">Auto-pin important memories</Label>
+                    <Switch id="auto-pin" defaultChecked />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="confirm-delete">Confirm before deleting</Label>
+                    <Switch id="confirm-delete" defaultChecked />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="show-relevance">Show relevance scores</Label>
+                    <Switch id="show-relevance" defaultChecked />
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Appearance Card */}
               <Card>
                 <CardHeader>
                   <CardTitle>Appearance</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="theme-select">Theme</Label>
                     <Select value={theme} onValueChange={setTheme}>
@@ -248,6 +323,35 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
                         <SelectItem value="system">System</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="compact-mode">Compact mode</Label>
+                    <Switch id="compact-mode" />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="reduce-motion">Reduce motion</Label>
+                    <Switch id="reduce-motion" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Notifications Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notifications</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="layout-between">
+                    <Label htmlFor="sound-notifications">Sound notifications</Label>
+                    <Switch id="sound-notifications" defaultChecked />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="desktop-notifications">Desktop notifications</Label>
+                    <Switch id="desktop-notifications" />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="message-preview">Message previews</Label>
+                    <Switch id="message-preview" defaultChecked />
                   </div>
                 </CardContent>
               </Card>
@@ -308,6 +412,18 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
           )}
         </div>
       </div>
+
+      {/* Toast notification */}
+      {showToast && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <Toast
+            message="All preferences have been reset to defaults"
+            variant="success"
+            duration={3000}
+            onDismiss={() => setShowToast(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

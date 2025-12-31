@@ -22,7 +22,7 @@ const DIMENSION_CONFIG: Array<{
   { key: 'innovation', label: 'Novelty', icon: '💡' },
 ];
 
-interface PivotModeSelectorProps {
+export interface PivotModeSelectorProps {
   showAdvanced?: boolean;
   onPresetChange?: (presetId: PresetId) => void;
   onWeightsChange?: (weights: DimensionWeights) => void;

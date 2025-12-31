@@ -454,14 +454,11 @@ const test = base.extend<TestFixtures>({
       async createConversation() {
         await page.click('[data-testid="new-chat-btn"]');
 
-        // Wait for conversation to be created and selected
-        await page.waitForSelector('.chat-window', { state: 'visible' });
-
         // Wait for conversation to be selected
-        await page.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+        await page.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
         // Get the conversation ID from the selected item
-        const selectedConv = await page.locator('.conversation-item.selected').first();
+        const selectedConv = await page.locator('.conversation-item.bg-sidebar-accent').first();
         const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
         if (!conversationId) {
@@ -474,9 +471,7 @@ const test = base.extend<TestFixtures>({
       async sendMessage(conversationId: string, message: string) {
         // Make sure the conversation is selected
         await page.click(`[data-conversation-id="${conversationId}"]`);
-
-        // Wait for chat window to be visible
-        await page.waitForSelector('.chat-window', { state: 'visible' });
+        await page.keyboard.press('Escape');
 
         // Wait for input to be visible and enabled
         const inputSelector = '.input-bar input[type="text"]';
@@ -499,7 +494,7 @@ const test = base.extend<TestFixtures>({
         await page.click('.input-bar button[type="submit"]');
 
         // Wait for the user message to appear in the list
-        await page.waitForSelector(`.message-bubble.user:has-text("${message}")`, {
+        await page.locator('div.user').filter({ hasText: message }).first().waitFor({
           timeout: 10000,
         });
 
@@ -509,10 +504,12 @@ const test = base.extend<TestFixtures>({
       },
 
       async deleteConversation(conversationId: string) {
-        // Click the delete button for the conversation using data-testid
+        // Click the conversation item to open dropdown menu
         const conversationItem = page.locator(`[data-conversation-id="${conversationId}"]`);
-        const deleteBtn = conversationItem.locator('[data-testid="delete-conversation-btn"]');
-        await deleteBtn.click();
+        await conversationItem.click();
+
+        // Click the delete menu item
+        await page.click('[data-testid="delete-conversation-menu-item"]');
 
         // Wait for conversation to be removed from the DOM
         await page.waitForSelector(`[data-conversation-id="${conversationId}"]`, {
@@ -522,7 +519,7 @@ const test = base.extend<TestFixtures>({
       },
 
       async waitForMessage(messageText: string) {
-        await page.waitForSelector(`.message-bubble:has-text("${messageText}")`, {
+        await page.locator('div.user, div.assistant, div.system').filter({ hasText: messageText }).first().waitFor({
           timeout: 10000,
         });
       },

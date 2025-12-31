@@ -114,10 +114,12 @@ test.describe('Console Errors', () => {
 
     // Navigate back to first conversation
     await page.click(`[data-conversation-id="${conv1}"]`);
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
 
     // Navigate to second conversation
     await page.click(`[data-conversation-id="${conv2}"]`);
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
 
     expect(consoleErrors, `Console errors found: ${consoleErrors.join('\n')}`).toEqual([]);
