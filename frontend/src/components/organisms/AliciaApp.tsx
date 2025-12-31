@@ -5,7 +5,9 @@ import { MemoryManager } from './MemoryManager';
 import ServerInfoPanel from './ServerPanel/ServerInfoPanel';
 import { Settings } from '../Settings';
 import { useConversations } from '../../hooks/useConversations';
+import { useConversationStore } from '../../stores/conversationStore';
 import type { VoiceState } from '../atoms/VoiceVisualizer';
+import { sendControlStop, sendControlVariation } from '../../adapters/protocolAdapter';
 
 /**
  * Panel types for the main navigation
@@ -92,13 +94,36 @@ export function AliciaApp() {
   };
 
   const handleStopStreaming = () => {
-    // TODO: Implement stop streaming
-    console.log('Stop streaming');
+    if (!activeConversationId) {
+      console.warn('Cannot stop streaming: no active conversation');
+      return;
+    }
+
+    sendControlStop(activeConversationId, 'all');
   };
 
   const handleRegenerateResponse = () => {
-    // TODO: Implement regenerate response
-    console.log('Regenerate response');
+    if (!activeConversationId) {
+      console.warn('Cannot regenerate: no active conversation');
+      return;
+    }
+
+    // Get the conversation store to find the last assistant message
+    const store = useConversationStore.getState();
+    const messages = Object.values(store.messages)
+      .filter(msg => msg.conversationId === activeConversationId && msg.role === 'assistant')
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    if (messages.length === 0) {
+      console.warn('Cannot regenerate: no assistant messages found');
+      return;
+    }
+
+    // Get the last assistant message
+    const lastAssistantMessage = messages[messages.length - 1];
+
+    // Send regenerate request
+    sendControlVariation(activeConversationId, lastAssistantMessage.id, 'regenerate');
   };
 
   const handlePanelChange = (panel: 'memory' | 'server' | 'settings') => {
