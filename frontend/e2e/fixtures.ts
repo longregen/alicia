@@ -429,6 +429,23 @@ const test = base.extend<TestFixtures>({
     // Setup all API mocks before each test
     await setupApiMocks(page, mockState);
 
+    // Mock the connectionStore to always be connected in tests
+    // This prevents the input field from being disabled with "Connecting..." placeholder
+    await page.addInitScript(() => {
+      // Override the connectionStore's initial state to be Connected
+      // This runs before the page loads, ensuring the store starts in the right state
+      (window as any).__E2E_CONNECTION_MOCK__ = {
+        status: 'connected',
+        error: null,
+        roomName: null,
+        roomSid: null,
+        participants: {},
+        localParticipantId: null,
+        connectedAt: new Date(),
+        reconnectAttempts: 0,
+      };
+    });
+
     await use(page);
   },
 
