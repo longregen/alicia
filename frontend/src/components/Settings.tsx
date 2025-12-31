@@ -87,7 +87,7 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
 
       {/* Tab navigation - vertical on mobile, horizontal on desktop */}
       <div className="bg-surface border-b border-default overflow-x-auto">
-        <div className="flex flex-col md:flex-row md:px-8">
+        <div className="flex flex-col md:flex-row md:gap-1 md:px-8">
           <button
             className={`tab whitespace-nowrap ${activeTab === 'mcp' ? 'active' : ''}`}
             onClick={() => setActiveTab('mcp')}

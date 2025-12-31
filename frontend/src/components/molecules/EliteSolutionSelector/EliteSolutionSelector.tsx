@@ -86,9 +86,9 @@ const EliteCard: React.FC<EliteCardProps> = ({
   disabled = false,
 }) => {
   return (
-    <div className={`card p-3 transition-colors ${isActive ? 'border-accent bg-accent-subtle' : 'hover:border-accent'}`}>
+    <div className={`bg-secondary rounded-lg p-3 transition-colors ${isActive ? 'ring-1 ring-accent bg-accent/10' : 'hover:bg-secondary/80'}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="font-semibold text-[13px] text-default flex items-center gap-1">
+        <span className="font-semibold text-[13px] text-foreground flex items-center gap-1">
           {isActive && <span className="text-sm">⭐</span>}
           {elite.label}
         </span>
@@ -180,26 +180,26 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
 
   if (isLoading) {
     return (
-      <div className="bg-surface border border-default rounded-lg p-4">
+      <div className="bg-card rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg">🏆</span>
-          <span className="font-semibold text-sm text-default">Elite Solutions</span>
+          <span className="font-semibold text-sm text-foreground">Elite Solutions</span>
         </div>
-        <div className="py-6 text-center text-muted text-[13px]">Loading elite solutions...</div>
+        <div className="py-6 text-center text-muted-foreground text-[13px]">Loading elite solutions...</div>
       </div>
     );
   }
 
   if (elites.length === 0) {
     return (
-      <div className="bg-surface border border-default rounded-lg p-4">
+      <div className="bg-card rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg">🏆</span>
-          <span className="font-semibold text-sm text-default">Elite Solutions</span>
+          <span className="font-semibold text-sm text-foreground">Elite Solutions</span>
         </div>
-        <div className="py-6 text-center text-muted text-[13px]">
+        <div className="py-6 text-center text-muted-foreground text-[13px]">
           <p>No elite solutions available yet.</p>
-          <p className="text-xs text-muted mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Elite solutions are generated through prompt optimization.
           </p>
         </div>
@@ -208,10 +208,10 @@ export const EliteSolutionSelector: React.FC<EliteSolutionSelectorProps> = ({
   }
 
   return (
-    <div className={`bg-surface border border-default rounded-lg p-4 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
+    <div className={`bg-card rounded-lg p-4 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🏆</span>
-        <span className="font-semibold text-sm text-default">Elite Solutions</span>
+        <span className="font-semibold text-sm text-foreground">Elite Solutions</span>
       </div>
 
       <p className="text-xs text-muted mb-3">

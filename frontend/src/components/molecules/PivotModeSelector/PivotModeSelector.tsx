@@ -68,10 +68,10 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
   }, [disabled, resetToBalanced, onPresetChange]);
 
   return (
-    <div className={cls('bg-surface border border-default rounded-lg p-4', disabled ? 'opacity-60 pointer-events-none' : '')}>
+    <div className={cls('bg-card rounded-lg p-4', disabled ? 'opacity-60 pointer-events-none' : '')}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-base">⚙️</span>
-        <span className="font-semibold text-sm text-default">Response Style</span>
+        <span className="font-semibold text-sm text-foreground">Response Style</span>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-3">
@@ -79,10 +79,10 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
           <button
             key={preset.id}
             className={cls(
-              'flex items-center gap-1 px-3 py-2 border rounded-md bg-elevated cursor-pointer text-sm transition-all',
+              'flex items-center gap-1 px-3 py-2 rounded-md cursor-pointer text-sm transition-all',
               presetId === preset.id
-                ? 'border-accent bg-accent-subtle text-accent font-medium'
-                : 'border-default text-muted hover:border-accent hover:bg-accent-subtle disabled:opacity-50 disabled:cursor-not-allowed'
+                ? 'bg-accent/20 text-accent font-medium'
+                : 'bg-secondary text-muted-foreground hover:bg-accent/10 hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed'
             )}
             onClick={() => handlePresetClick(preset.id)}
             disabled={disabled}
@@ -104,7 +104,7 @@ export const PivotModeSelector: React.FC<PivotModeSelectorProps> = ({
       </button>
 
       {showAdvanced && (
-        <div className="mt-3 pt-3 border-t border-default">
+        <div className="mt-3 pt-3 border-t border-border/50">
           <div className="flex flex-col gap-3">
             {DIMENSION_CONFIG.map(({ key, label, icon }) => (
               <div key={key} className="flex items-center gap-3">
