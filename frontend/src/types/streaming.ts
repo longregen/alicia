@@ -110,6 +110,7 @@ export interface Message {
   sentenceIds: SentenceId[];
   toolCallIds: ToolCallId[];
   memoryTraceIds: MemoryTraceId[];
+  sync_status?: 'pending' | 'synced' | 'conflict';
 }
 
 // Normalized conversation store state

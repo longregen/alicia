@@ -147,7 +147,7 @@ const EliteCard: React.FC<EliteCardProps> = ({
   );
 };
 
-interface EliteSolutionSelectorProps {
+export interface EliteSolutionSelectorProps {
   onSelectElite?: (eliteId: string) => void;
   disabled?: boolean;
 }

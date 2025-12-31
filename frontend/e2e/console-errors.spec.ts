@@ -113,11 +113,16 @@ test.describe('Console Errors', () => {
     await page.waitForTimeout(300);
 
     // Navigate back to first conversation
+    // Press Escape first to close any open dropdown menus
+    await page.keyboard.press('Escape');
     await page.click(`[data-conversation-id="${conv1}"]`);
+    await page.keyboard.press('Escape'); // Close the dropdown that opens on click
     await page.waitForTimeout(300);
 
     // Navigate to second conversation
+    await page.keyboard.press('Escape');
     await page.click(`[data-conversation-id="${conv2}"]`);
+    await page.keyboard.press('Escape'); // Close the dropdown that opens on click
     await page.waitForTimeout(300);
 
     expect(consoleErrors, `Console errors found: ${consoleErrors.join('\n')}`).toEqual([]);

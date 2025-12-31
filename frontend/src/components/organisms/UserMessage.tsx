@@ -120,6 +120,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
       timestamp={message.createdAt}
       addons={addons}
       messageId={messageId}
+      syncStatus={message.sync_status}
       className={className}
     />
   );

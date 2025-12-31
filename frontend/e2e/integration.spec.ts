@@ -61,17 +61,17 @@ test.describe('End-to-End Integration', () => {
     await conversationHelpers.sendMessage(conversationId, userMessage);
 
     // Verify user message appears
-    await expect(page.locator(`.message-bubble.user:has-text("${userMessage}")`)).toBeVisible();
+    await expect(page.locator(`div.user:has-text("${userMessage}")`)).toBeVisible();
 
     // Step 3: Wait for assistant response
     // The response might take some time, so we wait longer
-    const assistantMessage = page.locator('.message-bubble.assistant').first();
+    const assistantMessage = page.locator('div.assistant').first();
     await expect(assistantMessage).toBeVisible({ timeout: 30000 });
 
     // Step 4: Check for tool usage or reasoning (if present)
     // Tools are displayed as part of ComplexAddons in ChatBubble
     // Reasoning is displayed inline within message content
-    const messageContent = page.locator('.message-bubble.assistant').first();
+    const messageContent = page.locator('div.assistant').first();
     const hasContent = await messageContent.textContent();
     expect(hasContent).toBeTruthy();
 
@@ -119,7 +119,7 @@ test.describe('End-to-End Integration', () => {
     await conversationHelpers.sendMessage(conversationId, userMessage);
 
     // Wait for assistant response with tool usage
-    const assistantMessage = page.locator('.message-bubble.assistant').first();
+    const assistantMessage = page.locator('div.assistant').first();
     await expect(assistantMessage).toBeVisible({ timeout: 30000 });
 
     // Verify the assistant message has content
@@ -157,7 +157,7 @@ test.describe('End-to-End Integration', () => {
     await conversationHelpers.sendMessage(conversationId, userMessage);
 
     // Wait for assistant response
-    const assistantMessage = page.locator('.message-bubble.assistant').first();
+    const assistantMessage = page.locator('div.assistant').first();
     await expect(assistantMessage).toBeVisible({ timeout: 30000 });
 
     // Look for reasoning display
@@ -186,7 +186,7 @@ test.describe('End-to-End Integration', () => {
     await conversationHelpers.sendMessage(conversationId, userMessage);
 
     // Wait for assistant response
-    const assistantMessage = page.locator('.message-bubble.assistant').first();
+    const assistantMessage = page.locator('div.assistant').first();
     await expect(assistantMessage).toBeVisible({ timeout: 30000 });
 
     // Look for audio controls (AudioAddon component)
@@ -218,8 +218,8 @@ test.describe('End-to-End Integration', () => {
     const messageText = 'This message should persist';
     await conversationHelpers.sendMessage(conversationId, messageText);
 
-    // Verify message is visible
-    await expect(page.locator(`.message-bubble:has-text("${messageText}")`)).toBeVisible();
+    // Verify message is visible - use .first() since message bubble appears in multiple containers
+    await expect(page.locator('div.user').filter({ hasText: messageText }).first()).toBeVisible();
 
     // Reload page
     await page.reload();
@@ -233,8 +233,8 @@ test.describe('End-to-End Integration', () => {
     // Select conversation
     await page.click(`[data-conversation-id="${conversationId}"]`);
 
-    // Verify message is still there
-    await expect(page.locator(`.message-bubble:has-text("${messageText}")`)).toBeVisible();
+    // Verify message is still there - use .first() since message bubble appears in multiple containers
+    await expect(page.locator('div.user').filter({ hasText: messageText }).first()).toBeVisible();
   });
 
   test.skip('should handle error states gracefully', async ({
@@ -256,8 +256,8 @@ test.describe('End-to-End Integration', () => {
     await page.fill('.input-bar input[type="text"]', messageText);
     await page.click('.input-bar button[type="submit"]');
 
-    // Message should appear locally
-    await expect(page.locator(`.message-bubble:has-text("${messageText}")`)).toBeVisible();
+    // Message should appear locally - use .first() since message bubble appears in multiple containers
+    await expect(page.locator('div.user').filter({ hasText: messageText }).first()).toBeVisible();
 
     // May show error indicator or disconnection status
     // Connection status is shown in ChatWindow with class .connection-status
@@ -273,7 +273,7 @@ test.describe('End-to-End Integration', () => {
     // Wait for recovery
     await page.waitForTimeout(3000);
 
-    // Message should still be visible
-    await expect(page.locator(`.message-bubble:has-text("${messageText}")`)).toBeVisible();
+    // Message should still be visible - use .first() since message bubble appears in multiple containers
+    await expect(page.locator('div.user').filter({ hasText: messageText }).first()).toBeVisible();
   });
 });

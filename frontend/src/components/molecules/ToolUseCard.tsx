@@ -73,7 +73,10 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
                 {tool.name}
               </span>
               {tool.status && (
-                <StatusBadge status={getStatusType(tool.status)} />
+                <StatusBadge
+                  status={getStatusType(tool.status)}
+                  className="rounded-full"
+                />
               )}
             </div>
             {tool.description && (

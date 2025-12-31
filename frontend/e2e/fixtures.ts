@@ -455,13 +455,11 @@ const test = base.extend<TestFixtures>({
         await page.click('[data-testid="new-chat-btn"]');
 
         // Wait for conversation to be created and selected
-        await page.waitForSelector('.chat-window', { state: 'visible' });
-
-        // Wait for conversation to be selected
-        await page.waitForSelector('.conversation-item.selected', { state: 'visible', timeout: 5000 });
+        // Wait for a conversation item with bg-sidebar-accent class (indicates selection)
+        await page.waitForSelector('.conversation-item.bg-sidebar-accent', { state: 'visible', timeout: 5000 });
 
         // Get the conversation ID from the selected item
-        const selectedConv = await page.locator('.conversation-item.selected').first();
+        const selectedConv = await page.locator('.conversation-item.bg-sidebar-accent').first();
         const conversationId = await selectedConv.getAttribute('data-conversation-id');
 
         if (!conversationId) {
@@ -475,8 +473,8 @@ const test = base.extend<TestFixtures>({
         // Make sure the conversation is selected
         await page.click(`[data-conversation-id="${conversationId}"]`);
 
-        // Wait for chat window to be visible
-        await page.waitForSelector('.chat-window', { state: 'visible' });
+        // Close any open menus/dropdowns by pressing Escape
+        await page.keyboard.press('Escape');
 
         // Wait for input to be visible and enabled
         const inputSelector = '.input-bar input[type="text"]';
@@ -499,7 +497,8 @@ const test = base.extend<TestFixtures>({
         await page.click('.input-bar button[type="submit"]');
 
         // Wait for the user message to appear in the list
-        await page.waitForSelector(`.message-bubble.user:has-text("${message}")`, {
+        // ChatBubble uses role classes on a flex container div
+        await page.waitForSelector(`div.user:has-text("${message}")`, {
           timeout: 10000,
         });
 
@@ -509,10 +508,22 @@ const test = base.extend<TestFixtures>({
       },
 
       async deleteConversation(conversationId: string) {
-        // Click the delete button for the conversation using data-testid
+        // The conversation item is wrapped in a DropdownMenuTrigger
+        // Click on it to open the dropdown menu
         const conversationItem = page.locator(`[data-conversation-id="${conversationId}"]`);
-        const deleteBtn = conversationItem.locator('[data-testid="delete-conversation-btn"]');
-        await deleteBtn.click();
+
+        // First ensure it's visible
+        await expect(conversationItem).toBeVisible();
+
+        // Click to open the dropdown menu (DropdownMenuTrigger opens on click)
+        await conversationItem.click();
+
+        // Wait for dropdown menu content to appear
+        const deleteMenuItem = page.locator('[data-testid="delete-conversation-menu-item"]');
+        await expect(deleteMenuItem).toBeVisible({ timeout: 5000 });
+
+        // Click the delete menu item
+        await deleteMenuItem.click();
 
         // Wait for conversation to be removed from the DOM
         await page.waitForSelector(`[data-conversation-id="${conversationId}"]`, {
@@ -522,9 +533,10 @@ const test = base.extend<TestFixtures>({
       },
 
       async waitForMessage(messageText: string) {
-        await page.waitForSelector(`.message-bubble:has-text("${messageText}")`, {
-          timeout: 10000,
-        });
+        // ChatBubble uses role classes (user/assistant/system) on div flex containers
+        // Use filter + first() since message bubble appears in multiple containers
+        const messageLocator = page.locator('div.user, div.assistant, div.system').filter({ hasText: messageText }).first();
+        await expect(messageLocator).toBeVisible({ timeout: 10000 });
       },
     };
 

@@ -304,7 +304,7 @@ test.describe('Voice Workflow', () => {
       await page.waitForTimeout(1000);
 
       // Check if message bubbles appear (streaming messages use ChatBubble component)
-      const messageBubbles = page.locator('.message-bubble');
+      const messageBubbles = page.locator('div.user, div.assistant, div.system');
       const bubbleCount = await messageBubbles.count();
 
       // Should have at least the user message
@@ -333,8 +333,8 @@ test.describe('Voice Workflow', () => {
       await page.fill('.input-bar input[type="text"]', 'Text message in voice mode');
       await page.click('.input-bar button[type="submit"]');
 
-      // Message should appear
-      await expect(page.locator('.message-bubble:has-text("Text message in voice mode")')).toBeVisible();
+      // Message should appear - use .first() since message bubble appears in multiple containers
+      await expect(page.locator('div.user').filter({ hasText: 'Text message in voice mode' }).first()).toBeVisible();
     });
   });
 
@@ -432,8 +432,8 @@ test.describe('Voice Workflow', () => {
       await page.fill('.input-bar input[type="text"]', 'Test voice mode message');
       await page.click('.input-bar button[type="submit"]');
 
-      // 5. Verify message appears
-      await expect(page.locator('.message-bubble:has-text("Test voice mode message")')).toBeVisible();
+      // 5. Verify message appears - use .first() since message bubble appears in multiple containers
+      await expect(page.locator('div.user').filter({ hasText: 'Test voice mode message' }).first()).toBeVisible();
 
       // 6. Open voice settings
       await page.locator('.voice-selector-toggle').click();

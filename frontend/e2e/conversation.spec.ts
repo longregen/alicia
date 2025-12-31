@@ -12,14 +12,11 @@ test.describe('Conversation Management', () => {
     const conversationItem = page.locator(`[data-conversation-id="${conversationId}"]`);
     await expect(conversationItem).toBeVisible();
 
-    // Verify conversation is selected
-    await expect(conversationItem).toHaveClass(/selected/);
+    // Verify conversation is selected (has bg-sidebar-accent class)
+    await expect(conversationItem).toHaveClass(/bg-sidebar-accent/);
 
-    // Verify chat window is visible and empty
-    const chatWindow = page.locator('.chat-window');
-    await expect(chatWindow).toBeVisible();
-
-    const messages = chatWindow.locator('.message-bubble');
+    // Verify no messages yet (ChatBubble uses role classes on divs)
+    const messages = page.locator('div.user, div.assistant, div.system');
     await expect(messages).toHaveCount(0);
   });
 
@@ -30,7 +27,7 @@ test.describe('Conversation Management', () => {
     await conversationHelpers.sendMessage(conversationId, messageText);
 
     // Verify message appears in the message list with user role
-    const userMessage = page.locator(`.message-bubble.user:has-text("${messageText}")`);
+    const userMessage = page.locator('div.user').filter({ hasText: messageText }).first();
     await expect(userMessage).toBeVisible();
   });
 
@@ -49,12 +46,12 @@ test.describe('Conversation Management', () => {
 
     // Verify all user messages are visible
     for (const msg of messages) {
-      const messageBubble = page.locator(`.message-bubble.user:has-text("${msg}")`);
+      const messageBubble = page.locator('div.user').filter({ hasText: msg }).first();
       await expect(messageBubble).toBeVisible();
     }
 
     // Verify order by checking user messages specifically
-    const allUserMessages = await page.locator('.message-bubble.user').allTextContents();
+    const allUserMessages = await page.locator('div.user').allTextContents();
     expect(allUserMessages.some(text => text.includes(messages[0]))).toBe(true);
     expect(allUserMessages.some(text => text.includes(messages[1]))).toBe(true);
     expect(allUserMessages.some(text => text.includes(messages[2]))).toBe(true);
@@ -85,36 +82,33 @@ test.describe('Conversation Management', () => {
 
     // Verify conversation 2 is selected
     const conv2Item = page.locator(`[data-conversation-id="${conv2Id}"]`);
-    await expect(conv2Item).toHaveClass(/selected/, { timeout: 5000 });
+    await expect(conv2Item).toHaveClass(/bg-sidebar-accent/, { timeout: 5000 });
 
     // Switch back to conversation 1
     const conv1Item = page.locator(`[data-conversation-id="${conv1Id}"]`);
     await conv1Item.click();
 
     // Wait for conversation 1 to be selected (proper wait instead of fixed timeout)
-    await expect(conv1Item).toHaveClass(/selected/, { timeout: 5000 });
+    await expect(conv1Item).toHaveClass(/bg-sidebar-accent/, { timeout: 5000 });
 
     // Verify conversation 1 message is visible
-    await expect(page.locator('.message-bubble.user:has-text("Message in conversation 1")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('div.user').filter({ hasText: 'Message in conversation 1' }).first()).toBeVisible({ timeout: 5000 });
 
     // Switch back to conversation 2
     await conv2Item.click();
 
     // Wait for conversation 2 to be selected
-    await expect(conv2Item).toHaveClass(/selected/, { timeout: 5000 });
+    await expect(conv2Item).toHaveClass(/bg-sidebar-accent/, { timeout: 5000 });
 
     // Verify conversation 1 message is not visible (empty conversation)
-    await expect(page.locator('.message-bubble.user:has-text("Message in conversation 1")')).not.toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: 'Message in conversation 1' }).first()).not.toBeVisible();
   });
 
   test('should show empty state when no messages', async ({ page, conversationHelpers }) => {
     await conversationHelpers.createConversation();
 
-    // Verify empty state or placeholder
-    const chatWindow = page.locator('.chat-window');
-    await expect(chatWindow).toBeVisible();
-
-    const messages = chatWindow.locator('.message-bubble');
+    // Verify no messages yet (ChatBubble uses role classes on divs)
+    const messages = page.locator('div.user, div.assistant, div.system');
     await expect(messages).toHaveCount(0);
   });
 
@@ -127,8 +121,8 @@ test.describe('Conversation Management', () => {
     await conversationHelpers.sendMessage(conversationId, 'Quick message 3');
 
     // Verify all user messages appear
-    await expect(page.locator('.message-bubble.user:has-text("Quick message 1")')).toBeVisible();
-    await expect(page.locator('.message-bubble.user:has-text("Quick message 2")')).toBeVisible();
-    await expect(page.locator('.message-bubble.user:has-text("Quick message 3")')).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: 'Quick message 1' }).first()).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: 'Quick message 2' }).first()).toBeVisible();
+    await expect(page.locator('div.user').filter({ hasText: 'Quick message 3' }).first()).toBeVisible();
   });
 });

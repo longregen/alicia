@@ -95,14 +95,12 @@ export class SyncAssertions {
     timeoutMs = 10000
   ): Promise<void> {
     for (const page of pages) {
-      await expect(
-        page.locator(`.message-bubble:has-text("${messageText}")`)
-      ).toBeVisible({ timeout: timeoutMs });
+      // Use .first() since message bubble appears in multiple containers
+      const messageLocator = page.locator('div.user, div.assistant, div.system').filter({ hasText: messageText }).first();
+      await expect(messageLocator).toBeVisible({ timeout: timeoutMs });
 
       // Verify it's marked as synced
-      const syncStatus = await page
-        .locator(`.message-bubble:has-text("${messageText}")`)
-        .getAttribute('data-sync-status');
+      const syncStatus = await messageLocator.getAttribute('data-sync-status');
 
       expect(syncStatus).toBe('synced');
     }
@@ -156,7 +154,7 @@ export class SyncAssertions {
     expectedOrder: string[]
   ): Promise<void> {
     const messageElements = this.page.locator(
-      `[data-conversation-id="${conversationId}"] .message-bubble`
+      `[data-conversation-id="${conversationId}"] div.user, div.assistant, div.system`
     );
 
     const count = await messageElements.count();

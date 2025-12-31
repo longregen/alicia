@@ -6,7 +6,7 @@
  */
 
 @theme {
-  /* shadcn/ui-compatible color system - OKLCH values */
+  /* shadcn/ui-compatible color system - OKLCH values (dark mode default) */
   --background: oklch(0.13 0.005 250);
   --foreground: oklch(0.95 0 0);
   --card: oklch(0.16 0.005 250);
@@ -154,6 +154,52 @@
     @apply bg-background text-foreground;
     margin: 0;
     min-height: 100vh;
+  }
+
+  /* Light mode overrides */
+  html:not(.dark) {
+    --background: oklch(0.98 0 0);
+    --foreground: oklch(0.15 0.005 250);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.15 0.005 250);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.15 0.005 250);
+    --primary: oklch(0.55 0.2 250);
+    --primary-foreground: oklch(0.98 0 0);
+    --secondary: oklch(0.95 0.005 250);
+    --secondary-foreground: oklch(0.15 0.005 250);
+    --muted: oklch(0.93 0.005 250);
+    --muted-foreground: oklch(0.45 0.005 250);
+    --accent: oklch(0.95 0.005 250);
+    --accent-foreground: oklch(0.15 0.005 250);
+    --destructive: oklch(0.55 0.2 25);
+    --destructive-foreground: oklch(0.98 0 0);
+    --border: oklch(0.9 0.005 250);
+    --input: oklch(0.9 0.005 250);
+    --ring: oklch(0.55 0.2 250);
+    --sidebar: oklch(0.98 0 0);
+    --sidebar-foreground: oklch(0.15 0.005 250);
+    --sidebar-primary: oklch(0.55 0.2 250);
+    --sidebar-primary-foreground: oklch(0.98 0 0);
+    --sidebar-accent: oklch(0.95 0.005 250);
+    --sidebar-accent-foreground: oklch(0.15 0.005 250);
+    --sidebar-border: oklch(0.9 0.005 250);
+    --sidebar-ring: oklch(0.55 0.2 250);
+    --color-surface: oklch(1 0 0);
+    --color-default: oklch(0.15 0.005 250);
+    --color-app: oklch(0.98 0 0);
+    --color-elevated: oklch(1 0 0);
+    --color-sunken: oklch(0.95 0.005 250);
+    --color-overlay: oklch(0 0 0 / 0.5);
+    --color-subtle: oklch(0.45 0.005 250);
+    --color-accent-hover: oklch(0.92 0.005 160);
+    --color-accent-active: oklch(0.88 0.005 160);
+    --color-accent-subtle: oklch(0.95 0.005 160);
+    --color-success-subtle: oklch(0.95 0.005 160);
+    --color-error-subtle: oklch(0.95 0.005 25);
+    --color-warning-subtle: oklch(0.95 0.005 80);
+    --color-border-muted: oklch(0.9 0.005 250);
+    --color-border-emphasis: oklch(0.7 0.005 250);
   }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
