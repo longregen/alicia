@@ -2,7 +2,6 @@ import React from 'react';
 import FeedbackControls from '../atoms/FeedbackControls';
 import { useFeedback } from '../../hooks/useFeedback';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 
 /**
@@ -33,10 +32,10 @@ const ReasoningVoting: React.FC<ReasoningVotingProps> = ({
   } = useFeedback('reasoning', reasoningId);
 
   return (
-    <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2, className)}>
+    <div className={cls('flex items-center gap-2', className)}>
       {/* Label */}
       {showLabel && (
-        <span className={cls(CSS.textXs, CSS.textMuted)}>
+        <span className="text-xs text-muted">
           Was this reasoning helpful?
         </span>
       )}

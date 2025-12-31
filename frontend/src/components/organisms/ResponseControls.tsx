@@ -63,7 +63,7 @@ const ResponseControls: React.FC<ResponseControlsProps> = ({
           className={cls(
             'flex items-center gap-2 px-4 py-2 rounded-lg',
             'bg-error hover:bg-error/80',
-            'text-white-text font-medium',
+            'text-on-emphasis font-medium',
             'transition-all duration-200',
             'focus:outline-none focus:ring-2 focus:ring-error/50',
             'active:scale-95'
@@ -85,10 +85,10 @@ const ResponseControls: React.FC<ResponseControlsProps> = ({
           onClick={handleRegenerate}
           className={cls(
             'flex items-center gap-2 px-4 py-2 rounded-lg',
-            'bg-primary-blue hover:bg-primary-blue/80',
-            'text-white-text font-medium',
+            'bg-accent hover:bg-accent-hover',
+            'text-on-emphasis font-medium',
             'transition-all duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-primary-blue/50',
+            'focus:outline-none focus:ring-2 focus:ring-accent/50',
             'active:scale-95'
           )}
           aria-label="Regenerate response"

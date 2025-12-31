@@ -68,7 +68,7 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
 
   if (totalItems === 0) {
     return (
-      <div className={`flex items-center justify-center h-full text-muted-text ${className}`}>
+      <div className={`flex items-center justify-center h-full text-muted ${className}`}>
         <p>No messages yet. Start a conversation!</p>
       </div>
     );

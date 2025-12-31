@@ -120,7 +120,7 @@ describe('ServerInfoPanel', () => {
 
       await waitFor(() => {
         const statusBadge = screen.getByText('Connected');
-        expect(statusBadge).toHaveClass('text-green-600');
+        expect(statusBadge).toHaveClass('text-success');
       });
     });
   });
@@ -183,7 +183,7 @@ describe('ServerInfoPanel', () => {
 
       await waitFor(() => {
         const connectedBadges = screen.getAllByText('connected');
-        expect(connectedBadges[0]).toHaveClass('text-green-600');
+        expect(connectedBadges[0]).toHaveClass('text-success');
       });
     });
   });
@@ -282,7 +282,7 @@ describe('ServerInfoPanel', () => {
 
       await waitFor(() => {
         const qualityText = screen.getByText(/excellent/i);
-        expect(qualityText).toHaveClass('text-green-600');
+        expect(qualityText).toHaveClass('text-success');
       });
     });
   });

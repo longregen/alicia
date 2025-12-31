@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { VoteType } from '../../stores/feedbackStore';
 
 /**
@@ -48,18 +47,14 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
   };
 
   const buttonBaseClasses = cls(
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.gap1,
-    'rounded-md',
-    CSS.transitionAll,
-    CSS.duration200,
-    isLoading ? 'opacity-50 cursor-not-allowed' : CSS.cursorPointer,
+    'flex items-center gap-1 rounded-md',
+    'transition-all duration-200',
+    isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
     compact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm'
   );
 
   return (
-    <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2, className)}>
+    <div className={cls('flex items-center gap-2', className)}>
       {/* Upvote button */}
       <button
         onClick={handleUpvote}
@@ -68,8 +63,8 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
         className={cls(
           buttonBaseClasses,
           currentVote === 'up'
-            ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700'
-            : 'bg-surface-bg hover:bg-surface-hover text-muted-text hover:text-primary-text border border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+            ? 'bg-success-subtle text-success border border-success'
+            : 'bg-surface hover:bg-sunken text-muted hover:text-default border border-transparent hover:border'
         )}
       >
         <svg
@@ -96,8 +91,8 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
         className={cls(
           buttonBaseClasses,
           currentVote === 'down'
-            ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700'
-            : 'bg-surface-bg hover:bg-surface-hover text-muted-text hover:text-primary-text border border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+            ? 'bg-error-subtle text-error border border-error'
+            : 'bg-surface hover:bg-sunken text-muted hover:text-default border border-transparent hover:border'
         )}
       >
         <svg
@@ -118,7 +113,7 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
 
       {/* Loading indicator */}
       {isLoading && (
-        <div className="w-4 h-4 border-2 border-primary-blue-glow border-t-transparent rounded-full animate-spin" />
+        <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       )}
     </div>
   );

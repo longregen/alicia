@@ -104,7 +104,7 @@ describe('MCPSettings', () => {
       });
 
       const statusBadge = screen.getByText('Connected');
-      expect(statusBadge).toHaveClass('status-badge', 'status-connected');
+      expect(statusBadge).toHaveClass('badge', 'badge-success');
     });
 
     it('should display error status badge', async () => {
@@ -115,7 +115,7 @@ describe('MCPSettings', () => {
       });
 
       const statusBadge = screen.getByText('Error');
-      expect(statusBadge).toHaveClass('status-badge', 'status-error');
+      expect(statusBadge).toHaveClass('badge', 'badge-error');
     });
 
     it('should display error message for failed servers', async () => {
@@ -163,7 +163,7 @@ describe('MCPSettings', () => {
         expect(screen.getByText('error-server')).toBeInTheDocument();
       });
 
-      const errorServerCard = screen.getByText('error-server').closest('.server-card');
+      const errorServerCard = screen.getByText('error-server').closest('.card');
       expect(errorServerCard).toBeInTheDocument();
 
       const argsLabel = within(errorServerCard as HTMLElement).queryByText('Args:');

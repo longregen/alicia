@@ -10,6 +10,7 @@ vi.mock('../services/api', () => ({
     getConversations: vi.fn(),
     createConversation: vi.fn(),
     deleteConversation: vi.fn(),
+    updateConversation: vi.fn(),
   },
 }));
 
@@ -224,10 +225,13 @@ describe('useConversations', () => {
         title: 'Updated Title',
       };
 
-      act(() => {
-        result.current.updateConversation(updatedConversation);
+      vi.mocked(api.updateConversation).mockResolvedValue(updatedConversation);
+
+      await act(async () => {
+        await result.current.updateConversation(updatedConversation.id, { title: 'Updated Title' });
       });
 
+      expect(api.updateConversation).toHaveBeenCalledWith('conv-1', { title: 'Updated Title' });
       const found = result.current.conversations.find(c => c.id === 'conv-1');
       expect(found?.title).toBe('Updated Title');
     });
@@ -249,8 +253,10 @@ describe('useConversations', () => {
         updated_at: '2024-01-03T10:00:00Z',
       };
 
-      act(() => {
-        result.current.updateConversation(newConversation);
+      vi.mocked(api.updateConversation).mockResolvedValue(newConversation);
+
+      await act(async () => {
+        await result.current.updateConversation(newConversation.id, { title: newConversation.title });
       });
 
       // Length should stay the same (doesn't add, just maps)

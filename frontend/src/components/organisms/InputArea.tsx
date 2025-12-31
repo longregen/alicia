@@ -119,7 +119,7 @@ const InputArea: React.FC<InputAreaProps> = ({
 
   return (
     <form
-      className={cls('input-bar flex items-end gap-2 p-4 bg-main-bg border-t border-primary-blue-glow', className)}
+      className={cls('flex items-end gap-3 p-4 md:p-5 bg-elevated border-t border', className)}
       onSubmit={handleFormSubmit}
     >
       {/* Voice input button */}
@@ -150,7 +150,7 @@ const InputArea: React.FC<InputAreaProps> = ({
           placeholder={placeholder}
           disabled={disabled || isRecording}
           autoFocus
-          className="w-full px-3 py-2 text-sm text-primary-text placeholder-muted-text bg-surface-900 border border-primary-blue-glow rounded-xl focus:outline-none focus:border-primary-blue"
+          className="input rounded-3xl"
           aria-label="Message input"
         />
       </div>

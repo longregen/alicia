@@ -146,7 +146,7 @@ describe('ComplexAddons', () => {
       expect(button).toHaveClass('scale-110');
 
       // Check for status indicator dot
-      const statusDot = container.querySelector('.bg-primary-blue.rounded-full');
+      const statusDot = container.querySelector('.bg-accent.rounded-full');
       expect(statusDot).toBeInTheDocument();
     });
 
@@ -202,7 +202,7 @@ describe('ComplexAddons', () => {
       );
 
       const button = container.querySelector('button[title="Error Tool"]');
-      expect(button).toHaveClass('text-red-500');
+      expect(button).toHaveClass('text-error');
     });
   });
 
@@ -604,7 +604,7 @@ describe('ComplexAddons', () => {
       fireEvent.click(button!);
 
       expect(button).toHaveClass('scale-110');
-      expect(button).toHaveClass('bg-primary-blue/20');
+      expect(button).toHaveClass('bg-accent-subtle');
     });
 
     it('removes expanded styling when collapsed', () => {
@@ -620,10 +620,10 @@ describe('ComplexAddons', () => {
       expect(button).toBeInTheDocument();
 
       fireEvent.click(button!);
-      expect(button).toHaveClass('bg-primary-blue/20');
+      expect(button).toHaveClass('bg-accent-subtle');
 
       fireEvent.click(button!);
-      expect(button).not.toHaveClass('bg-primary-blue/20');
+      expect(button).not.toHaveClass('bg-accent-subtle');
     });
   });
 

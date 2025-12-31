@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import { CSS, sizeClasses, variantClasses } from '../../utils/constants';
 import type { BaseComponentProps, Size, Variant } from '../../types/components';
 
 /**
@@ -45,33 +44,36 @@ const Button: React.FC<ButtonProps> = ({
     }
   };
 
+  const sizeClasses = {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base',
+  };
+
+  const variantClasses = {
+    default: 'bg-surface text-default border hover:bg-sunken',
+    primary: 'bg-accent text-on-emphasis hover:bg-accent-hover active:bg-accent-active border-accent',
+    success: 'bg-success text-on-emphasis hover:bg-success/90 border-success',
+    warning: 'bg-warning text-on-emphasis hover:bg-warning/90 border-warning',
+    error: 'bg-error text-on-emphasis hover:bg-error/90 border-error',
+  };
+
   const buttonClasses = cls(
     // Base styles
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.justifyCenter,
-    CSS.gap2,
-    CSS.border,
-    CSS.rounded,
-    CSS.fontMedium,
-    CSS.transitionAll,
-    CSS.duration200,
-    CSS.focusOutlineNone,
-    CSS.focusRing2,
-    CSS.focusRingAlicia500,
+    'inline-flex items-center justify-center gap-2',
+    'border rounded-lg font-medium',
+    'transition-all duration-200',
+    'focus:outline-none focus:ring-2 focus:ring-accent',
 
     // Size
-    sizeClasses[size].button,
+    sizeClasses[size],
 
     // Variant
-    variantClasses[variant].background,
-    variantClasses[variant].text,
-    variantClasses[variant].border,
-    variantClasses[variant].hover,
+    variantClasses[variant],
 
     // States
-    disabled || loading ? cls(CSS.cursorNotAllowed, CSS.opacity50) : CSS.cursorPointer,
-    fullWidth ? CSS.wFull : '',
+    disabled || loading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+    fullWidth ? 'w-full' : '',
 
     // Custom classes
     className

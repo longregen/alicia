@@ -139,13 +139,13 @@ describe('MemoryList', () => {
       );
 
       const factBadge = screen.getByText('fact');
-      expect(factBadge).toHaveClass('text-blue-700');
+      expect(factBadge).toHaveClass('text-success');
 
       const preferenceBadge = screen.getByText('preference');
-      expect(preferenceBadge).toHaveClass('text-purple-700');
+      expect(preferenceBadge).toHaveClass('text-accent');
 
       const contextBadge = screen.getByText('context');
-      expect(contextBadge).toHaveClass('text-green-700');
+      expect(contextBadge).toHaveClass('text-warning');
     });
   });
 
@@ -196,7 +196,7 @@ describe('MemoryList', () => {
       );
 
       const card = container.querySelector('[class*="ring-2"]');
-      expect(card).toHaveClass('ring-primary-blue');
+      expect(card).toHaveClass('ring-accent');
     });
   });
 
@@ -465,7 +465,7 @@ describe('MemoryList', () => {
         />
       );
 
-      const cards = container.querySelectorAll('[class*="border-surface-300"]');
+      const cards = container.querySelectorAll('[class*="bg-surface"]');
       expect(cards.length).toBe(mockMemories.length);
     });
 
@@ -503,7 +503,7 @@ describe('MemoryList', () => {
       );
 
       const badge = screen.getByText('instruction');
-      expect(badge).toHaveClass('text-orange-700');
+      expect(badge).toHaveClass('text-error');
     });
   });
 

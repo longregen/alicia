@@ -1,7 +1,6 @@
 import React from 'react';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, MessageType, MessageState, MessageAddon } from '../../types/components';
 
 /**
@@ -112,13 +111,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       'sm:max-w-sm',
       'md:max-w-md',
       'lg:max-w-lg',
-      CSS.px4,
-      CSS.py3,
+      'px-4',
+      'py-3',
       'rounded-2xl',
-      CSS.textSm,
+      'text-sm',
       'break-words',
-      CSS.transitionAll,
-      CSS.duration300,
+      'transition-all',
+      'duration-300',
       'ease-in-out',
     ];
 
@@ -126,35 +125,33 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       case MESSAGE_TYPES.USER:
         return cls([
           ...baseClasses,
-          CSS.bgMessageSent,
-          CSS.textPrimary,
+          'bg-accent-subtle',
+          'text-default',
           'ml-auto',
           'rounded-br-md',
           'shadow-lg',
-          'shadow-[4px_4px_6px_#000c1a]',
         ]);
 
       case MESSAGE_TYPES.ASSISTANT:
         return cls([
           ...baseClasses,
-          CSS.bgMessageReceived,
-          CSS.textPrimary,
+          'bg-surface',
+          'text-default',
           'mr-auto',
           'rounded-bl-md',
           'shadow-lg',
-          'shadow-[-6px_6px_12px_#0f1010cc]',
         ]);
 
       case MESSAGE_TYPES.SYSTEM:
         return cls([
           ...baseClasses,
-          CSS.bgSurfaceBg,
-          CSS.textMuted,
+          'bg-surface',
+          'text-muted',
           'border',
-          'border-primary-blue-glow',
+          'border-accent',
           'mx-auto',
-          CSS.textCenter,
-          CSS.textXs,
+          'text-center',
+          'text-xs',
         ]);
 
       default:
@@ -175,8 +172,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       className={cls(
         'relative',
         'group',
-        CSS.cursorPointer,
-        CSS.textSm
+        'cursor-pointer',
+        'text-sm'
       )}
       title={addon.tooltip}
     >
@@ -192,8 +189,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         'px-3',
         'py-2',
         'text-xs',
-        'text-white',
-        'bg-gray-900/95',
+        'text-on-emphasis',
+        'bg-overlay',
         'backdrop-blur-sm',
         'rounded-md',
         'opacity-0',
@@ -205,7 +202,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         'z-10',
         'shadow-lg',
         'border',
-        'border-gray-700/50',
+        'border-border-emphasis',
         'min-w-[8rem]'
       )}>
         {addon.tooltip}
@@ -218,7 +215,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           '-translate-x-1/2',
           'border-4',
           'border-transparent',
-          'border-t-gray-900/95'
+          'border-t-overlay'
         )} />
       </div>
     </div>
@@ -227,25 +224,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
 
   return (
-    <div className={cls(CSS.flex, CSS.flexCol, CSS.gap2, className)}>
+    <div className={cls('flex', 'flex-col', 'gap-2', className)}>
       <div className={getBubbleClasses()}>
         {/* Main content */}
         {renderContent()}
 
         {/* Typing indicator */}
         {(showTyping || state === MESSAGE_STATES.TYPING) && (
-          <div className={cls(CSS.flex, CSS.itemsCenter, 'gap-1', 'mt-2')}>
-            <div className={cls(CSS.flex, 'space-x-1')}>
+          <div className={cls('flex', 'items-center', 'gap-1', 'mt-2')}>
+            <div className={cls('flex', 'space-x-1')}>
               <div
-                className={cls('w-2', 'h-2', CSS.bgPrimaryBlueGlow, CSS.roundedFull, CSS.animateBounce)}
+                className={cls('w-2', 'h-2', 'bg-accent', 'rounded-full', 'animate-bounce')}
                 style={{ animationDelay: '0ms' }}
               />
               <div
-                className={cls('w-2', 'h-2', CSS.bgPrimaryBlueGlow, CSS.roundedFull, CSS.animateBounce)}
+                className={cls('w-2', 'h-2', 'bg-accent', 'rounded-full', 'animate-bounce')}
                 style={{ animationDelay: '150ms' }}
               />
               <div
-                className={cls('w-2', 'h-2', CSS.bgPrimaryBlueGlow, CSS.roundedFull, CSS.animateBounce)}
+                className={cls('w-2', 'h-2', 'bg-accent', 'rounded-full', 'animate-bounce')}
                 style={{ animationDelay: '300ms' }}
               />
             </div>
@@ -254,11 +251,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Error state indicator */}
         {state === MESSAGE_STATES.ERROR && (
-          <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2, 'mt-2', CSS.textError)}>
+          <div className={cls('flex', 'items-center', 'gap-2', 'mt-2', 'text-error')}>
             <svg className={cls('w-4', 'h-4')} fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
-            <span className={cls(CSS.textXs)}>Failed to send</span>
+            <span className={cls('text-xs')}>Failed to send</span>
           </div>
         )}
       </div>
@@ -266,20 +263,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       {/* External footer with addons and timestamp */}
       {(inlineAddons.length > 0 || (!showTyping && !hideTimestamp)) && (
         <div className={cls(
-          CSS.flex,
-          CSS.itemsCenter,
-          CSS.justifyBetween,
+          'flex',
+          'items-center',
+          'justify-between',
           type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto',
-          'max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg' // Match bubble max-width
+          'max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg'
         )}>
           {/* Left side: Addons */}
-          <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2)}>
+          <div className={cls('flex', 'items-center', 'gap-2')}>
             {inlineAddons.map(renderAddonIcon)}
           </div>
 
           {/* Right side: Timestamp */}
           {!hideTimestamp && (
-            <div className={cls(CSS.textXs, CSS.textMuted)}>
+            <div className={cls('text-xs', 'text-muted')}>
               {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}

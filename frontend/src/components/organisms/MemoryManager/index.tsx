@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { cls } from '../../../utils/cls';
-import { CSS } from '../../../utils/constants';
 import type { Memory, MemoryCategory } from '../../../stores/memoryStore';
 import { useMemories } from '../../../hooks/useMemories';
 import { MemorySearch } from './MemorySearch';
@@ -128,11 +127,11 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
   };
 
   return (
-    <div className={cls(CSS.flexCol, CSS.gap4, CSS.hFull, className)}>
+    <div className={cls('flex flex-col gap-4 h-full', className)}>
       {/* Header */}
-      <div className={cls(CSS.flexCol, CSS.gap2)}>
-        <h1 className={cls(CSS.textLg, CSS.fontSemibold, CSS.textPrimary)}>Memory Manager</h1>
-        <p className={cls(CSS.textSm, CSS.textMuted)}>
+      <div className="flex flex-col gap-2">
+        <h1 className="text-lg font-semibold text-default">Memory Manager</h1>
+        <p className="text-sm text-muted">
           Manage global memories that persist across conversations
         </p>
       </div>
@@ -148,25 +147,15 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
 
       {/* Error message */}
       {error && (
-        <div
-          className={cls(
-            CSS.p3,
-            CSS.rounded,
-            CSS.border,
-            'border-red-300',
-            'bg-red-50 dark:bg-red-900/20',
-            'text-red-700 dark:text-red-300',
-            CSS.textSm
-          )}
-        >
+        <div className="p-3 rounded border border-error bg-error-subtle text-error text-sm">
           {error}
         </div>
       )}
 
       {/* Loading indicator */}
       {isFetching && (
-        <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyCenter, CSS.p4)}>
-          <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2, CSS.textMuted)}>
+        <div className="flex items-center justify-center p-4">
+          <div className="flex items-center gap-2 text-muted">
             <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path
@@ -175,7 +164,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            <span className={CSS.textSm}>Loading memories...</span>
+            <span className="text-sm">Loading memories...</span>
           </div>
         </div>
       )}

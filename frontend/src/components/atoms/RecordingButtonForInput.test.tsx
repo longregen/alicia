@@ -53,7 +53,7 @@ describe('RecordingButtonForInput', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute('aria-label', 'Stop recording');
       expect(button).toHaveAttribute('aria-pressed', 'true');
-      expect(button).toHaveClass('bg-active-speaking');
+      expect(button).toHaveClass('bg-success');
     });
 
     it('renders processing state correctly', () => {
@@ -62,7 +62,7 @@ describe('RecordingButtonForInput', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute('aria-label', 'Processing audio...');
       expect(button).toBeDisabled();
-      expect(button).toHaveClass('bg-primary-blue');
+      expect(button).toHaveClass('bg-accent');
     });
 
     it('renders error state correctly', () => {
@@ -78,7 +78,7 @@ describe('RecordingButtonForInput', () => {
 
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute('aria-label', 'Recording completed');
-      expect(button).toHaveClass('bg-translation-complete');
+      expect(button).toHaveClass('bg-success');
     });
 
     it('shows ripple effect when recording', () => {
@@ -237,7 +237,7 @@ describe('RecordingButtonForInput', () => {
 
       const button = screen.getByRole('button');
       expect(button).toHaveClass('cursor-not-allowed');
-      expect(button).toHaveClass('bg-inactive-disabled');
+      expect(button).toHaveClass('bg-sunken');
     });
 
     it('is disabled during processing state', () => {

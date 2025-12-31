@@ -52,14 +52,14 @@ describe('FeedbackControls', () => {
       render(<FeedbackControls currentVote="up" onVote={mockOnVote} />);
 
       const upvoteButton = screen.getByRole('button', { name: 'Remove upvote' });
-      expect(upvoteButton).toHaveClass('bg-green-100');
+      expect(upvoteButton).toHaveClass('bg-success-subtle');
     });
 
     it('shows downvote as active when currentVote is down', () => {
       render(<FeedbackControls currentVote="down" onVote={mockOnVote} />);
 
       const downvoteButton = screen.getByRole('button', { name: 'Remove downvote' });
-      expect(downvoteButton).toHaveClass('bg-red-100');
+      expect(downvoteButton).toHaveClass('bg-error-subtle');
     });
 
     it('shows neutral state when currentVote is null', () => {
@@ -68,8 +68,8 @@ describe('FeedbackControls', () => {
       const upvoteButton = screen.getByRole('button', { name: 'Upvote' });
       const downvoteButton = screen.getByRole('button', { name: 'Downvote' });
 
-      expect(upvoteButton).not.toHaveClass('bg-green-100');
-      expect(downvoteButton).not.toHaveClass('bg-red-100');
+      expect(upvoteButton).not.toHaveClass('bg-success-subtle');
+      expect(downvoteButton).not.toHaveClass('bg-error-subtle');
     });
   });
 

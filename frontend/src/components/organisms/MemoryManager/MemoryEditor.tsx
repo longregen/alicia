@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { cls } from '../../../utils/cls';
-import { CSS } from '../../../utils/constants';
 import type { Memory, MemoryCategory } from '../../../stores/memoryStore';
 
 export interface MemoryEditorProps {
@@ -86,7 +85,7 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-40"
+        className="fixed inset-0 bg-overlay z-40"
         onClick={handleCancel}
       />
 
@@ -99,32 +98,17 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
         onClick={(e) => e.target === e.currentTarget && handleCancel()}
       >
         <div
-          className={cls(
-            CSS.bgSurfaceBg,
-            CSS.rounded,
-            'shadow-2xl',
-            'w-full max-w-2xl',
-            CSS.p6,
-            CSS.flexCol,
-            CSS.gap4
-          )}
+          className="bg-surface shadow-2xl rounded-lg w-full max-w-2xl p-6 flex flex-col gap-4"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className={cls(CSS.flex, CSS.justifyBetween, CSS.itemsCenter)}>
-            <h2 className={cls(CSS.textLg, CSS.fontSemibold, CSS.textPrimary)}>
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-default">
               {memory ? 'Edit Memory' : 'Create Memory'}
             </h2>
             <button
               onClick={handleCancel}
-              className={cls(
-                CSS.textMuted,
-                'hover:text-primary-text',
-                CSS.transitionColors,
-                CSS.p2,
-                CSS.rounded,
-                CSS.hoverBgSurface100
-              )}
+              className="text-muted hover:text-default transition-colors p-2 rounded hover:bg-sunken"
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,10 +118,10 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className={cls(CSS.flexCol, CSS.gap4)}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Content */}
-            <div className={cls(CSS.flexCol, CSS.gap2)}>
-              <label htmlFor="memory-content" className={cls(CSS.textSm, CSS.fontMedium, CSS.textPrimary)}>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="memory-content" className="text-sm font-medium text-default">
                 Content
               </label>
               <textarea
@@ -147,19 +131,8 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
                 placeholder="Enter memory content..."
                 rows={6}
                 className={cls(
-                  CSS.wFull,
-                  CSS.px3,
-                  CSS.py2,
-                  CSS.rounded,
-                  CSS.border,
-                  CSS.borderSurface300,
-                  CSS.bgSurfaceBg,
-                  CSS.textPrimary,
-                  CSS.textSm,
-                  CSS.focusOutlineNone,
-                  'focus:border-primary-blue',
-                  CSS.transitionColors,
-                  'resize-none'
+                  'w-full px-3 py-2 rounded border bg-surface text-default text-sm',
+                  'focus:outline-none focus:border-accent transition-colors resize-none'
                 )}
                 autoFocus
                 required
@@ -167,33 +140,28 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
             </div>
 
             {/* Category */}
-            <div className={cls(CSS.flexCol, CSS.gap2)}>
-              <label htmlFor="memory-category" className={cls(CSS.textSm, CSS.fontMedium, CSS.textPrimary)}>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="memory-category" className="text-sm font-medium text-default">
                 Category
               </label>
-              <div className={cls('grid grid-cols-2 gap-3')}>
+              <div className="grid grid-cols-2 gap-3">
                 {categories.map((cat) => (
                   <button
                     key={cat.value}
                     type="button"
                     onClick={() => setCategory(cat.value)}
                     className={cls(
-                      CSS.p3,
-                      CSS.rounded,
-                      CSS.border,
-                      'text-left',
-                      CSS.transitionColors,
-                      CSS.focusOutlineNone,
-                      'focus:ring-2 focus:ring-primary-blue',
+                      'p-3 rounded border text-left transition-colors',
+                      'focus:outline-none focus:ring-2 focus:ring-accent',
                       category === cat.value
-                        ? [CSS.borderSurface600, CSS.bgPrimaryBlue, 'bg-opacity-10', 'border-primary-blue']
-                        : [CSS.borderSurface300, CSS.hoverBgSurface100]
+                        ? 'border-accent bg-accent-subtle'
+                        : 'border-muted hover:bg-sunken'
                     )}
                   >
-                    <div className={cls(CSS.fontMedium, CSS.textSm, CSS.textPrimary)}>
+                    <div className="font-medium text-sm text-default">
                       {cat.label}
                     </div>
-                    <div className={cls(CSS.textXs, CSS.textMuted, CSS.mt1)}>
+                    <div className="text-xs text-muted mt-1">
                       {cat.description}
                     </div>
                   </button>
@@ -202,26 +170,16 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
             </div>
 
             {/* Actions */}
-            <div className={cls(CSS.flex, CSS.justifyBetween, CSS.gap3, CSS.mt2)}>
+            <div className="flex justify-between gap-3 mt-2">
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={isLoading}
                 className={cls(
-                  CSS.px4,
-                  CSS.py2,
-                  CSS.rounded,
-                  CSS.border,
-                  CSS.borderSurface300,
-                  CSS.textPrimary,
-                  CSS.textSm,
-                  CSS.fontMedium,
-                  CSS.hoverBgSurface100,
-                  CSS.transitionColors,
-                  CSS.focusOutlineNone,
-                  'focus:ring-2 focus:ring-surface-400',
-                  CSS.disabledOpacity50,
-                  CSS.disabledCursorNotAllowed
+                  'px-4 py-2 rounded border text-default text-sm font-medium',
+                  'hover:bg-sunken transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-muted',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
               >
                 Cancel
@@ -230,22 +188,11 @@ export const MemoryEditor: React.FC<MemoryEditorProps> = ({
                 type="submit"
                 disabled={!content.trim() || isLoading}
                 className={cls(
-                  CSS.px4,
-                  CSS.py2,
-                  CSS.rounded,
-                  CSS.bgPrimaryBlue,
-                  CSS.textWhite,
-                  CSS.textSm,
-                  CSS.fontMedium,
-                  CSS.hoverBgPrimaryBlue,
-                  CSS.transitionColors,
-                  CSS.focusOutlineNone,
-                  'focus:ring-2 focus:ring-primary-blue focus:ring-offset-2',
-                  CSS.disabledOpacity50,
-                  CSS.disabledCursorNotAllowed,
-                  CSS.flex,
-                  CSS.itemsCenter,
-                  CSS.gap2
+                  'px-4 py-2 rounded bg-accent text-on-emphasis text-sm font-medium',
+                  'hover:bg-accent-hover transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'flex items-center gap-2'
                 )}
               >
                 {isLoading && (

@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../../utils/cls';
-import { CSS } from '../../../utils/constants';
 import type { Memory, MemoryCategory } from '../../../stores/memoryStore';
 
 export interface MemoryListProps {
@@ -21,24 +20,24 @@ export interface MemoryListProps {
 
 const categoryColors: Record<MemoryCategory, { bg: string; text: string; border: string }> = {
   preference: {
-    bg: 'bg-purple-50 dark:bg-purple-900/20',
-    text: 'text-purple-700 dark:text-purple-300',
-    border: 'border-purple-200 dark:border-purple-700',
+    bg: 'bg-accent-subtle',
+    text: 'text-accent',
+    border: 'border-accent',
   },
   fact: {
-    bg: 'bg-blue-50 dark:bg-blue-900/20',
-    text: 'text-blue-700 dark:text-blue-300',
-    border: 'border-blue-200 dark:border-blue-700',
+    bg: 'bg-success-subtle',
+    text: 'text-success',
+    border: 'border-success',
   },
   context: {
-    bg: 'bg-green-50 dark:bg-green-900/20',
-    text: 'text-green-700 dark:text-green-300',
-    border: 'border-green-200 dark:border-green-700',
+    bg: 'bg-warning-subtle',
+    text: 'text-warning',
+    border: 'border-warning',
   },
   instruction: {
-    bg: 'bg-orange-50 dark:bg-orange-900/20',
-    text: 'text-orange-700 dark:text-orange-300',
-    border: 'border-orange-200 dark:border-orange-700',
+    bg: 'bg-error-subtle',
+    text: 'text-error',
+    border: 'border-error',
   },
 };
 
@@ -95,19 +94,9 @@ export const MemoryList: React.FC<MemoryListProps> = ({
 }) => {
   if (memories.length === 0) {
     return (
-      <div
-        className={cls(
-          CSS.flex,
-          CSS.flexCol,
-          CSS.itemsCenter,
-          CSS.justifyCenter,
-          CSS.p6,
-          CSS.textCenter,
-          className
-        )}
-      >
+      <div className={cls('flex flex-col items-center justify-center p-6 md:p-8 lg:p-12 text-center', className)}>
         <svg
-          className={cls('w-16 h-16', CSS.textMuted, CSS.mb2)}
+          className="w-16 h-16 text-muted mb-2"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -119,8 +108,8 @@ export const MemoryList: React.FC<MemoryListProps> = ({
             d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
           />
         </svg>
-        <p className={cls(CSS.textMuted, CSS.textSm)}>No memories found</p>
-        <p className={cls(CSS.textMuted, CSS.textXs, CSS.mt1)}>
+        <p className="text-muted text-sm">No memories found</p>
+        <p className="text-muted text-xs mt-1">
           Create your first memory to get started
         </p>
       </div>
@@ -128,7 +117,7 @@ export const MemoryList: React.FC<MemoryListProps> = ({
   }
 
   return (
-    <div className={cls(CSS.flexCol, CSS.gap3, className)}>
+    <div className={cls('flex flex-col gap-3', className)}>
       {memories.map((memory) => {
         const categoryStyle = categoryColors[memory.category];
 
@@ -136,30 +125,18 @@ export const MemoryList: React.FC<MemoryListProps> = ({
           <div
             key={memory.id}
             className={cls(
-              CSS.p4,
-              CSS.rounded,
-              CSS.border,
-              CSS.borderSurface300,
-              CSS.bgSurfaceBg,
-              CSS.flexCol,
-              CSS.gap3,
-              CSS.transitionAll,
+              'p-4 rounded border bg-surface flex flex-col gap-3 transition-all',
               'hover:shadow-md',
-              memory.pinned ? 'ring-2 ring-primary-blue ring-opacity-50' : ''
+              memory.pinned ? 'ring-2 ring-accent ring-opacity-50' : ''
             )}
           >
             {/* Header */}
-            <div className={cls(CSS.flex, CSS.itemsStart, CSS.justifyBetween, CSS.gap3)}>
+            <div className="flex items-start justify-between gap-3">
               {/* Category and pinned badge */}
-              <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2)}>
+              <div className="flex items-center gap-2">
                 <span
                   className={cls(
-                    CSS.px2,
-                    CSS.py1,
-                    CSS.rounded,
-                    CSS.textXs,
-                    CSS.fontMedium,
-                    CSS.border,
+                    'px-2 py-1 rounded text-xs font-medium border',
                     categoryStyle.bg,
                     categoryStyle.text,
                     categoryStyle.border
@@ -169,7 +146,7 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                 </span>
                 {memory.pinned && (
                   <svg
-                    className={cls('w-4 h-4', CSS.textPrimaryBlue)}
+                    className="w-4 h-4 text-accent"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -179,18 +156,13 @@ export const MemoryList: React.FC<MemoryListProps> = ({
               </div>
 
               {/* Actions */}
-              <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap1)}>
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => onPin(memory)}
                   disabled={isLoading}
                   className={cls(
-                    CSS.p2,
-                    CSS.rounded,
-                    CSS.textMuted,
-                    'hover:text-primary-blue',
-                    CSS.hoverBgSurface100,
-                    CSS.transitionColors,
-                    CSS.disabledOpacity50
+                    'p-2 rounded text-muted hover:text-accent hover:bg-sunken',
+                    'transition-colors disabled:opacity-50'
                   )}
                   title={memory.pinned ? 'Unpin' : 'Pin'}
                   aria-label={memory.pinned ? 'Unpin memory' : 'Pin memory'}
@@ -204,13 +176,8 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                   onClick={() => onEdit(memory)}
                   disabled={isLoading}
                   className={cls(
-                    CSS.p2,
-                    CSS.rounded,
-                    CSS.textMuted,
-                    'hover:text-primary-text',
-                    CSS.hoverBgSurface100,
-                    CSS.transitionColors,
-                    CSS.disabledOpacity50
+                    'p-2 rounded text-muted hover:text-default hover:bg-sunken',
+                    'transition-colors disabled:opacity-50'
                   )}
                   title="Edit"
                   aria-label="Edit memory"
@@ -229,13 +196,8 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                   onClick={() => onArchive(memory)}
                   disabled={isLoading}
                   className={cls(
-                    CSS.p2,
-                    CSS.rounded,
-                    CSS.textMuted,
-                    'hover:text-orange-600',
-                    CSS.hoverBgSurface100,
-                    CSS.transitionColors,
-                    CSS.disabledOpacity50
+                    'p-2 rounded text-muted hover:text-warning hover:bg-sunken',
+                    'transition-colors disabled:opacity-50'
                   )}
                   title="Archive"
                   aria-label="Archive memory"
@@ -254,13 +216,8 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                   onClick={() => onDelete(memory)}
                   disabled={isLoading}
                   className={cls(
-                    CSS.p2,
-                    CSS.rounded,
-                    CSS.textMuted,
-                    'hover:text-red-600',
-                    CSS.hoverBgSurface100,
-                    CSS.transitionColors,
-                    CSS.disabledOpacity50
+                    'p-2 rounded text-muted hover:text-error hover:bg-sunken',
+                    'transition-colors disabled:opacity-50'
                   )}
                   title="Delete"
                   aria-label="Delete memory"
@@ -278,17 +235,17 @@ export const MemoryList: React.FC<MemoryListProps> = ({
             </div>
 
             {/* Content */}
-            <p className={cls(CSS.textSm, CSS.textPrimary, 'line-clamp-3')}>
+            <p className="text-sm text-default line-clamp-3">
               {memory.content}
             </p>
 
             {/* Footer */}
-            <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyBetween)}>
-              <span className={cls(CSS.textXs, CSS.textMuted)}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted">
                 Created {formatDate(memory.createdAt)}
               </span>
               {memory.updatedAt > memory.createdAt && (
-                <span className={cls(CSS.textXs, CSS.textMuted)}>
+                <span className="text-xs text-muted">
                   Updated {formatDate(memory.updatedAt)}
                 </span>
               )}

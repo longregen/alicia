@@ -56,11 +56,23 @@ export function useConversations() {
     }
   };
 
-  // Update conversation in local state
-  const updateConversation = (updatedConversation: Conversation) => {
-    setConversations(prev =>
-      prev.map(c => c.id === updatedConversation.id ? updatedConversation : c)
-    );
+  // Update conversation
+  const {
+    execute: executeUpdate,
+  } = useAsync(
+    async (id: string, data: Partial<Conversation>) => api.updateConversation(id, data),
+    {
+      errorMessage: 'Failed to update conversation',
+    }
+  );
+
+  const updateConversation = async (id: string, data: Partial<Conversation>) => {
+    const result = await executeUpdate(id, data);
+    if (result) {
+      setConversations(prev =>
+        prev.map(c => c.id === id ? result : c)
+      );
+    }
   };
 
   useEffect(() => {

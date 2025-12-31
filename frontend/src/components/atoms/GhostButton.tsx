@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import { CSS, sizeClasses } from '../../utils/constants';
 import type { BaseComponentProps, Size } from '../../types/components';
 
 /**
@@ -42,32 +41,29 @@ const GhostButton: React.FC<GhostButtonProps> = ({
     }
   };
 
+  const sizeClasses = {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base',
+  };
+
   const buttonClasses = cls(
     // Base styles
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.justifyCenter,
-    CSS.gap2,
-    CSS.rounded,
-    CSS.fontMedium,
-    CSS.transitionAll,
-    CSS.duration200,
-    CSS.focusOutlineNone,
-    CSS.focusRing2,
-    CSS.focusRingAlicia500,
+    'inline-flex items-center justify-center gap-2',
+    'rounded-lg font-medium',
+    'transition-all duration-200',
+    'focus:outline-none focus:ring-2 focus:ring-accent',
 
     // Size
-    sizeClasses[size].button,
+    sizeClasses[size],
 
     // Ghost styling - transparent with subtle hover
-    'bg-transparent',
-    'border border-transparent',
-    CSS.textMuted,
-    'hover:bg-surface-bg hover:text-primary-text hover:border-gray-300 dark:hover:border-gray-600',
+    'bg-transparent border border-transparent',
+    'text-muted hover:bg-surface hover:text-default hover:border',
 
     // States
-    disabled || loading ? cls(CSS.cursorNotAllowed, CSS.opacity50) : CSS.cursorPointer,
-    fullWidth ? CSS.wFull : '',
+    disabled || loading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+    fullWidth ? 'w-full' : '',
 
     // Custom classes
     className

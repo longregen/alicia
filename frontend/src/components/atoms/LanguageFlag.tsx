@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import { css } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 
 // Language flag size mapping - only sizes actually used
@@ -56,11 +55,7 @@ const LanguageFlag: React.FC<LanguageFlagProps> = ({
   const getFlagClasses = (): string => {
     return cls(
       FLAG_SIZE_MAP[size],
-      css.roundedFull,
-      css.flex,
-      css.itemsCenter,
-      css.justifyCenter,
-      css.selectNone
+      'rounded-full flex items-center justify-center select-none'
     );
   };
 
@@ -86,7 +81,7 @@ const LanguageFlag: React.FC<LanguageFlagProps> = ({
       aria-label={ariaLabel}
       title={ariaLabel}
     >
-      <span className="leading-none" style={{ fontSize: 'inherit', position: 'relative', top: '-1px' }}>
+      <span className="leading-none text-[inherit] relative -top-px">
         {displayFlag}
       </span>
     </div>

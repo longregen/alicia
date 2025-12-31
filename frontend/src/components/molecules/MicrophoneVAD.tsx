@@ -230,27 +230,27 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
   // Determine button state classes
   const getButtonClasses = () => {
     if (disabled) {
-      return 'bg-surface-800 cursor-not-allowed';
+      return 'bg-sunken cursor-not-allowed';
     }
     if (microphoneStatus === MicrophoneStatus.Error) {
-      return 'bg-red-900/20 hover:bg-red-900/30 border-2 border-red-500/50';
+      return 'bg-error-subtle hover:bg-error border-2 border-error';
     }
     if (isActive) {
       if (isSpeaking) {
-        return 'bg-green-600/20 hover:bg-green-600/30';
+        return 'bg-success-subtle hover:bg-success';
       }
-      return 'bg-blue-600/20 hover:bg-blue-600/30';
+      return 'bg-accent-subtle hover:bg-accent';
     }
-    return 'bg-surface-800 hover:bg-surface-700';
+    return 'bg-sunken hover:bg-surface';
   };
 
   // Determine icon color
   const getIconColor = () => {
-    if (disabled) return 'text-surface-400';
-    if (microphoneStatus === MicrophoneStatus.Error) return 'text-red-500';
-    if (!isActive) return 'text-surface-400';
-    if (isSpeaking) return 'text-green-500';
-    return 'text-blue-500';
+    if (disabled) return 'text-muted';
+    if (microphoneStatus === MicrophoneStatus.Error) return 'text-error';
+    if (!isActive) return 'text-muted';
+    if (isSpeaking) return 'text-success';
+    return 'text-accent';
   };
 
   return (
@@ -289,7 +289,7 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
             cy="20"
             r="0"
             fill="none"
-            stroke={isSpeaking ? '#10b981' : '#3b82f6'}
+            stroke={isSpeaking ? 'var(--color-success)' : 'var(--color-accent)'}
             strokeWidth="1.5"
             opacity="0"
           />

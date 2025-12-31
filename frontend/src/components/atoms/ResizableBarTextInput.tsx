@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { cls } from '../../utils/cls';
-import { css } from '../../utils/constants';
 import type { BaseComponentProps } from '../../types/components';
 
 // Component props interface
@@ -103,7 +102,7 @@ const ResizableBarTextInput: React.FC<ResizableBarTextInputProps> = ({
   const getContainerClasses = (): string => {
     const baseClasses = [
       'relative',
-      css.wFull,
+      'w-full',
       'pl-3',
       'pr-0',
       'py-2',
@@ -114,31 +113,31 @@ const ResizableBarTextInput: React.FC<ResizableBarTextInputProps> = ({
     if (disabled) {
       return cls(baseClasses, [
         'opacity-60',
-        css.cursorNotAllowed,
-        'border-inactive-disabled',
-        css.bgInactiveDisabled,
+        'cursor-not-allowed',
+        'border-border-muted',
+        'bg-sunken',
       ]);
     }
 
     if (isFocused) {
       return cls(baseClasses, [
-        'border-primary-blue',
+        'border-accent',
       ]);
     }
 
     return cls(baseClasses, [
-      'border-primary-blue-glow',
-      'hover:border-primary-blue',
+      'border-accent',
+      'hover:border-accent-hover',
     ]);
   };
 
   const getTextareaClasses = (): string => {
     const baseClasses = [
-      css.wFull,
+      'w-full',
       'pr-4',
-      css.textSm,
-      css.textPrimary,
-      'placeholder-muted-text',
+      'text-sm',
+      'text-default',
+      'placeholder-muted',
       'rounded-xl',
       'resize-none',
       'overflow-auto',
@@ -150,12 +149,12 @@ const ResizableBarTextInput: React.FC<ResizableBarTextInputProps> = ({
     if (disabled) {
       return cls(baseClasses, [
         'bg-transparent', // Transparent since container has the background
-        css.cursorNotAllowed,
+        'cursor-not-allowed',
       ]);
     }
 
     return cls(baseClasses, [
-      'bg-surface-900', // Solid background
+      'bg-surface', // Solid background
     ]);
   };
 
@@ -179,7 +178,7 @@ const ResizableBarTextInput: React.FC<ResizableBarTextInputProps> = ({
 
       {/* Visual indicator for multiline */}
       {isMultiline && showMultiline && (
-        <div className={cls('absolute', 'top-2', 'right-3', css.textXs, css.textSurface400, 'dark:text-surface-500', 'pointer-events-none')}>
+        <div className={cls('absolute', 'top-2', 'right-3', 'text-xs', 'text-muted', 'pointer-events-none')}>
           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
           </svg>

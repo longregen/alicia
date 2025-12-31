@@ -1,4 +1,4 @@
-import './OptimizationManager.css';
+import { cls } from '../../../utils/cls';
 
 interface DimensionScoresChartProps {
   scores: Record<string, number>;
@@ -17,13 +17,13 @@ const DIMENSION_LABELS: Record<string, string> = {
 };
 
 const DIMENSION_COLORS: Record<string, string> = {
-  successRate: '#4CAF50',
-  quality: '#2196F3',
-  efficiency: '#FFC107',
-  robustness: '#9C27B0',
-  generalization: '#FF5722',
-  diversity: '#00BCD4',
-  innovation: '#E91E63',
+  successRate: 'var(--chart-success)',
+  quality: 'var(--chart-primary)',
+  efficiency: 'var(--chart-warning)',
+  robustness: 'var(--chart-purple)',
+  generalization: 'var(--chart-orange)',
+  diversity: 'var(--chart-cyan)',
+  innovation: 'var(--chart-pink)',
 };
 
 export function DimensionScoresChart({ scores, weights, compact }: DimensionScoresChartProps) {
@@ -31,48 +31,53 @@ export function DimensionScoresChart({ scores, weights, compact }: DimensionScor
 
   if (compact) {
     return (
-      <div className="dimension-chart-compact">
-        {dimensions.map((dim) => (
-          <div key={dim} className="dimension-bar-compact">
-            <div
-              className="dimension-fill-compact"
-              style={{
-                width: `${scores[dim] * 100}%`,
-                backgroundColor: DIMENSION_COLORS[dim] || '#999',
-              }}
-            />
-          </div>
-        ))}
+      <div className="flex gap-0.5 h-5">
+        {dimensions.map((dim) => {
+          const widthPercent = scores[dim] * 100;
+          const bgColor = DIMENSION_COLORS[dim] || 'var(--chart-primary)';
+          return (
+            <div key={dim} className="flex-1 bg-sunken rounded-sm overflow-hidden">
+              <div
+                className="h-full transition-all"
+                style={{
+                  width: `${widthPercent}%`,
+                  backgroundColor: bgColor,
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
     );
   }
 
   return (
-    <div className="dimension-scores-chart">
-      <div className="dimension-bars">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
         {dimensions.map((dim) => {
           const score = scores[dim];
           const weight = weights?.[dim];
           const label = DIMENSION_LABELS[dim] || dim;
-          const color = DIMENSION_COLORS[dim] || '#999';
+          const color = DIMENSION_COLORS[dim] || 'var(--chart-primary)';
+          const widthPercent = score * 100;
 
           return (
-            <div key={dim} className="dimension-row">
-              <div className="dimension-label">
+            <div key={dim} className="flex gap-4 items-center">
+              <div className="min-w-[150px] text-sm">
                 <span>{label}</span>
                 {weight !== undefined && (
-                  <span className="dimension-weight">(weight: {(weight * 100).toFixed(0)}%)</span>
+                  <span className="text-xs text-muted ml-2">(weight: {(weight * 100).toFixed(0)}%)</span>
                 )}
               </div>
-              <div className="dimension-bar-container">
+              <div className="flex-1 relative h-6 bg-sunken rounded overflow-hidden">
                 <div
-                  className="dimension-bar-fill"
+                  className="h-full transition-all"
                   style={{
-                    width: `${score * 100}%`,
+                    width: `${widthPercent}%`,
                     backgroundColor: color,
                   }}
                 />
-                <span className="dimension-value">{score.toFixed(3)}</span>
+                <span className={cls('absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-default')}>{score.toFixed(3)}</span>
               </div>
             </div>
           );
@@ -80,7 +85,7 @@ export function DimensionScoresChart({ scores, weights, compact }: DimensionScor
       </div>
 
       {/* Radar chart visualization would go here in a production implementation */}
-      <div className="radar-chart-placeholder">
+      <div className="text-center py-10 bg-surface rounded text-muted">
         <p>Radar chart visualization (requires chart library like recharts or d3)</p>
       </div>
     </div>

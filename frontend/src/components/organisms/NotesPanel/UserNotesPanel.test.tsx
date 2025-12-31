@@ -103,10 +103,10 @@ describe('UserNotesPanel', () => {
       );
 
       const generalBadge = screen.getByText('General');
-      expect(generalBadge).toHaveClass('text-gray-700');
+      expect(generalBadge).toHaveClass('text-default');
 
       const correctionBadge = screen.getByText('Correction');
-      expect(correctionBadge).toHaveClass('text-red-700');
+      expect(correctionBadge).toHaveClass('text-error');
     });
 
     it('shows timestamps', () => {
@@ -167,7 +167,7 @@ describe('UserNotesPanel', () => {
       const improvementButton = screen.getByText('Improvement');
       await user.click(improvementButton);
 
-      expect(improvementButton).toHaveClass('text-blue-700');
+      expect(improvementButton).toHaveClass('text-accent');
     });
 
     it('allows typing note content', async () => {

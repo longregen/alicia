@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import LanguageFlag from '../atoms/LanguageFlag';
 import { languages } from '../../mockData';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, LanguageData } from '../../types/components';
 
 // Language selector size mapping
@@ -123,30 +122,30 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   const getTriggerClasses = (): string => {
     const baseClasses = [
       SELECTOR_SIZE_MAP[size],
-      CSS.bgSurfaceBg,
+      'bg-surface',
       'border-2',
-      'border-primary-blue-glow',
-      CSS.roundedLg,
-      CSS.flex,
-      CSS.itemsCenter,
-      CSS.justifyBetween,
-      CSS.gap3,
+      'border-accent',
+      'rounded-lg',
+      'flex',
+      'items-center',
+      'justify-between',
+      'gap-3',
       'cursor-pointer',
-      CSS.transitionAll,
-      CSS.duration200,
+      'transition-all',
+      'duration-200',
       'ease-in-out',
       'focus:outline-none',
       'focus:ring-4',
-      'focus:ring-primary-blue-glow',
+      'focus:ring-accent',
       'min-w-32',
     ];
 
     if (disabled) {
       return cls([
         ...baseClasses,
-        CSS.bgInactiveDisabled,
-        'border-inactive-disabled',
-        CSS.textMuted,
+        'bg-sunken',
+        'border-muted',
+        'text-muted',
         'cursor-not-allowed',
       ]);
     }
@@ -154,20 +153,18 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     if (isOpen) {
       return cls([
         ...baseClasses,
-        'border-primary-blue',
+        'border-accent',
         'ring-4',
-        'ring-primary-blue-glow',
+        'ring-accent',
         'shadow-lg',
-        'shadow-primary-blue-glow',
       ]);
     }
 
     return cls([
       ...baseClasses,
-      'hover:border-primary-blue',
+      'hover:border-accent-hover',
       'hover:shadow-md',
-      'hover:shadow-primary-blue-glow',
-      CSS.textPrimary,
+      'text-default',
     ]);
   };
 
@@ -178,31 +175,30 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       'left-0',
       'right-0',
       'mt-1',
-      CSS.bgContainerBg,
+      'bg-elevated',
       'border-2',
-      'border-primary-blue-glow',
-      CSS.roundedLg,
+      'border-accent',
+      'rounded-lg',
       'shadow-lg',
-      'shadow-primary-blue-glow',
       'z-50',
       'max-h-64',
       'overflow-hidden',
       isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none',
-      CSS.transitionAll,
-      CSS.duration200,
+      'transition-all',
+      'duration-200',
       'ease-in-out',
     ]);
   };
 
   const getOptionClasses = (language: LanguageData, index: number): string => {
     const baseClasses = [
-      CSS.px3,
-      CSS.py2,
-      CSS.flex,
-      CSS.itemsCenter,
-      CSS.gap3,
+      'px-3',
+      'py-2',
+      'flex',
+      'items-center',
+      'gap-3',
       'cursor-pointer',
-      CSS.transitionColors,
+      'transition-colors',
       'duration-150',
       'ease-in-out',
     ];
@@ -210,25 +206,23 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     if (language.code === selectedLanguage) {
       return cls([
         ...baseClasses,
-        CSS.bgPrimaryBlueGlow,
-        CSS.textWhite,
+        'bg-accent',
+        'text-on-emphasis',
       ]);
     }
 
     if (index === highlightedIndex) {
       return cls([
         ...baseClasses,
-        CSS.bgPrimaryBlue,
-        'bg-opacity-50',
-        CSS.textPrimary,
+        'bg-accent-subtle',
+        'text-default',
       ]);
     }
 
     return cls([
       ...baseClasses,
-      CSS.textPrimary,
-      'hover:bg-primary-blue-glow',
-      'hover:bg-opacity-30',
+      'text-default',
+      'hover:bg-accent-subtle',
     ]);
   };
 
@@ -249,7 +243,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
         aria-haspopup="listbox"
         aria-label="Language selector"
       >
-        <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap3)}>
+        <div className="flex items-center gap-3">
           {selectedLang ? (
             <>
               <LanguageFlag
@@ -257,10 +251,10 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                 flag={selectedLang.flag}
                 size={size === 'lg' ? 'md' : 'sm'}
               />
-              <span className={cls(CSS.fontMedium)}>{selectedLang.name}</span>
+              <span className="font-medium">{selectedLang.name}</span>
             </>
           ) : (
-            <span className={cls(CSS.textMuted)}>
+            <span className="text-muted">
               {placeholder}
             </span>
           )}
@@ -268,10 +262,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
 
         <svg
           className={cls(
-            'w-4',
-            'h-4',
-            CSS.transitionTransform,
-            CSS.duration200,
+            'w-4 h-4 transition-transform duration-200',
             isOpen ? 'rotate-180' : ''
           )}
           fill="currentColor"
@@ -283,32 +274,19 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
 
       <div className={getDropdownClasses()}>
         {showSearch && (
-          <div className={cls(CSS.p3, 'border-b', 'border-surface-200', 'dark:border-surface-700')}>
+          <div className="p-3 border-b border-muted">
             <input
               ref={searchInputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search languages..."
-              className={cls(
-                CSS.wFull,
-                CSS.px3,
-                CSS.py2,
-                CSS.textSm,
-                CSS.bgSurfaceBg,
-                'border',
-                'border-primary-blue-glow',
-                'rounded-md',
-                'focus:outline-none',
-                'focus:ring-2',
-                'focus:ring-primary-blue',
-                'focus:border-primary-blue'
-              )}
+              className="w-full px-3 py-2 text-sm bg-surface border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
             />
           </div>
         )}
 
-        <div className={cls('max-h-48', 'overflow-y-auto')}>
+        <div className="max-h-48 overflow-y-auto">
           {filteredLanguages.length > 0 ? (
             filteredLanguages.map((language, index) => (
               <div
@@ -324,21 +302,21 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                   flag={language.flag}
                   size="sm"
                 />
-                <div className={cls('flex-1')}>
-                  <div className={cls(CSS.fontMedium)}>{language.name}</div>
-                  <div className={cls(CSS.textXs, CSS.textMuted)}>
+                <div className="flex-1">
+                  <div className="font-medium">{language.name}</div>
+                  <div className="text-xs text-muted">
                     {language.code.toUpperCase()}
                   </div>
                 </div>
                 {language.code === selectedLanguage && (
-                  <svg className={cls('w-4', 'h-4', CSS.textPrimary)} fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4 text-default" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
               </div>
             ))
           ) : (
-            <div className={cls(CSS.px3, 'py-4', CSS.textCenter, CSS.textMuted, CSS.textSm)}>
+            <div className="px-3 py-4 text-center text-muted text-sm">
               No languages found
             </div>
           )}

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { cls } from '../../../utils/cls';
-import { CSS } from '../../../utils/constants';
 import type { MemoryCategory } from '../../../stores/memoryStore';
 
 export interface MemorySearchProps {
@@ -44,44 +43,25 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
   const [showCategories, setShowCategories] = useState(false);
 
   return (
-    <div className={cls(CSS.flex, CSS.flexCol, CSS.gap3, className)}>
+    <div className={cls('flex flex-col gap-3', className)}>
       {/* Search bar and create button */}
-      <div className={cls(CSS.flex, CSS.gap2)}>
+      <div className="flex gap-2">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search memories..."
           className={cls(
-            CSS.flex,
-            'flex-1',
-            CSS.px3,
-            CSS.py2,
-            CSS.rounded,
-            CSS.border,
-            CSS.borderSurface300,
-            CSS.bgSurfaceBg,
-            CSS.textPrimary,
-            CSS.textSm,
-            CSS.focusOutlineNone,
-            'focus:border-primary-blue',
-            CSS.transitionColors
+            'flex flex-1 px-3 py-2 rounded border bg-surface text-default text-sm',
+            'focus:outline-none focus:border-accent transition-colors'
           )}
         />
         <button
           onClick={onCreateNew}
           className={cls(
-            CSS.px4,
-            CSS.py2,
-            CSS.rounded,
-            CSS.bgPrimaryBlue,
-            CSS.textWhite,
-            CSS.textSm,
-            CSS.fontMedium,
-            CSS.hoverBgPrimaryBlue,
-            CSS.transitionColors,
-            CSS.focusOutlineNone,
-            'focus:ring-2 focus:ring-primary-blue focus:ring-offset-2'
+            'px-4 py-2 rounded bg-accent text-on-emphasis text-sm font-medium',
+            'hover:bg-accent-hover transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2'
           )}
         >
           Create Memory
@@ -89,34 +69,22 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
       </div>
 
       {/* Category filter */}
-      <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2)}>
-        <span className={cls(CSS.textSm, CSS.textMuted)}>Filter:</span>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted">Filter:</span>
         <div className="relative">
           <button
             onClick={() => setShowCategories(!showCategories)}
             className={cls(
-              CSS.px3,
-              CSS.py1,
-              CSS.rounded,
-              CSS.border,
-              CSS.borderSurface300,
-              CSS.bgSurfaceBg,
-              CSS.textPrimary,
-              CSS.textSm,
-              CSS.hoverBgSurface100,
-              CSS.transitionColors,
-              CSS.focusOutlineNone,
-              CSS.flex,
-              CSS.itemsCenter,
-              CSS.gap2,
-              'min-w-[140px]'
+              'px-3 py-1 rounded border bg-surface text-default text-sm',
+              'hover:bg-sunken transition-colors focus:outline-none',
+              'flex items-center gap-2 min-w-[140px]'
             )}
           >
             <span>
               {categories.find((c) => c.value === selectedCategory)?.label || 'All'}
             </span>
             <svg
-              className={cls('w-4 h-4', CSS.textMuted, CSS.transitionTransform, showCategories ? 'rotate-180' : '')}
+              className={cls('w-4 h-4 text-muted transition-transform', showCategories ? 'rotate-180' : '')}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -134,16 +102,7 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
               />
 
               {/* Dropdown */}
-              <div
-                className={cls(
-                  'absolute z-20 mt-1 w-full',
-                  CSS.rounded,
-                  CSS.border,
-                  CSS.borderSurface300,
-                  CSS.bgSurfaceBg,
-                  'shadow-lg'
-                )}
-              >
+              <div className="absolute z-20 mt-1 w-full rounded border bg-surface shadow-lg">
                 {categories.map((category) => (
                   <button
                     key={category.value}
@@ -152,18 +111,10 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
                       setShowCategories(false);
                     }}
                     className={cls(
-                      CSS.wFull,
-                      CSS.px3,
-                      CSS.py2,
-                      CSS.textSm,
-                      CSS.textPrimary,
-                      'text-left',
-                      CSS.hoverBgSurface100,
-                      CSS.transitionColors,
-                      selectedCategory === category.value ? CSS.bgPrimaryBlue : '',
-                      selectedCategory === category.value ? CSS.textWhite : '',
-                      'first:rounded-t',
-                      'last:rounded-b'
+                      'w-full px-3 py-2 text-sm text-default text-left',
+                      'hover:bg-sunken transition-colors',
+                      selectedCategory === category.value ? 'bg-accent-subtle text-accent' : '',
+                      'first:rounded-t last:rounded-b'
                     )}
                   >
                     {category.label}
@@ -181,12 +132,7 @@ export const MemorySearch: React.FC<MemorySearchProps> = ({
               onSearchChange('');
               onCategoryChange('all');
             }}
-            className={cls(
-              CSS.textSm,
-              CSS.textPrimaryBlue,
-              'hover:underline',
-              CSS.transitionColors
-            )}
+            className="text-sm text-accent hover:underline transition-colors"
           >
             Clear filters
           </button>

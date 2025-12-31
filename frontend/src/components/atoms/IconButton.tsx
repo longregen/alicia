@@ -1,6 +1,5 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import { CSS, variantClasses } from '../../utils/constants';
 import type { BaseComponentProps, Size, Variant } from '../../types/components';
 
 /**
@@ -47,35 +46,39 @@ const IconButton: React.FC<IconButtonProps> = ({
     }
   };
 
+  const sizeClasses = {
+    sm: 'p-1.5',
+    md: 'p-2',
+    lg: 'p-3',
+  };
+
   const iconSize = size === 'sm' ? 'w-3 h-3' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5';
-  const paddingSize = size === 'sm' ? 'p-1.5' : size === 'md' ? 'p-2' : 'p-3';
+
+  const variantClasses = {
+    default: 'bg-surface text-default border hover:bg-sunken',
+    primary: 'bg-accent text-on-emphasis hover:bg-accent-hover active:bg-accent-active border-accent',
+    success: 'bg-success text-on-emphasis hover:bg-success/90 border-success',
+    warning: 'bg-warning text-on-emphasis hover:bg-warning/90 border-warning',
+    error: 'bg-error text-on-emphasis hover:bg-error/90 border-error',
+  };
 
   const buttonClasses = cls(
     // Base styles
-    CSS.flex,
-    CSS.itemsCenter,
-    CSS.justifyCenter,
-    CSS.border,
-    CSS.transitionAll,
-    CSS.duration200,
-    CSS.focusOutlineNone,
-    CSS.focusRing2,
-    CSS.focusRingAlicia500,
+    'inline-flex items-center justify-center',
+    'border transition-all duration-200',
+    'focus:outline-none focus:ring-2 focus:ring-accent',
 
     // Padding
-    paddingSize,
+    sizeClasses[size],
 
     // Shape
-    circular ? CSS.roundedFull : CSS.rounded,
+    circular ? 'rounded-full' : 'rounded-lg',
 
     // Variant
-    variantClasses[variant].background,
-    variantClasses[variant].text,
-    variantClasses[variant].border,
-    variantClasses[variant].hover,
+    variantClasses[variant],
 
     // States
-    disabled || loading ? cls(CSS.cursorNotAllowed, CSS.opacity50) : CSS.cursorPointer,
+    disabled || loading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
 
     // Custom classes
     className

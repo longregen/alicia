@@ -3,7 +3,6 @@ import StatusBadge from '../atoms/StatusBadge';
 import ToolUseVoting from './ToolUseVoting';
 import GhostButton from '../atoms/GhostButton';
 import { cls } from '../../utils/cls';
-import { CSS } from '../../utils/constants';
 import type { BaseComponentProps, ToolData } from '../../types/components';
 
 /**
@@ -56,26 +55,21 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
   return (
     <div
       className={cls(
-        CSS.flex,
-        CSS.flexCol,
-        CSS.gap2,
-        CSS.p3,
-        CSS.roundedLg,
-        CSS.border,
-        'bg-tool-use border-gray-300 dark:border-gray-600',
+        'flex flex-col gap-2 p-3 rounded-lg border',
+        'bg-tool-use border',
         className
       )}
     >
       {/* Header */}
-      <div className={cls(CSS.flex, CSS.itemsCenter, CSS.justifyBetween, CSS.gap2)}>
-        <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2, 'flex-1', CSS.minW0)}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           {/* Tool icon */}
           <div className="flex-shrink-0 text-lg">🔧</div>
 
           {/* Tool name and description */}
-          <div className={cls(CSS.flex, CSS.flexCol, CSS.gap1, 'flex-1', CSS.minW0)}>
-            <div className={cls(CSS.flex, CSS.itemsCenter, CSS.gap2)}>
-              <span className={cls(CSS.textSm, CSS.fontSemibold, CSS.textPrimary)}>
+          <div className="flex flex-col gap-1 flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-tool-use">
                 {tool.name}
               </span>
               {tool.status && (
@@ -83,7 +77,7 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
               )}
             </div>
             {tool.description && (
-              <p className={cls(CSS.textXs, CSS.textMuted, 'truncate')}>
+              <p className="text-xs text-muted truncate">
                 {tool.description}
               </p>
             )}
@@ -119,18 +113,10 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
 
       {/* Result section */}
       {hasResult && (
-        <div className={cls(CSS.flex, CSS.flexCol, CSS.gap2)}>
+        <div className="flex flex-col gap-2">
           {/* Result content */}
-          <div
-            className={cls(
-              CSS.p3,
-              CSS.roundedLg,
-              'bg-tool-result',
-              CSS.border,
-              'border-gray-300 dark:border-gray-600'
-            )}
-          >
-            <pre className={cls(CSS.textXs, CSS.textPrimary, 'whitespace-pre-wrap', 'font-mono')}>
+          <div className="p-3 rounded-lg bg-tool-result border">
+            <pre className="text-xs text-tool-result whitespace-pre-wrap font-mono">
               {isExpanded || !shouldTruncate ? tool.result : previewResult}
             </pre>
           </div>
@@ -150,7 +136,7 @@ const ToolUseCard: React.FC<ToolUseCardProps> = ({
 
       {/* Voting controls */}
       {showVoting && tool.id && (
-        <div className={cls('pt-2', 'border-t', 'border-gray-300 dark:border-gray-600')}>
+        <div className="pt-2 border-t border-muted">
           <ToolUseVoting toolUseId={tool.id} compact showQuickFeedback />
         </div>
       )}
