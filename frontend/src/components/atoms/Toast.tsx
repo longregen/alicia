@@ -108,9 +108,9 @@ const Toast: React.FC<ToastProps> = ({
     // Variant
     variantStyles[variant],
 
-    // Semantic classes
-    variant === 'success' && 'toast-success',
-    variant === 'error' && 'toast-error',
+    // Semantic classes for e2e tests
+    variant === 'success' ? 'toast-success' : '',
+    variant === 'error' ? 'toast-error' : '',
 
     // Animation
     'transition-all duration-200 ease-out',
