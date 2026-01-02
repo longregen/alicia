@@ -20,6 +20,14 @@ android {
         buildConfigField("String", "LIVEKIT_URL", "\"wss://livekit.example.com\"")
     }
 
+    testOptions {
+        targetSdk = 36
+    }
+
+    lint {
+        targetSdk = 36
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

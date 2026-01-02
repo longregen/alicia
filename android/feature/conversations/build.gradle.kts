@@ -18,6 +18,14 @@ android {
         consumerProguardFiles("consumer-rules.pro")
     }
 
+    testOptions {
+        targetSdk = 36
+    }
+
+    lint {
+        targetSdk = 36
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
