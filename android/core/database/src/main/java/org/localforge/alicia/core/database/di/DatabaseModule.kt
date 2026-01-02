@@ -45,7 +45,7 @@ object DatabaseModule {
             // 4. Consider exportSchema = true in @Database for migration validation
             //
             // See: https://developer.android.com/training/data-storage/room/migrating-db-versions
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
 
