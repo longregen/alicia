@@ -225,6 +225,17 @@ in
       description = "Whether to open the firewall for the Alicia port.";
     };
 
+    corsOrigins = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      example = [ "https://alicia.example.com" ];
+      description = ''
+        List of allowed CORS origins for the API and WebSocket connections.
+        If empty, only localhost development origins are allowed.
+        For production, add your domain (e.g., "https://alicia.example.com").
+      '';
+    };
+
     mode = mkOption {
       type = types.enum [ "server" "agent" "both" ];
       default = "both";
@@ -386,6 +397,9 @@ in
         ALICIA_LLM_TEMPERATURE = toString cfg.llm.temperature;
 
         # LiveKit configuration
+      } // optionalAttrs (cfg.corsOrigins != []) {
+        # CORS origins for API and WebSocket connections
+        ALICIA_CORS_ORIGINS = concatStringsSep "," cfg.corsOrigins;
       } // optionalAttrs cfg.livekit.enable {
         ALICIA_LIVEKIT_URL = cfg.livekit.url;
       } // optionalAttrs (cfg.asr.url != null) {
