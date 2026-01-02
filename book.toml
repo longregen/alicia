@@ -9,5 +9,5 @@ title = "Alicia"
 command = "mdbook-mermaid"
 
 [output.html]
-site-url = "/docs/"
+site-url = "/"
 additional-js = ["docs/bin/assets/mermaid.min.js", "docs/bin/assets/mermaid-init.js"]
