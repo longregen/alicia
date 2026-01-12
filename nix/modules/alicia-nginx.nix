@@ -40,6 +40,11 @@ in
       default = false;
       description = "Force redirect HTTP to HTTPS.";
     };
+    useACMEHost = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "example.com";
+    };
 
     acmeEmail = mkOption {
       type = types.nullOr types.str;
@@ -122,10 +127,11 @@ in
       recommendedGzipSettings = true;
       recommendedOptimisation = true;
       recommendedProxySettings = true;
-      recommendedTlsSettings = true;
+      # Don't set recommendedTlsSettings - modules/setup/nginx.nix provides custom TLS settings
 
       virtualHosts.${cfg.serverName} = {
         enableACME = cfg.enableACME;
+        useACMEHost = cfg.useACMEHost;
         forceSSL = cfg.forceSSL;
 
         listen = map (addr: {
@@ -167,11 +173,6 @@ in
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
               proxy_set_header X-Forwarded-Proto $scheme;
               proxy_set_header Host $host;
-
-              # WebSocket specific settings
-              proxy_http_version 1.1;
-              proxy_set_header Upgrade $http_upgrade;
-              proxy_set_header Connection "upgrade";
 
               # Longer timeout for WebSocket connections
               proxy_connect_timeout 7d;
