@@ -28,6 +28,52 @@ export default defineConfig({
         })
       },
     },
+    {
+      name: 'cache-vad-assets',
+      configureServer(server) {
+        // Add proper MIME types and long-term caching for VAD/ONNX assets
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || '';
+
+          // Match VAD and ONNX static assets
+          if (url.startsWith('/js/lib/') || url.startsWith('/onnx/') || url.startsWith('/models/')) {
+            // Set proper MIME types
+            if (url.endsWith('.js')) {
+              res.setHeader('Content-Type', 'application/javascript');
+            } else if (url.endsWith('.wasm')) {
+              res.setHeader('Content-Type', 'application/wasm');
+            } else if (url.endsWith('.onnx')) {
+              res.setHeader('Content-Type', 'application/octet-stream');
+            }
+
+            // Cache for 1 year (immutable versioned assets)
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+
+          next();
+        });
+      },
+      configurePreviewServer(server) {
+        // Same middleware for preview server
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || '';
+
+          if (url.startsWith('/js/lib/') || url.startsWith('/onnx/') || url.startsWith('/models/')) {
+            if (url.endsWith('.js')) {
+              res.setHeader('Content-Type', 'application/javascript');
+            } else if (url.endsWith('.wasm')) {
+              res.setHeader('Content-Type', 'application/wasm');
+            } else if (url.endsWith('.onnx')) {
+              res.setHeader('Content-Type', 'application/octet-stream');
+            }
+
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+
+          next();
+        });
+      },
+    },
   ],
   build: {
     rollupOptions: {
@@ -59,7 +105,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3001,
     allowedHosts: ['alicia.hjkl.lol'],
     // Disable proxy during e2e tests so Playwright can intercept API calls
     proxy: process.env.PLAYWRIGHT_TEST ? undefined : {

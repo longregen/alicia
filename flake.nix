@@ -89,6 +89,18 @@
             sha256 = "sha256-1SD9NRyZuhVT/7z6GTAvJnRwZolwXRlIw9ygf7QI4Lc=";
           };
 
+          # VAD JavaScript bundle (main library with MicVAD class)
+          vadBundle = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/bundle.min.js";
+            sha256 = "sha256-XMxdF+8E89clng0bMXsjqGj6Nm5WjBHTK5VvfX026cc=";
+          };
+
+          # ONNX Runtime JavaScript library
+          ortJs = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js";
+            sha256 = "sha256-v3I5nuDnSSIrx8DdHPPaQbZvx++J9DcSeUQZnWBez/4=";
+          };
+
           ortWasm = pkgs.fetchurl {
             url = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort-wasm.wasm";
             sha256 = "sha256-u9y2s8fSlFd9gGB3YwRgvk4TyjWjRay16BGI6WSfp0o=";
@@ -114,6 +126,7 @@
           installPhase = ''
             mkdir -p $out/models
             mkdir -p $out/onnx
+            mkdir -p $out/js/lib
 
             cp $sileroModel $out/models/silero_vad_v5.onnx
             cp $vadWorklet $out/models/vad.worklet.bundle.min.js
@@ -121,10 +134,42 @@
             cp $ortWasmThreaded $out/onnx/ort-wasm-threaded.wasm
             cp $ortWasmSimd $out/onnx/ort-wasm-simd.wasm
             cp $ortWasmSimdThreaded $out/onnx/ort-wasm-simd-threaded.wasm
+
+            # JavaScript libraries for /js/lib/
+            cp $ortJs $out/js/lib/ort.js
+            cp $vadBundle $out/js/lib/vad.bundle.min.js
           '';
 
           meta = {
             description = "VAD and ONNX Runtime dependencies for web";
+            license = pkgs.lib.licenses.mit;
+          };
+        };
+
+        # Silero VAD v5 model for Go backend (silero-vad-go)
+        # This is the native ONNX model used by the backend for voice activity detection
+        # Uses the same model as the frontend (from @ricky0123/vad-web) for consistency
+        silero-vad-model = pkgs.stdenv.mkDerivation {
+          pname = "silero-vad-model";
+          version = "5.0";
+
+          # Use the same model as the frontend VAD for consistency
+          # This is the Silero VAD v5 model packaged with @ricky0123/vad-web
+          src = pkgs.fetchurl {
+            url = "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/silero_vad_v5.onnx";
+            sha256 = "sha256-JiOilT9v89LB5hdAxs23FoEzR5smff7xFKSjzFvdeI8=";
+          };
+
+          dontUnpack = true;
+
+          installPhase = ''
+            mkdir -p $out/share/silero-vad
+            cp $src $out/share/silero-vad/silero_vad.onnx
+          '';
+
+          meta = {
+            description = "Silero VAD v5 ONNX model for voice activity detection";
+            homepage = "https://github.com/snakers4/silero-vad";
             license = pkgs.lib.licenses.mit;
           };
         };
@@ -137,6 +182,7 @@
           libopus
           opusfile
           libogg
+          onnxruntime  # Required for silero-vad-go voice activity detection
         ];
 
         # Simple migration helper script (go-migrate has snowflake driver bug in nixpkgs)
@@ -165,9 +211,11 @@
         frontendShellHook = ''
           mkdir -p frontend/public/models
           mkdir -p frontend/public/onnx
+          mkdir -p frontend/public/js/lib
 
           ln -sf ${vad-dependencies}/models/* frontend/public/models/
           ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
+          ln -sf ${vad-dependencies}/js/lib/* frontend/public/js/lib/
           ln -sf ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm frontend/public/sql-wasm.wasm
 
           echo "VAD dependencies linked to frontend/public/"
@@ -179,6 +227,7 @@
             src = ./.;
             version = "0.1.0";
             rev = self.rev or "dirty";
+            inherit silero-vad-model;
           };
 
           # Frontend React/Vite application
@@ -441,6 +490,9 @@
 
           # VAD dependencies for frontend development
           inherit vad-dependencies;
+
+          # Silero VAD model for backend (silero-vad-go)
+          inherit silero-vad-model;
         };
 
         # Test derivations
@@ -524,6 +576,12 @@
         # Go-only shell for backend CI
         devShells.go = pkgs.mkShell {
           buildInputs = goDevInputs ++ [db-migrate alicia-dev];
+          shellHook = ''
+            # Set up CGO environment for ONNX Runtime (required by silero-vad-go)
+            export C_INCLUDE_PATH="${pkgs.onnxruntime.dev}/include:$C_INCLUDE_PATH"
+            export LIBRARY_PATH="${pkgs.onnxruntime}/lib:$LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${pkgs.onnxruntime}/lib:$LD_LIBRARY_PATH"
+          '';
         };
 
         # Frontend-only shell for frontend CI
@@ -640,6 +698,11 @@
             ];
 
           shellHook = ''
+            # Set up CGO environment for ONNX Runtime (required by silero-vad-go)
+            export C_INCLUDE_PATH="${pkgs.onnxruntime.dev}/include:$C_INCLUDE_PATH"
+            export LIBRARY_PATH="${pkgs.onnxruntime}/lib:$LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${pkgs.onnxruntime}/lib:$LD_LIBRARY_PATH"
+
             # Set up Android SDK environment
             export ANDROID_HOME="${androidSdk}/share/android-sdk"
             export ANDROID_SDK_ROOT="$ANDROID_HOME"
@@ -660,8 +723,13 @@
               mkdir -p "$PGDATA"
               initdb --auth=trust --no-locale --encoding=UTF8 --username=postgres
 
-              # Start PostgreSQL server with UNIX socket only (no TCP)
-              pg_ctl start -o "-k $PGDATA -h \"\" -c listen_addresses=\"\""
+              # Configure pg_hba.conf to allow remote connections
+              echo "# Allow connections from any host (for debugging via Tailscale, etc.)" >> "$PGDATA/pg_hba.conf"
+              echo "host    all             all             0.0.0.0/0               trust" >> "$PGDATA/pg_hba.conf"
+              echo "host    all             all             ::/0                    trust" >> "$PGDATA/pg_hba.conf"
+
+              # Start PostgreSQL server with TCP listening on all interfaces
+              pg_ctl start -o "-k $PGDATA -p $PGPORT -c listen_addresses='0.0.0.0'"
 
               # Wait for PostgreSQL to be ready
               sleep 2
@@ -683,7 +751,7 @@
             else
               # Start PostgreSQL server if not already running
               if ! pg_ctl status > /dev/null 2>&1; then
-                pg_ctl start -o "-k $PGDATA -h \"\" -c listen_addresses=\"\""
+                pg_ctl start -o "-k $PGDATA -p $PGPORT -c listen_addresses='0.0.0.0'"
                 sleep 2
               fi
             fi
@@ -696,8 +764,15 @@
             # Set up VAD dependencies for frontend
             mkdir -p frontend/public/models
             mkdir -p frontend/public/onnx
+            mkdir -p frontend/public/js/lib
             ln -sf ${vad-dependencies}/models/* frontend/public/models/
             ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
+            ln -sf ${vad-dependencies}/js/lib/* frontend/public/js/lib/
+
+            # Set up Silero VAD model for backend development
+            mkdir -p data/models
+            ln -sf ${silero-vad-model}/share/silero-vad/silero_vad.onnx data/models/silero_vad.onnx
+            export ALICIA_VAD_MODEL_PATH="$PWD/data/models/silero_vad.onnx"
 
             # Generate Android gradle wrapper if missing
             if [ -d "android" ] && [ ! -f "android/gradlew" ]; then
@@ -708,12 +783,7 @@
             # Generate deps.json placeholder if missing
             if [ -d "android" ] && [ ! -f "android/deps.json" ]; then
               echo "Generating deps.json placeholder..."
-              cat > android/deps.json << 'DEPS'
-            {
-             "!comment": "This is a nixpkgs Gradle dependency lockfile. For more details, refer to the Gradle section in the nixpkgs manual.",
-             "!version": 1
-            }
-            DEPS
+              echo '{"!comment": "This is a nixpkgs Gradle dependency lockfile.", "!version": 1}' > android/deps.json
             fi
 
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -728,6 +798,10 @@
             echo "Android Environment:"
             echo "  ANDROID_HOME: $ANDROID_HOME"
             echo "  JAVA_HOME: $JAVA_HOME"
+            echo ""
+            echo "VAD (Voice Activity Detection):"
+            echo "  Model: $ALICIA_VAD_MODEL_PATH"
+            echo "  ONNX Runtime: ${pkgs.onnxruntime}/lib"
             echo ""
             echo "Development Commands:"
             echo "  go build -o bin/alicia cmd/alicia/main.go  # Build backend"

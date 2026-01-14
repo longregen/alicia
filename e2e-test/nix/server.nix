@@ -19,8 +19,8 @@ let
   postgresUrl = "postgres://${dbUser}:${dbPassword}@localhost:${toString dbPort}/${dbName}?sslmode=disable";
 
   # External service URLs (real services, accessed via VM's network)
-  llmUrl = "https://llm.decent.town/v1";
-  livekitUrl = "wss://livekit.decent.town";
+  llmUrl = "https://llm.hjkl.lol/v1";
+  livekitUrl = "wss://livekit.hjkl.lol";
 in
 {
   # ============================================================================

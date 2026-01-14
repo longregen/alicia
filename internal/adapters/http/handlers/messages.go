@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -323,6 +324,15 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 	// Trigger response generation asynchronously (if use case is available)
 	if h.generateResponseUseCase != nil {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("PANIC in response generation for message %s: %v\n%s", message.ID, r, debug.Stack())
+					if h.wsBroadcaster != nil {
+						h.wsBroadcaster.BroadcastError(conversationID, "internal_error", "Response generation failed unexpectedly")
+					}
+				}
+			}()
+
 			// 5 minute timeout for LLM generation to prevent indefinite hangs
 			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()

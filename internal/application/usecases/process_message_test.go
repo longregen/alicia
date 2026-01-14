@@ -85,14 +85,22 @@ func (m *mockASRService) TranscribeStream(ctx context.Context, audioStream io.Re
 func TestProcessUserMessage_WithTextOnly(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation with a tip message
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	tipID := "msg_previous_tip"
+	conv.TipMessageID = &tipID
+	convRepo.Create(context.Background(), conv)
+
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -102,7 +110,6 @@ func TestProcessUserMessage_WithTextOnly(t *testing.T) {
 	input := &ports.ProcessUserMessageInput{
 		ConversationID: "conv_123",
 		TextContent:    "Hello there",
-		PreviousID:     "",
 	}
 
 	output, err := uc.Execute(context.Background(), input)
@@ -130,15 +137,31 @@ func TestProcessUserMessage_WithTextOnly(t *testing.T) {
 	if stored == nil {
 		t.Error("message not stored in repository")
 	}
+
+	// Verify previous_id was set from conversation tip
+	if output.Message.PreviousID != "msg_previous_tip" {
+		t.Errorf("expected previous ID 'msg_previous_tip', got %s", output.Message.PreviousID)
+	}
+
+	// Verify conversation tip was updated
+	updatedConv, _ := convRepo.GetByID(context.Background(), "conv_123")
+	if updatedConv.TipMessageID == nil || *updatedConv.TipMessageID != output.Message.ID {
+		t.Error("expected conversation tip to be updated to new message ID")
+	}
 }
 
 func TestProcessUserMessage_WithAudio(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
+
+	// Create a conversation
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	convRepo.Create(context.Background(), conv)
 
 	asrService.transcribeFunc = func(ctx context.Context, audio []byte, format string) (*ports.ASRResult, error) {
 		return &ports.ASRResult{
@@ -152,6 +175,7 @@ func TestProcessUserMessage_WithAudio(t *testing.T) {
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -197,10 +221,15 @@ func TestProcessUserMessage_WithAudio(t *testing.T) {
 func TestProcessUserMessage_WithMemoryRetrieval(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
+
+	// Create a conversation
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	convRepo.Create(context.Background(), conv)
 
 	memoryService.searchWithScoresFunc = func(ctx context.Context, query string, threshold float32, limit int) ([]*ports.MemorySearchResult, error) {
 		mem1 := models.NewMemory("mem_1", "User likes coffee")
@@ -222,6 +251,7 @@ func TestProcessUserMessage_WithMemoryRetrieval(t *testing.T) {
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -250,14 +280,20 @@ func TestProcessUserMessage_WithMemoryRetrieval(t *testing.T) {
 func TestProcessUserMessage_EmptyContent(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	convRepo.Create(context.Background(), conv)
+
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -278,14 +314,20 @@ func TestProcessUserMessage_EmptyContent(t *testing.T) {
 func TestProcessUserMessage_ASRServiceUnavailable(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	convRepo.Create(context.Background(), conv)
+
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
-		nil,
+		convRepo,
+		nil, // ASR service unavailable
 		memoryService,
 		idGen,
 		txManager,
@@ -307,10 +349,15 @@ func TestProcessUserMessage_ASRServiceUnavailable(t *testing.T) {
 func TestProcessUserMessage_ASRTranscriptionFails(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
+
+	// Create a conversation
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	convRepo.Create(context.Background(), conv)
 
 	asrService.transcribeFunc = func(ctx context.Context, audio []byte, format string) (*ports.ASRResult, error) {
 		return nil, errors.New("transcription failed")
@@ -319,6 +366,7 @@ func TestProcessUserMessage_ASRTranscriptionFails(t *testing.T) {
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -338,17 +386,25 @@ func TestProcessUserMessage_ASRTranscriptionFails(t *testing.T) {
 	}
 }
 
-func TestProcessUserMessage_WithPreviousID(t *testing.T) {
+func TestProcessUserMessage_WithConversationTip(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
 
+	// Create a conversation with a tip message
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	tipID := "msg_previous_tip"
+	conv.TipMessageID = &tipID
+	convRepo.Create(context.Background(), conv)
+
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -358,7 +414,6 @@ func TestProcessUserMessage_WithPreviousID(t *testing.T) {
 	input := &ports.ProcessUserMessageInput{
 		ConversationID: "conv_123",
 		TextContent:    "Follow-up message",
-		PreviousID:     "msg_previous",
 	}
 
 	output, err := uc.Execute(context.Background(), input)
@@ -366,18 +421,30 @@ func TestProcessUserMessage_WithPreviousID(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if output.Message.PreviousID == "" || output.Message.PreviousID != "msg_previous" {
-		t.Error("expected previous ID to be set")
+	// Previous ID should be set from conversation tip, not from input
+	if output.Message.PreviousID != "msg_previous_tip" {
+		t.Errorf("expected previous ID 'msg_previous_tip', got %s", output.Message.PreviousID)
+	}
+
+	// Verify conversation tip was updated to new message
+	updatedConv, _ := convRepo.GetByID(context.Background(), "conv_123")
+	if updatedConv.TipMessageID == nil || *updatedConv.TipMessageID != output.Message.ID {
+		t.Error("expected conversation tip to be updated to new message ID")
 	}
 }
 
 func TestProcessUserMessage_MemoryServiceFailure(t *testing.T) {
 	msgRepo := newMockMessageRepo()
 	audioRepo := newMockAudioRepo()
+	convRepo := newMockConversationRepo()
 	asrService := newMockASRService()
 	memoryService := newMockMemoryService()
 	idGen := newMockIDGenerator()
 	txManager := &mockTransactionManager{}
+
+	// Create a conversation
+	conv := models.NewConversation("conv_123", "Test Conversation")
+	convRepo.Create(context.Background(), conv)
 
 	memoryService.searchWithScoresFunc = func(ctx context.Context, query string, threshold float32, limit int) ([]*ports.MemorySearchResult, error) {
 		return nil, errors.New("memory service error")
@@ -386,6 +453,7 @@ func TestProcessUserMessage_MemoryServiceFailure(t *testing.T) {
 	uc := NewProcessUserMessage(
 		msgRepo,
 		audioRepo,
+		convRepo,
 		asrService,
 		memoryService,
 		idGen,

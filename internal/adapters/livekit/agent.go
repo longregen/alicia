@@ -41,6 +41,15 @@ type AgentConfig struct {
 	TokenValidityDuration time.Duration
 	WorkerCount           int // Number of worker goroutines for event processing
 	WorkQueueSize         int // Size of the buffered work queue
+
+	// VAD configuration
+	VADModelPath         string  // Path to Silero VAD ONNX model (empty to disable VAD)
+	VADSilenceDurationMs int     // Silence duration to mark end of turn (default: 1200ms)
+	VADThreshold         float32 // Speech detection threshold (default: 0.5)
+
+	// TTS audio format configuration (for resampling to 48kHz stereo)
+	TTSSampleRate int // TTS output sample rate (default: 24000 for Kokoro)
+	TTSChannels   int // TTS output channels: 1=mono, 2=stereo (default: 1)
 }
 
 func DefaultAgentConfig() *AgentConfig {
@@ -53,6 +62,15 @@ func DefaultAgentConfig() *AgentConfig {
 		TokenValidityDuration: 24 * time.Hour,
 		WorkerCount:           10,
 		WorkQueueSize:         100,
+
+		// VAD defaults
+		VADModelPath:         "",   // Disabled by default
+		VADSilenceDurationMs: 1200, // 1.2 seconds
+		VADThreshold:         0.5,
+
+		// TTS defaults (Kokoro outputs 24kHz mono)
+		TTSSampleRate: 24000,
+		TTSChannels:   1,
 	}
 }
 
@@ -68,6 +86,9 @@ type Agent struct {
 
 	audioTrack     *lksdk.LocalTrack
 	audioConverter *AudioConverter
+
+	// VAD for turn detection
+	vadProcessor *VADProcessor
 
 	// Acknowledgement tracking
 	pendingMu      sync.RWMutex
@@ -118,7 +139,7 @@ func NewAgent(config *AgentConfig, callbacks ports.LiveKitAgentCallbacks) (*Agen
 	// Create cancellable context for lifecycle management
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Agent{
+	agent := &Agent{
 		config:       config,
 		callbacks:    callbacks,
 		codec:        NewCodec(),
@@ -129,7 +150,48 @@ func NewAgent(config *AgentConfig, callbacks ports.LiveKitAgentCallbacks) (*Agen
 		workerCount:  config.WorkerCount,
 		ctx:          ctx,
 		cancel:       cancel,
-	}, nil
+	}
+
+	// Initialize VAD processor if model path is configured
+	if config.VADModelPath != "" {
+		silenceDuration := config.VADSilenceDurationMs
+		if silenceDuration <= 0 {
+			silenceDuration = VADMinSilenceDurationMs
+		}
+		threshold := config.VADThreshold
+		if threshold <= 0 {
+			threshold = VADThreshold
+		}
+
+		vadProcessor, err := NewVADProcessor(VADConfig{
+			ModelPath:            config.VADModelPath,
+			MinSilenceDurationMs: silenceDuration,
+			Threshold:            threshold,
+			OnTurnStart: func() {
+				if agent.callbacks != nil {
+					if err := agent.callbacks.OnTurnStart(agent.ctx); err != nil {
+						log.Printf("ERROR: OnTurnStart callback failed: %v", err)
+					}
+				}
+			},
+			OnTurnEnd: func(durationMs int64) {
+				if agent.callbacks != nil {
+					if err := agent.callbacks.OnTurnEnd(agent.ctx, durationMs); err != nil {
+						log.Printf("ERROR: OnTurnEnd callback failed: %v", err)
+					}
+				}
+			},
+		})
+		if err != nil {
+			cancel() // Clean up context on error
+			return nil, fmt.Errorf("failed to create VAD processor: %w", err)
+		}
+		agent.vadProcessor = vadProcessor
+		log.Printf("VAD processor initialized with model: %s, silence threshold: %dms, detection threshold: %.2f",
+			config.VADModelPath, silenceDuration, threshold)
+	}
+
+	return agent, nil
 }
 
 // SetCallbacks sets the agent callbacks (useful for two-phase initialization)
@@ -242,6 +304,14 @@ func (a *Agent) Disconnect(ctx context.Context) error {
 	a.roomInfo = nil
 	a.audioTrack = nil
 
+	// Clean up VAD processor
+	if a.vadProcessor != nil {
+		if err := a.vadProcessor.Destroy(); err != nil {
+			log.Printf("WARNING: Failed to destroy VAD processor: %v", err)
+		}
+		a.vadProcessor = nil
+	}
+
 	// Step 2: Close work queue BEFORE releasing lock to prevent race
 	// This prevents callbacks from queuing new work after we unlock
 	// Any callback trying to send will immediately see the closed channel
@@ -343,7 +413,23 @@ func (a *Agent) SendAudio(ctx context.Context, audio []byte, format string) erro
 			return fmt.Errorf("audio converter not initialized")
 		}
 
-		opusSamples, err := a.audioConverter.ConvertPCMToOpus(audio)
+		// Resample TTS audio to 48kHz stereo (LiveKit requirement)
+		// TTS typically outputs 24kHz mono, we need 48kHz stereo for Opus
+		inputRate := a.config.TTSSampleRate
+		inputChannels := a.config.TTSChannels
+		if inputRate == 0 {
+			inputRate = 24000 // Default for Kokoro
+		}
+		if inputChannels == 0 {
+			inputChannels = 1 // Default mono
+		}
+
+		resampledAudio, err := ResamplePCM(audio, inputRate, 48000, inputChannels, 2)
+		if err != nil {
+			return fmt.Errorf("failed to resample audio: %w", err)
+		}
+
+		opusSamples, err := a.audioConverter.ConvertPCMToOpus(resampledAudio)
 		if err != nil {
 			return fmt.Errorf("failed to convert PCM to Opus: %w", err)
 		}
@@ -721,6 +807,23 @@ func (a *Agent) onTrackSubscribed(track *webrtc.TrackRemote, publication *lksdk.
 			}
 		}()
 		defer a.wg.Done()
+
+		// Create an AudioConverter for decoding Opus to float32 for VAD processing
+		// Using LiveKit's sample rate (48kHz) and channels (stereo)
+		var vadDecoder *AudioConverter
+		a.mu.RLock()
+		hasVAD := a.vadProcessor != nil
+		a.mu.RUnlock()
+
+		if hasVAD {
+			var err error
+			vadDecoder, err = NewAudioConverter(LiveKitSampleRate, LiveKitChannels)
+			if err != nil {
+				log.Printf("ERROR: Failed to create audio converter for VAD: %v", err)
+				// Continue without VAD - audio callbacks will still work
+			}
+		}
+
 		for {
 			select {
 			case <-a.ctx.Done():
@@ -736,6 +839,26 @@ func (a *Agent) onTrackSubscribed(track *webrtc.TrackRemote, publication *lksdk.
 					SampleRate: int(track.Codec().ClockRate),
 					Channels:   int(track.Codec().Channels),
 					TrackSID:   publication.SID(),
+				}
+
+				// Feed decoded audio to VAD processor if available
+				if vadDecoder != nil {
+					a.mu.RLock()
+					vadProcessor := a.vadProcessor
+					a.mu.RUnlock()
+
+					if vadProcessor != nil {
+						// Decode Opus to float32 for VAD
+						samples, err := vadDecoder.ConvertOpusToPCMFloat(rtp.Payload)
+						if err != nil {
+							log.Printf("WARNING: Failed to decode audio for VAD: %v", err)
+						} else {
+							// Process through VAD
+							if err := vadProcessor.ProcessAudio(samples); err != nil {
+								log.Printf("WARNING: VAD processing failed: %v", err)
+							}
+						}
+					}
 				}
 
 				if err := a.callbacks.OnAudioReceived(a.ctx, frame); err != nil {

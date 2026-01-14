@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -70,6 +71,7 @@ func (h *ConversationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.conversationRepo.Create(r.Context(), conversation); err != nil {
+		log.Printf("Failed to create conversation for user %s: %v", userID, err)
 		respondError(w, "internal_error", "Failed to create conversation", http.StatusInternalServerError)
 		return
 	}
@@ -100,6 +102,7 @@ func (h *ConversationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		log.Printf("Failed to list conversations for user %s: %v", userID, err)
 		respondError(w, "internal_error", "Failed to list conversations", http.StatusInternalServerError)
 		return
 	}
@@ -132,6 +135,7 @@ func (h *ConversationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		if err == pgx.ErrNoRows {
 			respondError(w, "not_found", "Conversation not found or access denied", http.StatusNotFound)
 		} else {
+			log.Printf("Failed to get conversation %s for user %s: %v", id, userID, err)
 			respondError(w, "internal_error", "Failed to retrieve conversation", http.StatusInternalServerError)
 		}
 		return
@@ -155,6 +159,7 @@ func (h *ConversationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.conversationRepo.DeleteByIDAndUserID(r.Context(), id, userID); err != nil {
+		log.Printf("Failed to delete conversation %s for user %s: %v", id, userID, err)
 		respondError(w, "internal_error", "Failed to delete conversation", http.StatusInternalServerError)
 		return
 	}
@@ -185,6 +190,7 @@ func (h *ConversationsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		if err == pgx.ErrNoRows {
 			respondError(w, "not_found", "Conversation not found or access denied", http.StatusNotFound)
 		} else {
+			log.Printf("Failed to get conversation %s for patch (user %s): %v", id, userID, err)
 			respondError(w, "internal_error", "Failed to retrieve conversation", http.StatusInternalServerError)
 		}
 		return
@@ -215,6 +221,7 @@ func (h *ConversationsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	conversation.UpdatedAt = time.Now()
 
 	if err := h.conversationRepo.Update(r.Context(), conversation); err != nil {
+		log.Printf("Failed to update conversation %s for user %s: %v", id, userID, err)
 		respondError(w, "internal_error", "Failed to update conversation", http.StatusInternalServerError)
 		return
 	}

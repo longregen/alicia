@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultTTSEndpoint = "http://localhost:8000"
-	speechPath         = "/v1/audio/speech"
+	speechPath         = "/audio/speech"
 	// TTSTimeout is the maximum time to wait for TTS synthesis
 	TTSTimeout = 30 * time.Second
 )
@@ -98,13 +98,44 @@ func (t *TTSAdapter) doSynthesize(ctx context.Context, text string, options *por
 		return nil, fmt.Errorf("TTS synthesis failed: %w", err)
 	}
 
+	// Estimate duration from audio data size
+	durationMs := estimateAudioDuration(audioData, req.ResponseFormat)
+
 	result := &ports.TTSResult{
 		Audio:      audioData,
 		Format:     req.ResponseFormat,
-		DurationMs: 0,
+		DurationMs: int(durationMs),
 	}
 
 	return result, nil
+}
+
+// estimateAudioDuration calculates approximate duration in milliseconds from audio data
+func estimateAudioDuration(data []byte, format string) int64 {
+	if len(data) == 0 {
+		return 0
+	}
+
+	switch format {
+	case "pcm", "pcm_s16le":
+		// PCM 16-bit mono at 24000 Hz: 2 bytes per sample
+		// duration = samples / sampleRate * 1000
+		// samples = bytes / 2
+		// duration = bytes / 2 / 24000 * 1000 = bytes * 1000 / 48000
+		return int64(len(data)) * 1000 / 48000
+	case "opus":
+		// Opus typically uses 20ms frames at ~32kbps for speech
+		// Rough estimate: ~4KB per second of audio
+		// duration = bytes / 4000 * 1000 = bytes / 4
+		return int64(len(data)) / 4
+	case "mp3":
+		// MP3 at 128kbps: ~16KB per second
+		// duration = bytes / 16000 * 1000 = bytes / 16
+		return int64(len(data)) / 16
+	default:
+		// Unknown format, assume PCM-like
+		return int64(len(data)) * 1000 / 48000
+	}
 }
 
 func (t *TTSAdapter) SynthesizeStream(ctx context.Context, text string, options *ports.TTSOptions) (<-chan *ports.TTSResult, error) {

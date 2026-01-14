@@ -46,15 +46,43 @@ const formatContentSafe = (text: string): React.ReactNode => {
     let remaining = line;
     let partIndex = 0;
 
-    // Process bold, italic, and code patterns
-    const patterns = [
+    // Process bold, italic, code, and link patterns
+    // Link pattern matches [text](url) - must come before other patterns to avoid conflicts
+    const patterns: Array<{
+      regex: RegExp;
+      wrapper: (content: string, key: string, extra?: string) => React.ReactNode;
+      hasExtra?: boolean;
+    }> = [
+      {
+        regex: /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/,
+        wrapper: (content: string, key: string, url?: string) => (
+          <a
+            key={key}
+            href={url}
+            onClick={(e) => {
+              e.preventDefault();
+              if (url) window.open(url, '_blank', 'noopener,noreferrer');
+            }}
+            className="text-accent hover:text-accent-hover underline cursor-pointer"
+          >
+            {content}
+          </a>
+        ),
+        hasExtra: true,
+      },
       { regex: /\*\*(.*?)\*\*/, wrapper: (content: string, key: string) => <strong key={key}>{content}</strong> },
       { regex: /\*(.*?)\*/, wrapper: (content: string, key: string) => <em key={key}>{content}</em> },
       { regex: /`(.*?)`/, wrapper: (content: string, key: string) => <code key={key} className="bg-surface-bg px-1 rounded">{content}</code> },
     ];
 
     while (remaining.length > 0) {
-      let earliestMatch: { index: number; length: number; content: string; wrapper: (c: string, k: string) => React.ReactNode } | null = null;
+      let earliestMatch: {
+        index: number;
+        length: number;
+        content: string;
+        wrapper: (c: string, k: string, extra?: string) => React.ReactNode;
+        extra?: string;
+      } | null = null;
 
       for (const pattern of patterns) {
         const match = remaining.match(pattern.regex);
@@ -64,7 +92,8 @@ const formatContentSafe = (text: string): React.ReactNode => {
               index: match.index,
               length: match[0].length,
               content: match[1],
-              wrapper: pattern.wrapper
+              wrapper: pattern.wrapper,
+              extra: pattern.hasExtra ? match[2] : undefined,
             };
           }
         }
@@ -76,7 +105,7 @@ const formatContentSafe = (text: string): React.ReactNode => {
           parts.push(remaining.slice(0, earliestMatch.index));
         }
         // Add the formatted element
-        parts.push(earliestMatch.wrapper(earliestMatch.content, `${lineIndex}-${partIndex++}`));
+        parts.push(earliestMatch.wrapper(earliestMatch.content, `${lineIndex}-${partIndex++}`, earliestMatch.extra));
         remaining = remaining.slice(earliestMatch.index + earliestMatch.length);
       } else {
         // No more matches, add remaining text
@@ -256,18 +285,37 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
       {/* External footer with addons and timestamp */}
       {(inlineAddons.length > 0 || (!showTyping && !hideTimestamp)) && (
-        <div className="flex items-center gap-3 px-1">
+        <div className={cls(
+          'flex items-center justify-between',
+          'px-2 py-1 mt-0.5',
+          'min-h-[24px]'
+        )}>
           {/* Addons */}
-          {inlineAddons.length > 0 && (
-            <div className="flex items-center gap-2">
-              {inlineAddons.map(renderAddonIcon)}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {inlineAddons.map(renderAddonIcon)}
+          </div>
 
           {/* Timestamp */}
           {!hideTimestamp && (
-            <div className="text-xs text-muted-foreground">
-              {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <div className={cls(
+              'flex items-center gap-1.5',
+              'text-[11px] text-muted-foreground',
+              'font-medium tracking-wide'
+            )}>
+              <svg
+                className="w-3 h-3 opacity-60"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>{timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
             </div>
           )}
         </div>

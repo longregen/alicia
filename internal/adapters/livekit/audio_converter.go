@@ -58,7 +58,9 @@ func NewAudioConverter(sampleRate, channels int) (*AudioConverter, error) {
 	}
 
 	// Set encoder parameters for voice
-	encoder.SetBitrateToMax()
+	// Use 64kbps bitrate - excellent quality for voice while keeping frames
+	// well under the 1200-byte RTP MTU limit for WebRTC
+	encoder.SetBitrate(64000)
 	encoder.SetComplexity(OpusEncoderComplexity)
 
 	// Create Opus decoder
@@ -293,4 +295,83 @@ func (ac *AudioConverter) ConvertOpusToPCMFloat(opusData []byte) ([]float32, err
 	}
 
 	return pcmSamples[:n*ac.channels], nil
+}
+
+// ResamplePCM converts PCM audio from one format to another
+// Supports sample rate conversion and mono-to-stereo conversion
+// inputRate/outputRate: sample rates in Hz (e.g., 24000, 48000)
+// inputChannels/outputChannels: 1 for mono, 2 for stereo
+func ResamplePCM(input []byte, inputRate, outputRate, inputChannels, outputChannels int) ([]byte, error) {
+	if len(input) == 0 {
+		return nil, fmt.Errorf("empty input data")
+	}
+
+	// If no conversion needed, return input as-is
+	if inputRate == outputRate && inputChannels == outputChannels {
+		return input, nil
+	}
+
+	// Calculate sample counts
+	inputSamplesPerChannel := len(input) / (BytesPerPCMSample * inputChannels)
+
+	// Read input samples
+	totalInputSamples := len(input) / BytesPerPCMSample
+	inputInt16 := make([]int16, totalInputSamples)
+	reader := bytes.NewReader(input)
+	if err := binary.Read(reader, binary.LittleEndian, &inputInt16); err != nil {
+		return nil, fmt.Errorf("failed to read input samples: %w", err)
+	}
+
+	// Convert to mono if input is stereo (average L+R)
+	var monoSamples []int16
+	if inputChannels == 2 {
+		monoSamples = make([]int16, inputSamplesPerChannel)
+		for i := 0; i < inputSamplesPerChannel; i++ {
+			left := int32(inputInt16[i*2])
+			right := int32(inputInt16[i*2+1])
+			monoSamples[i] = int16((left + right) / 2)
+		}
+	} else {
+		monoSamples = inputInt16
+	}
+
+	// Resample if needed
+	var resampledMono []int16
+	if inputRate != outputRate {
+		ratio := float64(outputRate) / float64(inputRate)
+		outputSamplesPerChannel := int(float64(len(monoSamples)) * ratio)
+		resampledMono = make([]int16, outputSamplesPerChannel)
+
+		// Linear interpolation resampling
+		for i := 0; i < outputSamplesPerChannel; i++ {
+			srcPos := float64(i) / ratio
+			srcIdx := int(srcPos)
+			frac := srcPos - float64(srcIdx)
+
+			if srcIdx >= len(monoSamples)-1 {
+				resampledMono[i] = monoSamples[len(monoSamples)-1]
+			} else {
+				// Linear interpolation between samples
+				sample1 := int32(monoSamples[srcIdx])
+				sample2 := int32(monoSamples[srcIdx+1])
+				resampledMono[i] = int16(sample1 + int32(float64(sample2-sample1)*frac))
+			}
+		}
+	} else {
+		resampledMono = monoSamples
+	}
+
+	// Convert to stereo if needed
+	outputBytes := len(resampledMono) * outputChannels * BytesPerPCMSample
+	output := make([]byte, 0, outputBytes)
+	writer := bytes.NewBuffer(output)
+
+	for _, sample := range resampledMono {
+		binary.Write(writer, binary.LittleEndian, sample) // Left (or mono)
+		if outputChannels == 2 {
+			binary.Write(writer, binary.LittleEndian, sample) // Right (duplicate for stereo)
+		}
+	}
+
+	return writer.Bytes(), nil
 }

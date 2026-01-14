@@ -244,16 +244,20 @@ export const useConversationStore = create<ConversationStore>()(
         }
 
         // Add/update messages from the new set
-        // PRESERVE existing streaming state (sentenceIds, toolCallIds, memoryTraceIds)
+        // MERGE arrays: combine existing streaming state with incoming REST data
         for (const msg of messages) {
           const existing = state.messages[msg.id];
           if (existing) {
-            // Merge new message data while preserving streaming arrays
+            // Merge arrays - combine existing IDs with incoming ones, avoiding duplicates
+            const mergedSentenceIds = [...new Set([...existing.sentenceIds, ...msg.sentenceIds])];
+            const mergedToolCallIds = [...new Set([...existing.toolCallIds, ...msg.toolCallIds])];
+            const mergedMemoryTraceIds = [...new Set([...existing.memoryTraceIds, ...msg.memoryTraceIds])];
+
             state.messages[msg.id] = {
               ...msg,
-              sentenceIds: existing.sentenceIds,
-              toolCallIds: existing.toolCallIds,
-              memoryTraceIds: existing.memoryTraceIds,
+              sentenceIds: mergedSentenceIds,
+              toolCallIds: mergedToolCallIds,
+              memoryTraceIds: mergedMemoryTraceIds,
             };
           } else {
             // New message - just add it

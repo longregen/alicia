@@ -93,6 +93,7 @@ class AudioManagerClass {
       sizeBytes: arrayBuffer.byteLength,
       durationMs: metadata?.durationMs ?? 0,
       sampleRate: metadata?.sampleRate ?? 24000,
+      format: metadata?.format,
     };
 
     // Store metadata in Zustand store
@@ -220,8 +221,12 @@ class AudioManagerClass {
 
       const audio = this.audioElement;
 
+      // Get format from AudioRef metadata
+      const audioRef = audioStore.getAudioRef(id);
+      const mimeType = this.getMimeType(audioRef?.format);
+
       // Create blob and object URL
-      const blob = new Blob([audioData], { type: 'audio/mpeg' });
+      const blob = new Blob([audioData], { type: mimeType });
       this.currentBlobUrl = URL.createObjectURL(blob);
 
       // Update store to indicate playback starting
@@ -266,6 +271,52 @@ class AudioManagerClass {
       console.error('Failed to play audio:', error);
       audioStore.stopPlayback();
       throw error;
+    }
+  }
+
+  /**
+   * Get MIME type from format string
+   */
+  private getMimeType(format?: string): string {
+    if (!format) {
+      return 'audio/mpeg'; // Default fallback
+    }
+
+    const formatLower = format.toLowerCase();
+
+    // Handle explicit MIME types
+    if (formatLower.startsWith('audio/')) {
+      return formatLower;
+    }
+
+    // Map common format strings to MIME types
+    switch (formatLower) {
+      case 'opus':
+        return 'audio/ogg; codecs=opus';
+      case 'pcm':
+      case 'pcm16':
+      case 'pcm_s16le':
+        return 'audio/wav';
+      case 'mp3':
+      case 'mpeg':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'aac':
+        return 'audio/aac';
+      case 'flac':
+        return 'audio/flac';
+      case 'ogg':
+        return 'audio/ogg';
+      default:
+        // Try to extract format from compound strings like 'pcm_s16le_24000'
+        if (formatLower.includes('opus')) {
+          return 'audio/ogg; codecs=opus';
+        }
+        if (formatLower.includes('pcm')) {
+          return 'audio/wav';
+        }
+        return 'audio/mpeg';
     }
   }
 

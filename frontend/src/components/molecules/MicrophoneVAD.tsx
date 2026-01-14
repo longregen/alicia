@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { cls } from '../../utils/cls';
 import { MicrophoneStatus } from '../../types/streaming';
-import { SileroVADManager } from '../../utils/sileroVAD';
 
 export interface MicrophoneVADProps {
   /** Current microphone status */
@@ -16,41 +15,29 @@ export interface MicrophoneVADProps {
   disabled?: boolean;
   /** Additional CSS classes */
   className?: string;
-  /** Callback when speech segment is detected */
-  onSpeechSegment?: (audioData: Float32Array) => void;
-  /** Enable Silero VAD integration */
-  useSileroVAD?: boolean;
-  /** Silero VAD manager instance (passed from parent) */
-  vadManager?: SileroVADManager;
-  /** Callback when speech probability changes */
-  onSpeechProbabilityChange?: (probability: number, isSpeaking: boolean) => void;
+  /** Callback to start VAD (from useVAD hook) */
+  onStartVAD?: () => Promise<void>;
+  /** Callback to stop VAD (from useVAD hook) */
+  onStopVAD?: () => void;
 }
 
 const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
-  microphoneStatus: externalMicrophoneStatus,
-  isSpeaking: externalIsSpeaking = false,
-  speechProbability: externalSpeechProbability = 0,
+  microphoneStatus = MicrophoneStatus.Inactive,
+  isSpeaking = false,
+  speechProbability = 0,
   onClick,
   disabled = false,
   className = '',
-  onSpeechSegment,
-  useSileroVAD = false,
-  vadManager,
-  onSpeechProbabilityChange
+  onStartVAD,
+  onStopVAD,
 }) => {
-  // Internal state for Silero VAD
-  const [internalMicrophoneStatus, setInternalMicrophoneStatus] = useState<MicrophoneStatus>(MicrophoneStatus.Inactive);
-  const [internalIsSpeaking, setInternalIsSpeaking] = useState(false);
-  const [internalSpeechProbability, setInternalSpeechProbability] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
+  const isActive = microphoneStatus === MicrophoneStatus.Recording || microphoneStatus === MicrophoneStatus.Sending;
+  const isLoading = microphoneStatus === MicrophoneStatus.Loading || microphoneStatus === MicrophoneStatus.RequestingPermission;
+  const isReady = microphoneStatus === MicrophoneStatus.Active;
+  const isError = microphoneStatus === MicrophoneStatus.Error;
+  const isSending = microphoneStatus === MicrophoneStatus.Sending;
 
-  // Use external props if provided, otherwise use internal state
-  const microphoneStatus = externalMicrophoneStatus ?? internalMicrophoneStatus;
-  const isSpeaking = externalIsSpeaking ?? internalIsSpeaking;
-  const speechProbability = externalSpeechProbability ?? internalSpeechProbability;
-  const isActive = microphoneStatus === MicrophoneStatus.Recording;
-
-  // Create refs for direct DOM manipulation
+  // Create refs for direct DOM manipulation (rings animation)
   const ringRefs = useRef<(SVGCircleElement | null)[]>([]);
   const animationFrameRef = useRef<number>(0);
   const ringStatesRef = useRef<Array<{ active: boolean; radius: number; opacity: number }>>(
@@ -59,97 +46,26 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
   const frameCountRef = useRef<number>(0);
   const lastRingProbabilityRef = useRef<number>(0);
 
-  // Setup VAD callbacks when vadManager is provided
-  useEffect(() => {
-    if (!vadManager || !useSileroVAD) return;
-
-    // Update the callbacks to use our internal state
-    vadManager.updateCallbacks({
-      onStatusChange: setInternalMicrophoneStatus,
-      onSpeechProbability: (probability, speaking) => {
-        setInternalSpeechProbability(probability);
-        setInternalIsSpeaking(speaking);
-        // Note: onSpeechProbabilityChange is called via requestAnimationFrame in useEffect
-        // to avoid React re-renders during high-frequency updates
-      },
-      onSpeechStart: () => {
-        console.log('Speech detected - start');
-      },
-      onSpeechEnd: (audioData) => {
-        console.log('Speech detected - end', audioData.length, 'samples');
-        onSpeechSegment?.(audioData);
-      },
-      onError: (error) => {
-        console.error('VAD Error:', error);
-      }
-    });
-  }, [vadManager, useSileroVAD, onSpeechSegment]);
-
-  // Store speech probability in refs to avoid re-renders
-  const speechProbabilityRef = useRef(internalSpeechProbability);
-  const isSpeakingRef = useRef(internalIsSpeaking);
-
-  useEffect(() => {
-    speechProbabilityRef.current = internalSpeechProbability;
-    isSpeakingRef.current = internalIsSpeaking;
-  }, [internalSpeechProbability, internalIsSpeaking]);
-
-  // Use requestAnimationFrame to update speech probability to avoid React re-renders
-  useEffect(() => {
-    if (!onSpeechProbabilityChange) return;
-
-    let rafId: number;
-    let running = true;
-
-    const updateCallback = () => {
-      if (!running) return;
-
-      // Call the callback with current ref values
-      onSpeechProbabilityChange(speechProbabilityRef.current, isSpeakingRef.current);
-      rafId = requestAnimationFrame(updateCallback);
-    };
-
-    rafId = requestAnimationFrame(updateCallback);
-
-    return () => {
-      running = false;
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
-    };
-  }, [onSpeechProbabilityChange]); // Only depend on the callback function
-
   // Handle click with VAD integration
   const handleClick = async () => {
-    if (useSileroVAD) {
-      if (!vadManager) {
-        console.warn('VAD is enabled but no vadManager provided');
-        return;
-      }
+    // Always call external onClick first (for parent to manage state)
+    onClick?.();
 
-      try {
-        if (isRecording) {
-          vadManager.stop();
-          setIsRecording(false);
-        } else {
-          // Initialize if not already done
-          if (vadManager.getStatus() === MicrophoneStatus.Inactive) {
-            await vadManager.initialize();
-          }
-          await vadManager.start();
-          setIsRecording(true);
-        }
-      } catch (error) {
-        console.error('Failed to toggle VAD recording:', error);
+    try {
+      if (isActive) {
+        onStopVAD?.();
+      } else {
+        await onStartVAD?.();
       }
-    } else {
-      onClick?.();
+    } catch (error) {
+      console.error('Failed to toggle VAD recording:', error);
     }
   };
 
+  // Rings animation effect
   useEffect(() => {
-    if (!isActive) {
-      // Reset all rings
+    if (!isActive || isSending) {
+      // Reset all rings when not active or sending
       ringStatesRef.current.forEach((ring, i) => {
         ring.active = false;
         const circleRef = ringRefs.current[i];
@@ -226,15 +142,21 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isActive, speechProbability]); // Only depend on isActive and speechProbability - animation state managed via refs
+  }, [isActive, isSending, speechProbability]);
 
   // Determine button state classes
   const getButtonClasses = () => {
     if (disabled) {
       return 'bg-sunken cursor-not-allowed';
     }
-    if (microphoneStatus === MicrophoneStatus.Error) {
+    if (isError) {
       return 'bg-error-subtle hover:bg-error border-2 border-error';
+    }
+    if (isLoading) {
+      return 'bg-accent-subtle animate-pulse cursor-wait';
+    }
+    if (isSending) {
+      return 'bg-accent-subtle animate-pulse';
     }
     if (isActive) {
       if (isSpeaking) {
@@ -242,22 +164,39 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
       }
       return 'bg-accent-subtle hover:bg-accent';
     }
+    if (isReady) {
+      return 'bg-accent-subtle hover:bg-accent ring-2 ring-accent/30';
+    }
+    // Inactive
     return 'bg-sunken hover:bg-surface';
   };
 
   // Determine icon color
   const getIconColor = () => {
     if (disabled) return 'text-muted';
-    if (microphoneStatus === MicrophoneStatus.Error) return 'text-error';
-    if (!isActive) return 'text-muted';
+    if (isError) return 'text-error';
+    if (isLoading) return 'text-accent';
+    if (isSending) return 'text-accent';
+    if (!isActive && !isReady) return 'text-muted';
     if (isSpeaking) return 'text-success';
     return 'text-accent';
+  };
+
+  // Get aria label based on state
+  const getAriaLabel = () => {
+    if (disabled) return 'Microphone disabled';
+    if (isError) return 'Microphone error';
+    if (isLoading) return 'Loading microphone...';
+    if (isSending) return 'Sending speech...';
+    if (isActive) return 'Stop recording';
+    if (isReady) return 'Start recording (ready)';
+    return 'Start recording';
   };
 
   return (
     <button
       onClick={handleClick}
-      disabled={disabled}
+      disabled={disabled || isLoading}
       className={cls(
         // Base button styles matching send button
         'w-10 h-10',
@@ -272,7 +211,7 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
         // Custom classes
         className
       )}
-      aria-label={isActive ? 'Stop recording' : 'Start recording'}
+      aria-label={getAriaLabel()}
     >
       {/* Growing rings animation */}
       <svg
@@ -297,9 +236,46 @@ const MicrophoneVAD: React.FC<MicrophoneVADProps> = ({
         ))}
       </svg>
 
+      {/* Loading spinner overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <svg className="animate-spin h-5 w-5 text-accent" viewBox="0 0 24 24">
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="3"
+              fill="none"
+              opacity="0.25"
+            />
+            <path
+              d="M12 2a10 10 0 0 1 10 10"
+              stroke="currentColor"
+              strokeWidth="3"
+              fill="none"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* Sending indicator overlay */}
+      {isSending && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <svg className="h-3 w-3 text-accent animate-bounce" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z"/>
+          </svg>
+        </div>
+      )}
+
       {/* Microphone icon */}
       <svg
-        className={cls('w-5 h-5 relative z-10', getIconColor())}
+        className={cls(
+          'w-5 h-5 relative z-10 transition-opacity',
+          getIconColor(),
+          (isLoading || isSending) && 'opacity-50'
+        )}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"

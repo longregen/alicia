@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import AudioAddon from './AudioAddon';
 import FeedbackControls from './FeedbackControls';
+import BranchNavigator from './BranchNavigator';
 import { AUDIO_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
 import { flexCenterGap, uiPatterns } from '../../utils/uiPatterns';
 import { useFeedback } from '../../hooks/useFeedback';
-import type { BaseComponentProps, MessageAddon, AudioState } from '../../types/components';
+import type { BaseComponentProps, MessageAddon, AudioState, MemoryAddonData } from '../../types/components';
 
 // Tool details interface
 export interface ToolDetail {
@@ -23,6 +24,302 @@ interface ToolDetailsPanelProps {
   showFeedback?: boolean;
 }
 
+// Helper to get status badge styling
+const getStatusBadge = (status: string): { label: string; className: string; icon: string } => {
+  switch (status) {
+    case 'completed':
+      return { label: 'success', className: 'bg-success/20 text-success', icon: '+' };
+    case 'error':
+      return { label: 'error', className: 'bg-error/20 text-error', icon: '!' };
+    case 'running':
+      return { label: 'running', className: 'bg-accent/20 text-accent', icon: '~' };
+    case 'pending':
+      return { label: 'pending', className: 'bg-warning/20 text-warning', icon: '?' };
+    default:
+      return { label: status || 'unknown', className: 'bg-muted/20 text-muted', icon: '?' };
+  }
+};
+
+// Helper to format web search - compact inline format
+const formatWebSearchCompact = (toolName: string, args: string, result: string): React.ReactNode => {
+  let query = '';
+  let limit = 5;
+  let results: Array<{ title?: string; url?: string }> = [];
+
+  // Parse arguments - strip "Arguments: " prefix if present
+  try {
+    const argsJson = args.replace(/^Arguments:\s*/i, '');
+    const parsedArgs = JSON.parse(argsJson);
+    query = parsedArgs.query || '';
+    limit = parsedArgs.limit || 5;
+  } catch { /* ignore */ }
+
+  // Parse results
+  try {
+    const parsedResult = JSON.parse(result);
+    results = parsedResult.results || [];
+  } catch { /* ignore */ }
+
+  const resultCount = results.length;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs">
+        <span className="text-muted-foreground font-mono">{toolName}:</span> <span className="text-accent">"{query}"</span> <span className="text-muted-foreground/60">(limit {limit})</span>
+      </div>
+      <div className="text-xs">
+        <span className="text-muted-foreground">Results:</span> <span className="text-muted-foreground/60">({resultCount})</span>
+      </div>
+      {results.length > 0 && (
+        <div className="space-y-1.5 pl-1">
+          {results.slice(0, 6).map((item, index) => (
+            <div key={index}>
+              <div className="text-xs font-medium text-default truncate">
+                • {item.title || 'Untitled'}
+              </div>
+              {item.url && (
+                <div className="text-[10px] text-accent/70 truncate pl-2.5">
+                  {item.url}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Helper to format web search results in a user-friendly way (fallback)
+const formatWebSearchResult = (parsed: Record<string, unknown>): React.ReactNode => {
+  const results = parsed.results as Array<{ title?: string; url?: string; snippet?: string }> | undefined;
+  const resultCount = parsed.result_count as number | undefined;
+
+  return (
+    <div className="space-y-1.5">
+      {results && results.length > 0 && (
+        <>
+          <div className="text-xs text-success flex items-center gap-1.5 mb-2">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Results ({resultCount || results.length}):
+          </div>
+          <div className="space-y-1.5 pl-1">
+            {results.slice(0, 6).map((item, index) => (
+              <div key={index}>
+                <div className="text-xs font-medium text-default truncate">
+                  • {item.title || 'Untitled'}
+                </div>
+                {item.url && (
+                  <div className="text-[10px] text-accent/70 truncate pl-2.5">
+                    {item.url}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// Helper to format memory - compact inline format
+const formatMemoryCompact = (toolName: string, args: string, result: string): React.ReactNode => {
+  let query = '';
+  let limit = 5;
+  let memories: Array<{ id?: string; content?: string; similarity?: number; relevance?: number }> = [];
+
+  // Parse arguments - strip "Arguments: " prefix if present
+  try {
+    const argsJson = args.replace(/^Arguments:\s*/i, '');
+    const parsedArgs = JSON.parse(argsJson);
+    query = parsedArgs.query || parsedArgs.text || '';
+    limit = parsedArgs.limit || parsedArgs.k || 5;
+  } catch { /* ignore */ }
+
+  // Parse results
+  try {
+    const parsedResult = JSON.parse(result);
+    memories = parsedResult.memories || parsedResult || [];
+  } catch { /* ignore */ }
+
+  const resultCount = memories.length;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs">
+        <span className="text-muted-foreground font-mono">{toolName}:</span> <span className="text-accent">"{query}"</span> <span className="text-muted-foreground/60">(limit {limit})</span>
+      </div>
+      <div className="text-xs">
+        <span className="text-muted-foreground">Results:</span> <span className="text-muted-foreground/60">({resultCount})</span>
+      </div>
+      {memories.length > 0 && (
+        <div className="space-y-1.5 pl-1">
+          {memories.slice(0, 6).map((item, index) => (
+            <div key={item.id || index}>
+              <div className="text-xs text-default">
+                • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+              </div>
+              {(item.similarity !== undefined || item.relevance !== undefined) && (
+                <div className="text-[10px] text-muted-foreground/60 pl-2.5">
+                  {Math.round((item.similarity ?? item.relevance ?? 0) * 100)}% match
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Helper to format memory query results (fallback)
+const formatMemoryQueryResult = (parsed: Record<string, unknown>): React.ReactNode => {
+  const memories = parsed.memories as Array<{ id?: string; content?: string; similarity?: number }> | undefined;
+  const count = parsed.count as number | undefined;
+
+  return (
+    <div className="space-y-1.5">
+      {memories && memories.length > 0 && (
+        <>
+          <div className="text-xs">
+            <span className="text-muted-foreground">Results:</span> <span className="text-muted-foreground/60">({count || memories.length})</span>
+          </div>
+          <div className="space-y-1.5 pl-1">
+            {memories.slice(0, 6).map((item, index) => (
+              <div key={item.id || index}>
+                <div className="text-xs text-default">
+                  • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                </div>
+                {item.similarity !== undefined && (
+                  <div className="text-[10px] text-muted-foreground/60 pl-2.5">
+                    {Math.round(item.similarity * 100)}% match
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// Helper to parse and format tool arguments
+const formatToolArguments = (description: string): React.ReactNode => {
+  // Try to parse description as JSON (it might contain arguments)
+  try {
+    const parsed = JSON.parse(description);
+
+    // Format known argument types nicely
+    if (typeof parsed === 'object' && parsed !== null) {
+      const entries = Object.entries(parsed);
+      if (entries.length === 0) {
+        return <span className="text-muted text-xs italic">No arguments</span>;
+      }
+
+      return (
+        <div className="space-y-1">
+          {entries.map(([key, value]) => (
+            <div key={key} className="flex items-start gap-2 text-xs">
+              <span className="text-muted font-medium min-w-[60px]">{key}:</span>
+              <span className="text-default">
+                {typeof value === 'string' ? `"${value}"` : JSON.stringify(value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return <span className="text-default text-xs">{description}</span>;
+  } catch {
+    // Not JSON, return as plain text
+    return <span className="text-default text-xs">{description}</span>;
+  }
+};
+
+// Helper to parse and format tool results
+const formatToolResult = (result: string, toolName: string): React.ReactNode => {
+  // Try to parse as JSON for better formatting
+  try {
+    const parsed = JSON.parse(result);
+    const lowerToolName = toolName.toLowerCase();
+
+    // Handle web search results
+    if (lowerToolName.includes('web_search') || lowerToolName.includes('search')) {
+      if (parsed.results && Array.isArray(parsed.results)) {
+        return formatWebSearchResult(parsed);
+      }
+    }
+
+    // Handle memory query results
+    if (lowerToolName.includes('memory')) {
+      if (parsed.memories && Array.isArray(parsed.memories)) {
+        return formatMemoryQueryResult(parsed);
+      }
+      // Handle array format for memory results
+      if (Array.isArray(parsed)) {
+        return (
+          <div className="space-y-1.5 pl-1">
+            {parsed.slice(0, 6).map((item: { id?: string; content?: string; relevance?: number; similarity?: number }, index: number) => (
+              <div key={item.id || index}>
+                <div className="text-xs text-default">
+                  • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                </div>
+                {(item.relevance !== undefined || item.similarity !== undefined) && (
+                  <div className="text-[10px] text-muted-foreground/60 pl-2.5">
+                    {Math.round((item.relevance ?? item.similarity ?? 0) * 100)}% match
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      }
+    }
+
+    // Handle simple success/error results
+    if (typeof parsed === 'object' && parsed !== null) {
+      if ('success' in parsed || 'error' in parsed || 'message' in parsed) {
+        return (
+          <div className="space-y-1">
+            {parsed.success !== undefined && (
+              <div className={cls(
+                'flex items-center gap-1.5 text-xs',
+                parsed.success ? 'text-success' : 'text-error'
+              )}>
+                <span>{parsed.success ? '✓' : '✗'}</span>
+                <span>{parsed.success ? 'Success' : 'Failed'}</span>
+              </div>
+            )}
+            {parsed.message && (
+              <div className="text-xs text-default">{String(parsed.message)}</div>
+            )}
+            {parsed.error && (
+              <div className="text-xs text-error">{String(parsed.error)}</div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    // Generic JSON formatting with truncation for readability
+    const jsonStr = JSON.stringify(parsed, null, 2);
+    const truncated = jsonStr.length > 500;
+    return (
+      <pre className="text-xs text-default whitespace-pre-wrap font-mono bg-surface-bg p-2 rounded max-h-48 overflow-y-auto">
+        {truncated ? jsonStr.substring(0, 500) + '\n...' : jsonStr}
+      </pre>
+    );
+  } catch {
+    // Not JSON, return as plain text
+    return <span className="text-default text-xs">{result}</span>;
+  }
+};
+
 const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFeedback = false }) => {
   // useFeedback hook for tool voting
   const {
@@ -32,41 +329,142 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
     isLoading: feedbackLoading,
   } = useFeedback('tool_use', toolDetail.id);
 
+  const statusBadge = getStatusBadge(toolDetail.status || 'pending');
+  const lowerName = toolDetail.name.toLowerCase();
+  const isWebSearch = lowerName.includes('web_search') || (lowerName.includes('search') && !lowerName.includes('memory'));
+  const isMemory = lowerName.includes('memory');
+  const isCompleted = toolDetail.status === 'completed';
+
+  // Render compact format for web_search
+  if (isWebSearch && isCompleted && toolDetail.result && toolDetail.description) {
+    return (
+      <div className={cls(
+        'transition-all duration-300 ease-in-out overflow-hidden',
+        'bg-white/[0.02] rounded-lg p-4 mt-3 border border-white/[0.06]'
+      )}>
+        {/* Compact web search output */}
+        <div className="max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+          {formatWebSearchCompact(toolDetail.name, toolDetail.description, toolDetail.result)}
+        </div>
+
+        {/* Feedback controls */}
+        {showFeedback && (
+          <div className="pt-3 mt-3 border-t border-white/[0.04]">
+            <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
+            <FeedbackControls
+              currentVote={currentVote as 'up' | 'down' | null}
+              onVote={vote}
+              upvotes={counts.up}
+              downvotes={counts.down}
+              isLoading={feedbackLoading}
+              compact
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Render compact format for memory
+  if (isMemory && isCompleted && toolDetail.result && toolDetail.description) {
+    return (
+      <div className={cls(
+        'transition-all duration-300 ease-in-out overflow-hidden',
+        'bg-white/[0.02] rounded-lg p-4 mt-3 border border-white/[0.06]'
+      )}>
+        {/* Compact memory output */}
+        <div className="max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+          {formatMemoryCompact(toolDetail.name, toolDetail.description, toolDetail.result)}
+        </div>
+
+        {/* Feedback controls */}
+        {showFeedback && (
+          <div className="pt-3 mt-3 border-t border-white/[0.04]">
+            <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
+            <FeedbackControls
+              currentVote={currentVote as 'up' | 'down' | null}
+              onVote={vote}
+              upvotes={counts.up}
+              downvotes={counts.down}
+              isLoading={feedbackLoading}
+              compact
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={cls(
       'transition-all duration-300 ease-in-out overflow-hidden',
-      'bg-surface rounded-lg p-4 mt-3 border border-border',
-      'max-h-64 opacity-100'
+      'bg-white/[0.02] rounded-lg p-4 mt-3 border border-white/[0.06]'
     )}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1">
-          <div className="text-sm font-medium text-default">{toolDetail.name}</div>
-          <div className="text-xs text-muted mt-1">{toolDetail.description}</div>
-        </div>
+      {/* Header with tool name */}
+      <div className="mb-3">
+        <span className="text-sm font-medium text-muted-foreground font-mono">{toolDetail.name}</span>
       </div>
 
-      {toolDetail.result && (
-        <div className="text-xs text-success mt-2">✓ {toolDetail.result}</div>
-      )}
-
+      {/* Running indicator */}
       {toolDetail.status === 'running' && (
-        <div className="text-xs text-accent mt-2 flex items-center gap-1">
+        <div className="text-xs text-accent mb-3 flex items-center gap-1.5">
           <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-          Running...
+          Processing...
         </div>
       )}
 
-      {toolDetail.status === 'pending' && (
-        <div className="text-xs text-warning mt-2">⏳ Pending...</div>
+      {/* Arguments section */}
+      {toolDetail.description && (
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted font-medium mb-2">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+            Arguments
+          </div>
+          <div className="rounded-md px-3 py-2 bg-black/20 text-muted-foreground">
+            {formatToolArguments(toolDetail.description)}
+          </div>
+        </div>
       )}
 
-      {toolDetail.status === 'error' && (
-        <div className="text-xs text-error mt-2">❌ Error occurred</div>
+      {/* Results section */}
+      {toolDetail.result && (toolDetail.status === 'completed' || toolDetail.status === 'error') && (
+        <div className="mb-3">
+          <div className={cls(
+            'flex items-center gap-1.5 text-xs font-medium mb-2',
+            toolDetail.status === 'error' ? 'text-error' : 'text-success'
+          )}>
+            {toolDetail.status === 'error' ? (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {toolDetail.status === 'error' ? 'Error' : 'Result'}
+          </div>
+          <div className="max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+            {formatToolResult(toolDetail.result, toolDetail.name)}
+          </div>
+        </div>
+      )}
+
+      {/* Pending state */}
+      {toolDetail.status === 'pending' && (
+        <div className="text-xs text-warning flex items-center gap-1.5">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Waiting to execute...
+        </div>
       )}
 
       {/* Feedback controls for completed tools */}
       {showFeedback && toolDetail.status === 'completed' && (
-        <div className="mt-3 pt-3 border-t border-border-muted">
+        <div className="pt-3 border-t border-white/[0.04]">
           <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
           <FeedbackControls
             currentVote={currentVote as 'up' | 'down' | null}
@@ -82,6 +480,13 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
   );
 };
 
+// Branch navigation data interface
+export interface BranchData {
+  currentIndex: number;
+  totalBranches: number;
+  onNavigate: (direction: 'prev' | 'next') => void;
+}
+
 // Component props interface
 export interface ComplexAddonsProps extends BaseComponentProps {
   /** Array of addons to display */
@@ -92,6 +497,8 @@ export interface ComplexAddonsProps extends BaseComponentProps {
   timestamp: Date;
   /** Whether to show feedback controls (default: false) */
   showFeedback?: boolean;
+  /** Branch navigation data (shows navigator when totalBranches > 1) */
+  branchData?: BranchData;
 }
 
 const ComplexAddons: React.FC<ComplexAddonsProps> = ({
@@ -100,9 +507,11 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
   timestamp,
   className = '',
   showFeedback = false,
+  branchData,
 }) => {
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
-  const [hoveredAddonId, setHoveredAddonId] = useState<string | null>(null);
+  const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
+  const [hoveredMemoryId, setHoveredMemoryId] = useState<string | null>(null);
   const [audioState, setAudioState] = useState<AudioState>(AUDIO_STATES.IDLE);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
@@ -144,8 +553,95 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
     return '';
   };
 
+  // Helper functions for memory badges
+  const getRelevancePercentage = (relevance: number): number => Math.round(relevance * 100);
+
+  const getRelevanceColor = (relevance: number): string => {
+    if (relevance >= 0.7) return 'text-success';
+    if (relevance >= 0.4) return 'text-accent';
+    return 'text-muted';
+  };
+
+  const getRelevanceBgColor = (relevance: number): string => {
+    if (relevance >= 0.7) return 'bg-success/10';
+    if (relevance >= 0.4) return 'bg-accent-subtle';
+    return 'bg-surface';
+  };
+
+  const renderMemoryBadge = (memory: MemoryAddonData) => {
+    const percentage = getRelevancePercentage(memory.relevance);
+    const isHovered = hoveredMemoryId === memory.id;
+    const isExpanded = expandedMemoryId === memory.id;
+
+    return (
+      <div key={memory.id} className="relative">
+        <button
+          className={cls(
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+            'transition-all duration-200 cursor-pointer',
+            'hover:scale-105',
+            getRelevanceBgColor(memory.relevance),
+            getRelevanceColor(memory.relevance),
+            isExpanded ? 'ring-2 ring-accent scale-105' : ''
+          )}
+          onMouseEnter={() => setHoveredMemoryId(memory.id)}
+          onMouseLeave={() => setHoveredMemoryId(null)}
+          onClick={() => setExpandedMemoryId(expandedMemoryId === memory.id ? null : memory.id)}
+          title={`Memory trace (${percentage}% relevant)`}
+        >
+          <span className="text-sm">🧠</span>
+          <span className="font-semibold">{percentage}%</span>
+        </button>
+
+        {/* Hover tooltip */}
+        {isHovered && !isExpanded && (
+          <div className={cls(
+            'absolute z-20 transition-all duration-200',
+            'bg-overlay backdrop-blur-sm text-on-emphasis text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
+            'pointer-events-none shadow-xl border border-border-emphasis',
+            'bottom-full left-1/2 transform -translate-x-1/2 mb-2'
+          )}>
+            <div className="font-semibold text-sm mb-1.5 text-accent">
+              Memory Trace ({percentage}% relevant)
+            </div>
+            <div className="text-subtle leading-relaxed">
+              {memory.content.length > 120 ? memory.content.substring(0, 120) + '...' : memory.content}
+            </div>
+            <div className="text-[11px] text-muted mt-2">Click to view full memory</div>
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-overlay" />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderAddon = (addon: MessageAddon) => {
-    // Special rendering for audio addons
+    // Feedback addon - render FeedbackControls inline
+    if (addon.type === 'feedback' && addon.feedbackData) {
+      return (
+        <FeedbackControls
+          key={addon.id}
+          currentVote={addon.feedbackData.currentVote}
+          onVote={addon.feedbackData.onVote}
+          upvotes={addon.feedbackData.upvotes}
+          downvotes={addon.feedbackData.downvotes}
+          isLoading={addon.feedbackData.isLoading}
+          compact
+        />
+      );
+    }
+
+    // Memory addon - render memory badges inline
+    if (addon.type === 'memory' && addon.memoryData) {
+      const sortedMemories = [...addon.memoryData].sort((a, b) => b.relevance - a.relevance);
+      return (
+        <div key={addon.id} className="flex items-center gap-1.5">
+          {sortedMemories.map(renderMemoryBadge)}
+        </div>
+      );
+    }
+
+    // Audio addon
     if (addon.type === 'audio') {
       return (
         <AudioAddon
@@ -164,71 +660,62 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
       );
     }
 
-    // Default rendering for other addon types
+    // Default rendering for tool/icon addon types
     const toolDetail = getToolDetail(addon.id);
-    const isHovered = hoveredAddonId === addon.id;
     const isExpanded = expandedToolId === addon.id;
 
+    // Render tool badge with inline expandable details
     return (
       <div key={addon.id} className="relative">
         <button
           className={cls(
-            'relative w-6 h-6 flex items-center justify-center',
-            'text-sm cursor-pointer transition-all duration-200',
-            'hover:scale-110 hover:bg-surface rounded-full',
-            getAddonAnimation(addon, toolDetail),
-            isExpanded ? 'scale-110 bg-accent-subtle' : ''
+            'inline-flex items-center gap-1.5 px-2 py-1 rounded-md',
+            'text-xs cursor-pointer transition-all duration-200',
+            'hover:bg-surface-hover border border-transparent',
+            toolDetail?.status === 'running' ? 'bg-accent/10 border-accent/30' : 'bg-surface',
+            toolDetail?.status === 'completed' ? 'hover:border-success/30' : '',
+            toolDetail?.status === 'error' ? 'bg-error/10 border-error/30' : '',
+            isExpanded ? 'bg-accent-subtle border-accent/50' : '',
+            getAddonAnimation(addon, toolDetail)
           )}
-          onMouseEnter={() => setHoveredAddonId(addon.id)}
-          onMouseLeave={() => setHoveredAddonId(null)}
           onClick={() => {
             if (addon.type === 'tool' || addon.type === 'icon') {
               setExpandedToolId(expandedToolId === addon.id ? null : addon.id);
             }
           }}
-          title={addon.tooltip}
+          title={`${toolDetail?.name || addon.tooltip} - Click to ${isExpanded ? 'collapse' : 'expand'}`}
         >
-          {addon.emoji}
+          {/* Emoji icon */}
+          <span className="text-sm">{addon.emoji}</span>
 
-          {/* Status indicator for running tools */}
-          {toolDetail?.status === 'running' && (
-            <div className={cls("absolute -bottom-1 -right-1 w-2 h-2 bg-accent rounded-full", uiPatterns.pulseAnimation)} />
+          {/* Tool name */}
+          <span className="font-medium font-mono text-default">
+            {toolDetail?.name || addon.tooltip}
+          </span>
+
+          {/* Status badge */}
+          {toolDetail?.status && (
+            <span className={cls(
+              'text-[9px] font-semibold px-1.5 py-0.5 rounded-full ml-0.5',
+              getStatusBadge(toolDetail.status).className
+            )}>
+              {getStatusBadge(toolDetail.status).icon}
+            </span>
           )}
+
+          {/* Expand/collapse indicator */}
+          <svg
+            className={cls(
+              'w-3 h-3 text-muted transition-transform duration-200',
+              isExpanded ? 'rotate-180' : ''
+            )}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
-
-        {/* Tooltip */}
-        {isHovered && !isExpanded && (
-          <div className={cls(
-            'absolute z-20 transition-all duration-200',
-            'bg-overlay backdrop-blur-sm text-on-emphasis text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
-            'pointer-events-none shadow-xl border border-border-emphasis',
-            'top-full left-1/2 transform -translate-x-1/2 mt-2'
-          )}>
-            <div className="font-semibold text-sm">{toolDetail?.name || addon.tooltip}</div>
-            {toolDetail?.description && (
-              <div className="text-subtle mt-1.5 text-xs leading-relaxed">
-                {toolDetail.description}
-              </div>
-            )}
-
-            {/* Status indicator */}
-            {toolDetail?.status && (
-              <div className={cls(
-                'mt-2 text-[11px] font-medium',
-                toolDetail.status === 'running' ? 'text-accent' : '',
-                toolDetail.status === 'completed' ? 'text-success' : '',
-                toolDetail.status === 'error' ? 'text-error' : ''
-              )}>
-                {toolDetail.status === 'running' && '⚡ Currently running...'}
-                {toolDetail.status === 'completed' && '✓ Completed'}
-                {toolDetail.status === 'error' && '⚠️ Error occurred'}
-              </div>
-            )}
-
-            {/* Tooltip arrow */}
-            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-overlay" />
-          </div>
-        )}
       </div>
     );
   };
@@ -247,24 +734,97 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
     );
   };
 
+  // Find memory data from memory addon for expanded panel
+  const getExpandedMemory = (): MemoryAddonData | null => {
+    if (!expandedMemoryId) return null;
+    const memoryAddon = addons.find(a => a.type === 'memory');
+    if (!memoryAddon?.memoryData) return null;
+    return memoryAddon.memoryData.find(m => m.id === expandedMemoryId) || null;
+  };
+
+  const renderMemoryDetails = () => {
+    const memory = getExpandedMemory();
+    if (!memory) return null;
+
+    const percentage = getRelevancePercentage(memory.relevance);
+
+    return (
+      <div className={cls(
+        'transition-all duration-300 ease-in-out overflow-hidden',
+        'bg-accent-subtle rounded-lg p-4 mt-2',
+        'border border-border',
+        'max-h-96 opacity-100'
+      )}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🧠</span>
+            <span className="text-sm font-semibold text-accent">Memory Trace</span>
+          </div>
+          <div className={cls(
+            'text-xs px-2 py-1 rounded-full font-semibold',
+            getRelevanceBgColor(memory.relevance),
+            getRelevanceColor(memory.relevance)
+          )}>
+            {percentage}% relevant
+          </div>
+        </div>
+        <div className="text-sm text-default leading-relaxed max-h-64 overflow-y-auto pr-2">
+          {memory.content}
+        </div>
+        <div className="text-[11px] text-muted mt-3 pt-3 border-t border-border-muted">
+          Memory ID: {memory.id}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={cls('space-y-2 w-full', className)}>
       {/* Main addon row */}
-      <div className="layout-between w-full">
+      <div className="flex items-center justify-between w-full gap-3">
         {/* Left: All addons inline */}
-        <div className={flexCenterGap(2)}>
-          {/* All addons */}
+        <div className={cls(flexCenterGap(2), 'flex-wrap')}>
           {addons.map(renderAddon)}
         </div>
 
-        {/* Right: Timestamp */}
-        <div className="text-xs text-muted">
-          {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {/* Right: Branch navigation + Timestamp */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Branch Navigator */}
+          {branchData && branchData.totalBranches > 1 && (
+            <BranchNavigator
+              currentIndex={branchData.currentIndex}
+              totalBranches={branchData.totalBranches}
+              onNavigate={branchData.onNavigate}
+            />
+          )}
+
+          {/* Timestamp with clock icon */}
+          <div className={cls(
+            'flex items-center gap-1.5',
+            'text-[11px] text-muted-foreground',
+            'font-medium tracking-wide'
+          )}>
+            <svg
+              className="w-3 h-3 opacity-60"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>{timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+          </div>
         </div>
       </div>
 
-      {/* Tool Details */}
+      {/* Expanded Details (Tool or Memory) */}
       {renderToolDetails()}
+      {renderMemoryDetails()}
     </div>
   );
 };

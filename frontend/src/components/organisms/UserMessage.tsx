@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
 import { useConversationStore, selectSentences } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
+import { sendControlVariation } from '../../adapters/protocolAdapter';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
 import type { MessageId } from '../../types/streaming';
 import type { MessageAddon, AudioState } from '../../types/components';
@@ -24,6 +25,7 @@ export interface UserMessageProps {
 
 const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
+  const currentConversationId = useConversationStore((state) => state.currentConversationId);
   const sentencesMap = useConversationStore(selectSentences);
 
   // Memoize sentences to avoid creating new arrays on every render
@@ -68,6 +70,13 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
 
     setAudioStates(newStates);
   }, [message, currentlyPlayingId, isPlaying, sentencesWithAudio]);
+
+  // Handle message edit - sends to backend for new agent response
+  const handleEditMessage = useCallback((editedMessageId: MessageId, newContent: string) => {
+    if (currentConversationId) {
+      sendControlVariation(currentConversationId, editedMessageId, 'edit', newContent);
+    }
+  }, [currentConversationId]);
 
   // Early return after all hooks
   if (!message) {
@@ -121,6 +130,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
         timestamp={message.createdAt}
         addons={addons}
         messageId={messageId}
+        onEditMessage={handleEditMessage}
         syncStatus={message.sync_status}
       />
     </div>

@@ -69,6 +69,7 @@ func TestNewMessageRouter(t *testing.T) {
 		ttsService,
 		idGenerator,
 		agent,
+		0.5, // minConfidence
 	)
 
 	if router == nil {

@@ -1,5 +1,6 @@
 bin
 book
+data
 dist
 docs/assets/bin
 docs/assets
@@ -38,4 +39,10 @@ frontend/coverage/
 
 # Binary files
 *.wasm
+
+# Frontend public assets (symlinked from Nix store)
+frontend/public/models/
+frontend/public/onnx/
+frontend/public/js/
+frontend/public/sql-wasm.wasm
 

@@ -15,6 +15,7 @@ require (
 	github.com/pion/webrtc/v4 v4.2.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
+	github.com/streamer45/silero-vad-go v0.2.1
 	github.com/stretchr/testify v1.11.1
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.opentelemetry.io/otel v1.39.0

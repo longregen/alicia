@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Brain, Server, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit2, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { Conversation } from '../types/models';
+import type { AppView } from '../App';
 import { useSidebarStore, COLLAPSED_WIDTH } from '../stores/sidebarStore';
 import { formatRelativeTime } from '../lib/timeUtils';
 import { cls } from '../utils/cls';
@@ -24,6 +25,7 @@ import { ConnectionStatusIndicator } from './ConnectionStatusIndicator';
 interface SidebarProps {
   conversations: Conversation[];
   selectedId: string | null;
+  activeView: AppView;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
@@ -38,6 +40,7 @@ interface SidebarProps {
 export function Sidebar({
   conversations,
   selectedId,
+  activeView,
   onSelect,
   onNew,
   onDelete,
@@ -368,7 +371,10 @@ export function Sidebar({
           <div className="flex flex-col gap-1 mt-2">
             <button
               onClick={() => onPanelChange('memory')}
-              className="p-2 hover:bg-sidebar-accent rounded transition-colors"
+              className={cls(
+                'p-2 rounded transition-colors',
+                activeView === 'memory' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
+              )}
               title="Memory"
               aria-label="Memory"
             >
@@ -376,7 +382,10 @@ export function Sidebar({
             </button>
             <button
               onClick={() => onPanelChange('server')}
-              className="p-2 hover:bg-sidebar-accent rounded transition-colors"
+              className={cls(
+                'p-2 rounded transition-colors',
+                activeView === 'server' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
+              )}
               title="Server"
               aria-label="Server"
             >
@@ -384,7 +393,10 @@ export function Sidebar({
             </button>
             <button
               onClick={onSettings}
-              className="p-2 hover:bg-sidebar-accent rounded transition-colors"
+              className={cls(
+                'p-2 rounded transition-colors',
+                activeView === 'settings' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
+              )}
               title="Settings"
               data-testid="settings-btn"
               aria-label="Settings"
@@ -397,7 +409,10 @@ export function Sidebar({
           <div className="flex flex-col gap-2 mt-2">
             <button
               onClick={() => onPanelChange('memory')}
-              className="layout-center-gap p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
+              className={cls(
+                'layout-center-gap p-2 rounded transition-colors w-full text-left',
+                activeView === 'memory' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
+              )}
               title="Memory"
             >
               <Brain className="w-4 h-4" />
@@ -405,7 +420,10 @@ export function Sidebar({
             </button>
             <button
               onClick={() => onPanelChange('server')}
-              className="layout-center-gap p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
+              className={cls(
+                'layout-center-gap p-2 rounded transition-colors w-full text-left',
+                activeView === 'server' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
+              )}
               title="Server"
             >
               <Server className="w-4 h-4" />
@@ -413,7 +431,10 @@ export function Sidebar({
             </button>
             <button
               onClick={onSettings}
-              className="layout-center-gap p-2 hover:bg-sidebar-accent rounded transition-colors w-full text-left"
+              className={cls(
+                'layout-center-gap p-2 rounded transition-colors w-full text-left',
+                activeView === 'settings' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
+              )}
               title="Settings"
               data-testid="settings-btn"
             >

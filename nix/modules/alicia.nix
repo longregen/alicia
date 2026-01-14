@@ -241,6 +241,33 @@ in
       default = "both";
       description = "Which services to run: server only, agent only, or both";
     };
+
+    # VAD (Voice Activity Detection) configuration for the agent
+    vad = {
+      enable = mkEnableOption "Voice Activity Detection using Silero VAD";
+
+      modelPath = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          Path to the Silero VAD ONNX model file.
+          If null and VAD is enabled, uses the bundled model from the package
+          at ''${cfg.package}/share/alicia/models/silero_vad.onnx.
+        '';
+      };
+
+      silenceDurationMs = mkOption {
+        type = types.int;
+        default = 1200;
+        description = "Silence duration in milliseconds to mark end of turn.";
+      };
+
+      threshold = mkOption {
+        type = types.float;
+        default = 0.5;
+        description = "Speech detection threshold (0.0 to 1.0).";
+      };
+    };
   };
 
   config = mkIf cfg.enable {
@@ -526,6 +553,16 @@ in
         ALICIA_EMBEDDING_URL = cfg.embedding.url;
         ALICIA_EMBEDDING_MODEL = cfg.embedding.model;
         ALICIA_EMBEDDING_DIMENSIONS = toString cfg.embedding.dimensions;
+      } // optionalAttrs cfg.vad.enable {
+        # VAD configuration
+        # Use custom model path if provided, otherwise use bundled model
+        ALICIA_VAD_MODEL_PATH = if cfg.vad.modelPath != null
+          then cfg.vad.modelPath
+          else "${cfg.package}/share/alicia/models/silero_vad.onnx";
+        ALICIA_VAD_SILENCE_DURATION_MS = toString cfg.vad.silenceDurationMs;
+        ALICIA_VAD_THRESHOLD = toString cfg.vad.threshold;
+        # ONNX Runtime library path for silero-vad-go
+        LD_LIBRARY_PATH = "${pkgs.onnxruntime}/lib";
       };
 
       # Script to load credentials and start agent

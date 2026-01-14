@@ -453,7 +453,9 @@ func (uc *GenerateResponse) processStream(
 				sentence, err := uc.sentenceRepo.GetByID(ctx, sentenceID)
 				if err == nil && sentence != nil {
 					sentence.MarkAsFailed()
-					_ = uc.sentenceRepo.Update(ctx, sentence)
+					if err := uc.sentenceRepo.Update(ctx, sentence); err != nil {
+						log.Printf("ERROR: failed to mark sentence %s as failed: %v", sentenceID, err)
+					}
 				}
 			}
 
@@ -474,7 +476,9 @@ func (uc *GenerateResponse) processStream(
 				sentence, err := uc.sentenceRepo.GetByID(ctx, sentenceID)
 				if err == nil && sentence != nil {
 					sentence.MarkAsFailed()
-					_ = uc.sentenceRepo.Update(ctx, sentence)
+					if err := uc.sentenceRepo.Update(ctx, sentence); err != nil {
+						log.Printf("ERROR: failed to mark sentence %s as failed: %v", sentenceID, err)
+					}
 				}
 			}
 		}
@@ -631,7 +635,9 @@ func (uc *GenerateResponse) processStream(
 				sentence, err := uc.sentenceRepo.GetByID(ctx, sentenceID)
 				if err == nil && sentence != nil && !sentence.IsCompleted() {
 					sentence.MarkAsCompleted()
-					_ = uc.sentenceRepo.Update(ctx, sentence)
+					if err := uc.sentenceRepo.Update(ctx, sentence); err != nil {
+						log.Printf("ERROR: failed to mark sentence %s as completed: %v", sentenceID, err)
+					}
 				}
 			}
 

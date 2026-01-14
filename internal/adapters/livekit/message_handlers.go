@@ -114,6 +114,14 @@ func (d *DefaultMessageDispatcher) processUserInput(
 			fmt.Sprintf("Failed to get sequence number: %v", err), true)
 	}
 
+	// Fetch conversation to get the current tip for proper message chaining
+	conversation, err := d.conversationRepo.GetByID(ctx, conversationID)
+	if err != nil {
+		log.Printf("Failed to get conversation: %v", err)
+		return nil, d.sendError(ctx, protocol.ErrCodeInternalError,
+			fmt.Sprintf("Failed to get conversation: %v", err), true)
+	}
+
 	now := time.Now()
 	message := &models.Message{
 		ID:             messageID,
@@ -126,10 +134,21 @@ func (d *DefaultMessageDispatcher) processUserInput(
 		UpdatedAt:      now,
 	}
 
+	// Use conversation tip as previous_id for proper message chaining
+	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
+		message.PreviousID = *conversation.TipMessageID
+	}
+
 	if err := d.messageRepo.Create(ctx, message); err != nil {
 		log.Printf("Failed to store user message: %v", err)
 		return nil, d.sendError(ctx, protocol.ErrCodeInternalError,
 			fmt.Sprintf("Failed to store message: %v", err), true)
+	}
+
+	// Update conversation tip to point to the new message
+	if err := d.conversationRepo.UpdateTip(ctx, conversationID, message.ID); err != nil {
+		log.Printf("Failed to update conversation tip: %v", err)
+		// Non-fatal, continue
 	}
 
 	processOutput := &ports.ProcessUserMessageOutput{
@@ -192,20 +211,17 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 		log.Printf("Generated response for user message: %s", userMessageID)
 
 		// Handle streaming vs non-streaming responses
-		var fullResponseText string
-
 		if input.EnableStreaming && output.StreamChannel != nil {
-			var err error
-			fullResponseText, err = d.processStreamingResponse(genCtx, conversationID, output)
+			_, err = d.processStreamingResponse(genCtx, conversationID, output)
 			if err != nil {
 				return
 			}
 		} else if !input.EnableStreaming && output.Message != nil {
-			fullResponseText = d.sendNonStreamingResponse(genCtx, conversationID, output)
+			d.sendNonStreamingResponse(genCtx, conversationID, output)
 		}
 
-		// Synthesize speech for voice response
-		d.synthesizeAndSendSpeech(genCtx, fullResponseText)
+		// Note: For streaming responses, TTS is synthesized per-sentence in processStreamingResponse
+		// For non-streaming responses, TTS synthesis should be added in sendNonStreamingResponse
 	}()
 }
 
@@ -301,6 +317,9 @@ func (d *DefaultMessageDispatcher) processStreamingResponse(
 				return "", err
 			}
 
+			// Synthesize and send audio for this sentence
+			d.synthesizeAndSendAudioChunk(ctx, conversationID, chunk.Text, int32(chunk.Sequence), chunk.IsFinal)
+
 			previousID = chunk.SentenceID
 		}
 
@@ -395,36 +414,61 @@ func (d *DefaultMessageDispatcher) sendNonStreamingResponse(
 	return output.Message.Contents
 }
 
-// synthesizeAndSendSpeech synthesizes and sends audio response
-func (d *DefaultMessageDispatcher) synthesizeAndSendSpeech(ctx context.Context, text string) {
+// synthesizeAndSendAudioChunk synthesizes speech for a sentence and sends it as an AudioChunk protocol message
+// isLast indicates whether this is the final sentence of the response
+func (d *DefaultMessageDispatcher) synthesizeAndSendAudioChunk(ctx context.Context, conversationID string, text string, sequence int32, isLast bool) {
 	if d.ttsService == nil || text == "" {
 		return
 	}
 
-	log.Printf("Synthesizing speech for response: %d characters", len(text))
+	log.Printf("Synthesizing speech for sentence %d: %d characters (isLast: %v)", sequence, len(text), isLast)
 
-	// Get TTS options from conversation preferences if available
+	// Get TTS options
 	ttsOptions := &ports.TTSOptions{
-		OutputFormat: "pcm",
+		OutputFormat: "opus", // Use opus for protocol messages (better compression)
 	}
 
 	result, err := d.ttsService.Synthesize(ctx, text, ttsOptions)
 	if err != nil {
-		log.Printf("Failed to synthesize speech: %v", err)
-		// Send error to client but don't fail the whole operation
-		_ = d.sendError(ctx, protocol.ErrCodeServiceUnavailable,
-			fmt.Sprintf("Failed to synthesize speech: %v", err), false)
-	} else if result != nil && len(result.Audio) > 0 {
-		log.Printf("Synthesized %d bytes of audio", len(result.Audio))
+		log.Printf("Failed to synthesize speech for sentence %d: %v", sequence, err)
+		// Don't fail the whole operation, just skip audio for this sentence
+		return
+	}
 
-		// Send audio via the protocol handler's agent
-		if err := d.protocolHandler.SendAudio(ctx, result.Audio, result.Format); err != nil {
-			log.Printf("Failed to send synthesized audio: %v", err)
-			_ = d.sendError(ctx, protocol.ErrCodeServiceUnavailable,
-				fmt.Sprintf("Failed to send audio: %v", err), false)
-		} else {
-			log.Printf("Sent synthesized audio to client")
-		}
+	if result == nil || len(result.Audio) == 0 {
+		log.Printf("No audio data received for sentence %d", sequence)
+		return
+	}
+
+	log.Printf("Synthesized %d bytes of audio for sentence %d (duration: %dms)", len(result.Audio), sequence, result.DurationMs)
+
+	// Send AudioChunk protocol message
+	audioChunk := &protocol.AudioChunk{
+		ConversationID: conversationID,
+		Format:         result.Format,
+		Sequence:       sequence,
+		DurationMs:     int32(result.DurationMs),
+		Data:           result.Audio,
+		IsLast:         isLast,
+		Timestamp:      uint64(time.Now().UnixMilli()),
+	}
+
+	if err := d.protocolHandler.SendEnvelope(ctx, &protocol.Envelope{
+		ConversationID: conversationID,
+		Type:           protocol.TypeAudioChunk,
+		Body:           audioChunk,
+	}); err != nil {
+		log.Printf("Failed to send AudioChunk for sentence %d: %v", sequence, err)
+		// Don't fail, just log the error
+		return
+	}
+
+	log.Printf("Sent AudioChunk for sentence %d", sequence)
+
+	// Also send to LiveKit audio track for voice conversations
+	if err := d.protocolHandler.SendAudio(ctx, result.Audio, result.Format); err != nil {
+		log.Printf("Failed to send audio to LiveKit track for sentence %d: %v", sequence, err)
+		// Non-fatal, audio chunk was already sent via protocol
 	}
 }
 
@@ -618,21 +662,33 @@ func (d *DefaultMessageDispatcher) handleControlVariation(ctx context.Context, e
 			fmt.Sprintf("Target message not found: %s", varMsg.TargetID), true)
 	}
 
-	// Only allow variations on assistant messages
-	if !targetMessage.IsFromAssistant() {
-		return d.sendError(ctx, protocol.ErrCodeInvalidState,
-			"Can only create variations of assistant messages", true)
-	}
-
-	// Handle different variation types
+	// Handle different variation types based on message role
 	switch varMsg.Mode {
+	case protocol.VariationTypeEdit:
+		// Edit mode supports both user and assistant messages
+		if targetMessage.IsFromAssistant() {
+			return d.handleAssistantEdit(ctx, envelope, targetMessage, varMsg.NewContent)
+		} else if targetMessage.IsFromUser() {
+			return d.handleUserEdit(ctx, envelope, targetMessage, varMsg.NewContent)
+		} else {
+			return d.sendError(ctx, protocol.ErrCodeInvalidState,
+				"Can only edit user or assistant messages", true)
+		}
+
 	case protocol.VariationTypeRegenerate:
+		// Regenerate only applies to assistant messages
+		if !targetMessage.IsFromAssistant() {
+			return d.sendError(ctx, protocol.ErrCodeInvalidState,
+				"Can only regenerate assistant messages", true)
+		}
 		return d.handleRegenerate(ctx, envelope, targetMessage)
 
-	case protocol.VariationTypeEdit:
-		return d.handleEdit(ctx, envelope, targetMessage, varMsg.NewContent)
-
 	case protocol.VariationTypeContinue:
+		// Continue only applies to assistant messages
+		if !targetMessage.IsFromAssistant() {
+			return d.sendError(ctx, protocol.ErrCodeInvalidState,
+				"Can only continue assistant messages", true)
+		}
 		return d.handleContinue(ctx, envelope, targetMessage)
 
 	default:
@@ -829,9 +885,9 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
-// handleEdit updates an existing message with new content
-func (d *DefaultMessageDispatcher) handleEdit(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message, newContent string) error {
-	log.Printf("Editing message: %s", targetMessage.ID)
+// handleAssistantEdit updates an existing assistant message with new content (no regeneration)
+func (d *DefaultMessageDispatcher) handleAssistantEdit(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message, newContent string) error {
+	log.Printf("Editing assistant message: %s", targetMessage.ID)
 
 	// Validate that new content is provided
 	if newContent == "" {
@@ -850,7 +906,7 @@ func (d *DefaultMessageDispatcher) handleEdit(ctx context.Context, envelope *pro
 			fmt.Sprintf("Failed to update message: %v", err), true)
 	}
 
-	log.Printf("Updated message content: %s", targetMessage.ID)
+	log.Printf("Updated assistant message content: %s", targetMessage.ID)
 
 	// Send updated AssistantMessage back to the client
 	assistantMsg := &protocol.AssistantMessage{
@@ -872,10 +928,96 @@ func (d *DefaultMessageDispatcher) handleEdit(ctx context.Context, envelope *pro
 			fmt.Sprintf("Failed to send updated message: %v", err), true)
 	}
 
-	log.Printf("Sent updated message to client: %s", targetMessage.ID)
+	log.Printf("Sent updated assistant message to client: %s", targetMessage.ID)
 
 	// Send acknowledgement
 	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
+}
+
+// handleUserEdit updates a user message and triggers a new assistant response
+func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message, newContent string) error {
+	log.Printf("Editing user message: %s", targetMessage.ID)
+
+	// Validate that new content is provided
+	if newContent == "" {
+		return d.sendError(ctx, protocol.ErrCodeMalformedData,
+			"NewContent is required for user message edit", true)
+	}
+
+	// 1. Cancel any ongoing generation (the manager tracks all active generations)
+	d.generationManager.CancelAll()
+
+	// 2. Update the user message content
+	targetMessage.Contents = newContent
+	targetMessage.UpdatedAt = time.Now()
+	if err := d.messageRepo.Update(ctx, targetMessage); err != nil {
+		return d.sendError(ctx, protocol.ErrCodeInternalError,
+			fmt.Sprintf("Failed to update user message: %v", err), true)
+	}
+
+	log.Printf("Updated user message content: %s", targetMessage.ID)
+
+	// 3. Delete all messages that came AFTER this user message
+	if err := d.messageRepo.DeleteAfterSequence(ctx, targetMessage.ConversationID, targetMessage.SequenceNumber); err != nil {
+		return d.sendError(ctx, protocol.ErrCodeInternalError,
+			fmt.Sprintf("Failed to clear subsequent messages: %v", err), true)
+	}
+
+	log.Printf("Deleted messages after sequence %d in conversation %s", targetMessage.SequenceNumber, targetMessage.ConversationID)
+
+	// 4. Send acknowledgement for the edit
+	if err := d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true); err != nil {
+		log.Printf("Failed to send acknowledgement: %v", err)
+		return err
+	}
+
+	// 5. Send updated UserMessage back to client
+	userMsg := &protocol.UserMessage{
+		ID:             targetMessage.ID,
+		ConversationID: targetMessage.ConversationID,
+		Content:        newContent,
+		PreviousID:     targetMessage.PreviousID,
+	}
+	userEnvelope := &protocol.Envelope{
+		ConversationID: targetMessage.ConversationID,
+		Type:           protocol.TypeUserMessage,
+		Body:           userMsg,
+	}
+	if err := d.protocolHandler.SendEnvelope(ctx, userEnvelope); err != nil {
+		log.Printf("Failed to send updated user message: %v", err)
+		// Non-fatal, continue with regeneration
+	}
+
+	// 6. Trigger new assistant response generation
+	// Reuse the same flow as when a new UserMessage is received
+	processOutput := &ports.ProcessUserMessageOutput{
+		Message:          targetMessage,
+		RelevantMemories: []*models.Memory{},
+	}
+
+	// Retrieve relevant memories for the edited message
+	if d.processUserMessageUseCase != nil {
+		// Use the process use case to get memories
+		processInput := &ports.ProcessUserMessageInput{
+			ConversationID: targetMessage.ConversationID,
+			TextContent:    newContent,
+			PreviousID:     targetMessage.PreviousID,
+		}
+		output, err := d.processUserMessageUseCase.Execute(ctx, processInput)
+		if err != nil {
+			log.Printf("Failed to retrieve memories for edited message: %v", err)
+			// Continue without memories
+		} else {
+			processOutput.RelevantMemories = output.RelevantMemories
+			// Send memory traces for retrieved memories
+			d.sendMemoryTraces(ctx, targetMessage.ID, output.RelevantMemories)
+		}
+	}
+
+	log.Printf("Triggering assistant response for edited user message: %s", targetMessage.ID)
+	d.generateResponseAsync(ctx, targetMessage.ConversationID, targetMessage.ID, processOutput)
+
+	return nil
 }
 
 // handleContinue extends an existing message

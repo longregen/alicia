@@ -185,13 +185,16 @@ export class SileroVADManager {
   }
 
   /**
-   * Pause VAD processing (can be resumed with start())
-   * Status remains Active as the system is ready to resume
+   * Stop VAD processing and release microphone.
+   * This destroys the VAD instance to release the browser recording indicator.
+   * Scripts remain loaded in window.vad/window.ort for fast restart.
    */
   stop(): void {
     if (this.vadInstance) {
-      this.vadInstance.pause();
-      this.updateStatus(MicrophoneStatus.Active);
+      this.vadInstance.destroy();
+      this.vadInstance = null;
+      this.isInitialized = false;
+      this.updateStatus(MicrophoneStatus.Inactive);
     }
   }
 

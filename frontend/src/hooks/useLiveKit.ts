@@ -101,6 +101,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
   const protocolRef = useRef(new ProtocolService());
   const audioTrackRef = useRef<MediaStreamTrack | null>(null);
   const roomRef = useRef<Room | null>(null);
+  const pendingTrackRef = useRef<MediaStreamTrack | null>(null);
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
 
   // Keep messageContext ref updated (no deps - runs every render)
   useEffect(() => {
@@ -142,6 +144,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
                 updated_at: new Date(timestamp).toISOString(),
               };
               messageContextRef.current.finalizeStreamingMessage(finalMessage);
+              // Track last message ID for message chaining
+              lastMessageIdRef.current = finalMessage.id;
             }
           }
           break;
@@ -169,6 +173,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
                 updated_at: new Date(timestamp).toISOString(),
               };
               messageContextRef.current.addMessage(userMessage);
+              // Track last message ID for message chaining
+              lastMessageIdRef.current = userMessage.id;
             }
           }
           break;
@@ -199,6 +205,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           const existingByServerId = messageRepository.findByServerId(message.id);
           if (existingByServerId) {
             // Already have this message, skip to avoid duplicate
+            // Still track the ID for message chaining
+            lastMessageIdRef.current = message.id;
             break;
           }
 
@@ -206,6 +214,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           if (message.local_id) {
             const existingByLocalId = messageRepository.findByLocalId(message.local_id);
             if (existingByLocalId) {
+              // Still track the ID for message chaining
+              lastMessageIdRef.current = message.id;
               break;
             }
           }
@@ -213,6 +223,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           // Also check by the message ID itself
           const existingById = messageRepository.findById(message.id);
           if (existingById) {
+            // Still track the ID for message chaining
+            lastMessageIdRef.current = message.id;
             break;
           }
 
@@ -221,6 +233,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
             ...message,
             sync_status: 'synced',
           });
+          // Track last message ID for message chaining
+          lastMessageIdRef.current = message.id;
           break;
         }
 
@@ -241,6 +255,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           const existingByServerId = messageRepository.findByServerId(message.id);
           if (existingByServerId) {
             // Already have this message, skip to avoid duplicate
+            // Still track the ID for message chaining
+            lastMessageIdRef.current = message.id;
             break;
           }
 
@@ -248,6 +264,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           if (message.local_id) {
             const existingByLocalId = messageRepository.findByLocalId(message.local_id);
             if (existingByLocalId) {
+              // Still track the ID for message chaining
+              lastMessageIdRef.current = message.id;
               break;
             }
           }
@@ -255,6 +273,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           // Also check by the message ID itself
           const existingById = messageRepository.findById(message.id);
           if (existingById) {
+            // Still track the ID for message chaining
+            lastMessageIdRef.current = message.id;
             break;
           }
 
@@ -263,6 +283,8 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
             ...message,
             sync_status: 'synced',
           });
+          // Track last message ID for message chaining
+          lastMessageIdRef.current = message.id;
           break;
         }
 
@@ -310,19 +332,17 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
 
         case MessageType.AudioChunk: {
           const audioChunk = envelope.body as AudioChunk;
-          // Handle audio metadata for synchronization
-          // This is primarily for debugging/logging audio stream state
-          console.debug('Audio chunk received:', {
+          console.log('[LiveKit] AudioChunk received:', {
             format: audioChunk.format,
             sequence: audioChunk.sequence,
             durationMs: audioChunk.durationMs,
+            dataSize: audioChunk.data?.byteLength,
+            hasData: !!audioChunk.data,
             isLast: audioChunk.isLast,
           });
 
-          // If isLast is true, this signals end of TTS output
-          if (audioChunk.isLast) {
-            // Could emit an event or update state to indicate speaking finished
-          }
+          // Process the audio chunk (store and auto-play)
+          handleProtocolMessage(envelope);
           break;
         }
 
@@ -478,6 +498,21 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
         );
         const data = protocolRef.current.encode(configEnvelope);
         newRoom.localParticipant.publishData(data, { reliable: true });
+
+        // Publish any pending audio track that was queued before connection
+        if (pendingTrackRef.current) {
+          console.log('[LiveKit] Publishing queued audio track after connection');
+          newRoom.localParticipant.publishTrack(pendingTrackRef.current, {
+            name: 'microphone',
+            source: Track.Source.Microphone,
+          }).then(() => {
+            audioTrackRef.current = pendingTrackRef.current;
+            pendingTrackRef.current = null;
+            console.log('[LiveKit] Queued audio track published successfully');
+          }).catch((err) => {
+            console.error('[LiveKit] Failed to publish queued audio track:', err);
+          });
+        }
       });
 
       newRoom.on(RoomEvent.Disconnected, () => {
@@ -511,6 +546,21 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
         );
         const data = protocolRef.current.encode(configEnvelope);
         newRoom.localParticipant.publishData(data, { reliable: true });
+
+        // Re-publish any pending audio track after reconnection
+        if (pendingTrackRef.current) {
+          console.log('[LiveKit] Re-publishing queued audio track after reconnection');
+          newRoom.localParticipant.publishTrack(pendingTrackRef.current, {
+            name: 'microphone',
+            source: Track.Source.Microphone,
+          }).then(() => {
+            audioTrackRef.current = pendingTrackRef.current;
+            pendingTrackRef.current = null;
+            console.log('[LiveKit] Queued audio track re-published successfully');
+          }).catch((err) => {
+            console.error('[LiveKit] Failed to re-publish queued audio track:', err);
+          });
+        }
       });
 
       newRoom.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
@@ -566,7 +616,7 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
     if (!room || !conversationId || !content.trim()) return;
 
     try {
-      const envelope = protocolRef.current.createUserMessage(conversationId, content);
+      const envelope = protocolRef.current.createUserMessage(conversationId, content, lastMessageIdRef.current);
       const data = protocolRef.current.encode(envelope);
       await room.localParticipant.publishData(data, { reliable: true });
     } catch (err) {
@@ -617,14 +667,22 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
 
   // Publish audio track
   const publishAudioTrack = useCallback(async (track: MediaStreamTrack) => {
-    if (!room) return;
+    if (!room) {
+      // Room not ready yet, store track and publish when connected
+      console.log('[LiveKit] Room not ready, queueing track for later publishing');
+      pendingTrackRef.current = track;
+      return;
+    }
 
     try {
+      console.log('[LiveKit] Publishing audio track to room');
       await room.localParticipant.publishTrack(track, {
         name: 'microphone',
         source: Track.Source.Microphone,
       });
       audioTrackRef.current = track;
+      pendingTrackRef.current = null;
+      console.log('[LiveKit] Audio track published successfully');
     } catch (err) {
       console.error('Failed to publish audio track:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to publish audio';

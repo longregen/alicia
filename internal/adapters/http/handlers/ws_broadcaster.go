@@ -57,17 +57,14 @@ func (b *WebSocketBroadcaster) Unsubscribe(conversationID string, conn *websocke
 
 // BroadcastBinary broadcasts binary MessagePack data to all subscribers of a conversation
 func (b *WebSocketBroadcaster) BroadcastBinary(conversationID string, data []byte) {
+	// Copy connections under single lock to avoid holding during I/O
 	b.mu.RLock()
 	conns, ok := b.connections[conversationID]
-	b.mu.RUnlock()
-
 	if !ok || len(conns) == 0 {
+		b.mu.RUnlock()
 		return
 	}
-
-	// Copy connections to avoid holding the lock during I/O
 	targets := make([]*websocket.Conn, 0, len(conns))
-	b.mu.RLock()
 	for conn := range conns {
 		targets = append(targets, conn)
 	}

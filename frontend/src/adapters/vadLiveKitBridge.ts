@@ -22,6 +22,9 @@ export class VADLiveKitBridge {
   private workletNode: AudioWorkletNode | null = null;
   private isInitialized = false;
 
+  // VAD input sample rate (Silero VAD outputs at 16kHz)
+  private static readonly VAD_SAMPLE_RATE = 16000;
+
   /**
    * Initialize the audio pipeline and return a MediaStreamTrack
    * ready to be published to LiveKit
@@ -32,15 +35,23 @@ export class VADLiveKitBridge {
     }
 
     try {
-      // TODO: Consider making sample rate configurable or detecting from VAD config
-      this.audioContext = new AudioContext({ sampleRate: 16000 }); // Must match VAD output
+      // Use default sample rate (typically 48kHz) for compatibility with LiveKit's
+      // silence detection which creates its own AudioContext at default sample rate.
+      // The worklet upsamples from VAD's 16kHz to the output sample rate.
+      this.audioContext = new AudioContext();
+      const outputSampleRate = this.audioContext.sampleRate;
 
       // Create destination node that provides a MediaStream
       this.destination = this.audioContext.createMediaStreamDestination();
 
       // Load and create AudioWorklet for efficient Float32Array → MediaStream conversion
       await this.audioContext.audioWorklet.addModule('/vad-processor.js');
-      this.workletNode = new AudioWorkletNode(this.audioContext, 'vad-processor');
+      this.workletNode = new AudioWorkletNode(this.audioContext, 'vad-processor', {
+        processorOptions: {
+          inputSampleRate: VADLiveKitBridge.VAD_SAMPLE_RATE,
+          outputSampleRate: outputSampleRate,
+        },
+      });
 
       // Connect worklet to destination
       this.workletNode.connect(this.destination);

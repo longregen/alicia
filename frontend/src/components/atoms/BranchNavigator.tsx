@@ -4,7 +4,7 @@ import { cls } from '../../utils/cls';
 import type { MessageId } from '../../types/streaming';
 
 export interface BranchNavigatorProps {
-  messageId: MessageId;
+  messageId?: MessageId;
   currentIndex: number;
   totalBranches: number;
   onNavigate: (direction: 'prev' | 'next') => void;
@@ -20,6 +20,7 @@ const BranchNavigator: React.FC<BranchNavigatorProps> = ({
   totalBranches,
   onNavigate,
   className = '',
+  // messageId is optional and unused - kept for API compatibility
 }) => {
   // Don't render if there's only one branch or none
   if (totalBranches <= 1) return null;

@@ -3,6 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import ChatWindowBridge from './components/organisms/ChatWindowBridge';
 import WelcomeScreen from './components/organisms/WelcomeScreen';
 import { Settings, type SettingsTab } from './components/Settings';
+import { MemoryManager } from './components/organisms/MemoryManager';
+import ServerInfoPanel from './components/organisms/ServerPanel/ServerInfoPanel';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { useDatabase } from './hooks/useDatabase';
@@ -12,11 +14,14 @@ import { WebSocketProvider } from './contexts/WebSocketContext';
 import { storage } from './utils/storage';
 import Toast from './components/atoms/Toast';
 
+// View types for main content area navigation
+export type AppView = 'chat' | 'memory' | 'server' | 'settings';
+
 interface AppContentProps {
   selectedConversationId: string | null;
   setSelectedConversationId: (id: string | null) => void;
-  settingsOpen: boolean;
-  setSettingsOpen: (open: boolean) => void;
+  activeView: AppView;
+  setActiveView: (view: AppView) => void;
   settingsTab: SettingsTab;
   setSettingsTab: (tab: SettingsTab) => void;
 }
@@ -24,8 +29,8 @@ interface AppContentProps {
 function AppContent({
   selectedConversationId,
   setSelectedConversationId,
-  settingsOpen,
-  setSettingsOpen,
+  activeView,
+  setActiveView,
   settingsTab,
   setSettingsTab,
 }: AppContentProps) {
@@ -107,23 +112,25 @@ function AppContent({
 
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
+    setActiveView('chat');
     setSidebarOpen(false);
   };
 
   const handleOpenSettings = (tab: SettingsTab = 'mcp') => {
     setSettingsTab(tab);
-    setSettingsOpen(true);
+    setActiveView('settings');
     setSidebarOpen(false);
   };
 
   const handlePanelChange = (panel: 'memory' | 'server' | 'settings') => {
-    // Map sidebar panel names to settings tabs
-    const tabMap: Record<string, SettingsTab> = {
-      memory: 'memories',
-      server: 'server',
-      settings: 'mcp',
-    };
-    handleOpenSettings(tabMap[panel] || 'mcp');
+    setSidebarOpen(false);
+    if (panel === 'memory') {
+      setActiveView('memory');
+    } else if (panel === 'server') {
+      setActiveView('server');
+    } else {
+      setActiveView('settings');
+    }
   };
 
   return (
@@ -187,6 +194,7 @@ function AppContent({
         <Sidebar
           conversations={conversations}
           selectedId={selectedConversationId}
+          activeView={activeView}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
           onDelete={handleDeleteConversation}
@@ -201,10 +209,26 @@ function AppContent({
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {settingsOpen ? (
+        {activeView === 'memory' ? (
+          <div className="h-full bg-background">
+            <div className="p-6 md:px-8 border-b border-border bg-card">
+              <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Memory</h1>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 h-[calc(100%-81px)]">
+              <MemoryManager />
+            </div>
+          </div>
+        ) : activeView === 'server' ? (
+          <div className="h-full bg-background">
+            <div className="p-6 md:px-8 border-b border-border bg-card">
+              <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Server Info</h1>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 h-[calc(100%-81px)]">
+              <ServerInfoPanel />
+            </div>
+          </div>
+        ) : activeView === 'settings' ? (
           <Settings
-            isOpen={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
             conversationId={selectedConversationId}
             defaultTab={settingsTab}
           />
@@ -234,7 +258,7 @@ function App() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(() => {
     return storage.getSelectedConversationId();
   });
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeView, setActiveView] = useState<AppView>('chat');
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('mcp');
 
   // Initialize database
@@ -266,8 +290,8 @@ function App() {
           <AppContent
             selectedConversationId={selectedConversationId}
             setSelectedConversationId={setSelectedConversationId}
-            settingsOpen={settingsOpen}
-            setSettingsOpen={setSettingsOpen}
+            activeView={activeView}
+            setActiveView={setActiveView}
             settingsTab={settingsTab}
             setSettingsTab={setSettingsTab}
           />

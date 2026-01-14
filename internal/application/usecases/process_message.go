@@ -10,29 +10,32 @@ import (
 )
 
 type ProcessUserMessage struct {
-	messageRepo   ports.MessageRepository
-	audioRepo     ports.AudioRepository
-	asrService    ports.ASRService
-	memoryService ports.MemoryService
-	idGenerator   ports.IDGenerator
-	txManager     ports.TransactionManager
+	messageRepo      ports.MessageRepository
+	audioRepo        ports.AudioRepository
+	conversationRepo ports.ConversationRepository
+	asrService       ports.ASRService
+	memoryService    ports.MemoryService
+	idGenerator      ports.IDGenerator
+	txManager        ports.TransactionManager
 }
 
 func NewProcessUserMessage(
 	messageRepo ports.MessageRepository,
 	audioRepo ports.AudioRepository,
+	conversationRepo ports.ConversationRepository,
 	asrService ports.ASRService,
 	memoryService ports.MemoryService,
 	idGenerator ports.IDGenerator,
 	txManager ports.TransactionManager,
 ) *ProcessUserMessage {
 	return &ProcessUserMessage{
-		messageRepo:   messageRepo,
-		audioRepo:     audioRepo,
-		asrService:    asrService,
-		memoryService: memoryService,
-		idGenerator:   idGenerator,
-		txManager:     txManager,
+		messageRepo:      messageRepo,
+		audioRepo:        audioRepo,
+		conversationRepo: conversationRepo,
+		asrService:       asrService,
+		memoryService:    memoryService,
+		idGenerator:      idGenerator,
+		txManager:        txManager,
 	}
 }
 
@@ -73,6 +76,12 @@ func (uc *ProcessUserMessage) Execute(ctx context.Context, input *ports.ProcessU
 		return nil, fmt.Errorf("no text content provided or transcribed")
 	}
 
+	// Fetch the conversation to get the current tip for message branching
+	conversation, err := uc.conversationRepo.GetByID(ctx, input.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+
 	sequenceNumber, err := uc.messageRepo.GetNextSequenceNumber(ctx, input.ConversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get next sequence number: %w", err)
@@ -80,8 +89,10 @@ func (uc *ProcessUserMessage) Execute(ctx context.Context, input *ports.ProcessU
 
 	messageID := uc.idGenerator.GenerateMessageID()
 	message := models.NewUserMessage(messageID, input.ConversationID, sequenceNumber, textContent)
-	if input.PreviousID != "" {
-		message.SetPreviousMessage(input.PreviousID)
+
+	// Set previous_id to the current conversation tip for message branching
+	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
+		message.SetPreviousMessage(*conversation.TipMessageID)
 	}
 
 	// Wrap message and audio creation in a transaction to ensure atomicity.
@@ -103,6 +114,12 @@ func (uc *ProcessUserMessage) Execute(ctx context.Context, input *ports.ProcessU
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Update conversation tip to point to the new message
+	if err := uc.conversationRepo.UpdateTip(ctx, input.ConversationID, message.ID); err != nil {
+		// Log but don't fail - this is a non-critical operation
+		log.Printf("warning: failed to update conversation tip: %v\n", err)
 	}
 
 	var relevantMemories []*models.Memory

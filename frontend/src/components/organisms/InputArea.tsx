@@ -1,12 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import RecordingButtonForInput from '../atoms/RecordingButtonForInput';
 import InputSendButton from '../atoms/InputSendButton';
 import MicrophoneVAD from '../molecules/MicrophoneVAD';
 import { cls } from '../../utils/cls';
-import { RECORDING_STATES } from '../../mockData';
 import { MicrophoneStatus } from '../../types/streaming';
 import { useVAD } from '../../hooks/useVAD';
-import type { RecordingState } from '../../types/components';
 
 /**
  * InputArea organism component.
@@ -22,14 +19,16 @@ import type { RecordingState } from '../../types/components';
 export interface InputAreaProps {
   /** Callback when user submits a message */
   onSend?: (message: string, isVoice: boolean) => void;
-  /** Callback to publish audio track to LiveKit (when useSileroVAD is true) */
+  /** Callback to publish audio track to LiveKit */
   onPublishAudioTrack?: (track: MediaStreamTrack) => Promise<void>;
+  /** Callback when voice input is toggled */
+  onVoiceActiveChange?: (active: boolean) => void;
+  /** Whether voice input is currently active (LiveKit connected) */
+  voiceActive?: boolean;
   /** Whether input is disabled */
   disabled?: boolean;
   /** Placeholder text for input */
   placeholder?: string;
-  /** Whether to use Silero VAD for voice input */
-  useSileroVAD?: boolean;
   /** Current conversation ID - used to autofocus when switching conversations */
   conversationId?: string | null;
   className?: string;
@@ -38,14 +37,14 @@ export interface InputAreaProps {
 const InputArea: React.FC<InputAreaProps> = ({
   onSend,
   onPublishAudioTrack,
+  onVoiceActiveChange,
+  voiceActive = false,
   disabled = false,
   placeholder = 'Type a message...',
-  useSileroVAD = false,
   conversationId,
   className = '',
 }) => {
   const [inputValue, setInputValue] = useState('');
-  const [recordingState, setRecordingState] = useState<RecordingState>(RECORDING_STATES.IDLE);
   const trackPublishedRef = useRef<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -56,18 +55,22 @@ const InputArea: React.FC<InputAreaProps> = ({
     }
   }, [conversationId]);
 
+  // Reset track published state when voice becomes inactive
+  useEffect(() => {
+    if (!voiceActive) {
+      trackPublishedRef.current = false;
+    }
+  }, [voiceActive]);
+
   // Initialize VAD hook with LiveKit audio streaming
-  const { status: microphoneStatus, vadManager } = useVAD({
+  const { status: microphoneStatus, startVAD, stopVAD, isSpeaking, speechProbability } = useVAD({
     onStatusChange: (status) => {
       console.log('VAD status changed:', status);
     },
     onSpeechEnd: (audioData: Float32Array) => {
       console.log('Speech segment captured:', audioData.length, 'samples');
-      // Speech segment captured - audio streaming handled by VAD bridge
-      // Server responds with Transcription protocol messages
     },
     onTrackReady: useCallback(async (track: MediaStreamTrack) => {
-      // Publish the audio track to LiveKit when ready
       if (onPublishAudioTrack && !trackPublishedRef.current) {
         try {
           await onPublishAudioTrack(track);
@@ -83,10 +86,6 @@ const InputArea: React.FC<InputAreaProps> = ({
     },
   });
 
-  const handleTextChange = (value: string) => {
-    setInputValue(value);
-  };
-
   const handleTextSubmit = (value: string) => {
     if (value.trim() && onSend) {
       onSend(value.trim(), false);
@@ -99,18 +98,11 @@ const InputArea: React.FC<InputAreaProps> = ({
   };
 
   const handleVoiceClick = () => {
-    if (!useSileroVAD) {
-      // Toggle recording state for non-VAD mode
-      const newState = recordingState === RECORDING_STATES.IDLE
-        ? RECORDING_STATES.RECORDING
-        : RECORDING_STATES.IDLE;
-      setRecordingState(newState);
-    }
-    // VAD mode handles its own state
+    onVoiceActiveChange?.(!voiceActive);
   };
 
   const canSend = inputValue.trim().length > 0;
-  const isRecording = microphoneStatus === MicrophoneStatus.Recording || recordingState === RECORDING_STATES.RECORDING;
+  const isRecording = voiceActive && microphoneStatus === MicrophoneStatus.Recording;
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +110,7 @@ const InputArea: React.FC<InputAreaProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleTextChange(e.target.value);
+    setInputValue(e.target.value);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -134,22 +126,16 @@ const InputArea: React.FC<InputAreaProps> = ({
       onSubmit={handleFormSubmit}
     >
       {/* Voice input button */}
-      {useSileroVAD ? (
-        <MicrophoneVAD
-          useSileroVAD={true}
-          vadManager={vadManager || undefined}
-          disabled={disabled}
-          className="flex-shrink-0"
-        />
-      ) : (
-        <RecordingButtonForInput
-          state={recordingState}
-          onClick={handleVoiceClick}
-          disabled={disabled}
-          size="md"
-          className="flex-shrink-0"
-        />
-      )}
+      <MicrophoneVAD
+        microphoneStatus={microphoneStatus}
+        isSpeaking={isSpeaking}
+        speechProbability={speechProbability}
+        onStartVAD={startVAD}
+        onStopVAD={stopVAD}
+        disabled={disabled}
+        onClick={handleVoiceClick}
+        className="flex-shrink-0"
+      />
 
       {/* Text input - using simple input for e2e test compatibility */}
       <div className="flex-1">

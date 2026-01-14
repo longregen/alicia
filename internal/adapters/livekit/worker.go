@@ -20,6 +20,10 @@ type WorkerConfig struct {
 	RoomPrefix    string
 	WorkerCount   int // Number of worker goroutines for event processing per agent
 	WorkQueueSize int // Size of the buffered work queue per agent
+
+	// TTS audio format configuration (for resampling to 48kHz stereo)
+	TTSSampleRate int // TTS output sample rate (default: 24000 for Kokoro)
+	TTSChannels   int // TTS output channels: 1=mono, 2=stereo (default: 1)
 }
 
 // DefaultWorkerConfig returns a default worker configuration
@@ -33,6 +37,8 @@ func DefaultWorkerConfig() *WorkerConfig {
 		RoomPrefix:            "conv_", // Only handle conversation rooms
 		WorkerCount:           10,
 		WorkQueueSize:         100,
+		TTSSampleRate:         24000, // Kokoro outputs 24kHz
+		TTSChannels:           1,     // Kokoro outputs mono
 	}
 }
 
@@ -211,6 +217,8 @@ func (w *Worker) dispatchAgent(ctx context.Context, roomName string) error {
 		TokenValidityDuration: w.config.TokenValidityDuration,
 		WorkerCount:           w.config.WorkerCount,
 		WorkQueueSize:         w.config.WorkQueueSize,
+		TTSSampleRate:         w.config.TTSSampleRate,
+		TTSChannels:           w.config.TTSChannels,
 	}
 
 	// Create agent and message router using factory

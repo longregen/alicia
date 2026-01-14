@@ -27,9 +27,11 @@ export enum MessageStatus {
 // Microphone status enum
 export enum MicrophoneStatus {
   Inactive = 'inactive',
+  Loading = 'loading',                        // Loading VAD model/scripts
   RequestingPermission = 'requesting_permission',
-  Active = 'active',
-  Recording = 'recording',
+  Active = 'active',                          // Connected, ready to record
+  Recording = 'recording',                    // Actively listening
+  Sending = 'sending',                        // Speech ended, sending to server
   Error = 'error'
 }
 
@@ -88,6 +90,7 @@ export interface AudioRef {
   sizeBytes: number;
   durationMs: number;
   sampleRate: number;
+  format?: string; // MIME type or format string (e.g., 'opus', 'pcm', 'audio/opus')
 }
 
 // Memory trace structure

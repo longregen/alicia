@@ -488,3 +488,19 @@ func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) (
 
 	return r.scanMessages(rows)
 }
+
+// DeleteAfterSequence soft-deletes all messages in a conversation after the given sequence number
+func (r *MessageRepository) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `
+		UPDATE alicia_messages
+		SET deleted_at = NOW()
+		WHERE conversation_id = $1
+		  AND sequence_number > $2
+		  AND deleted_at IS NULL`
+
+	_, err := r.conn(ctx).Exec(ctx, query, conversationID, afterSequence)
+	return err
+}

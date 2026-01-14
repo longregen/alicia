@@ -43,6 +43,8 @@ type MessageRepository interface {
 	// Cleanup support
 	GetIncompleteOlderThan(ctx context.Context, olderThan time.Time) ([]*models.Message, error)
 	GetIncompleteByConversation(ctx context.Context, conversationID string, olderThan time.Time) ([]*models.Message, error)
+	// DeleteAfterSequence soft-deletes all messages in a conversation after the given sequence number
+	DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error
 }
 
 // SentenceRepository defines operations for sentence persistence

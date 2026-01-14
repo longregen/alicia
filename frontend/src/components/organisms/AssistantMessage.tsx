@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
 import AudioAddon from '../atoms/AudioAddon';
-import MemoryTraceAddon from '../atoms/MemoryTraceAddon';
-import FeedbackControls from '../atoms/FeedbackControls';
 import { useConversationStore, selectSentences } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
 import { useFeedback } from '../../hooks/useFeedback';
+import { sendControlVariation } from '../../adapters/protocolAdapter';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
 import type { MessageId } from '../../types/streaming';
 import type { MessageAddon, ToolData, AudioState } from '../../types/components';
@@ -28,6 +27,7 @@ export interface AssistantMessageProps {
 
 const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, className = '' }) => {
   const message = useConversationStore((state) => state.messages[messageId]);
+  const currentConversationId = useConversationStore((state) => state.currentConversationId);
   const toolCallsMap = useConversationStore((state) => state.toolCalls);
   const memoryTracesMap = useConversationStore((state) => state.memoryTraces);
   const sentencesMap = useConversationStore(selectSentences);
@@ -97,6 +97,13 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
     setAudioStates(newStates);
   }, [message, currentlyPlayingId, isPlaying, sentencesWithAudio]);
 
+  // Handle message edit - sends to backend for new agent response
+  const handleEditMessage = useCallback((editedMessageId: MessageId, newContent: string) => {
+    if (currentConversationId) {
+      sendControlVariation(currentConversationId, editedMessageId, 'edit', newContent);
+    }
+  }, [currentConversationId]);
+
   // Early return after all hooks
   if (!message) {
     return null;
@@ -114,8 +121,33 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
             toolCall.status === 'error' ? toolCall.error : undefined,
   }));
 
-  // Build addons for audio (memory traces handled separately via MemoryTraceAddon)
+  // Build addons for tools and audio (memory traces handled separately via MemoryTraceAddon)
   const addons: MessageAddon[] = [];
+
+  // Add tool addons for each tool call
+  tools.forEach(tool => {
+    // Map tool names to appropriate emojis
+    const getToolEmoji = (toolName: string) => {
+      const name = toolName.toLowerCase();
+      // Specific tool mappings
+      if (name === 'memory_query' || name.includes('memory')) return '🧠';
+      if (name === 'web_search' || name.includes('web')) return '🌐';
+      // Generic mappings
+      if (name.includes('search') || name.includes('find') || name.includes('query')) return '🔍';
+      if (name.includes('calculate') || name.includes('math') || name.includes('compute')) return '🔢';
+      if (name.includes('file') || name.includes('read') || name.includes('write')) return '📄';
+      if (name.includes('code') || name.includes('execute') || name.includes('run')) return '⚙️';
+      return '🔧'; // Default tool icon
+    };
+
+    addons.push({
+      id: tool.id,
+      type: 'tool',
+      position: 'inline',
+      emoji: getToolEmoji(tool.name),
+      tooltip: tool.name,
+    });
+  });
 
   // Add audio addons for sentences with audio
   sentencesWithAudio.forEach(sentence => {
@@ -144,6 +176,34 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
     });
   });
 
+  // Add memory traces as addon
+  if (memoryTraces.length > 0) {
+    addons.push({
+      id: 'memory-traces',
+      type: 'memory',
+      position: 'inline',
+      memoryData: memoryTraces.map(trace => ({
+        id: trace.id,
+        content: trace.content,
+        relevance: trace.relevance,
+      })),
+    });
+  }
+
+  // Add feedback controls as addon
+  addons.push({
+    id: 'message-feedback',
+    type: 'feedback',
+    position: 'inline',
+    feedbackData: {
+      currentVote: currentVote as 'up' | 'down' | null,
+      onVote: vote,
+      upvotes: counts.up,
+      downvotes: counts.down,
+      isLoading: feedbackLoading,
+    },
+  });
+
   return (
     <div className={`flex flex-col items-start gap-2 ${className}`}>
       <ChatBubble
@@ -154,18 +214,8 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
         addons={addons}
         tools={tools}
         messageId={messageId}
+        onEditMessage={handleEditMessage}
         syncStatus={message.sync_status}
-      />
-      {memoryTraces.length > 0 && (
-        <MemoryTraceAddon traces={memoryTraces} />
-      )}
-      <FeedbackControls
-        currentVote={currentVote as 'up' | 'down' | null}
-        onVote={vote}
-        upvotes={counts.up}
-        downvotes={counts.down}
-        isLoading={feedbackLoading}
-        compact
       />
     </div>
   );

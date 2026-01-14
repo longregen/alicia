@@ -47,6 +47,7 @@ func TestNewAgentFactory(t *testing.T) {
 		asrService,
 		ttsService,
 		idGenerator,
+		0.5, // minConfidence
 	)
 
 	if factory == nil {
@@ -128,6 +129,7 @@ func TestCreateAgent(t *testing.T) {
 		asrService,
 		ttsService,
 		idGenerator,
+		0.5, // minConfidence
 	)
 
 	// Create a conversation for testing
@@ -304,6 +306,7 @@ func TestCreateAgent_InvalidConfig(t *testing.T) {
 		asrService,
 		ttsService,
 		idGenerator,
+		0.5, // minConfidence
 	)
 
 	conversationID := "conv_test_invalid"
@@ -365,6 +368,7 @@ func TestCreateAgentWithCallbacks(t *testing.T) {
 		asrService,
 		ttsService,
 		idGenerator,
+		0.5, // minConfidence
 	)
 
 	conversationID := "conv_test_callbacks"
@@ -451,6 +455,7 @@ func TestCreateAgentWithCallbacks_NilWrapper(t *testing.T) {
 		asrService,
 		ttsService,
 		idGenerator,
+		0.5, // minConfidence
 	)
 
 	conversationID := "conv_test_nil_wrapper"
@@ -527,6 +532,7 @@ func TestAgentFactory_IntegrationWithAllComponents(t *testing.T) {
 		asrService,
 		ttsService,
 		idGenerator,
+		0.5, // minConfidence
 	)
 
 	conversationID := "conv_test_integration"

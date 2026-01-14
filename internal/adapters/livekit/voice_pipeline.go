@@ -20,6 +20,10 @@ const (
 	SilenceThreshold  = 500                     // RMS threshold for silence detection
 	SilenceTimeout    = 1500 * time.Millisecond // How long to wait after silence before processing
 	MinSpeechDuration = 300 * time.Millisecond  // Minimum speech duration to process
+
+	// Transcription confidence threshold - reject low-confidence transcriptions
+	// to avoid hallucinations from background noise
+	MinTranscriptionConfidence = 0.5
 )
 
 // VoicePipeline manages the voice processing pipeline for a conversation
@@ -35,6 +39,9 @@ type VoicePipeline struct {
 	silenceTimer    *time.Timer
 	silenceTimerGen int64 // Generation counter to prevent race between timer callback and cancellation
 	processingAudio bool
+
+	// Transcription confidence threshold
+	minConfidence float64
 
 	// Lifecycle
 	ctx    context.Context
@@ -132,11 +139,13 @@ func (ab *AudioBuffer) IsEmpty() bool {
 
 // NewVoicePipeline creates a new voice processing pipeline
 // The provided context is used as the parent context for the pipeline's lifecycle
+// minConfidence sets the minimum ASR confidence threshold (0.0-1.0), use 0 to use default
 func NewVoicePipeline(
 	ctx context.Context,
 	asrService ports.ASRService,
 	ttsService ports.TTSService,
 	agent *Agent,
+	minConfidence float64,
 ) (*VoicePipeline, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -150,12 +159,18 @@ func NewVoicePipeline(
 		return nil, fmt.Errorf("failed to create audio converter: %w", err)
 	}
 
+	// Use default if not specified
+	if minConfidence <= 0 {
+		minConfidence = MinTranscriptionConfidence
+	}
+
 	return &VoicePipeline{
 		asrService:     asrService,
 		ttsService:     ttsService,
 		agent:          agent,
 		audioBuffer:    NewAudioBuffer(DefaultSampleRate, DefaultChannels),
 		audioConverter: audioConverter,
+		minConfidence:  minConfidence,
 		ctx:            pipelineCtx,
 		cancel:         cancel,
 	}, nil
@@ -335,6 +350,14 @@ func (vp *VoicePipeline) handleSilenceTimeout(gen int64) {
 		}
 
 		log.Printf("Transcription: %s (confidence: %.2f)", result.Text, result.Confidence)
+
+		// Reject low-confidence transcriptions to avoid processing hallucinations
+		// from background noise
+		if result.Confidence < vp.minConfidence {
+			log.Printf("Rejecting low-confidence transcription (%.2f < %.2f): %s",
+				result.Confidence, vp.minConfidence, result.Text)
+			return
+		}
 
 		// Call transcription callback
 		vp.mu.Lock()

@@ -25,6 +25,7 @@ type AgentFactory struct {
 	asrService                ports.ASRService
 	ttsService                ports.TTSService
 	idGenerator               ports.IDGenerator
+	asrMinConfidence          float64
 }
 
 // NewAgentFactory creates a new agent factory
@@ -46,6 +47,7 @@ func NewAgentFactory(
 	asrService ports.ASRService,
 	ttsService ports.TTSService,
 	idGenerator ports.IDGenerator,
+	asrMinConfidence float64,
 ) *AgentFactory {
 	return &AgentFactory{
 		conversationRepo:          conversationRepo,
@@ -65,6 +67,7 @@ func NewAgentFactory(
 		asrService:                asrService,
 		ttsService:                ttsService,
 		idGenerator:               idGenerator,
+		asrMinConfidence:          asrMinConfidence,
 	}
 }
 
@@ -116,6 +119,7 @@ func (f *AgentFactory) CreateAgent(
 		f.ttsService,
 		f.idGenerator,
 		agent,
+		f.asrMinConfidence,
 	)
 
 	// Wire up the agent with the message router as callbacks

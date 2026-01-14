@@ -251,11 +251,19 @@ export function handleAssistantSentence(
   const context = getConversationContext(message.conversationId);
 
   // Check if there's audio associated with this sentence
-  const audioRefId = context.sentenceAudioMap.get(sentenceId);
+  // Also check the sequence-based fallback ID in case audio arrived before sentence
+  // (audio uses fallback ID when sentence doesn't exist yet)
+  const fallbackId = createSentenceId(`${currentMessageId}_s${msg.sequence}`);
+  const audioRefId =
+    context.sentenceAudioMap.get(sentenceId) ||
+    context.sentenceAudioMap.get(fallbackId);
   if (audioRefId) {
     sentence.audioRefId = audioRefId;
-    // Keep audio entry for now, cleanup will handle it
+    // Clean up both possible entries
+    context.sentenceAudioMap.delete(sentenceId);
+    context.sentenceAudioMap.delete(fallbackId);
     clearCleanupTimer(sentenceId, context);
+    clearCleanupTimer(fallbackId, context);
   } else {
     // No audio yet - register sentence as waiting for audio
     context.pendingSentences.add(sentenceId);
@@ -389,7 +397,8 @@ export async function handleAudioChunk(
   msg: AudioChunk,
   store: ReturnType<typeof useConversationStore.getState>
 ): Promise<void> {
-  if (!msg.data || !msg.trackSid) {
+  // Handle audio chunks - they can come from LiveKit tracks (with trackSid) or protocol messages (without)
+  if (!msg.data) {
     return;
   }
 
@@ -400,6 +409,7 @@ export async function handleAudioChunk(
     const audioRefId = await audioManager.store(msg.data, {
       durationMs: msg.durationMs,
       sampleRate,
+      format: msg.format,
     });
 
     // Create AudioRef metadata and add to store
@@ -408,6 +418,7 @@ export async function handleAudioChunk(
       sizeBytes: msg.data.byteLength,
       durationMs: msg.durationMs,
       sampleRate,
+      format: msg.format,
     };
     store.addAudioRef(audioRef);
 

@@ -32,9 +32,34 @@ let
   # Source is the current directory (where overlay.nix is located)
   src = ./.;
 
+  # Silero VAD v5 model for Go backend
+  # Uses the same model as the frontend (from @ricky0123/vad-web) for consistency
+  silero-vad-model = final.stdenv.mkDerivation {
+    pname = "silero-vad-model";
+    version = "5.0";
+
+    src = final.fetchurl {
+      url = "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.22/dist/silero_vad_v5.onnx";
+      sha256 = "sha256-JiOilT9v89LB5hdAxs23FoEzR5smff7xFKSjzFvdeI8=";
+    };
+
+    dontUnpack = true;
+
+    installPhase = ''
+      mkdir -p $out/share/silero-vad
+      cp $src $out/share/silero-vad/silero_vad.onnx
+    '';
+
+    meta = {
+      description = "Silero VAD v5 ONNX model for voice activity detection";
+      homepage = "https://github.com/snakers4/silero-vad";
+      license = final.lib.licenses.mit;
+    };
+  };
+
   # Build individual packages using shared package definitions
   alicia-backend = final.callPackage ./nix/packages/backend.nix {
-    inherit src version;
+    inherit src version silero-vad-model;
     rev = "overlay";
   };
 
@@ -47,6 +72,9 @@ in
   # Export the packages
   alicia-backend = alicia-backend;
   alicia-frontend = alicia-frontend;
+
+  # Silero VAD model
+  inherit silero-vad-model;
 
   # Combined package
   alicia = final.callPackage ./nix/packages/alicia.nix {

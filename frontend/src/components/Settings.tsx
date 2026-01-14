@@ -1,7 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { MCPSettings } from './MCPSettings';
-import ServerInfoPanel from './organisms/ServerPanel/ServerInfoPanel';
-import { MemoryManager } from './organisms/MemoryManager';
 import UserNotesPanel from './organisms/NotesPanel/UserNotesPanel';
 import { PivotModeSelector } from './molecules/PivotModeSelector/PivotModeSelector';
 import { EliteSolutionSelector } from './molecules/EliteSolutionSelector/EliteSolutionSelector';
@@ -32,13 +30,11 @@ import {
 import Toast from './atoms/Toast';
 
 interface SettingsProps {
-  isOpen: boolean;
-  onClose: () => void;
   conversationId?: string | null;
   defaultTab?: SettingsTab;
 }
 
-export type SettingsTab = 'mcp' | 'server' | 'memories' | 'notes' | 'optimization' | 'preferences';
+export type SettingsTab = 'mcp' | 'notes' | 'optimization' | 'preferences';
 
 // Default preference values
 const DEFAULT_PREFERENCES = {
@@ -48,7 +44,7 @@ const DEFAULT_PREFERENCES = {
   responseLength: 'balanced' as const,
 };
 
-export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }: SettingsProps) {
+export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) {
   // Note: defaultTab is synchronized via useEffect, making it act as a controlled prop
   const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
   const [audioOutputEnabled, setAudioOutputEnabled] = useState(DEFAULT_PREFERENCES.audioOutputEnabled);
@@ -108,37 +104,30 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
     setShowToast(true);
   }, [setTheme]);
 
-  if (!isOpen) return null;
-
   return (
     <div className="layout-stack h-full bg-background">
       {/* Header */}
       <div className="flex justify-between items-center p-6 md:px-8 border-b border-border bg-card">
-        <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Settings & Info</h1>
-        <div className="layout-center-gap">
-          <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                Reset All
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset all preferences?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will reset all preferences in the Preferences tab to their default values. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleResetAll}>Reset All</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <button className="btn-ghost text-3xl w-10 h-10" onClick={onClose} title="Close settings">
-            ×
-          </button>
-        </div>
+        <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Settings</h1>
+        <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              Reset All
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset all preferences?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will reset all preferences in the Preferences tab to their default values. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleResetAll}>Reset All</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Tab navigation - vertical on mobile, horizontal on desktop */}
@@ -148,19 +137,7 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
             className={`tab whitespace-nowrap ${activeTab === 'mcp' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('mcp')}
           >
-            MCP Settings
-          </button>
-          <button
-            className={`tab whitespace-nowrap ${activeTab === 'server' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('server')}
-          >
-            Server Info
-          </button>
-          <button
-            className={`tab whitespace-nowrap ${activeTab === 'memories' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('memories')}
-          >
-            Memories
+            MCP
           </button>
           <button
             className={`tab whitespace-nowrap ${activeTab === 'notes' ? 'tab-active' : ''}`}
@@ -188,8 +165,6 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mb-8 last:mb-0">
           {activeTab === 'mcp' && <MCPSettings />}
-          {activeTab === 'server' && <ServerInfoPanel />}
-          {activeTab === 'memories' && <MemoryManager />}
           {activeTab === 'notes' && conversationId && (
             <UserNotesPanel
               targetType="message"

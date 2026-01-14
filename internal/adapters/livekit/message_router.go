@@ -44,6 +44,7 @@ func NewMessageRouter(
 	ttsService ports.TTSService,
 	idGenerator ports.IDGenerator,
 	agent *Agent,
+	asrMinConfidence float64,
 ) *MessageRouter {
 	// Create the generation manager
 	generationManager := NewDefaultResponseGenerationManager()
@@ -89,6 +90,7 @@ func NewMessageRouter(
 			asrService,
 			ttsService,
 			agent,
+			asrMinConfidence,
 		)
 		if err != nil {
 			log.Printf("Failed to create voice pipeline: %v", err)
@@ -129,8 +131,6 @@ func (r *MessageRouter) OnDataReceived(ctx context.Context, msg *ports.DataChann
 
 // OnAudioReceived implements ports.LiveKitAgentCallbacks
 func (r *MessageRouter) OnAudioReceived(ctx context.Context, frame *ports.AudioFrame) error {
-	log.Printf("Received audio frame: %d bytes, track %s", len(frame.Data), frame.TrackSID)
-
 	// Use voice pipeline if available (preferred method with buffering and silence detection)
 	if r.voicePipeline != nil {
 		if err := r.voicePipeline.ProcessAudioFrame(ctx, frame); err != nil {
@@ -191,6 +191,33 @@ func (r *MessageRouter) OnParticipantConnected(ctx context.Context, participant 
 // OnParticipantDisconnected implements ports.LiveKitAgentCallbacks
 func (r *MessageRouter) OnParticipantDisconnected(ctx context.Context, participant *ports.LiveKitParticipant) error {
 	log.Printf("Participant disconnected: %s (%s)", participant.Name, participant.Identity)
+	return nil
+}
+
+// OnTurnStart implements ports.LiveKitAgentCallbacks
+// Called when VAD detects the user has started speaking
+func (r *MessageRouter) OnTurnStart(ctx context.Context) error {
+	log.Printf("VAD: Turn started for conversation: %s", r.conversationID)
+
+	// Cancel any ongoing response generation when user starts speaking
+	if r.generationManager != nil {
+		r.generationManager.CancelAll()
+		log.Printf("Cancelled ongoing response generation due to user speech")
+	}
+
+	return nil
+}
+
+// OnTurnEnd implements ports.LiveKitAgentCallbacks
+// Called when VAD detects the user has finished speaking (after silence threshold)
+func (r *MessageRouter) OnTurnEnd(ctx context.Context, durationMs int64) error {
+	log.Printf("VAD: Turn ended for conversation: %s (duration: %dms)", r.conversationID, durationMs)
+
+	// The actual response generation will be triggered by the transcription
+	// callback when the voice pipeline finalizes the transcript.
+	// This callback can be used for logging/metrics or to trigger
+	// any turn-based processing that should happen after user finishes speaking.
+
 	return nil
 }
 

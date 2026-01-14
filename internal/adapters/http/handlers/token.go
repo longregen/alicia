@@ -78,8 +78,8 @@ func (h *TokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 				// Try to get it one more time before failing
 				existingRoom, getErr := h.liveKitService.GetRoom(r.Context(), roomName)
 				if getErr != nil {
-					// Both create and get failed - return error
-					respondError(w, "livekit_error", "Failed to create or get LiveKit room", http.StatusInternalServerError)
+					// Both create and get failed - return error with details
+					respondError(w, "livekit_error", fmt.Sprintf("Failed to create or get LiveKit room: create=%v, get=%v", createErr, getErr), http.StatusInternalServerError)
 					return
 				}
 				// Successfully retrieved room that was created by another request

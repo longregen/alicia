@@ -242,6 +242,7 @@ func runAgentWorker(ctx context.Context) error {
 	processUserMessageUseCase := usecases.NewProcessUserMessage(
 		messageRepo,
 		audioRepo,
+		conversationRepo,
 		asrService,
 		memoryService,
 		idGen,
@@ -268,6 +269,7 @@ func runAgentWorker(ctx context.Context) error {
 		asrService,
 		ttsService,
 		idGen,
+		cfg.ASR.MinConfidence,
 	)
 	log.Println("Agent factory initialized")
 
@@ -281,6 +283,8 @@ func runAgentWorker(ctx context.Context) error {
 		RoomPrefix:            "conv_",
 		WorkerCount:           cfg.LiveKit.WorkerCount,
 		WorkQueueSize:         cfg.LiveKit.WorkQueueSize,
+		TTSSampleRate:         cfg.TTS.SampleRate,
+		TTSChannels:           cfg.TTS.Channels,
 	}
 
 	// Create and start worker

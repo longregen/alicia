@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/longregen/alicia/internal/domain"
 	"github.com/longregen/alicia/internal/domain/models"
@@ -293,7 +294,9 @@ func (s *ToolService) ExecuteToolUse(ctx context.Context, toolUseID string) (*mo
 	executor, exists := s.executors[toolUse.ToolName]
 	if !exists {
 		toolUse.Fail("no executor registered for tool")
-		_ = s.toolUseRepo.Update(ctx, toolUse)
+		if err := s.toolUseRepo.Update(ctx, toolUse); err != nil {
+			log.Printf("ERROR: failed to update tool use %s after executor not found: %v", toolUseID, err)
+		}
 		return nil, domain.NewDomainError(domain.ErrToolExecutionFailed, "no executor registered for tool")
 	}
 
@@ -307,7 +310,9 @@ func (s *ToolService) ExecuteToolUse(ctx context.Context, toolUseID string) (*mo
 	result, err := executor(ctx, toolUse.Arguments)
 	if err != nil {
 		toolUse.Fail(err.Error())
-		_ = s.toolUseRepo.Update(ctx, toolUse)
+		if updateErr := s.toolUseRepo.Update(ctx, toolUse); updateErr != nil {
+			log.Printf("ERROR: failed to update tool use %s after execution error: %v", toolUseID, updateErr)
+		}
 		return nil, domain.NewDomainError(domain.ErrToolExecutionFailed, err.Error())
 	}
 

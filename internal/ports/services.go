@@ -153,6 +153,9 @@ type LiveKitAgentCallbacks interface {
 	OnAudioReceived(ctx context.Context, frame *AudioFrame) error
 	OnParticipantConnected(ctx context.Context, participant *LiveKitParticipant) error
 	OnParticipantDisconnected(ctx context.Context, participant *LiveKitParticipant) error
+	// Turn detection callbacks (VAD-based)
+	OnTurnStart(ctx context.Context) error
+	OnTurnEnd(ctx context.Context, durationMs int64) error
 }
 
 // LiveKitAgent defines the interface for a LiveKit agent

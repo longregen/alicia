@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import MessageBubble from '../atoms/MessageBubble';
 import ComplexAddons, { type ToolDetail } from '../atoms/ComplexAddons';
 import FeedbackControls from '../atoms/FeedbackControls';
-import BranchNavigator from '../atoms/BranchNavigator';
 import { Textarea } from '../atoms/Textarea';
 import Button from '../atoms/Button';
 import Badge from '../atoms/Badge';
@@ -136,6 +135,8 @@ export interface ChatBubbleProps extends BaseComponentProps {
   tools?: ToolData[];
   /** Message ID for branch tracking */
   messageId?: MessageId;
+  /** Callback when user edits a message - triggers new agent response */
+  onEditMessage?: (messageId: MessageId, newContent: string) => void;
   /** Callback when user clicks "Continue from here" on an assistant message */
   onContinueFromHere?: (messageId: MessageId) => void;
   /** Sync status for offline sync support */
@@ -156,6 +157,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   addons = [],
   tools = [],
   messageId,
+  onEditMessage,
   onContinueFromHere,
   syncStatus,
   serverContent,
@@ -178,12 +180,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     getCurrentIndex,
   } = useBranchStore();
 
-  // Initialize branch for user messages on mount
+  // Initialize branch for all messages on mount (enables branching for user and assistant)
   useEffect(() => {
-    if (messageId && type === MESSAGE_TYPES.USER && content) {
+    if (messageId && content) {
       initializeBranch(messageId, content);
     }
-  }, [messageId, type, content, initializeBranch]);
+  }, [messageId, content, initializeBranch]);
 
   // Get current branch content if available
   const currentBranch = messageId ? getCurrentBranch(messageId) : null;
@@ -304,14 +306,14 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   };
 
   const handleSaveEdit = () => {
-    if (type === MESSAGE_TYPES.USER && messageId) {
-      // For user messages: create new branch (UI-only)
+    if (messageId && editedContent !== effectiveContent) {
+      // Create local branch for UI navigation
       createBranch(messageId, editedContent);
-    } else if (type === MESSAGE_TYPES.ASSISTANT) {
-      // For assistant messages: submit as correction feedback
-      console.log('Assistant message edited - would submit feedback:', editedContent);
-      // Note: Correction/conflict resolution requires backend API implementation
-      // For now, these are UI-only operations
+
+      // Notify parent to trigger new agent response
+      if (onEditMessage) {
+        onEditMessage(messageId, editedContent);
+      }
     }
     setIsEditing(false);
   };
@@ -461,22 +463,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         </div>
       )}
 
-      {/* Footer: timestamp, tools, branch navigator */}
-      <div className="flex items-center gap-2 px-1">
+      {/* Footer: addons, branch navigation, timestamp */}
+      <div className="px-1">
         <ComplexAddons
           addons={inlineAddons}
           toolDetails={toolDetails}
           timestamp={timestamp}
           showFeedback={false}
+          branchData={messageId && branchCount > 1 ? {
+            currentIndex,
+            totalBranches: branchCount,
+            onNavigate: handleNavigateBranch,
+          } : undefined}
         />
-        {isUser && messageId && branchCount > 0 && (
-          <BranchNavigator
-            messageId={messageId}
-            currentIndex={currentIndex}
-            totalBranches={branchCount}
-            onNavigate={handleNavigateBranch}
-          />
-        )}
       </div>
 
       {/* Below addons (audio, etc.) */}

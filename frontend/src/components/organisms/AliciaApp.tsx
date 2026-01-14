@@ -9,11 +9,13 @@ import { useConversationStore } from '../../stores/conversationStore';
 import { createConversationId } from '../../types/streaming';
 import type { VoiceState } from '../atoms/VoiceVisualizer';
 import { sendControlStop, sendControlVariation } from '../../adapters/protocolAdapter';
+import type { AppView } from '../../App';
 
 /**
  * Panel types for the main navigation
+ * @deprecated Use AppView from App.tsx instead
  */
-export type Panel = 'chat' | 'memory' | 'server' | 'settings';
+export type Panel = AppView;
 
 /**
  * AliciaApp - Main application layout component
@@ -157,6 +159,7 @@ export function AliciaApp() {
       <Sidebar
         conversations={conversations}
         selectedId={activeConversationId}
+        activeView={activePanel}
         onSelect={handleSelectConversation}
         onNew={handleNewConversation}
         onDelete={handleDeleteConversation}
@@ -177,7 +180,6 @@ export function AliciaApp() {
             onSendMessage={handleSendMessage}
             onStopStreaming={handleStopStreaming}
             onRegenerateResponse={handleRegenerateResponse}
-            useSileroVAD={false}
             showControls={true}
           />
         )}
@@ -199,8 +201,6 @@ export function AliciaApp() {
 
         {activePanel === 'settings' && (
           <Settings
-            isOpen={true}
-            onClose={() => setActivePanel('chat')}
             conversationId={activeConversationId}
           />
         )}

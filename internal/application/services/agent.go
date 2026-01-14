@@ -428,7 +428,9 @@ func (s *AgentService) executeWithToolLoop(
 
 	// Max iterations reached
 	message.Contents = "Max tool execution iterations reached."
-	_ = s.messageRepo.Update(ctx, message)
+	if err := s.messageRepo.Update(ctx, message); err != nil {
+		log.Printf("ERROR: failed to update message %s after max iterations: %v", message.ID, err)
+	}
 
 	return output, nil
 }
@@ -533,7 +535,9 @@ func (s *AgentService) processStream(
 		if chunk.Done {
 			message.Contents = fullContent.String()
 			message.MarkAsCompleted()
-			_ = s.messageRepo.Update(ctx, message)
+			if err := s.messageRepo.Update(ctx, message); err != nil {
+				log.Printf("ERROR: failed to update message %s after stream completion: %v", message.ID, err)
+			}
 
 			outputChan <- &ports.ResponseStreamChunk{
 				IsFinal: true,
@@ -591,7 +595,9 @@ Output each piece as "MEMORY: <content>" on a separate line. Output "NONE" if no
 		if len(content) > 100 {
 			importance = 0.7
 		}
-		_, _ = s.memoryService.SetImportance(memCtx, memory.ID, importance)
+		if _, err := s.memoryService.SetImportance(memCtx, memory.ID, importance); err != nil {
+			log.Printf("warning: failed to set memory importance for %s: %v", memory.ID, err)
+		}
 	}
 }
 

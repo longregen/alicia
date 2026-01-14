@@ -27,6 +27,9 @@ type ResponseGenerationManager interface {
 	RegisterTTS(targetID string, cancelFunc context.CancelFunc)
 	UnregisterTTS(targetID string)
 	CancelTTS(targetID string) error
+
+	// Cancel all active operations (generations and TTS)
+	CancelAll()
 }
 
 // DefaultResponseGenerationManager implements ResponseGenerationManager
@@ -190,6 +193,15 @@ func (m *DefaultResponseGenerationManager) CancelTTS(targetID string) error {
 	delete(m.activeTTS, targetID)
 
 	return nil
+}
+
+// CancelAll cancels all active generations and TTS operations
+// This is used for interruption when the user starts speaking
+func (m *DefaultResponseGenerationManager) CancelAll() {
+	// Cancel all generations (passing empty string cancels all)
+	_ = m.CancelGeneration("")
+	// Cancel all TTS operations (passing empty string cancels all)
+	_ = m.CancelTTS("")
 }
 
 // StartPeriodicCleanup starts a background goroutine that periodically cleans up stale generations

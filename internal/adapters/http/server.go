@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -311,8 +312,17 @@ func (s *Server) setupRouter() {
 	// Serve frontend static files if configured (no auth required)
 	if s.config.Server.StaticDir != "" {
 		fileServer := http.FileServer(http.Dir(s.config.Server.StaticDir))
-		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			fileServer.ServeHTTP(w, r)
+		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+			path := req.URL.Path
+
+			// Add long-term caching for immutable VAD/ONNX assets
+			if strings.HasPrefix(path, "/js/lib/") ||
+				strings.HasPrefix(path, "/onnx/") ||
+				strings.HasPrefix(path, "/models/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+
+			fileServer.ServeHTTP(w, req)
 		})
 	}
 

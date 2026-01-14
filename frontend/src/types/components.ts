@@ -38,16 +38,34 @@ export type AudioLevels = number[];
 export type InputMethod = 'text' | 'voice';
 
 // Addon type for message bubbles
-export type AddonType = 'icon' | 'tool' | 'audio';
+export type AddonType = 'icon' | 'tool' | 'audio' | 'feedback' | 'memory';
+
+// Feedback addon data
+export interface FeedbackAddonData {
+  currentVote: 'up' | 'down' | null;
+  onVote: (vote: 'up' | 'down' | 'critical') => void;
+  upvotes: number;
+  downvotes: number;
+  isLoading: boolean;
+}
+
+// Memory addon data (single trace)
+export interface MemoryAddonData {
+  id: string;
+  content: string;
+  relevance: number;
+}
 
 // Message addon interface
 export interface MessageAddon {
   id: string;
   type: AddonType;
   position?: 'inline' | 'below';
-  emoji: string; // Required emoji representation for inline display
-  tooltip: string; // Required tooltip text
+  emoji?: string; // Emoji for inline display (not required for feedback/memory)
+  tooltip?: string; // Tooltip text (not required for feedback/memory)
   content?: React.ReactNode; // Optional content for below addons or expanded state
+  feedbackData?: FeedbackAddonData; // Data for feedback addon type
+  memoryData?: MemoryAddonData[]; // Data for memory addon type
 }
 
 // Tool data interface (updated from ToolUseData)

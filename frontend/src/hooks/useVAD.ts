@@ -1,7 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { SileroVADManager, SileroVADCallbacks } from '../utils/sileroVAD';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { MicrophoneStatus } from '../types/streaming';
-import { VADLiveKitBridge } from '../adapters/vadLiveKitBridge';
+import { getMicrophoneManager, MicrophoneManagerCallbacks } from '../utils/microphoneManager';
 
 export interface UseVADOptions {
   /** Callback when speech starts */
@@ -23,8 +22,6 @@ export interface UseVADReturn {
   startVAD: () => Promise<void>;
   /** Stop VAD processing */
   stopVAD: () => void;
-  /** Destroy VAD instance and cleanup resources */
-  destroyVAD: () => void;
   /** Current microphone status */
   status: MicrophoneStatus;
   /** Whether VAD is currently recording */
@@ -35,19 +32,15 @@ export interface UseVADReturn {
   isSpeaking: boolean;
   /** MediaStreamTrack for LiveKit publishing (null until started) */
   audioTrack: MediaStreamTrack | null;
-  /** VAD manager instance (for advanced usage) */
-  vadManager: SileroVADManager | null;
 }
 
 /**
  * Hook for managing Silero VAD integration with LiveKit audio streaming.
  *
- * This hook:
- * - Initializes and manages SileroVADManager
- * - Creates MediaStreamTrack from microphone input
- * - Provides start/stop controls for voice activity detection
- * - Exposes speech detection events and probability
- * - Returns audio track for publishing to LiveKit
+ * This hook uses a singleton MicrophoneManager that:
+ * - Initializes microphone and VAD once
+ * - Reuses the same audio track across all LiveKit rooms
+ * - Provides consistent speech detection events
  *
  * @example
  * ```tsx
@@ -66,8 +59,6 @@ export function useVAD(options: UseVADOptions = {}): UseVADReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [audioTrack, setAudioTrack] = useState<MediaStreamTrack | null>(null);
 
-  const vadManagerRef = useRef<SileroVADManager | null>(null);
-  const bridgeRef = useRef<VADLiveKitBridge | null>(null);
   const optionsRef = useRef<UseVADOptions>(options);
 
   // Keep options ref updated
@@ -75,9 +66,17 @@ export function useVAD(options: UseVADOptions = {}): UseVADReturn {
     optionsRef.current = options;
   }, [options]);
 
-  // Initialize VAD manager on mount
+  // Subscribe to MicrophoneManager on mount
   useEffect(() => {
-    const callbacks: SileroVADCallbacks = {
+    const manager = getMicrophoneManager();
+
+    // Initialize state from manager's current state
+    setStatus(manager.getStatus());
+    setSpeechProbability(manager.getSpeechProbability());
+    setIsSpeaking(manager.getIsSpeaking());
+    setAudioTrack(manager.getAudioTrack());
+
+    const callbacks: MicrophoneManagerCallbacks = {
       onStatusChange: (newStatus) => {
         setStatus(newStatus);
         optionsRef.current.onStatusChange?.(newStatus);
@@ -87,126 +86,53 @@ export function useVAD(options: UseVADOptions = {}): UseVADReturn {
         setIsSpeaking(speaking);
         optionsRef.current.onSpeechProbability?.(probability, speaking);
       },
-      onFrameProcessed: (audioFrame) => {
-        bridgeRef.current?.pushAudioFrame(audioFrame);
-      },
       onSpeechStart: () => {
         optionsRef.current.onSpeechStart?.();
       },
       onSpeechEnd: (audioData) => {
-        bridgeRef.current?.pushSpeechSegment(audioData);
         optionsRef.current.onSpeechEnd?.(audioData);
+      },
+      onTrackReady: (track) => {
+        setAudioTrack(track);
+        optionsRef.current.onTrackReady?.(track);
       },
       onError: (error) => {
         optionsRef.current.onError?.(error);
       },
     };
 
-    vadManagerRef.current = new SileroVADManager(callbacks);
+    const unsubscribe = manager.subscribe(callbacks);
 
     return () => {
-      // Cleanup on unmount
-      if (vadManagerRef.current) {
-        vadManagerRef.current.destroy();
-        vadManagerRef.current = null;
-      }
-      if (bridgeRef.current) {
-        bridgeRef.current.cleanup();
-        bridgeRef.current = null;
-      }
+      unsubscribe();
     };
   }, []);
 
   /**
    * Start VAD processing and create MediaStreamTrack for LiveKit.
-   *
-   * This will:
-   * 1. Initialize VADLiveKitBridge (creates AudioContext and worklet)
-   * 2. Get MediaStreamTrack from bridge for LiveKit publishing
-   * 3. Initialize Silero VAD (connects to microphone)
-   * 4. Start VAD processing (routes audio frames through bridge)
-   * 5. Return bridge's MediaStreamTrack to LiveKit
    */
   const startVAD = useCallback(async () => {
-    if (!vadManagerRef.current) {
-      throw new Error('VAD manager not initialized');
-    }
-
-    try {
-      // Initialize VADLiveKitBridge
-      bridgeRef.current = new VADLiveKitBridge();
-      const bridgeTrack = await bridgeRef.current.initialize();
-
-      setAudioTrack(bridgeTrack);
-
-      // Initialize and start VAD (this will start calling onFrameProcessed/onSpeechEnd)
-      await vadManagerRef.current.initialize();
-      await vadManagerRef.current.start();
-
-      // Notify that bridge track is ready for LiveKit publishing
-      try {
-        optionsRef.current.onTrackReady?.(bridgeTrack);
-      } catch (callbackError) {
-        // Cleanup on callback error
-        if (bridgeRef.current) {
-          bridgeRef.current.cleanup();
-          bridgeRef.current = null;
-        }
-        optionsRef.current.onError?.(callbackError as Error);
-        throw callbackError;
-      }
-    } catch (error) {
-      // Cleanup bridge on any error
-      if (bridgeRef.current) {
-        bridgeRef.current.cleanup();
-        bridgeRef.current = null;
-      }
-      setAudioTrack(null);
-      console.error('Failed to start VAD:', error);
-      optionsRef.current.onError?.(error as Error);
-      throw error;
-    }
+    const manager = getMicrophoneManager();
+    await manager.start();
   }, []);
 
   /**
-   * Stop VAD processing but keep bridge and VAD resources allocated for quick restart.
+   * Stop VAD processing but keep resources allocated for quick restart.
    */
   const stopVAD = useCallback(() => {
-    if (vadManagerRef.current) {
-      vadManagerRef.current.stop();
-    }
+    const manager = getMicrophoneManager();
+    manager.stop();
   }, []);
 
-  /**
-   * Destroy VAD instance and cleanup all resources including bridge.
-   * Use this when done with VAD completely (e.g., component unmounting).
-   */
-  const destroyVAD = useCallback(() => {
-    if (vadManagerRef.current) {
-      vadManagerRef.current.destroy();
-      vadManagerRef.current = null;
-    }
-    if (bridgeRef.current) {
-      bridgeRef.current.cleanup();
-      bridgeRef.current = null;
-    }
-    setAudioTrack(null);
-    setStatus(MicrophoneStatus.Inactive);
-    setSpeechProbability(0);
-    setIsSpeaking(false);
-  }, []);
-
-  const isRecording = status === MicrophoneStatus.Recording;
+  const isRecording = status === MicrophoneStatus.Recording || status === MicrophoneStatus.Sending;
 
   return {
     startVAD,
     stopVAD,
-    destroyVAD,
     status,
     isRecording,
     speechProbability,
     isSpeaking,
     audioTrack,
-    vadManager: vadManagerRef.current,
   };
 }

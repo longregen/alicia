@@ -194,7 +194,6 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
     <ChatWindow
       onSendMessage={handleSendMessage}
       conversationId={conversationId}
-      useSileroVAD={false}
       showControls={false} // Disable controls in bridge mode since stop/regenerate not supported
     />
   );

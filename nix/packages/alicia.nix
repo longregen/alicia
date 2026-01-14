@@ -14,6 +14,7 @@ pkgs.stdenv.mkDerivation {
     mkdir -p $out/bin
     mkdir -p $out/share/alicia/frontend
     mkdir -p $out/share/alicia/migrations
+    mkdir -p $out/share/alicia/models
 
     # Copy backend binary
     cp ${alicia-backend}/bin/alicia $out/bin/
@@ -35,6 +36,14 @@ pkgs.stdenv.mkDerivation {
       echo "ERROR: Migrations directory not found in backend package" >&2
       echo "Expected: ${alicia-backend}/share/alicia/migrations" >&2
       exit 1
+    fi
+
+    # Copy Silero VAD model for voice activity detection
+    if [ -d "${alicia-backend}/share/alicia/models" ]; then
+      if [ -n "$(ls -A ${alicia-backend}/share/alicia/models 2>/dev/null)" ]; then
+        cp -r ${alicia-backend}/share/alicia/models/* $out/share/alicia/models/
+        echo "Copied VAD model files"
+      fi
     fi
   '';
 

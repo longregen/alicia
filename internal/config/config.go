@@ -43,17 +43,20 @@ type LiveKitConfig struct {
 
 // ASRConfig holds Automatic Speech Recognition configuration (Whisper via speaches)
 type ASRConfig struct {
-	URL    string `json:"url"`
-	APIKey string `json:"api_key"`
-	Model  string `json:"model"` // e.g., "whisper-large-v3"
+	URL           string  `json:"url"`
+	APIKey        string  `json:"api_key"`
+	Model         string  `json:"model"`          // e.g., "whisper-large-v3"
+	MinConfidence float64 `json:"min_confidence"` // Minimum confidence threshold (0.0-1.0), default 0.5
 }
 
 // TTSConfig holds Text-to-Speech configuration (Kokoro via speaches)
 type TTSConfig struct {
-	URL    string `json:"url"`
-	APIKey string `json:"api_key"`
-	Model  string `json:"model"` // e.g., "kokoro"
-	Voice  string `json:"voice"` // e.g., "af_sarah"
+	URL        string `json:"url"`
+	APIKey     string `json:"api_key"`
+	Model      string `json:"model"`       // e.g., "kokoro"
+	Voice      string `json:"voice"`       // e.g., "af_sarah"
+	SampleRate int    `json:"sample_rate"` // Output sample rate in Hz (default: 24000)
+	Channels   int    `json:"channels"`    // Output channels: 1=mono, 2=stereo (default: 1)
 }
 
 // EmbeddingConfig holds embedding API configuration
@@ -119,15 +122,18 @@ func DefaultConfig() *Config {
 			WorkQueueSize: 100,
 		},
 		ASR: ASRConfig{
-			URL:    "http://localhost:8001/v1",
-			APIKey: "",
-			Model:  "whisper-large-v3",
+			URL:           "http://localhost:8001/v1",
+			APIKey:        "",
+			Model:         "whisper-large-v3",
+			MinConfidence: 0.5,
 		},
 		TTS: TTSConfig{
-			URL:    "http://localhost:8001/v1",
-			APIKey: "",
-			Model:  "kokoro",
-			Voice:  "af_sarah",
+			URL:        "http://localhost:8001/v1",
+			APIKey:     "",
+			Model:      "kokoro",
+			Voice:      "af_sarah",
+			SampleRate: 24000, // Kokoro outputs 24kHz
+			Channels:   1,     // Kokoro outputs mono
 		},
 		Embedding: EmbeddingConfig{
 			URL:        "http://localhost:11434/v1",
@@ -242,12 +248,15 @@ func Load() (*Config, error) {
 	envString("ALICIA_ASR_URL", &cfg.ASR.URL)
 	envStringFromFile("ALICIA_ASR_API_KEY", &cfg.ASR.APIKey)
 	envString("ALICIA_ASR_MODEL", &cfg.ASR.Model)
+	envFloat("ALICIA_ASR_MIN_CONFIDENCE", &cfg.ASR.MinConfidence)
 
 	// Load TTS configuration from environment
 	envString("ALICIA_TTS_URL", &cfg.TTS.URL)
 	envStringFromFile("ALICIA_TTS_API_KEY", &cfg.TTS.APIKey)
 	envString("ALICIA_TTS_MODEL", &cfg.TTS.Model)
 	envString("ALICIA_TTS_VOICE", &cfg.TTS.Voice)
+	envInt("ALICIA_TTS_SAMPLE_RATE", &cfg.TTS.SampleRate)
+	envInt("ALICIA_TTS_CHANNELS", &cfg.TTS.Channels)
 
 	// Load Embedding configuration from environment
 	envString("ALICIA_EMBEDDING_URL", &cfg.Embedding.URL)

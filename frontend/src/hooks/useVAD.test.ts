@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useVAD } from './useVAD';
 import { MicrophoneStatus } from '../types/streaming';
-import type { SileroVADCallbacks } from '../utils/sileroVAD';
+import type { MicrophoneManagerCallbacks } from '../utils/microphoneManager';
 
 // Mock MediaStreamTrack
 const mockMediaStreamTrack = {
@@ -26,60 +26,69 @@ const mockMediaStreamTrack = {
   onunmute: null,
 } as unknown as MediaStreamTrack;
 
-// Store captured callbacks for tests - accessed via getter to handle hoisting
+// Store captured callbacks for tests
 const testState = {
-  capturedCallbacks: null as SileroVADCallbacks | null,
-  mockVADManager: {
-    initialize: vi.fn(),
+  subscribers: new Set<MicrophoneManagerCallbacks>(),
+  status: MicrophoneStatus.Inactive,
+  audioTrack: null as MediaStreamTrack | null,
+  speechProbability: 0,
+  isSpeaking: false,
+  mockManager: {
     start: vi.fn(),
     stop: vi.fn(),
     destroy: vi.fn(),
-  },
-  mockBridge: {
-    initialize: vi.fn(),
-    pushAudioFrame: vi.fn(),
-    pushSpeechSegment: vi.fn(),
-    cleanup: vi.fn(),
+    getStatus: vi.fn(() => testState.status),
+    getAudioTrack: vi.fn(() => testState.audioTrack),
+    getSpeechProbability: vi.fn(() => testState.speechProbability),
+    getIsSpeaking: vi.fn(() => testState.isSpeaking),
+    isRecording: vi.fn(() => false),
+    subscribe: vi.fn((callbacks: MicrophoneManagerCallbacks) => {
+      testState.subscribers.add(callbacks);
+      // Immediately notify of current state
+      if (testState.status !== MicrophoneStatus.Inactive) {
+        callbacks.onStatusChange?.(testState.status);
+      }
+      if (testState.audioTrack) {
+        callbacks.onTrackReady?.(testState.audioTrack);
+      }
+      return () => {
+        testState.subscribers.delete(callbacks);
+      };
+    }),
   },
 };
 
-// Mock dependencies
-vi.mock('../utils/sileroVAD', () => {
-  return {
-    SileroVADManager: class MockSileroVADManager {
-      constructor(callbacks: SileroVADCallbacks) {
-        testState.capturedCallbacks = callbacks;
-      }
-      initialize = testState.mockVADManager.initialize;
-      start = testState.mockVADManager.start;
-      stop = testState.mockVADManager.stop;
-      destroy = testState.mockVADManager.destroy;
-    },
-  };
-});
+// Helper to notify all subscribers
+const notifySubscribers = <K extends keyof MicrophoneManagerCallbacks>(
+  event: K,
+  ...args: Parameters<NonNullable<MicrophoneManagerCallbacks[K]>>
+): void => {
+  testState.subscribers.forEach((callbacks) => {
+    const callback = callbacks[event];
+    if (callback) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (callback as (...args: any[]) => void)(...args);
+    }
+  });
+};
 
-vi.mock('../adapters/vadLiveKitBridge', () => {
+// Mock the MicrophoneManager
+vi.mock('../utils/microphoneManager', () => {
   return {
-    VADLiveKitBridge: class MockVADLiveKitBridge {
-      initialize = testState.mockBridge.initialize;
-      pushAudioFrame = testState.mockBridge.pushAudioFrame;
-      pushSpeechSegment = testState.mockBridge.pushSpeechSegment;
-      cleanup = testState.mockBridge.cleanup;
-    },
+    getMicrophoneManager: () => testState.mockManager,
   };
 });
 
 describe('useVAD', () => {
-  // Convenient aliases to testState
-  const mockVADManager = testState.mockVADManager;
-  const mockBridge = testState.mockBridge;
-
-  // Getter for captured callbacks
-  const getCapturedCallbacks = () => testState.capturedCallbacks;
+  const mockManager = testState.mockManager;
 
   beforeEach(() => {
-    // Reset captured callbacks
-    testState.capturedCallbacks = null;
+    // Reset test state
+    testState.subscribers.clear();
+    testState.status = MicrophoneStatus.Inactive;
+    testState.audioTrack = null;
+    testState.speechProbability = 0;
+    testState.isSpeaking = false;
 
     // Reset all mock implementations
     vi.clearAllMocks();
@@ -90,9 +99,7 @@ describe('useVAD', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Reset mock implementations to default behavior
-    mockVADManager.initialize.mockResolvedValue(undefined);
-    mockVADManager.start.mockResolvedValue(undefined);
-    mockBridge.initialize.mockResolvedValue(mockMediaStreamTrack);
+    mockManager.start.mockResolvedValue(mockMediaStreamTrack);
   });
 
   afterEach(() => {
@@ -110,432 +117,246 @@ describe('useVAD', () => {
       expect(result.current.audioTrack).toBeNull();
     });
 
-    it('should create SileroVADManager on mount', () => {
+    it('should subscribe to MicrophoneManager on mount', () => {
       renderHook(() => useVAD());
 
-      // VAD manager is created with callbacks - verify via captured callbacks
-      expect(getCapturedCallbacks()).not.toBeNull();
-      expect(getCapturedCallbacks()).toHaveProperty('onStatusChange');
-      expect(getCapturedCallbacks()).toHaveProperty('onSpeechProbability');
+      expect(mockManager.subscribe).toHaveBeenCalled();
+      expect(testState.subscribers.size).toBe(1);
     });
 
-    it('should expose vadManager reference', () => {
+    it('should unsubscribe from MicrophoneManager on unmount', () => {
+      const { unmount } = renderHook(() => useVAD());
+
+      expect(testState.subscribers.size).toBe(1);
+
+      unmount();
+
+      expect(testState.subscribers.size).toBe(0);
+    });
+
+    it('should initialize state from manager current state', () => {
+      // Set up manager state before mounting
+      testState.status = MicrophoneStatus.Recording;
+      testState.audioTrack = mockMediaStreamTrack;
+      testState.speechProbability = 0.75;
+      testState.isSpeaking = true;
+
       const { result } = renderHook(() => useVAD());
 
-      // vadManager is set after useEffect runs, so it should be the mock
-      expect(result.current.vadManager).toBeDefined();
+      expect(result.current.status).toBe(MicrophoneStatus.Recording);
+      expect(result.current.audioTrack).toBe(mockMediaStreamTrack);
+      expect(result.current.speechProbability).toBe(0.75);
+      expect(result.current.isSpeaking).toBe(true);
     });
   });
 
   describe('startVAD', () => {
-    it('should initialize bridge before VAD on startVAD', async () => {
+    it('should call manager.start()', async () => {
       const { result } = renderHook(() => useVAD());
 
       await act(async () => {
         await result.current.startVAD();
       });
 
-      // Bridge is initialized during startVAD
-      expect(mockBridge.initialize).toHaveBeenCalled();
+      expect(mockManager.start).toHaveBeenCalled();
     });
 
-    it('should initialize VAD manager after bridge', async () => {
+    it('should handle start errors gracefully', async () => {
+      mockManager.start.mockRejectedValueOnce(new Error('Start failed'));
+
       const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      expect(mockVADManager.initialize).toHaveBeenCalled();
-    });
-
-    it('should start VAD after initialization', async () => {
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      expect(mockVADManager.start).toHaveBeenCalled();
-    });
-
-    it('should set audioTrack state from bridge', async () => {
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      expect(result.current.audioTrack).toBe(mockMediaStreamTrack);
-    });
-
-    it('should call onTrackReady with bridge track', async () => {
-      const onTrackReady = vi.fn();
-      const { result } = renderHook(() => useVAD({ onTrackReady }));
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      expect(onTrackReady).toHaveBeenCalledWith(mockMediaStreamTrack);
-    });
-
-    it('should call onError when VAD initialization fails', async () => {
-      mockVADManager.initialize.mockRejectedValueOnce(new Error('Init failed'));
-
-      const onError = vi.fn();
-      const { result } = renderHook(() => useVAD({ onError }));
-
-      await act(async () => {
-        try {
-          await result.current.startVAD();
-        } catch {
-          // Expected to throw
-        }
-      });
-
-      expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    });
-
-    it('should call onError when VAD start fails', async () => {
-      mockVADManager.start.mockRejectedValueOnce(new Error('Start failed'));
-
-      const onError = vi.fn();
-      const { result } = renderHook(() => useVAD({ onError }));
-
-      await act(async () => {
-        try {
-          await result.current.startVAD();
-        } catch {
-          // Expected to throw
-        }
-      });
-
-      expect(onError).toHaveBeenCalled();
-    });
-
-    it('should throw when onTrackReady callback errors', async () => {
-      const onTrackReady = vi.fn().mockImplementation(() => {
-        throw new Error('Callback error');
-      });
-
-      const { result } = renderHook(() => useVAD({ onTrackReady }));
 
       await expect(
         act(async () => {
           await result.current.startVAD();
         })
-      ).rejects.toThrow('Callback error');
-    });
-
-    it('should reset audioTrack to null on error', async () => {
-      mockVADManager.initialize.mockRejectedValueOnce(new Error('Error'));
-
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        try {
-          await result.current.startVAD();
-        } catch {
-          // Expected
-        }
-      });
-
-      expect(result.current.audioTrack).toBeNull();
+      ).rejects.toThrow('Start failed');
     });
   });
 
   describe('stopVAD', () => {
-    it('should call vadManager.stop()', async () => {
+    it('should call manager.stop()', () => {
       const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
 
       act(() => {
         result.current.stopVAD();
       });
 
-      expect(mockVADManager.stop).toHaveBeenCalled();
+      expect(mockManager.stop).toHaveBeenCalled();
     });
 
-    it('should handle stop when called before startVAD', () => {
-      // The vadManager exists but VAD hasn't been started
+    it('should be safe to call when not recording', () => {
       const { result } = renderHook(() => useVAD());
 
-      // Should not throw - stopVAD is safe to call even when not recording
+      // Should not throw
       expect(() => result.current.stopVAD()).not.toThrow();
-      expect(mockVADManager.stop).toHaveBeenCalled();
-    });
-  });
-
-  describe('destroyVAD', () => {
-    it('should destroy VAD manager', async () => {
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      act(() => {
-        result.current.destroyVAD();
-      });
-
-      expect(mockVADManager.destroy).toHaveBeenCalled();
-    });
-
-    it('should cleanup bridge', async () => {
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      act(() => {
-        result.current.destroyVAD();
-      });
-
-      expect(mockBridge.cleanup).toHaveBeenCalled();
-    });
-
-    it('should reset all state', async () => {
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      // Simulate some state changes
-      act(() => {
-        getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
-        getCapturedCallbacks()?.onSpeechProbability?.(0.8, true);
-      });
-
-      act(() => {
-        result.current.destroyVAD();
-      });
-
-      expect(result.current.audioTrack).toBeNull();
-      expect(result.current.status).toBe(MicrophoneStatus.Inactive);
-      expect(result.current.speechProbability).toBe(0);
-      expect(result.current.isSpeaking).toBe(false);
-    });
-
-    it('should handle destroy when resources are null', () => {
-      const { result } = renderHook(() => useVAD());
-
-      // Should not throw even without calling startVAD
-      expect(() => result.current.destroyVAD()).not.toThrow();
+      expect(mockManager.stop).toHaveBeenCalled();
     });
   });
 
   describe('Callback Invocations', () => {
-    it('should call onStatusChange when VAD status changes', async () => {
+    it('should call onStatusChange when manager status changes', () => {
       const onStatusChange = vi.fn();
-      const { result } = renderHook(() => useVAD({ onStatusChange }));
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
+      renderHook(() => useVAD({ onStatusChange }));
 
       act(() => {
-        getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
+        notifySubscribers('onStatusChange', MicrophoneStatus.Recording);
       });
 
       expect(onStatusChange).toHaveBeenCalledWith(MicrophoneStatus.Recording);
     });
 
-    it('should update status state on status change', async () => {
+    it('should update status state on status change', () => {
       const { result } = renderHook(() => useVAD());
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
       act(() => {
-        getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
+        notifySubscribers('onStatusChange', MicrophoneStatus.Recording);
       });
 
       expect(result.current.status).toBe(MicrophoneStatus.Recording);
     });
 
-    it('should call onSpeechProbability with probability and speaking state', async () => {
+    it('should call onSpeechProbability with probability and speaking state', () => {
       const onSpeechProbability = vi.fn();
-      const { result } = renderHook(() => useVAD({ onSpeechProbability }));
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
+      renderHook(() => useVAD({ onSpeechProbability }));
 
       act(() => {
-        getCapturedCallbacks()?.onSpeechProbability?.(0.75, true);
+        notifySubscribers('onSpeechProbability', 0.75, true);
       });
 
       expect(onSpeechProbability).toHaveBeenCalledWith(0.75, true);
     });
 
-    it('should update speechProbability state', async () => {
+    it('should update speechProbability state', () => {
       const { result } = renderHook(() => useVAD());
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
       act(() => {
-        getCapturedCallbacks()?.onSpeechProbability?.(0.9, true);
+        notifySubscribers('onSpeechProbability', 0.9, true);
       });
 
       expect(result.current.speechProbability).toBe(0.9);
     });
 
-    it('should update isSpeaking state', async () => {
+    it('should update isSpeaking state', () => {
       const { result } = renderHook(() => useVAD());
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
       act(() => {
-        getCapturedCallbacks()?.onSpeechProbability?.(0.9, true);
+        notifySubscribers('onSpeechProbability', 0.9, true);
       });
 
       expect(result.current.isSpeaking).toBe(true);
     });
 
-    it('should call onSpeechStart when speech detected', async () => {
+    it('should call onSpeechStart when speech detected', () => {
       const onSpeechStart = vi.fn();
-      const { result } = renderHook(() => useVAD({ onSpeechStart }));
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
+      renderHook(() => useVAD({ onSpeechStart }));
 
       act(() => {
-        getCapturedCallbacks()?.onSpeechStart?.();
+        notifySubscribers('onSpeechStart');
       });
 
       expect(onSpeechStart).toHaveBeenCalled();
     });
 
-    it('should call onSpeechEnd with audio data', async () => {
+    it('should call onSpeechEnd with audio data', () => {
       const onSpeechEnd = vi.fn();
-      const { result } = renderHook(() => useVAD({ onSpeechEnd }));
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
+      renderHook(() => useVAD({ onSpeechEnd }));
 
       const audioData = new Float32Array([0.1, 0.2, 0.3]);
       act(() => {
-        getCapturedCallbacks()?.onSpeechEnd?.(audioData);
+        notifySubscribers('onSpeechEnd', audioData);
       });
 
       expect(onSpeechEnd).toHaveBeenCalledWith(audioData);
     });
 
-    it('should push audio frame to bridge on onFrameProcessed', async () => {
-      const { result } = renderHook(() => useVAD());
+    it('should call onTrackReady when track is ready', () => {
+      const onTrackReady = vi.fn();
+      renderHook(() => useVAD({ onTrackReady }));
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      const audioFrame = new Float32Array([0.5, 0.6, 0.7]);
       act(() => {
-        getCapturedCallbacks()?.onFrameProcessed?.(audioFrame);
+        notifySubscribers('onTrackReady', mockMediaStreamTrack);
       });
 
-      expect(mockBridge.pushAudioFrame).toHaveBeenCalledWith(audioFrame);
+      expect(onTrackReady).toHaveBeenCalledWith(mockMediaStreamTrack);
     });
 
-    it('should push speech segment to bridge on onSpeechEnd', async () => {
+    it('should update audioTrack state when track is ready', () => {
       const { result } = renderHook(() => useVAD());
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      const speechData = new Float32Array([0.8, 0.9, 1.0]);
       act(() => {
-        getCapturedCallbacks()?.onSpeechEnd?.(speechData);
+        notifySubscribers('onTrackReady', mockMediaStreamTrack);
       });
 
-      expect(mockBridge.pushSpeechSegment).toHaveBeenCalledWith(speechData);
+      expect(result.current.audioTrack).toBe(mockMediaStreamTrack);
     });
 
-    it('should call onError when error occurs', async () => {
+    it('should call onError when error occurs', () => {
       const onError = vi.fn();
-      const { result } = renderHook(() => useVAD({ onError }));
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
+      renderHook(() => useVAD({ onError }));
 
       const error = new Error('Test error');
       act(() => {
-        getCapturedCallbacks()?.onError?.(error);
+        notifySubscribers('onError', error);
       });
 
       expect(onError).toHaveBeenCalledWith(error);
     });
 
-    it('should handle missing callbacks gracefully', async () => {
-      const { result } = renderHook(() => useVAD()); // No callbacks provided
+    it('should handle missing callbacks gracefully', () => {
+      renderHook(() => useVAD()); // No callbacks provided
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      // These should not throw even without callbacks - wrap in act() since they trigger state updates
-      await act(async () => {
+      // These should not throw even without callbacks
+      act(() => {
         expect(() => {
-          getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
-          getCapturedCallbacks()?.onSpeechProbability?.(0.5, false);
-          getCapturedCallbacks()?.onSpeechStart?.();
-          getCapturedCallbacks()?.onSpeechEnd?.(new Float32Array([0.1]));
-          getCapturedCallbacks()?.onError?.(new Error('test'));
+          notifySubscribers('onStatusChange', MicrophoneStatus.Recording);
+          notifySubscribers('onSpeechProbability', 0.5, false);
+          notifySubscribers('onSpeechStart');
+          notifySubscribers('onSpeechEnd', new Float32Array([0.1]));
+          notifySubscribers('onError', new Error('test'));
         }).not.toThrow();
       });
     });
   });
 
   describe('State Management', () => {
-    it('should compute isRecording from status', async () => {
+    it('should compute isRecording from status (Recording)', () => {
       const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
 
       expect(result.current.isRecording).toBe(false);
 
       act(() => {
-        getCapturedCallbacks()?.onStatusChange?.(MicrophoneStatus.Recording);
+        notifySubscribers('onStatusChange', MicrophoneStatus.Recording);
       });
 
       expect(result.current.isRecording).toBe(true);
     });
 
-    it('should use latest callbacks via ref', async () => {
+    it('should compute isRecording from status (Sending)', () => {
+      const { result } = renderHook(() => useVAD());
+
+      act(() => {
+        notifySubscribers('onStatusChange', MicrophoneStatus.Sending);
+      });
+
+      expect(result.current.isRecording).toBe(true);
+    });
+
+    it('should use latest callbacks via ref', () => {
       const onSpeechStart1 = vi.fn();
       const onSpeechStart2 = vi.fn();
 
-      const { result, rerender } = renderHook(
+      const { rerender } = renderHook(
         ({ options }) => useVAD(options),
         { initialProps: { options: { onSpeechStart: onSpeechStart1 } } }
       );
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
 
       // Update options
       rerender({ options: { onSpeechStart: onSpeechStart2 } });
 
       // Trigger callback
       act(() => {
-        getCapturedCallbacks()?.onSpeechStart?.();
+        notifySubscribers('onSpeechStart');
       });
 
       expect(onSpeechStart1).not.toHaveBeenCalled();
@@ -543,36 +364,27 @@ describe('useVAD', () => {
     });
   });
 
-  describe('Cleanup on Unmount', () => {
-    it('should destroy VAD manager on unmount', async () => {
-      const { result, unmount } = renderHook(() => useVAD());
+  describe('Multiple Hooks', () => {
+    it('should allow multiple hooks to subscribe', () => {
+      renderHook(() => useVAD());
+      renderHook(() => useVAD());
 
-      await act(async () => {
-        await result.current.startVAD();
-      });
-
-      unmount();
-
-      expect(mockVADManager.destroy).toHaveBeenCalled();
+      expect(testState.subscribers.size).toBe(2);
     });
 
-    it('should cleanup bridge on unmount', async () => {
-      const { result, unmount } = renderHook(() => useVAD());
+    it('should notify all hooks when status changes', () => {
+      const onStatusChange1 = vi.fn();
+      const onStatusChange2 = vi.fn();
 
-      await act(async () => {
-        await result.current.startVAD();
+      renderHook(() => useVAD({ onStatusChange: onStatusChange1 }));
+      renderHook(() => useVAD({ onStatusChange: onStatusChange2 }));
+
+      act(() => {
+        notifySubscribers('onStatusChange', MicrophoneStatus.Recording);
       });
 
-      unmount();
-
-      expect(mockBridge.cleanup).toHaveBeenCalled();
-    });
-
-    it('should handle unmount when resources are null', () => {
-      const { unmount } = renderHook(() => useVAD());
-
-      // Should not throw
-      expect(() => unmount()).not.toThrow();
+      expect(onStatusChange1).toHaveBeenCalledWith(MicrophoneStatus.Recording);
+      expect(onStatusChange2).toHaveBeenCalledWith(MicrophoneStatus.Recording);
     });
   });
 
@@ -597,25 +409,21 @@ describe('useVAD', () => {
         await result.current.startVAD();
       });
 
-      expect(mockVADManager.start).toHaveBeenCalled();
+      expect(mockManager.start).toHaveBeenCalled();
     });
 
-    it('should support destroy and restart', async () => {
-      const { result } = renderHook(() => useVAD());
-
-      await act(async () => {
-        await result.current.startVAD();
-      });
+    it('should handle rapid status changes', () => {
+      const onStatusChange = vi.fn();
+      renderHook(() => useVAD({ onStatusChange }));
 
       act(() => {
-        result.current.destroyVAD();
+        notifySubscribers('onStatusChange', MicrophoneStatus.Loading);
+        notifySubscribers('onStatusChange', MicrophoneStatus.Active);
+        notifySubscribers('onStatusChange', MicrophoneStatus.Recording);
       });
 
-      // Clear mocks and setup for new cycle
-      vi.clearAllMocks();
-
-      // Restart - need to re-render since manager was destroyed
-      // This tests that the hook can recover from destroy
+      expect(onStatusChange).toHaveBeenCalledTimes(3);
+      expect(onStatusChange).toHaveBeenLastCalledWith(MicrophoneStatus.Recording);
     });
   });
 });
