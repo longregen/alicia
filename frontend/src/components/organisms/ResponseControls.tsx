@@ -62,10 +62,10 @@ const ResponseControls: React.FC<ResponseControlsProps> = ({
           onClick={handleStop}
           className={cls(
             'layout-center-gap px-4 py-2 rounded-lg',
-            'bg-error hover:bg-error/80',
-            'text-on-emphasis font-medium',
+            'bg-destructive hover:bg-destructive/90',
+            'text-destructive-foreground font-medium',
             'transition-all duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-error/50',
+            'focus:outline-none focus:ring-2 focus:ring-destructive/50',
             'active:scale-95'
           )}
           aria-label="Stop response"
@@ -85,10 +85,10 @@ const ResponseControls: React.FC<ResponseControlsProps> = ({
           onClick={handleRegenerate}
           className={cls(
             'layout-center-gap px-4 py-2 rounded-lg',
-            'bg-accent hover:bg-accent-hover',
-            'text-on-emphasis font-medium',
+            'bg-accent hover:bg-accent/90',
+            'text-accent-foreground font-medium',
             'transition-all duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-accent/50',
+            'focus:outline-none focus:ring-2 focus:ring-ring',
             'active:scale-95'
           )}
           aria-label="Regenerate response"

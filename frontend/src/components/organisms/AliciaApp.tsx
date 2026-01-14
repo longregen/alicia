@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '../Sidebar';
 import ChatWindow from './ChatWindow';
 import { MemoryManager } from './MemoryManager';
@@ -6,6 +6,7 @@ import ServerInfoPanel from './ServerPanel/ServerInfoPanel';
 import { Settings } from '../Settings';
 import { useConversations } from '../../hooks/useConversations';
 import { useConversationStore } from '../../stores/conversationStore';
+import { createConversationId } from '../../types/streaming';
 import type { VoiceState } from '../atoms/VoiceVisualizer';
 import { sendControlStop, sendControlVariation } from '../../adapters/protocolAdapter';
 
@@ -46,6 +47,21 @@ export function AliciaApp() {
   // Voice state
   // Reserved for future voice state integration
   const [_voiceState, _setVoiceState] = useState<VoiceState>('idle');
+
+  // Store actions for clearing messages on conversation switch
+  const clearConversation = useConversationStore((state) => state.clearConversation);
+  const setCurrentConversationId = useConversationStore((state) => state.setCurrentConversationId);
+
+  // Clear store and set current conversation when switching conversations
+  useEffect(() => {
+    if (activeConversationId) {
+      clearConversation();
+      setCurrentConversationId(createConversationId(activeConversationId));
+    } else {
+      clearConversation();
+      setCurrentConversationId(null);
+    }
+  }, [activeConversationId, clearConversation, setCurrentConversationId]);
 
   // Log conversation errors (could be enhanced with toast notifications)
   if (conversationsError) {
@@ -173,7 +189,7 @@ export function AliciaApp() {
         {activePanel === 'server' && (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-2xl mx-auto">
-              <h1 className="text-2xl font-semibold text-default mb-6">Server Information</h1>
+              <h1 className="text-2xl font-semibold text-foreground mb-6">Server Information</h1>
               <ServerInfoPanel />
             </div>
           </div>

@@ -108,18 +108,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     const baseClasses = [
       'message-bubble',
       'relative',
-      'max-w-xs',
-      'sm:max-w-sm',
-      'md:max-w-md',
-      'lg:max-w-lg',
+      'message-max-width',
+      'w-fit',
       'px-4',
       'py-3',
       'rounded-2xl',
       'text-sm',
       'break-words',
-      'transition-all',
-      'duration-300',
-      'ease-in-out',
     ];
 
     switch (type) {
@@ -127,33 +122,28 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         return cls([
           ...baseClasses,
           'user',
-          'bg-accent-subtle',
-          'text-default',
-          'ml-auto',
-          'rounded-br-md',
-          'shadow-lg',
+          'bg-primary',
+          'text-primary-foreground',
+          'rounded-br-sm',
         ]);
 
       case MESSAGE_TYPES.ASSISTANT:
         return cls([
           ...baseClasses,
           'assistant',
-          'bg-surface',
-          'text-default',
-          'mr-auto',
-          'rounded-bl-md',
-          'shadow-lg',
+          'bg-card',
+          'text-card-foreground',
+          'rounded-bl-sm',
+          'border',
+          'border-border',
         ]);
 
       case MESSAGE_TYPES.SYSTEM:
         return cls([
           ...baseClasses,
           'system',
-          'bg-surface',
-          'text-muted',
-          'border',
-          'border-accent',
-          'mx-auto',
+          'bg-muted',
+          'text-muted-foreground',
           'text-center',
           'text-xs',
         ]);
@@ -228,7 +218,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
 
   return (
-    <div className={cls('flex', 'flex-col', 'gap-2', className)}>
+    <div className={cls('flex flex-col gap-1', className)}>
       <div className={getBubbleClasses()}>
         {/* Main content */}
         {renderContent()}
@@ -266,21 +256,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
       {/* External footer with addons and timestamp */}
       {(inlineAddons.length > 0 || (!showTyping && !hideTimestamp)) && (
-        <div className={cls(
-          'flex',
-          'items-center',
-          'justify-between',
-          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto',
-          'max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg'
-        )}>
-          {/* Left side: Addons */}
-          <div className={cls('flex', 'items-center', 'gap-2')}>
-            {inlineAddons.map(renderAddonIcon)}
-          </div>
+        <div className="flex items-center gap-3 px-1">
+          {/* Addons */}
+          {inlineAddons.length > 0 && (
+            <div className="flex items-center gap-2">
+              {inlineAddons.map(renderAddonIcon)}
+            </div>
+          )}
 
-          {/* Right side: Timestamp */}
+          {/* Timestamp */}
           {!hideTimestamp && (
-            <div className={cls('text-xs', 'text-muted')}>
+            <div className="text-xs text-muted-foreground">
               {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}

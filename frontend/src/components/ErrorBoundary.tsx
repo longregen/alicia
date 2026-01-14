@@ -45,12 +45,12 @@ export class ErrorBoundary extends Component<Props, State> {
       const isDev = import.meta.env.DEV;
 
       return (
-        <div className="min-h-screen bg-app flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-surface rounded-lg shadow-lg p-8">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full bg-card rounded-lg shadow-lg p-8">
             <div className="flex items-center gap-4 mb-6">
               <div className="flex-shrink-0">
                 <svg
-                  className="w-12 h-12 text-error"
+                  className="w-12 h-12 text-destructive"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -64,25 +64,25 @@ export class ErrorBoundary extends Component<Props, State> {
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-default">Something went wrong</h1>
-                <p className="text-muted mt-1">
+                <h1 className="text-2xl font-bold text-foreground">Something went wrong</h1>
+                <p className="text-muted-foreground mt-1">
                   The application encountered an unexpected error.
                 </p>
               </div>
             </div>
 
             {isDev && this.state.error && (
-              <div className="mb-6 p-4 bg-sunken rounded-lg overflow-auto">
-                <h2 className="font-semibold text-default mb-2">Error Details:</h2>
-                <pre className="text-sm text-error whitespace-pre-wrap">
+              <div className="mb-6 p-4 bg-muted rounded-lg overflow-auto">
+                <h2 className="font-semibold text-foreground mb-2">Error Details:</h2>
+                <pre className="text-sm text-destructive whitespace-pre-wrap">
                   {this.state.error.toString()}
                 </pre>
                 {this.state.errorInfo && (
                   <details className="mt-4">
-                    <summary className="cursor-pointer font-semibold text-muted hover:text-default">
+                    <summary className="cursor-pointer font-semibold text-muted-foreground hover:text-foreground">
                       Stack Trace
                     </summary>
-                    <pre className="text-xs text-muted mt-2 whitespace-pre-wrap">
+                    <pre className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">
                       {this.state.errorInfo.componentStack}
                     </pre>
                   </details>

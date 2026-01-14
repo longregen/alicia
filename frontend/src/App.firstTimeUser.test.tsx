@@ -1,4 +1,4 @@
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import App from './App';
 import * as useConversationsModule from './hooks/useConversations';
@@ -92,7 +92,35 @@ vi.mock('./components/organisms/ChatWindowBridge', () => ({
       ) : (
         <div data-testid="empty-state">
           <p>No conversation selected</p>
-          <p>This is just an empty state with no clear call-to-action</p>
+        </div>
+      )}
+    </div>
+  ),
+}));
+
+// Mock WelcomeScreen component
+vi.mock('./components/organisms/WelcomeScreen', () => ({
+  default: ({ onNewConversation, conversations, onSelectConversation }: {
+    onNewConversation: () => void;
+    conversations: { id: string; title: string }[];
+    onSelectConversation: (id: string) => void;
+  }) => (
+    <div data-testid="welcome-screen">
+      <h1>Welcome to Alicia</h1>
+      <button onClick={onNewConversation} data-testid="start-new-chat-btn">
+        Start New Chat
+      </button>
+      {conversations.length > 0 && (
+        <div data-testid="recent-conversations">
+          {conversations.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => onSelectConversation(c.id)}
+              data-testid={`conversation-${c.id}`}
+            >
+              {c.title}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -104,7 +132,7 @@ vi.mock('./components/Settings', () => ({
   Settings: () => <div data-testid="settings">Settings Panel</div>,
 }));
 
-describe('App - First Time User UX', () => {
+describe('App - First Time User UX with Welcome Screen', () => {
   const mockCreateConversation = vi.fn();
   const mockDeleteConversation = vi.fn();
   const mockUpdateConversation = vi.fn();
@@ -112,17 +140,7 @@ describe('App - First Time User UX', () => {
   const mockRefresh = vi.fn();
 
   beforeEach(() => {
-    // Set up default mock return value for createConversation BEFORE clearing mocks
-    const autoCreatedConversation = {
-      id: 'auto-created-1',
-      title: 'New Chat',
-      status: 'active' as const,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
     vi.clearAllMocks();
-    mockCreateConversation.mockResolvedValue(autoCreatedConversation);
 
     // Mock useDatabase to return ready state
     vi.spyOn(useDatabaseModule, 'useDatabase').mockReturnValue({
@@ -162,98 +180,124 @@ describe('App - First Time User UX', () => {
   });
 
   describe('First-time user experience', () => {
-    it('should auto-create a conversation for first-time users', async () => {
-      // ARRANGE: Render the App component as a first-time user would see it
-      // - Empty database (no conversations)
-      // - No localStorage state (no selectedConversationId)
-      const autoCreatedConversation = {
-        id: 'auto-created-1',
-        title: 'New Chat',
-        status: 'active' as const,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      mockCreateConversation.mockResolvedValue(autoCreatedConversation);
-
+    it('should show Welcome Screen for first-time users instead of auto-creating', async () => {
+      // ARRANGE & ACT: Render the App as a first-time user would see it
       render(<App />);
 
-      // ASSERT: Wait for the app to finish loading
+      // ASSERT: Wait for database to be ready
       await waitFor(() => {
         expect(screen.queryByText('Initializing database...')).not.toBeInTheDocument();
       });
 
-      // EXPECTED BEHAVIOR: A conversation should be auto-created for the user
+      // EXPECTED BEHAVIOR: Welcome Screen should be shown, NOT auto-create
+      expect(screen.getByTestId('welcome-screen')).toBeInTheDocument();
+      expect(screen.getByText('Welcome to Alicia')).toBeInTheDocument();
+      expect(screen.getByTestId('start-new-chat-btn')).toBeInTheDocument();
+
+      // No conversation should be auto-created
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+    });
+
+    it('should create conversation when user clicks Start New Chat', async () => {
+      // ARRANGE
+      const newConversation = {
+        id: 'new-conv-1',
+        title: 'New Chat',
+        status: 'active' as const,
+        last_client_stanza_id: 0,
+        last_server_stanza_id: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      mockCreateConversation.mockResolvedValue(newConversation);
+
+      render(<App />);
+
+      // Wait for Welcome Screen
+      await waitFor(() => {
+        expect(screen.getByTestId('welcome-screen')).toBeInTheDocument();
+      });
+
+      // ACT: Click "Start New Chat" button
+      fireEvent.click(screen.getByTestId('start-new-chat-btn'));
+
+      // ASSERT: createConversation should be called
       await waitFor(() => {
         expect(mockCreateConversation).toHaveBeenCalledTimes(1);
         expect(mockCreateConversation).toHaveBeenCalledWith('New Chat');
       });
     });
 
-
-
-    it('should verify database is ready and auto-create happens', async () => {
-      // ARRANGE
-      render(<App />);
-
-      // ASSERT: Database should be ready
-      await waitFor(() => {
-        expect(screen.queryByText('Initializing database...')).not.toBeInTheDocument();
-      });
-
-      // Auto-creation should have been triggered
-      await waitFor(() => {
-        expect(mockCreateConversation).toHaveBeenCalledTimes(1);
-      });
-
-      // This test verifies the FIX: ready database + empty conversations = auto-create conversation
-    });
-  });
-
-  describe('Expected behavior (what we want to fix)', () => {
-    it('should auto-create a conversation for first-time users with empty database', async () => {
-      // This test documents the DESIRED behavior that we want to implement
-
-      // ARRANGE: Set up mock to simulate auto-creation
-      const autoCreatedConversation = {
-        id: 'auto-created-1',
-        title: 'New Chat',
+    it('should not show Welcome Screen when conversation is selected', async () => {
+      // ARRANGE: Set up with an existing conversation selected
+      const existingConversation = {
+        id: 'existing-conv-1',
+        title: 'Existing Chat',
         status: 'active' as const,
+        last_client_stanza_id: 0,
+        last_server_stanza_id: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      mockCreateConversation.mockResolvedValue(autoCreatedConversation);
+      vi.spyOn(useConversationsModule, 'useConversations').mockReturnValue({
+        conversations: [existingConversation],
+        loading: false,
+        error: null,
+        createConversation: mockCreateConversation,
+        deleteConversation: mockDeleteConversation,
+        updateConversation: mockUpdateConversation,
+        refetch: vi.fn(),
+      });
 
-      // ACT
+      // Mock storage to return existing conversation ID
+      const storageModule = await import('./utils/storage');
+      vi.mocked(storageModule.storage.getSelectedConversationId).mockReturnValue('existing-conv-1');
+
       render(<App />);
 
-      // ASSERT: After initial load with empty conversations, should auto-create one
+      // Wait for app to load
       await waitFor(() => {
         expect(screen.queryByText('Initializing database...')).not.toBeInTheDocument();
       });
 
-      // Expected: createConversation should be called automatically
-      // This will FAIL with current implementation
-      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
-      expect(mockCreateConversation).toHaveBeenCalledWith('New Chat');
+      // ASSERT: Chat window should be shown, NOT Welcome Screen
+      expect(screen.queryByTestId('welcome-screen')).not.toBeInTheDocument();
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
     });
+  });
 
-    it('should not require manual user action to start first conversation', async () => {
-      // Verify that the auto-creation approach eliminates the need for manual action
+  describe('Returning user with stale localStorage', () => {
+    it('should show Welcome Screen when stored conversation ID does not exist on server', async () => {
+      // ARRANGE: Storage has a conversation ID that doesn't exist in conversations list
+      const storageModule = await import('./utils/storage');
+      vi.mocked(storageModule.storage.getSelectedConversationId).mockReturnValue('stale-conv-id');
 
-      // ARRANGE & ACT
+      // Server returns empty conversations (or conversations that don't include the stale ID)
+      vi.spyOn(useConversationsModule, 'useConversations').mockReturnValue({
+        conversations: [],
+        loading: false,
+        error: null,
+        createConversation: mockCreateConversation,
+        deleteConversation: mockDeleteConversation,
+        updateConversation: mockUpdateConversation,
+        refetch: vi.fn(),
+      });
+
       render(<App />);
 
+      // Wait for app to process
       await waitFor(() => {
         expect(screen.queryByText('Initializing database...')).not.toBeInTheDocument();
       });
 
-      // ASSERT: createConversation should be called automatically
-      // User doesn't need to click anything
+      // ASSERT: Welcome Screen should be shown after stale ID is cleared
       await waitFor(() => {
-        expect(mockCreateConversation).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('welcome-screen')).toBeInTheDocument();
       });
+
+      // No auto-create should happen
+      expect(mockCreateConversation).not.toHaveBeenCalled();
     });
   });
 });

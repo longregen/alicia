@@ -50,16 +50,17 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({ className = '' }) =
   ];
 
   return (
-    <ChatBubble
-      type={MESSAGE_TYPES.ASSISTANT}
-      content=""  // Empty for streaming - actual content comes via streamingText prop
-      state={MESSAGE_STATES.STREAMING}
-      timestamp={streamingMessage.createdAt}
-      streamingText={streamingText}
-      addons={addons}
-      showTyping={true}
-      className={className}
-    />
+    <div className={`flex flex-col items-start ${className}`}>
+      <ChatBubble
+        type={MESSAGE_TYPES.ASSISTANT}
+        content=""
+        state={MESSAGE_STATES.STREAMING}
+        timestamp={streamingMessage.createdAt}
+        streamingText={streamingText}
+        addons={addons}
+        showTyping={true}
+      />
+    </div>
   );
 };
 

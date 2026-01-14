@@ -5,10 +5,12 @@ import { useConnectionStore, ConnectionStatus } from '../../stores/connectionSto
 import {
   createMessageId,
   createConversationId,
+  createToolCallId,
   MessageStatus,
   NormalizedMessage,
+  ToolCall,
 } from '../../types/streaming';
-import { Message } from '../../types/models';
+import { Message, ToolUseResponse } from '../../types/models';
 
 /**
  * ChatWindowBridge component.
@@ -30,9 +32,52 @@ export interface ChatWindowBridgeProps {
 }
 
 /**
+ * Convert REST API ToolUseResponse to store ToolCall format
+ */
+function convertToToolCall(toolUse: ToolUseResponse, messageId: string): ToolCall {
+  const baseFields = {
+    id: createToolCallId(toolUse.id),
+    toolName: toolUse.tool_name,
+    arguments: toolUse.arguments || {},
+    messageId: createMessageId(messageId),
+    startTimeMs: new Date(toolUse.created_at).getTime(),
+  };
+
+  if (toolUse.status === 'success') {
+    return {
+      ...baseFields,
+      status: 'success',
+      endTimeMs: toolUse.completed_at ? new Date(toolUse.completed_at).getTime() : Date.now(),
+      resultContent: typeof toolUse.result === 'string' ? toolUse.result : JSON.stringify(toolUse.result),
+    };
+  } else if (toolUse.status === 'error') {
+    return {
+      ...baseFields,
+      status: 'error',
+      endTimeMs: toolUse.completed_at ? new Date(toolUse.completed_at).getTime() : Date.now(),
+      error: toolUse.error_message || 'Unknown error',
+    };
+  } else if (toolUse.status === 'running') {
+    return {
+      ...baseFields,
+      status: 'executing',
+    };
+  } else {
+    // pending or cancelled
+    return {
+      ...baseFields,
+      status: 'pending',
+    };
+  }
+}
+
+/**
  * Convert legacy Message to new streaming Message format
  */
 function convertToStreamingMessage(legacyMessage: Message): NormalizedMessage {
+  // Extract tool call IDs if present
+  const toolCallIds = (legacyMessage.tool_uses || []).map(tu => createToolCallId(tu.id));
+
   return {
     id: createMessageId(legacyMessage.id),
     conversationId: createConversationId(legacyMessage.conversation_id),
@@ -41,9 +86,10 @@ function convertToStreamingMessage(legacyMessage: Message): NormalizedMessage {
     status: MessageStatus.Complete, // Legacy messages are always complete
     createdAt: new Date(legacyMessage.created_at),
     sentenceIds: [],
-    toolCallIds: [],
+    toolCallIds,
     memoryTraceIds: [],
     sync_status: legacyMessage.sync_status,
+    local_id: legacyMessage.local_id, // Required for deduplication when server responds
   };
 }
 
@@ -56,16 +102,39 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   syncError = null,
 }) => {
   const mergeMessages = useConversationStore((state) => state.mergeMessages);
+  const addToolCall = useConversationStore((state) => state.addToolCall);
+  const setCurrentConversationId = useConversationStore((state) => state.setCurrentConversationId);
+  const clearConversation = useConversationStore((state) => state.clearConversation);
   const setConnectionStatus = useConnectionStore((state) => state.setConnectionStatus);
   const setError = useConnectionStore((state) => state.setError);
 
-  // Synchronize conversationId and messages to conversationStore
+  // Clear store and set current conversation when switching conversations
+  useEffect(() => {
+    if (conversationId) {
+      clearConversation();
+      setCurrentConversationId(createConversationId(conversationId));
+    } else {
+      clearConversation();
+      setCurrentConversationId(null);
+    }
+  }, [conversationId, clearConversation, setCurrentConversationId]);
+
+  // Synchronize messages to conversationStore
   useEffect(() => {
     if (conversationId && messages) {
       const streamingMessages = messages.map(convertToStreamingMessage);
       mergeMessages(createConversationId(conversationId), streamingMessages);
+
+      // Add tool calls to the store (after mergeMessages so messages exist)
+      messages.forEach(msg => {
+        if (msg.tool_uses) {
+          msg.tool_uses.forEach(toolUse => {
+            addToolCall(convertToToolCall(toolUse, msg.id));
+          });
+        }
+      });
     }
-  }, [conversationId, messages, mergeMessages]);
+  }, [conversationId, messages, mergeMessages, addToolCall]);
 
   // Synchronize connection state to connectionStore
   // Skip in E2E tests where connection is mocked

@@ -11,8 +11,6 @@ export interface MemorySearchProps {
   onSearchChange: (query: string) => void;
   /** Callback when category filter changes */
   onCategoryChange: (category: MemoryCategory | 'all') => void;
-  /** Callback to create new memory */
-  onCreateNew: () => void;
   className?: string;
 }
 
@@ -25,48 +23,34 @@ const categories: Array<{ value: MemoryCategory | 'all'; label: string }> = [
 ];
 
 /**
- * MemorySearch component for filtering and creating memories.
+ * MemorySearch component for filtering memories.
  *
  * Features:
  * - Search input for filtering by content
  * - Category dropdown for filtering by type
- * - Create new memory button
  */
 export const MemorySearch: React.FC<MemorySearchProps> = ({
   searchQuery,
   selectedCategory,
   onSearchChange,
   onCategoryChange,
-  onCreateNew,
   className = '',
 }) => {
   const [showCategories, setShowCategories] = useState(false);
 
   return (
     <div className={cls('flex flex-col gap-3', className)}>
-      {/* Search bar and create button */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search memories..."
-          className={cls(
-            'flex flex-1 px-3 py-2 rounded border bg-surface text-default text-sm',
-            'focus:outline-none focus:border-accent transition-colors'
-          )}
-        />
-        <button
-          onClick={onCreateNew}
-          className={cls(
-            'px-4 py-2 rounded bg-accent text-on-emphasis text-sm font-medium',
-            'hover:bg-accent-hover transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2'
-          )}
-        >
-          Create Memory
-        </button>
-      </div>
+      {/* Search bar */}
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder="Search memories..."
+        className={cls(
+          'flex px-3 py-2 rounded border bg-surface text-default text-sm',
+          'focus:outline-none focus:border-accent transition-colors'
+        )}
+      />
 
       {/* Category filter */}
       <div className="layout-center-gap">

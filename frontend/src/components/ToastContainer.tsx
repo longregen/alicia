@@ -1,11 +1,12 @@
 import React from 'react';
 import { useToastStore, type ToastVariant } from '../stores/toastStore';
+import { cls } from '../utils/cls';
 
 const variantStyles: Record<ToastVariant, string> = {
-  default: 'bg-elevated text-default border',
-  success: 'bg-success-subtle text-success border border-success/20',
-  warning: 'bg-warning-subtle text-warning border border-warning/20',
-  error: 'bg-error-subtle text-error border border-error/20',
+  default: 'bg-popover text-foreground border border-border',
+  success: 'bg-success/10 text-success border border-success/20',
+  warning: 'bg-warning/10 text-warning border border-warning/20',
+  error: 'bg-destructive/10 text-destructive border border-destructive/20',
 };
 
 const icons: Record<ToastVariant, React.ReactElement> = {
@@ -37,24 +38,21 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 layout-stack-gap max-w-sm">
+    <div className="fixed bottom-4 right-4 z-50 stack-2 max-w-sm">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`
-            flex items-center gap-3 p-4 rounded-lg shadow-lg
-            animate-slide-in backdrop-blur-sm
-            ${variantStyles[toast.variant]}
-            ${toast.variant === 'success' ? 'toast-success' : ''}
-            ${toast.variant === 'error' ? 'toast-error' : ''}
-          `}
+          className={cls(
+            'row gap-3 p-4 rounded-lg shadow-lg animate-slide-in backdrop-blur-sm',
+            variantStyles[toast.variant]
+          )}
           role="alert"
         >
-          <span className="flex-shrink-0">{icons[toast.variant]}</span>
+          <span className="shrink-0">{icons[toast.variant]}</span>
           <p className="flex-1 text-sm font-medium">{toast.message}</p>
           <button
             onClick={() => removeToast(toast.id)}
-            className="flex-shrink-0 p-1 rounded hover:bg-black/10 transition-colors"
+            className="shrink-0 btn-icon p-1"
             aria-label="Dismiss"
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

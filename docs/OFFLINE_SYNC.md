@@ -165,27 +165,73 @@ Gets synchronization status for a conversation.
 }
 ```
 
-### GET /api/v1/conversations/{id}/sync/ws
+### GET /api/v1/ws (Multiplexed WebSocket)
 
-Real-time WebSocket synchronization endpoint for bidirectional message sync.
+Multiplexed WebSocket endpoint that allows a single connection to subscribe to multiple conversations simultaneously.
 
 **Protocol:** Binary MessagePack over WebSocket
 
 **Features:**
-- Automatic sync of pending messages on connection establishment
-- Real-time broadcast of new messages to all connected clients
-- Ping/pong heartbeat for connection health monitoring
+- Single connection serves all conversations (no reconnection when switching)
+- Explicit subscribe/unsubscribe per conversation
+- Real-time broadcast of new messages to all subscribed clients
+- Ping/pong heartbeat for connection health monitoring (30s server pings, 10s client pings)
 - Cross-device message synchronization via `WebSocketBroadcaster`
+- Automatic re-subscription on reconnection
+
+**Subscription Protocol:**
+
+The client must subscribe to conversations before receiving or sending messages for them.
+
+| Type | ID | Direction | Description |
+|------|-----|-----------|-------------|
+| Subscribe | 40 | Client → Server | Subscribe to a conversation |
+| Unsubscribe | 41 | Client → Server | Unsubscribe from a conversation |
+| SubscribeAck | 42 | Server → Client | Subscription acknowledgement |
+| UnsubscribeAck | 43 | Server → Client | Unsubscription acknowledgement |
+
+**Subscribe Request:**
+```json
+{
+  "conversationId": "conv_xyz",
+  "fromSequence": 42  // optional: resume from sequence number
+}
+```
+
+**Subscribe Acknowledgement:**
+```json
+{
+  "conversationId": "conv_xyz",
+  "success": true,
+  "error": "",           // present if success=false
+  "missedMessages": 5    // optional: count of messages since fromSequence
+}
+```
+
+**Unsubscribe Request/Acknowledgement:**
+```json
+{
+  "conversationId": "conv_xyz",
+  "success": true
+}
+```
 
 **Connection Flow:**
-1. Client establishes WebSocket connection
-2. Server automatically syncs all pending messages for the conversation
-3. Server broadcasts new messages to all connected WebSocket clients
-4. Client receives real-time updates from other devices/sessions
+1. Client establishes WebSocket connection to `/api/v1/ws`
+2. Client sends Subscribe message for each conversation of interest
+3. Server responds with SubscribeAck for each subscription
+4. Client can now send SyncRequest messages for subscribed conversations
+5. Server broadcasts messages to all subscribers of the conversation
+6. Client sends Unsubscribe when leaving a conversation
+
+**Stanza ID Convention:**
+- Client stanza IDs: Positive integers, incrementing from 1
+- Server stanza IDs: Negative integers, decrementing from -1
 
 **Reconnection Behavior:**
 - Exponential backoff reconnection (minimum 1 second, maximum 30 seconds)
-- Automatic pending message resync on reconnect
+- Client automatically re-subscribes to all previously active conversations
+- Pending messages synced after re-subscription
 - No message loss during brief disconnections
 
 **Message Format:** All messages use MessagePack binary encoding with camelCase field names. See [WebSocket Protocol Specification](protocol/index.md) for detailed message type definitions.

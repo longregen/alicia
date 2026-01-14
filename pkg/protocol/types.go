@@ -38,6 +38,10 @@ const (
 	TypeCommentary MessageType = 15
 	// TypeAssistantSentence (16) - Streaming response chunk
 	TypeAssistantSentence MessageType = 16
+	// TypeSyncRequest (17) - Client sync request
+	TypeSyncRequest MessageType = 17
+	// TypeSyncResponse (18) - Server sync response
+	TypeSyncResponse MessageType = 18
 	// TypeFeedback (20) - Vote message sent from client to server
 	TypeFeedback MessageType = 20
 	// TypeFeedbackConfirmation (21) - Server confirmation with aggregates
@@ -54,12 +58,22 @@ const (
 	TypeServerInfo MessageType = 26
 	// TypeSessionStats (27) - Session statistics
 	TypeSessionStats MessageType = 27
+	// TypeConversationUpdate (28) - Conversation metadata update (e.g., title change)
+	TypeConversationUpdate MessageType = 28
 	// TypeDimensionPreference (29) - User adjusts dimension weights
 	TypeDimensionPreference MessageType = 29
 	// TypeEliteSelect (30) - User selects a specific elite solution
 	TypeEliteSelect MessageType = 30
 	// TypeEliteOptions (31) - Server sends available elite solutions
 	TypeEliteOptions MessageType = 31
+	// TypeSubscribe (40) - Client subscribes to a conversation
+	TypeSubscribe MessageType = 40
+	// TypeUnsubscribe (41) - Client unsubscribes from a conversation
+	TypeUnsubscribe MessageType = 41
+	// TypeSubscribeAck (42) - Server acknowledges subscription
+	TypeSubscribeAck MessageType = 42
+	// TypeUnsubscribeAck (43) - Server acknowledges unsubscription
+	TypeUnsubscribeAck MessageType = 43
 )
 
 // String returns the string representation of the message type
@@ -97,6 +111,10 @@ func (t MessageType) String() string {
 		return "Commentary"
 	case TypeAssistantSentence:
 		return "AssistantSentence"
+	case TypeSyncRequest:
+		return "SyncRequest"
+	case TypeSyncResponse:
+		return "SyncResponse"
 	case TypeFeedback:
 		return "Feedback"
 	case TypeFeedbackConfirmation:
@@ -113,12 +131,22 @@ func (t MessageType) String() string {
 		return "ServerInfo"
 	case TypeSessionStats:
 		return "SessionStats"
+	case TypeConversationUpdate:
+		return "ConversationUpdate"
 	case TypeDimensionPreference:
 		return "DimensionPreference"
 	case TypeEliteSelect:
 		return "EliteSelect"
 	case TypeEliteOptions:
 		return "EliteOptions"
+	case TypeSubscribe:
+		return "Subscribe"
+	case TypeUnsubscribe:
+		return "Unsubscribe"
+	case TypeSubscribeAck:
+		return "SubscribeAck"
+	case TypeUnsubscribeAck:
+		return "UnsubscribeAck"
 	default:
 		return "Unknown"
 	}

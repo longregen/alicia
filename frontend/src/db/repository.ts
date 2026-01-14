@@ -187,6 +187,57 @@ export const messageRepository = {
     scheduleSave();
   },
 
+  /**
+   * Replace a message's ID (e.g., when server assigns a new ID to a locally-created message).
+   * This is needed because SQLite doesn't allow updating primary keys directly.
+   *
+   * Handles race conditions:
+   * - If newId already exists (WebSocket inserted it first), just deletes oldId
+   * - If oldId doesn't exist, returns false
+   *
+   * Returns true if successful, false if the old message wasn't found.
+   */
+  replaceId(oldId: string, newId: string, updates?: Partial<Message>): boolean {
+    const existing = this.findById(oldId);
+    if (!existing) return false;
+
+    const db = getDatabase();
+
+    // Check if the new ID already exists (WebSocket race condition)
+    const newIdExists = this.findById(newId);
+    if (newIdExists) {
+      // WebSocket already inserted the message with the server ID
+      // Just delete the old optimistic row to avoid duplicates
+      db.run('DELETE FROM messages WHERE id = ?', [oldId]);
+      scheduleSave();
+      return true;
+    }
+
+    // Delete the old row
+    db.run('DELETE FROM messages WHERE id = ?', [oldId]);
+
+    // Insert with the new ID and any updates
+    const updated = { ...existing, ...updates, id: newId };
+    db.run(
+      'INSERT INTO messages (id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        updated.id,
+        updated.conversation_id,
+        updated.sequence_number,
+        updated.role,
+        updated.contents,
+        updated.local_id || null,
+        updated.server_id || null,
+        updated.sync_status || 'synced',
+        updated.retry_count || 0,
+        updated.created_at,
+        new Date().toISOString(),
+      ]
+    );
+    scheduleSave();
+    return true;
+  },
+
   getRetryable(conversationId: string, maxRetries: number = 3): Message[] {
     const db = getDatabase();
     const results = db.exec(

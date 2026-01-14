@@ -107,9 +107,9 @@ const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({
           )}
         >
           {state === 'processing' ? (
-            <div className="w-5 h-5 border-2 border-on-emphasis border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
           ) : (
-            <span className="text-on-emphasis text-xs font-bold">A</span>
+            <span className="text-primary-foreground text-xs font-bold">A</span>
           )}
         </div>
       </div>
@@ -129,7 +129,7 @@ const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({
       </div>
 
       {/* State label */}
-      <span className="text-sm text-muted">{getStateLabel()}</span>
+      <span className="text-sm text-muted-foreground">{getStateLabel()}</span>
     </div>
   );
 };

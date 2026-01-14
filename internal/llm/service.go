@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/longregen/alicia/internal/adapters/circuitbreaker"
@@ -148,7 +149,7 @@ func (s *Service) convertMessages(messages []ports.LLMMessage) []ChatMessage {
 	for i, msg := range messages {
 		chatMessages[i] = ChatMessage{
 			Role:    msg.Role,
-			Content: msg.Content,
+			Content: strings.TrimSpace(msg.Content),
 		}
 	}
 	return chatMessages

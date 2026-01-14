@@ -24,6 +24,7 @@ type GenerateResponse struct {
 	promptVersionService ports.PromptVersionService
 	idGenerator          ports.IDGenerator
 	txManager            ports.TransactionManager
+	titleGenerator       *GenerateConversationTitle // Optional: auto-generates conversation titles
 }
 
 func NewGenerateResponse(
@@ -39,8 +40,9 @@ func NewGenerateResponse(
 	promptVersionService ports.PromptVersionService,
 	idGenerator ports.IDGenerator,
 	txManager ports.TransactionManager,
+	broadcaster ports.ConversationBroadcaster,
 ) *GenerateResponse {
-	return &GenerateResponse{
+	gr := &GenerateResponse{
 		messageRepo:          messageRepo,
 		sentenceRepo:         sentenceRepo,
 		toolUseRepo:          toolUseRepo,
@@ -54,6 +56,11 @@ func NewGenerateResponse(
 		idGenerator:          idGenerator,
 		txManager:            txManager,
 	}
+
+	// Initialize title generator with shared dependencies
+	gr.titleGenerator = NewGenerateConversationTitle(conversationRepo, messageRepo, llmService, broadcaster)
+
+	return gr
 }
 
 func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateResponseInput) (*ports.GenerateResponseOutput, error) {
@@ -203,7 +210,7 @@ func (uc *GenerateResponse) executeNonStreaming(
 
 	// Wrap message update and reasoning steps in a transaction
 	err = uc.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		message.Contents = response.Content
+		message.Contents = strings.TrimSpace(response.Content)
 		if err := uc.messageRepo.Update(txCtx, message); err != nil {
 			return fmt.Errorf("failed to update message: %w", err)
 		}
@@ -239,6 +246,9 @@ func (uc *GenerateResponse) executeNonStreaming(
 		uc.extractAndStoreMemories(memCtx, message, input.ConversationID)
 	}()
 
+	// Generate conversation title if needed (async, non-blocking)
+	uc.titleGenerator.ExecuteAsync(ctx, input.ConversationID)
+
 	return output, nil
 }
 
@@ -271,7 +281,7 @@ func (uc *GenerateResponse) executeWithToolLoop(
 		if len(response.ToolCalls) == 0 {
 			// Update message with final content
 			err = uc.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-				message.Contents = response.Content
+				message.Contents = strings.TrimSpace(response.Content)
 				if err := uc.messageRepo.Update(txCtx, message); err != nil {
 					return fmt.Errorf("failed to update message: %w", err)
 				}
@@ -306,6 +316,9 @@ func (uc *GenerateResponse) executeWithToolLoop(
 				defer cancel()
 				uc.extractAndStoreMemories(memCtx, message, input.ConversationID)
 			}()
+
+			// Generate conversation title if needed (async, non-blocking)
+			uc.titleGenerator.ExecuteAsync(ctx, input.ConversationID)
 
 			return output, nil
 		}
@@ -355,7 +368,7 @@ func (uc *GenerateResponse) executeWithToolLoop(
 
 	// If we hit max iterations, update message with the last response
 	err := uc.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		message.Contents = "Max tool execution iterations reached. Last response: " + currentMessages[len(currentMessages)-1].Content
+		message.Contents = "Max tool execution iterations reached. Last response: " + strings.TrimSpace(currentMessages[len(currentMessages)-1].Content)
 		return uc.messageRepo.Update(txCtx, message)
 	})
 
@@ -618,7 +631,7 @@ func (uc *GenerateResponse) processStream(
 			}
 
 			// Update message with final content and mark as completed
-			message.Contents = fullContent.String()
+			message.Contents = strings.TrimSpace(fullContent.String())
 			message.MarkAsCompleted()
 			if err := uc.messageRepo.Update(ctx, message); err != nil {
 				outputChan <- &ports.ResponseStreamChunk{Error: fmt.Errorf("failed to update message: %w", err)}
@@ -634,6 +647,9 @@ func (uc *GenerateResponse) processStream(
 				defer cancel()
 				uc.extractAndStoreMemories(memCtx, message, message.ConversationID)
 			}()
+
+			// Generate conversation title if needed (async, non-blocking)
+			uc.titleGenerator.ExecuteAsync(ctx, message.ConversationID)
 
 			return
 		}

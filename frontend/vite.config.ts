@@ -60,10 +60,11 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    allowedHosts: ['alicia.hjkl.lol'],
     // Disable proxy during e2e tests so Playwright can intercept API calls
     proxy: process.env.PLAYWRIGHT_TEST ? undefined : {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:8090',
         changeOrigin: true,
       }
     },

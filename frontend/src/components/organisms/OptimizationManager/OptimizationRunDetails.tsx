@@ -93,7 +93,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
   let badgeClass = 'badge ';
   if (statusLower === 'completed') badgeClass += 'badge-success';
   else if (statusLower === 'running') badgeClass += 'badge-warning';
-  else if (statusLower === 'failed') badgeClass += 'badge-error';
+  else if (statusLower === 'failed') badgeClass += 'badge-destructive';
   else badgeClass += 'badge-secondary'; // Default for unknown status
 
   return (
@@ -131,7 +131,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
         {selectedTab === 'overview' && (
           <div>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-5 mb-7">
-              <div className="bg-surface p-5 rounded-md">
+              <div className="bg-card p-5 rounded-md">
                 <h3 className="mt-0 mb-4 text-base">Run Information</h3>
                 <dl className="grid grid-cols-[auto_1fr] gap-2 m-0">
                   <dt className="font-semibold text-muted">ID:</dt>
@@ -151,7 +151,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
                 </dl>
               </div>
 
-              <div className="bg-surface p-5 rounded-md">
+              <div className="bg-card p-5 rounded-md">
                 <h3 className="mt-0 mb-4 text-base">Performance</h3>
                 <dl className="grid grid-cols-[auto_1fr] gap-2 m-0">
                   <dt className="font-semibold text-muted">Best Score:</dt>
@@ -161,7 +161,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
                       <dt className="font-semibold text-muted">Baseline Score:</dt>
                       <dd className="m-0">{run.baseline_score.toFixed(4)}</dd>
                       <dt className="font-semibold text-muted">Improvement:</dt>
-                      <dd className={cls('m-0 font-semibold', run.best_score > run.baseline_score ? 'text-success' : 'text-error')}>
+                      <dd className={cls('m-0 font-semibold', run.best_score > run.baseline_score ? 'text-success' : 'text-destructive')}>
                         {((run.best_score - run.baseline_score) / run.baseline_score * 100).toFixed(1)}%
                       </dd>
                     </>
@@ -187,7 +187,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
                       <div key={dim} className="flex flex-col gap-1">
                         <span className="text-sm font-medium">{dim}:</span>
                         <span className="text-lg font-bold text-accent">{widthPercent.toFixed(0)}%</span>
-                        <div className="h-2 bg-sunken rounded overflow-hidden">
+                        <div className="h-2 bg-muted rounded overflow-hidden">
                           <div className="h-full bg-accent transition-all" style={{ width: `${widthPercent}%` }} />
                         </div>
                       </div>
@@ -207,7 +207,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
             ) : (
               <div className="layout-stack-gap-4">
                 {candidates.map((candidate) => (
-                  <div key={candidate.id} className="bg-surface p-4 rounded-md border-l-4 border-accent">
+                  <div key={candidate.id} className="bg-card p-4 rounded-md border-l-4 border-accent">
                     <div className="flex justify-between mb-2">
                       <span className="font-semibold">Iteration {candidate.iteration}</span>
                       <span className="font-semibold text-success">Score: {candidate.score.toFixed(4)}</span>
@@ -215,7 +215,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
                     <div className="flex gap-4 text-sm text-muted mb-2.5">
                       <span>Evaluations: {candidate.evaluation_count}</span>
                       <span>
-                        Success Rate: {((candidate.success_count / candidate.evaluation_count) * 100).toFixed(1)}%
+                        Success Rate: {candidate.evaluation_count > 0 ? ((candidate.success_count / candidate.evaluation_count) * 100).toFixed(1) : '0.0'}%
                       </span>
                     </div>
                     {candidate.dimension_scores && (

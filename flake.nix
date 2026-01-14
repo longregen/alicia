@@ -633,6 +633,16 @@
             export PGDATABASE="alicia"
             export PGUSER="postgres"
             export PGPORT=5555
+            export ALICIA_POSTGRES_URL="postgres://postgres@localhost:5555/alicia?host=$PGDATA&sslmode=disable"
+
+            # Simple migration helper (go-migrate has snowflake driver bug in nixpkgs)
+            db-migrate() {
+              for f in migrations/*.up.sql; do
+                echo "Applying $f..."
+                psql -d alicia -f "$f" 2>&1 | grep -v "already exists" || true
+              done
+              echo "Migrations complete."
+            }
 
             # Initialize PostgreSQL if needed
             if [ ! -d "$PGDATA" ]; then
@@ -713,6 +723,7 @@
             echo "  go build -o bin/alicia cmd/alicia/main.go  # Build backend"
             echo "  gomod2nix                                   # Update Go dependencies"
             echo "  sqlc generate                               # Generate database code"
+            echo "  db-migrate                                  # Run database migrations"
             echo "  mdbook serve docs                           # Serve documentation"
             echo "  cd android && ./gradlew assembleDebug       # Build Android APK"
             echo ""

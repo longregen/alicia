@@ -113,12 +113,12 @@ export function useMessages(conversationId: string | null) {
       // Send to server
       const serverMessage = await api.sendMessage(conversationId, { contents: content, local_id: localId });
 
-      // Update SQLite with server response
-      // Explicitly set server_id from the server's message ID to enable duplicate detection
-      messageRepository.update(localId, {
+      // Replace the local message ID with the server-assigned ID
+      // This prevents duplicates when WebSocket broadcasts arrive with the server ID
+      messageRepository.replaceId(localId, serverMessage.id, {
         ...serverMessage,
         local_id: localId,
-        server_id: serverMessage.id, // The server's ID is in the 'id' field of the response
+        server_id: serverMessage.id,
         sync_status: 'synced',
       });
 

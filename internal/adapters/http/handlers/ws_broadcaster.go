@@ -3,9 +3,12 @@ package handlers
 import (
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
+	"github.com/longregen/alicia/internal/domain/models"
+	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -121,4 +124,32 @@ func (b *WebSocketBroadcaster) GetSubscriberCount(conversationID string) int {
 		return len(conns)
 	}
 	return 0
+}
+
+// BroadcastConversationUpdate broadcasts a conversation metadata update to all subscribers
+func (b *WebSocketBroadcaster) BroadcastConversationUpdate(conversation *models.Conversation) {
+	if conversation == nil {
+		return
+	}
+
+	update := protocol.ConversationUpdate{
+		ConversationID: conversation.ID,
+		Title:          conversation.Title,
+		Status:         string(conversation.Status),
+		UpdatedAt:      conversation.UpdatedAt.Format(time.RFC3339),
+	}
+
+	// Wrap in envelope with message type
+	envelope := map[string]interface{}{
+		"type": protocol.TypeConversationUpdate,
+		"body": update,
+	}
+
+	data, err := msgpack.Marshal(envelope)
+	if err != nil {
+		log.Printf("Failed to encode conversation update for WebSocket broadcast: %v", err)
+		return
+	}
+
+	b.BroadcastBinary(conversation.ID, data)
 }

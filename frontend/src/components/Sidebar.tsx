@@ -14,7 +14,6 @@ import {
 } from './atoms/Command';
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -131,31 +130,33 @@ export function Sidebar({
 
   const actualWidth = isCollapsed ? COLLAPSED_WIDTH : width;
 
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   const renderConversationItem = (conv: Conversation) => {
     const isArchived = conv.status === 'archived';
 
     return (
-      <DropdownMenu key={conv.id}>
-        <DropdownMenuTrigger asChild>
-          <div
-            className={cls(
-              'conversation-item p-3 mb-2 rounded-md cursor-pointer transition-colors',
-              'hover:bg-sidebar-accent',
-              selectedId === conv.id && 'bg-sidebar-accent border-l-2 border-accent',
-              isCollapsed && 'p-2 flex justify-center'
-            )}
-            onClick={() => {
-              if (editingId !== conv.id) {
-                onSelect(conv.id);
-              }
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault(); // Prevent default context menu
-            }}
-            data-conversation-id={conv.id}
-            data-testid="conversation-item"
-            title={isCollapsed ? conv.title || 'New Conversation' : undefined}
-          >
+      <DropdownMenu key={conv.id} open={openMenuId === conv.id} onOpenChange={(open) => setOpenMenuId(open ? conv.id : null)}>
+        <div
+          className={cls(
+            'conversation-item p-3 mb-2 rounded-md cursor-pointer transition-colors',
+            'hover:bg-sidebar-accent',
+            selectedId === conv.id && 'bg-sidebar-accent border-l-2 border-accent',
+            isCollapsed && 'p-2 flex justify-center'
+          )}
+          onClick={() => {
+            if (editingId !== conv.id) {
+              onSelect(conv.id);
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setOpenMenuId(conv.id);
+          }}
+          data-conversation-id={conv.id}
+          data-testid="conversation-item"
+          title={isCollapsed ? conv.title || 'New Conversation' : undefined}
+        >
             {isCollapsed ? (
               // Collapsed view: just show first letter
               <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-semibold">
@@ -190,7 +191,6 @@ export function Sidebar({
               </div>
             )}
           </div>
-        </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuItem
             onClick={(e) => {
@@ -276,13 +276,13 @@ export function Sidebar({
       <div
         ref={sidebarRef}
         className={cls(
-          'bg-sidebar text-foreground flex flex-col border-r border-sidebar-border h-full relative transition-all',
+          'bg-sidebar text-foreground flex flex-col border-r border-border h-full relative transition-all',
           isResizing && 'select-none'
         )}
         style={{ width: `${actualWidth}px` }}
       >
       {/* Header with toggle button */}
-      <div className={cls('p-5 border-b border-sidebar-border', isCollapsed && 'p-3')}>
+      <div className={cls('p-5 border-b border-border', isCollapsed && 'p-3')}>
         {!isCollapsed ? (
           <>
             <div className="layout-between mb-3">
@@ -359,7 +359,7 @@ export function Sidebar({
       </div>
 
       {/* Bottom navigation */}
-      <div className={cls('border-t border-sidebar-border', isCollapsed ? 'p-2' : 'p-2.5')}>
+      <div className={cls('border-t border-border', isCollapsed ? 'p-2' : 'p-2.5')}>
         {/* Connection status indicator */}
         <ConnectionStatusIndicator isCollapsed={isCollapsed} />
 

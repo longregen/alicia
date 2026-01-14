@@ -27,6 +27,7 @@ type Server struct {
 	httpServer              *http.Server
 	conversationRepo        ports.ConversationRepository
 	messageRepo             ports.MessageRepository
+	toolUseRepo             ports.ToolUseRepository
 	noteRepo                ports.NoteRepository
 	voteRepo                ports.VoteRepository
 	sessionStatsRepo        ports.SessionStatsRepository
@@ -51,6 +52,7 @@ func NewServer(
 	cfg *config.Config,
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
+	toolUseRepo ports.ToolUseRepository,
 	noteRepo ports.NoteRepository,
 	voteRepo ports.VoteRepository,
 	sessionStatsRepo ports.SessionStatsRepository,
@@ -68,11 +70,13 @@ func NewServer(
 	embeddingClient *embedding.Client,
 	mcpAdapter *mcp.Adapter,
 	generateResponseUseCase ports.GenerateResponseUseCase,
+	wsBroadcaster *handlers.WebSocketBroadcaster,
 ) *Server {
 	s := &Server{
 		config:                  cfg,
 		conversationRepo:        conversationRepo,
 		messageRepo:             messageRepo,
+		toolUseRepo:             toolUseRepo,
 		noteRepo:                noteRepo,
 		voteRepo:                voteRepo,
 		sessionStatsRepo:        sessionStatsRepo,
@@ -90,7 +94,7 @@ func NewServer(
 		embeddingClient:         embeddingClient,
 		mcpAdapter:              mcpAdapter,
 		generateResponseUseCase: generateResponseUseCase,
-		wsBroadcaster:           handlers.NewWebSocketBroadcaster(),
+		wsBroadcaster:           wsBroadcaster,
 	}
 
 	s.setupRouter()
@@ -142,7 +146,7 @@ func (s *Server) setupRouter() {
 		r.Patch("/conversations/{id}", conversationsHandler.Patch)
 		r.Delete("/conversations/{id}", conversationsHandler.Delete)
 
-		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.wsBroadcaster)
+		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.toolUseRepo, s.idGen, s.generateResponseUseCase, s.wsBroadcaster)
 		r.Get("/conversations/{id}/messages", messagesHandler.List)
 		r.Post("/conversations/{id}/messages", messagesHandler.Send)
 		r.Get("/messages/{id}/siblings", messagesHandler.GetSiblings)
@@ -152,9 +156,13 @@ func (s *Server) setupRouter() {
 		r.Post("/conversations/{id}/sync", syncHandler.SyncMessages)
 		r.Get("/conversations/{id}/sync/status", syncHandler.GetSyncStatus)
 
-		// WebSocket endpoint for MessagePack sync
+		// WebSocket endpoint for MessagePack sync (per-conversation, legacy)
 		wsHandler := handlers.NewWebSocketSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster, s.config.Server.CORSOrigins)
 		r.Get("/conversations/{id}/sync/ws", wsHandler.Handle)
+
+		// Multiplexed WebSocket endpoint (single connection, multiple conversations)
+		multiplexedWSHandler := handlers.NewMultiplexedWSHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster, s.config.Server.CORSOrigins)
+		r.Get("/ws", multiplexedWSHandler.Handle)
 
 		tokenHandler := handlers.NewTokenHandler(s.conversationRepo, s.liveKitService)
 		r.Post("/conversations/{id}/token", tokenHandler.Generate)

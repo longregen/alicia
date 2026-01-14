@@ -22,24 +22,24 @@ const BUTTON_BASE_CLASSES = [
 ] as const;
 
 const DISABLED_CLASSES = [
-  'bg-sunken',
-  'text-muted',
+  'bg-muted',
+  'text-muted-foreground',
   'cursor-not-allowed',
 ] as const;
 
 const CANNOT_SEND_CLASSES = [
-  'bg-surface',
-  'text-muted',
-  'hover:bg-sunken',
-  'hover:text-accent',
+  'bg-card',
+  'text-muted-foreground',
+  'hover:bg-muted',
+  'hover:text-accent-foreground',
 ] as const;
 
 // Primary variant styling only
 const PRIMARY_CLASSES = [
   'bg-accent',
-  'hover:bg-accent-hover',
-  'active:bg-accent-active',
-  'text-on-emphasis',
+  'hover:bg-accent/90',
+  'active:bg-accent/80',
+  'text-accent-foreground',
 ] as const;
 
 // Tooltip classes for "up" position only
@@ -53,8 +53,8 @@ const TOOLTIP_BASE_CLASSES = [
   'origin-bottom',
   'px-3',
   'py-1',
-  'bg-overlay',
-  'text-on-emphasis',
+  'bg-popover',
+  'text-popover-foreground',
   'text-xs',
   'rounded',
   'whitespace-nowrap',
@@ -77,7 +77,7 @@ const TOOLTIP_ARROW_CLASSES = [
   '-translate-x-1/2',
   'border-2',
   'border-transparent',
-  'border-t-overlay'
+  'border-t-popover'
 ] as const;
 
 // Simplified component props interface
@@ -183,8 +183,8 @@ const InputSendButton: React.FC<InputSendButtonProps> = ({
         <div className={cls(
           "absolute inset-0 rounded-full transition-opacity duration-300",
           canSend
-            ? "bg-accent-subtle opacity-0 group-hover:opacity-20"
-            : "bg-accent-subtle opacity-0 group-hover:opacity-10"
+            ? "bg-accent/15 opacity-0 group-hover:opacity-20"
+            : "bg-accent/15 opacity-0 group-hover:opacity-10"
         )} />
       </button>
 

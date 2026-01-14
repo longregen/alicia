@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Conversation } from '../types/models';
 import { api } from '../services/api';
 import { useAsync } from './useAsync';
+import { registerConversationUpdateHandler } from '../contexts/WebSocketContext';
+import { ConversationUpdate } from '../types/protocol';
 
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -79,6 +81,28 @@ export function useConversations() {
     fetchConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only fetch on mount
+
+  // Listen for real-time conversation updates via WebSocket
+  useEffect(() => {
+    const handleConversationUpdate = (update: ConversationUpdate) => {
+      setConversations(prev =>
+        prev.map(c => {
+          if (c.id === update.conversationId) {
+            return {
+              ...c,
+              title: update.title ?? c.title,
+              status: (update.status as Conversation['status']) ?? c.status,
+              updated_at: update.updatedAt,
+            };
+          }
+          return c;
+        })
+      );
+    };
+
+    const unregister = registerConversationUpdateHandler(handleConversationUpdate);
+    return () => unregister();
+  }, []);
 
   return {
     conversations,

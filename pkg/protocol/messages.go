@@ -288,6 +288,14 @@ type SessionStats struct {
 	SessionDuration int `msgpack:"sessionDuration" json:"sessionDuration"`
 }
 
+// ConversationUpdate (Type 28) represents conversation metadata updates
+type ConversationUpdate struct {
+	ConversationID string `msgpack:"conversationId" json:"conversationId"`
+	Title          string `msgpack:"title,omitempty" json:"title,omitempty"`
+	Status         string `msgpack:"status,omitempty" json:"status,omitempty"`
+	UpdatedAt      string `msgpack:"updatedAt" json:"updatedAt"`
+}
+
 // DimensionWeights defines weights for GEPA optimization dimensions
 type DimensionWeights struct {
 	SuccessRate    float64 `msgpack:"successRate" json:"successRate"`

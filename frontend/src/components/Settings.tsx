@@ -111,10 +111,10 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
   if (!isOpen) return null;
 
   return (
-    <div className="layout-stack h-full bg-app">
+    <div className="layout-stack h-full bg-background">
       {/* Header */}
-      <div className="flex justify-between items-center p-6 md:px-8 border-b border-default bg-surface">
-        <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-default">Settings & Info</h1>
+      <div className="flex justify-between items-center p-6 md:px-8 border-b border-border bg-card">
+        <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Settings & Info</h1>
         <div className="layout-center-gap">
           <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
             <AlertDialogTrigger asChild>
@@ -142,41 +142,41 @@ export function Settings({ isOpen, onClose, conversationId, defaultTab = 'mcp' }
       </div>
 
       {/* Tab navigation - vertical on mobile, horizontal on desktop */}
-      <div className="bg-surface border-b border-default overflow-x-auto">
+      <div className="bg-card border-b border-border overflow-x-auto">
         <div className="flex flex-col md:flex-row md:gap-1 md:px-8">
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'mcp' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'mcp' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('mcp')}
           >
             MCP Settings
           </button>
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'server' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'server' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('server')}
           >
             Server Info
           </button>
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'memories' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'memories' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('memories')}
           >
             Memories
           </button>
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'notes' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'notes' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('notes')}
             disabled={!conversationId}
           >
             Notes
           </button>
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'optimization' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'optimization' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('optimization')}
           >
             Optimization
           </button>
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'preferences' ? 'active' : ''}`}
+            className={`tab whitespace-nowrap ${activeTab === 'preferences' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('preferences')}
           >
             Preferences

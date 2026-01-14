@@ -1,6 +1,21 @@
-import type { AssistantSentence, AudioChunk, ReasoningStep, ToolUseRequest } from './protocol';
+import type { AssistantSentence, AudioChunk, ReasoningStep } from './protocol';
 
 export type ConversationStatus = 'active' | 'archived' | 'deleted';
+
+// ToolUseResponse matches the DTO format from the server's REST API
+export interface ToolUseResponse {
+  id: string;
+  message_id: string;
+  tool_name: string;
+  arguments?: Record<string, unknown>;
+  result?: unknown;
+  status: 'pending' | 'running' | 'success' | 'error' | 'cancelled';
+  error_message?: string;
+  sequence_number: number;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface ConversationPreferences {
   tts_voice?: string;
@@ -54,7 +69,7 @@ export interface Message {
   // Related entities (loaded separately)
   sentences?: AssistantSentence[];
   audio?: AudioChunk;
-  tool_uses?: ToolUseRequest[];
+  tool_uses?: ToolUseResponse[];
   reasoning_steps?: ReasoningStep[];
 }
 

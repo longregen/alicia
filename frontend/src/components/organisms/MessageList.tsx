@@ -23,13 +23,17 @@ export interface MessageListProps {
 const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
   const messagesMap = useConversationStore(selectMessages);
   const currentStreamingMessageId = useConversationStore((state) => state.currentStreamingMessageId);
+  const currentConversationId = useConversationStore((state) => state.currentConversationId);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   // Memoize sorted messages to avoid creating new arrays on every render
   // Sort messages using previousId chain for correct conversation order,
   // falling back to timestamp when no previousId chain exists
   const messages = useMemo(() => {
-    const messageArray = Object.values(messagesMap);
+    // Filter messages by current conversation ID
+    const messageArray = Object.values(messagesMap).filter(
+      (msg) => !currentConversationId || msg.conversationId === currentConversationId
+    );
 
     // Build a map for quick lookup
     const messageById = new Map(messageArray.map(m => [m.id, m]));
@@ -64,22 +68,22 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
     }
 
     return result;
-  }, [messagesMap]);
+  }, [messagesMap, currentConversationId]);
+
+  // Calculate total items including streaming message
+  const totalItems = messages.length + (currentStreamingMessageId ? 1 : 0);
 
   // Scroll to bottom when messages change or streaming state changes
   // Note: This scrolls on any change, not just additions
   useEffect(() => {
-    if (virtuosoRef.current) {
+    if (virtuosoRef.current && totalItems > 0) {
       virtuosoRef.current.scrollToIndex({
-        index: messages.length - 1,
+        index: totalItems - 1,
         behavior: 'smooth',
         align: 'end',
       });
     }
-  }, [messages.length, currentStreamingMessageId]);
-
-  // Calculate total items including streaming message
-  const totalItems = messages.length + (currentStreamingMessageId ? 1 : 0);
+  }, [totalItems]);
 
   const renderItem = (index: number) => {
     // Check if this is the streaming message
@@ -104,7 +108,7 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
 
   if (totalItems === 0) {
     return (
-      <div className={`flex items-center justify-center h-full text-muted ${className}`}>
+      <div className={`flex items-center justify-center h-full text-muted-foreground ${className}`}>
         <p>No messages yet. Start a conversation!</p>
       </div>
     );

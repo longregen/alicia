@@ -171,7 +171,6 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
           selectedCategory={selectedCategory}
           onSearchChange={setSearchQuery}
           onCategoryChange={setSelectedCategory}
-          onCreateNew={handleCreateNew}
         />
       </div>
 

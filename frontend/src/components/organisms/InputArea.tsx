@@ -119,7 +119,7 @@ const InputArea: React.FC<InputAreaProps> = ({
 
   return (
     <form
-      className={cls('input-bar flex items-end gap-3 p-4 md:p-5 bg-elevated border-t border', className)}
+      className={cls('input-bar flex items-end gap-3 p-4 md:p-5 bg-elevated', className)}
       onSubmit={handleFormSubmit}
     >
       {/* Voice input button */}

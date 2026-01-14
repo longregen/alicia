@@ -297,3 +297,8 @@ type EliteDimensionScores struct {
 	Diversity      float64
 	Innovation     float64
 }
+
+// ConversationBroadcaster defines the interface for broadcasting conversation updates
+type ConversationBroadcaster interface {
+	BroadcastConversationUpdate(conversation *models.Conversation)
+}

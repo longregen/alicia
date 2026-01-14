@@ -87,10 +87,12 @@ All require authentication via `Authorization` header.
 - `GET /api/v1/conversations/{id}/sync/status` - Get sync status
   - Returns last sync timestamp and pending message count
 
-- `GET /api/v1/conversations/{id}/sync/ws` - WebSocket endpoint
-  - Binary MessagePack protocol over WebSocket
-  - Real-time bidirectional message sync
-  - Used by Android client for efficient streaming
+- `GET /api/v1/ws` - Multiplexed WebSocket endpoint
+  - Single connection handles multiple conversations
+  - Subscribe/unsubscribe to conversations dynamically
+  - Message types: Subscribe (40), Unsubscribe (41), SubscribeAck (42), UnsubscribeAck (43)
+  - Binary MessagePack protocol
+  - Used by web and mobile clients
 
 ### Real-Time Events (SSE)
 

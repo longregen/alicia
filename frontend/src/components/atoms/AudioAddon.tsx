@@ -123,9 +123,9 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
     'justify-center',
     'rounded-full',
     'bg-accent',
-    'text-on-emphasis',
+    'text-accent-foreground',
     'transition-colors',
-    disabled ? 'opacity-50' : 'hover:bg-accent-hover',
+    disabled ? 'opacity-50' : 'hover:bg-accent/90',
     disabled ? 'cursor-not-allowed' : 'cursor-pointer',
   ]);
 
@@ -145,7 +145,7 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
             'flex',
             'items-center',
             'justify-center',
-            'rounded-full bg-accent-subtle hover:bg-accent',
+            'rounded-full bg-accent/15 hover:bg-accent',
             'transition-colors',
             'duration-300',
             disabled ? 'opacity-50' : '',
@@ -160,8 +160,8 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
           {getIcon('small')}
         </button>
         <span className={cls(
-          'text-xs text-muted',
-          state === AUDIO_STATES.PLAYING ? 'text-accent' : ''
+          'text-xs text-muted-foreground',
+          state === AUDIO_STATES.PLAYING ? 'text-accent-foreground' : ''
         )}>
           { state === AUDIO_STATES.PLAYING ? formatTime(currentTime) + ' / ' : ''}
           {formatTime(duration)}
@@ -193,7 +193,7 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
           <div className={cls(
             'flex-1',
             'h-1',
-            'bg-surface',
+            'bg-muted',
             'rounded-full',
             'relative',
             'overflow-hidden'
@@ -213,7 +213,7 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
           </div>
 
           {/* Time display */}
-          <div className={cls('text-xs', 'text-muted', 'min-w-[3rem]', 'text-right')}>
+          <div className={cls('text-xs', 'text-muted-foreground', 'min-w-[3rem]', 'text-right')}>
             {formatTime(currentTime)} / {formatTime(duration)}
           </div>
 
@@ -227,9 +227,9 @@ const AudioAddon: React.FC<AudioAddonProps> = ({
                 'items-center',
                 'justify-center',
                 'rounded-full',
-                'text-muted',
-                'hover:text-default',
-                'hover:bg-surface',
+                'text-muted-foreground',
+                'hover:text-foreground',
+                'hover:bg-muted',
                 'transition-colors'
               )}
               onClick={handleStop}

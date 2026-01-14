@@ -104,8 +104,8 @@ The following CSS component classes are defined in `src/index.css` and provide c
 
 ```tsx
 <div className="flex gap-1">
-  <button className={`tab ${activeTab === 'one' ? 'active' : ''}`}>Tab One</button>
-  <button className={`tab ${activeTab === 'two' ? 'active' : ''}`}>Tab Two</button>
+  <button className={`tab ${activeTab === 'one' ? 'tab-active' : ''}`}>Tab One</button>
+  <button className={`tab ${activeTab === 'two' ? 'tab-active' : ''}`}>Tab Two</button>
 </div>
 ```
 

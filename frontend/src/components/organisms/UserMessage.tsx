@@ -113,16 +113,17 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
   });
 
   return (
-    <ChatBubble
-      type={MESSAGE_TYPES.USER}
-      content={message.content}
-      state={MESSAGE_STATES.COMPLETED}
-      timestamp={message.createdAt}
-      addons={addons}
-      messageId={messageId}
-      syncStatus={message.sync_status}
-      className={className}
-    />
+    <div className={`flex flex-col items-end ${className}`}>
+      <ChatBubble
+        type={MESSAGE_TYPES.USER}
+        content={message.content}
+        state={MESSAGE_STATES.COMPLETED}
+        timestamp={message.createdAt}
+        addons={addons}
+        messageId={messageId}
+        syncStatus={message.sync_status}
+      />
+    </div>
   );
 };
 

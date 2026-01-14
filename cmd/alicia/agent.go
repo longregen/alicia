@@ -235,6 +235,7 @@ func runAgentWorker(ctx context.Context) error {
 		promptVersionService,
 		idGen,
 		txManager,
+		nil, // No broadcaster needed for CLI agent
 	)
 	log.Println("GenerateResponse use case initialized")
 

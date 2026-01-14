@@ -11,12 +11,13 @@ The protocol specification is divided into the following chapters:
 1. [Introduction](./01-introduction.md) - Overview of the protocol's purpose and scope
 2. [Conventions and Terminology](./02-conventions.md) - Key terms and conventions used throughout the specification
 3. [Envelope Format](./03-envelope-format.md) - The common wrapper structure for all messages
-4. [Message Types](./04-message-types/index.md) - Message types defined in the protocol (types 1-31, with some IDs reserved):
+4. [Message Types](./04-message-types/index.md) - Message types defined in the protocol:
    - Types 1-16: Core messages (fully documented)
-   - Types 17-19: Reserved
+   - Types 17-19: Reserved (17-18 used for Sync)
    - Types 20-27: Feedback & Memory messages
    - Type 28: Reserved
    - Types 29-31: Optimization messages
+   - Types 40-43: Subscription messages (for multiplexed WebSocket)
    - [ErrorMessage](./04-message-types/01-error-message.md) (Type 1)
    - [UserMessage](./04-message-types/02-user-message.md) (Type 2)
    - [AssistantMessage](./04-message-types/03-assistant-message.md) (Type 3)

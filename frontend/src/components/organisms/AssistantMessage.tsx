@@ -145,7 +145,7 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
   });
 
   return (
-    <div className={className}>
+    <div className={`flex flex-col items-start gap-2 ${className}`}>
       <ChatBubble
         type={MESSAGE_TYPES.ASSISTANT}
         content={message.content}
@@ -157,7 +157,7 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
         syncStatus={message.sync_status}
       />
       {memoryTraces.length > 0 && (
-        <MemoryTraceAddon traces={memoryTraces} className="mt-2" />
+        <MemoryTraceAddon traces={memoryTraces} />
       )}
       <FeedbackControls
         currentVote={currentVote as 'up' | 'down' | null}
@@ -165,7 +165,7 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
         upvotes={counts.up}
         downvotes={counts.down}
         isLoading={feedbackLoading}
-        className="mt-2 mr-auto"
+        compact
       />
     </div>
   );

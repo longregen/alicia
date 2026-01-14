@@ -57,6 +57,40 @@ The protocol currently defines message types 1-31 (with some IDs reserved for fu
 - EliteSelect – ID = 30 – Selection of elite solution
 - EliteOptions – ID = 31 – Available elite solution options
 
+#### Subscription Messages (Types 40-43)
+Used by the multiplexed WebSocket endpoint (`/api/v1/ws`) to manage conversation subscriptions:
+
+- Subscribe – ID = 40 – Client subscribes to a conversation
+- Unsubscribe – ID = 41 – Client unsubscribes from a conversation
+- SubscribeAck – ID = 42 – Server acknowledges subscription request
+- UnsubscribeAck – ID = 43 – Server acknowledges unsubscription request
+
+**Subscribe Body:**
+```json
+{
+  "conversationId": "conv_xyz",
+  "fromSequence": 42  // optional
+}
+```
+
+**SubscribeAck Body:**
+```json
+{
+  "conversationId": "conv_xyz",
+  "success": true,
+  "error": "",           // present if success=false
+  "missedMessages": 5    // optional
+}
+```
+
+**Unsubscribe/UnsubscribeAck Body:**
+```json
+{
+  "conversationId": "conv_xyz",
+  "success": true
+}
+```
+
 ### Common Fields
 
 Many message types share these fields for consistency:

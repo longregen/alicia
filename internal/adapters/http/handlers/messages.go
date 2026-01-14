@@ -16,6 +16,7 @@ import (
 type MessagesHandler struct {
 	conversationRepo        ports.ConversationRepository
 	messageRepo             ports.MessageRepository
+	toolUseRepo             ports.ToolUseRepository
 	idGen                   ports.IDGenerator
 	generateResponseUseCase ports.GenerateResponseUseCase
 	wsBroadcaster           *WebSocketBroadcaster
@@ -24,6 +25,7 @@ type MessagesHandler struct {
 func NewMessagesHandler(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
+	toolUseRepo ports.ToolUseRepository,
 	idGen ports.IDGenerator,
 	generateResponseUseCase ports.GenerateResponseUseCase,
 	wsBroadcaster *WebSocketBroadcaster,
@@ -31,6 +33,7 @@ func NewMessagesHandler(
 	return &MessagesHandler{
 		conversationRepo:        conversationRepo,
 		messageRepo:             messageRepo,
+		toolUseRepo:             toolUseRepo,
 		idGen:                   idGen,
 		generateResponseUseCase: generateResponseUseCase,
 		wsBroadcaster:           wsBroadcaster,
@@ -77,6 +80,19 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, "internal_error", "Failed to list messages", http.StatusInternalServerError)
 		return
+	}
+
+	// Load tool uses for each message
+	if h.toolUseRepo != nil {
+		for _, msg := range messages {
+			toolUses, err := h.toolUseRepo.GetByMessage(r.Context(), msg.ID)
+			if err != nil {
+				// Log error but don't fail the request - tool uses are supplementary
+				log.Printf("Warning: Failed to load tool uses for message %s: %v", msg.ID, err)
+				continue
+			}
+			msg.ToolUses = toolUses
+		}
 	}
 
 	response := &dto.MessageListResponse{
@@ -257,6 +273,12 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 	id := h.idGen.GenerateMessageID()
 	message := models.NewUserMessage(id, conversationID, sequenceNumber, req.Contents)
+
+	// Preserve client's local_id for deduplication and sync
+	if req.LocalID != "" {
+		message.LocalID = req.LocalID
+		message.ServerID = id
+	}
 
 	// Set previous_id to the current conversation tip for message branching
 	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {

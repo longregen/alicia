@@ -73,7 +73,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   const getLabelClasses = (): string => {
     return cls(
       'text-sm font-medium select-none cursor-pointer',
-      disabled ? 'text-muted cursor-not-allowed' : 'text-default'
+      disabled ? 'text-muted-foreground cursor-not-allowed' : 'text-foreground'
     );
   };
 

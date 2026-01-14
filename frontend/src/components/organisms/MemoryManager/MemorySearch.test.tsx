@@ -7,7 +7,6 @@ import type { MemoryCategory } from '../../../stores/memoryStore';
 describe('MemorySearch', () => {
   const mockOnSearchChange = vi.fn();
   const mockOnCategoryChange = vi.fn();
-  const mockOnCreateNew = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -21,25 +20,10 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
       expect(screen.getByPlaceholderText('Search memories...')).toBeInTheDocument();
-    });
-
-    it('renders create button', () => {
-      render(
-        <MemorySearch
-          searchQuery=""
-          selectedCategory="all"
-          onSearchChange={mockOnSearchChange}
-          onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
-        />
-      );
-
-      expect(screen.getByRole('button', { name: /create memory/i })).toBeInTheDocument();
     });
 
     it('renders category filter', () => {
@@ -49,7 +33,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -64,7 +47,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
           className="custom-class"
         />
       );
@@ -82,7 +64,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -98,7 +79,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -116,7 +96,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -129,31 +108,10 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
       expect(input).toHaveValue('test');
-    });
-  });
-
-  describe('Create Button', () => {
-    it('calls onCreateNew when clicked', async () => {
-      const user = userEvent.setup();
-      render(
-        <MemorySearch
-          searchQuery=""
-          selectedCategory="all"
-          onSearchChange={mockOnSearchChange}
-          onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
-        />
-      );
-
-      const button = screen.getByRole('button', { name: /create memory/i });
-      await user.click(button);
-
-      expect(mockOnCreateNew).toHaveBeenCalled();
     });
   });
 
@@ -165,7 +123,6 @@ describe('MemorySearch', () => {
           selectedCategory="preference"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -180,7 +137,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -202,7 +158,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -226,7 +181,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -247,7 +201,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -272,7 +225,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -294,7 +246,6 @@ describe('MemorySearch', () => {
           selectedCategory="fact"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -315,7 +266,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -329,7 +279,6 @@ describe('MemorySearch', () => {
           selectedCategory="fact"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -343,7 +292,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -358,7 +306,6 @@ describe('MemorySearch', () => {
           selectedCategory="fact"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -379,7 +326,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -409,8 +355,7 @@ describe('MemorySearch', () => {
             selectedCategory="all"
             onSearchChange={mockOnSearchChange}
             onCategoryChange={mockOnCategoryChange}
-            onCreateNew={mockOnCreateNew}
-          />
+            />
         );
 
         const dropdownButton = screen.getByText('All');
@@ -441,7 +386,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -459,7 +403,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -479,7 +422,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -487,38 +429,9 @@ describe('MemorySearch', () => {
       expect(input).toHaveClass('focus:border-accent');
     });
 
-    it('applies focus styles to create button', () => {
-      render(
-        <MemorySearch
-          searchQuery=""
-          selectedCategory="all"
-          onSearchChange={mockOnSearchChange}
-          onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
-        />
-      );
-
-      const button = screen.getByRole('button', { name: /create memory/i });
-      expect(button).toHaveClass('focus:ring-2');
-    });
   });
 
   describe('Layout', () => {
-    it('renders search bar and create button in same row', () => {
-      const { container } = render(
-        <MemorySearch
-          searchQuery=""
-          selectedCategory="all"
-          onSearchChange={mockOnSearchChange}
-          onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
-        />
-      );
-
-      const searchRow = container.querySelector('[class*="flex gap-2"]');
-      expect(searchRow).toBeInTheDocument();
-    });
-
     it('renders filter section below search bar', () => {
       const { container } = render(
         <MemorySearch
@@ -526,7 +439,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
@@ -543,27 +455,11 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 
       const input = screen.getByPlaceholderText('Search memories...');
       expect(input).toHaveAttribute('type', 'text');
-    });
-
-    it('has accessible create button', () => {
-      render(
-        <MemorySearch
-          searchQuery=""
-          selectedCategory="all"
-          onSearchChange={mockOnSearchChange}
-          onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
-        />
-      );
-
-      const button = screen.getByRole('button', { name: /create memory/i });
-      expect(button).toBeInTheDocument();
     });
 
     it('category dropdown buttons are keyboard accessible', async () => {
@@ -574,7 +470,6 @@ describe('MemorySearch', () => {
           selectedCategory="all"
           onSearchChange={mockOnSearchChange}
           onCategoryChange={mockOnCategoryChange}
-          onCreateNew={mockOnCreateNew}
         />
       );
 

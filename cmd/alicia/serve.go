@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/longregen/alicia/internal/adapters/embedding"
 	"github.com/longregen/alicia/internal/adapters/http"
+	"github.com/longregen/alicia/internal/adapters/http/handlers"
 	"github.com/longregen/alicia/internal/adapters/id"
 	"github.com/longregen/alicia/internal/adapters/livekit"
 	"github.com/longregen/alicia/internal/adapters/postgres"
@@ -200,6 +201,10 @@ func runServer(ctx context.Context) error {
 		log.Println("Built-in tools registered")
 	}
 
+	// Create WebSocket broadcaster (shared between server and use cases)
+	wsBroadcaster := handlers.NewWebSocketBroadcaster()
+	log.Println("WebSocket broadcaster initialized")
+
 	// Initialize use cases
 	generateResponseUseCase := usecases.NewGenerateResponse(
 		messageRepo,
@@ -214,6 +219,7 @@ func runServer(ctx context.Context) error {
 		promptVersionService,
 		idGen,
 		txManager,
+		wsBroadcaster,
 	)
 	log.Println("GenerateResponse use case initialized")
 
@@ -259,6 +265,7 @@ func runServer(ctx context.Context) error {
 		cfg,
 		conversationRepo,
 		messageRepo,
+		toolUseRepo,
 		noteRepo,
 		voteRepo,
 		sessionStatsRepo,
@@ -276,6 +283,7 @@ func runServer(ctx context.Context) error {
 		embeddingClient,
 		mcpAdapter,
 		generateResponseUseCase,
+		wsBroadcaster,
 	)
 
 	// Set up graceful shutdown

@@ -63,8 +63,8 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
         className={cls(
           buttonBaseClasses,
           currentVote === 'up'
-            ? 'bg-success-subtle text-success border border-success'
-            : 'bg-surface hover:bg-sunken text-muted hover:text-default border border-transparent hover:border'
+            ? 'bg-success/15 text-success border border-success'
+            : 'bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-transparent hover:border-border'
         )}
       >
         <svg
@@ -91,8 +91,8 @@ const FeedbackControls: React.FC<FeedbackControlsProps> = ({
         className={cls(
           buttonBaseClasses,
           currentVote === 'down'
-            ? 'bg-error-subtle text-error border border-error'
-            : 'bg-surface hover:bg-sunken text-muted hover:text-default border border-transparent hover:border'
+            ? 'bg-destructive/15 text-destructive border border-destructive'
+            : 'bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-transparent hover:border-border'
         )}
       >
         <svg

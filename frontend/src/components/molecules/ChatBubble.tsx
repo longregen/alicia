@@ -166,7 +166,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [typingIndex, setTypingIndex] = useState<number>(0);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editedContent, setEditedContent] = useState<string>('');
-  const [isHovering, setIsHovering] = useState<boolean>(false);
   const [conflictDialogOpen, setConflictDialogOpen] = useState<boolean>(false);
 
   // Branch store for managing message versions
@@ -360,86 +359,46 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   // Determine role-based class for e2e testing
   const roleClass = type === MESSAGE_TYPES.USER ? 'user' : type === MESSAGE_TYPES.ASSISTANT ? 'assistant' : 'system';
+  const isUser = type === MESSAGE_TYPES.USER;
 
   // Don't allow editing while streaming
   const canEdit = state !== MESSAGE_STATES.STREAMING;
 
   return (
-    <div
-      className={cls('layout-stack-gap', roleClass, className)}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
-    >
-      {/* Streaming status badge */}
+    <div className={cls('flex flex-col gap-1', roleClass, className)}>
+      {/* Status badges */}
       {state === MESSAGE_STATES.STREAMING && type === MESSAGE_TYPES.ASSISTANT && (
-        <div className="w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mr-auto mb-1">
-          <span className="badge badge-neutral">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent mr-1.5 animate-pulse" />
-            Streaming
-          </span>
-        </div>
+        <span className="badge badge-default w-fit text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent mr-1.5 animate-pulse" />
+          Streaming
+        </span>
       )}
 
-      {/* Sync conflict badge */}
       {syncStatus === 'conflict' && (
-        <div className={cls(
-          'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mb-1',
-          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
-        )}>
-          <Badge
-            variant="destructive"
-            className="cursor-pointer hover:opacity-80"
-            onClick={handleConflictClick}
-          >
-            <svg
-              className="w-3 h-3 mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            Sync Conflict - Click to resolve
-          </Badge>
-        </div>
+        <Badge
+          variant="destructive"
+          className="w-fit cursor-pointer hover:opacity-80"
+          onClick={handleConflictClick}
+        >
+          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Sync Conflict
+        </Badge>
       )}
 
-      {/* Sync pending badge */}
       {syncStatus === 'pending' && (
-        <div className={cls(
-          'w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-xl mb-1',
-          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
-        )}>
-          <Badge variant="secondary" className="text-xs">
-            <svg
-              className="w-3 h-3 mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Pending sync
-          </Badge>
-        </div>
+        <Badge variant="secondary" className="w-fit text-xs">
+          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Pending
+        </Badge>
       )}
 
       {/* Main message bubble or edit mode */}
       {isEditing ? (
-        <div className={cls(
-          'w-full message-max-width',
-          type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
-        )}>
+        <div className="message-max-width">
           <Textarea
             value={editedContent}
             onChange={(e) => setEditedContent(e.target.value)}
@@ -447,24 +406,16 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             autoFocus
           />
           <div className="flex gap-2 justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCancelEdit}
-            >
+            <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
               Cancel
             </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleSaveEdit}
-            >
+            <Button variant="default" size="sm" onClick={handleSaveEdit}>
               Save
             </Button>
           </div>
         </div>
       ) : (
-        <div className="relative group">
+        <div className="relative group/bubble">
           <MessageBubble
             type={type}
             content={getContentToDisplay()}
@@ -474,54 +425,34 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             addons={[]}
             hideTimestamp={true}
           />
-          {/* Edit button - show on hover */}
-          {canEdit && isHovering && (
+          {/* Hover actions - CSS-only visibility */}
+          {canEdit && (
             <div className={cls(
-              'absolute top-2 flex gap-1',
-              type === MESSAGE_TYPES.USER ? 'left-2' : 'right-2'
+              'absolute top-1 flex gap-0.5',
+              'opacity-0 group-hover/bubble:opacity-100 transition-opacity',
+              isUser ? '-left-8' : '-right-8'
             )}>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 onClick={handleEditClick}
-                className="opacity-70 hover:opacity-100"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 aria-label="Edit message"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </Button>
-              {/* Continue from here button - only for assistant messages */}
               {type === MESSAGE_TYPES.ASSISTANT && messageId && onContinueFromHere && (
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => onContinueFromHere(messageId)}
-                  className="opacity-70 hover:opacity-100"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
                   aria-label="Continue from here"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </Button>
               )}
@@ -530,44 +461,29 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         </div>
       )}
 
-      {/* Addons footer with timestamp and branch navigator */}
-      <div className={cls(
-        'w-full message-max-width',
-        type === MESSAGE_TYPES.USER ? 'ml-auto' : 'mr-auto'
-      )}>
-        <div className="layout-between-gap">
-          <div className="flex-1">
-            <ComplexAddons
-              addons={inlineAddons}
-              toolDetails={toolDetails}
-              timestamp={timestamp}
-              className="w-full"
-              showFeedback={true}
-            />
-          </div>
-          {/* Branch navigator - only for user messages with branches */}
-          {type === MESSAGE_TYPES.USER && messageId && branchCount > 0 && (
-            <BranchNavigator
-              messageId={messageId}
-              currentIndex={currentIndex}
-              totalBranches={branchCount}
-              onNavigate={handleNavigateBranch}
-            />
-          )}
-        </div>
+      {/* Footer: timestamp, tools, branch navigator */}
+      <div className="flex items-center gap-2 px-1">
+        <ComplexAddons
+          addons={inlineAddons}
+          toolDetails={toolDetails}
+          timestamp={timestamp}
+          showFeedback={false}
+        />
+        {isUser && messageId && branchCount > 0 && (
+          <BranchNavigator
+            messageId={messageId}
+            currentIndex={currentIndex}
+            totalBranches={branchCount}
+            onNavigate={handleNavigateBranch}
+          />
+        )}
       </div>
 
-
-      {/* Below addons */}
+      {/* Below addons (audio, etc.) */}
       {belowAddons.length > 0 && (
-        <div className={cls(
-          'layout-stack-gap',
-          type === MESSAGE_TYPES.USER ? 'ml-4' : 'mr-4'
-        )}>
+        <div className="flex flex-col gap-2 pl-1">
           {belowAddons.map(addon => (
-            <div key={addon.id}>
-              {addon.content}
-            </div>
+            <div key={addon.id}>{addon.content}</div>
           ))}
         </div>
       )}

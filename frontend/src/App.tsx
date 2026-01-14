@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import ChatWindowBridge from './components/organisms/ChatWindowBridge';
+import WelcomeScreen from './components/organisms/WelcomeScreen';
 import { Settings, type SettingsTab } from './components/Settings';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
 import { useDatabase } from './hooks/useDatabase';
 import { MessageProvider } from './contexts/MessageContext';
 import { ConfigProvider } from './contexts/ConfigContext';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 import { storage } from './utils/storage';
 import Toast from './components/atoms/Toast';
 
@@ -29,7 +31,6 @@ function AppContent({
 }: AppContentProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'warning' } | null>(null);
-  const [hasTriggeredAutoCreate, setHasTriggeredAutoCreate] = useState(false);
 
   const {
     conversations,
@@ -65,25 +66,21 @@ function AppContent({
     storage.setSelectedConversationId(selectedConversationId);
   }, [selectedConversationId]);
 
-  // Auto-create first conversation for new users
+  // Handle missing conversations - clear stale IDs from localStorage
   useEffect(() => {
-    if (!conversationsLoading && conversations.length === 0 && !selectedConversationId && !hasTriggeredAutoCreate) {
-      // First-time user: auto-create a conversation
-      setHasTriggeredAutoCreate(true);
-      handleNewConversation();
-    }
-  }, [conversationsLoading, conversations.length, selectedConversationId, hasTriggeredAutoCreate, handleNewConversation]);
-
-  // Handle missing conversations
-  useEffect(() => {
-    if (selectedConversationId && conversations.length > 0) {
-      const conversationExists = conversations.some(conv => conv.id === selectedConversationId);
-      if (!conversationExists) {
-        setToast({ message: 'Conversation not found. Starting a new chat.', variant: 'warning' });
+    if (selectedConversationId && !conversationsLoading) {
+      if (conversations.length === 0) {
+        // No conversations exist - clear stale ID
         setSelectedConversationId(null);
+      } else {
+        const conversationExists = conversations.some(conv => conv.id === selectedConversationId);
+        if (!conversationExists) {
+          setToast({ message: 'Conversation not found. Starting a new chat.', variant: 'warning' });
+          setSelectedConversationId(null);
+        }
       }
     }
-  }, [selectedConversationId, conversations, setSelectedConversationId]);
+  }, [selectedConversationId, conversations, conversationsLoading, setSelectedConversationId]);
 
   const handleDeleteConversation = async (id: string) => {
     if (id === selectedConversationId) {
@@ -211,7 +208,7 @@ function AppContent({
             conversationId={selectedConversationId}
             defaultTab={settingsTab}
           />
-        ) : (
+        ) : selectedConversationId ? (
           <ChatWindowBridge
             messages={messages}
             loading={messagesLoading}
@@ -219,6 +216,13 @@ function AppContent({
             onSendMessage={handleSendMessage}
             conversationId={selectedConversationId}
             syncError={syncError}
+          />
+        ) : (
+          <WelcomeScreen
+            conversations={conversations}
+            onNewConversation={handleNewConversation}
+            onSelectConversation={handleSelectConversation}
+            loading={conversationsLoading}
           />
         )}
       </div>
@@ -257,16 +261,18 @@ function App() {
 
   return (
     <ConfigProvider>
-      <MessageProvider>
-        <AppContent
-          selectedConversationId={selectedConversationId}
-          setSelectedConversationId={setSelectedConversationId}
-          settingsOpen={settingsOpen}
-          setSettingsOpen={setSettingsOpen}
-          settingsTab={settingsTab}
-          setSettingsTab={setSettingsTab}
-        />
-      </MessageProvider>
+      <WebSocketProvider>
+        <MessageProvider>
+          <AppContent
+            selectedConversationId={selectedConversationId}
+            setSelectedConversationId={setSelectedConversationId}
+            settingsOpen={settingsOpen}
+            setSettingsOpen={setSettingsOpen}
+            settingsTab={settingsTab}
+            setSettingsTab={setSettingsTab}
+          />
+        </MessageProvider>
+      </WebSocketProvider>
     </ConfigProvider>
   );
 }

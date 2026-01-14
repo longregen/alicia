@@ -36,10 +36,17 @@ export enum MessageType {
   MemoryConfirmation = 25,
   ServerInfo = 26,
   SessionStats = 27,
+  // Conversation metadata update
+  ConversationUpdate = 28,
   // Dimension optimization message types
   DimensionPreference = 29,
   EliteSelect = 30,
   EliteOptions = 31,
+  // Subscription message types (multiplexed WebSocket)
+  Subscribe = 40,
+  Unsubscribe = 41,
+  SubscribeAck = 42,
+  UnsubscribeAck = 43,
 }
 
 export enum Severity {
@@ -320,6 +327,14 @@ export interface SessionStats {
   sessionDuration: number;
 }
 
+// ConversationUpdate (Type 28) - conversation metadata update
+export interface ConversationUpdate {
+  conversationId: string;
+  title?: string;
+  status?: string;
+  updatedAt: string;
+}
+
 // Dimension optimization types (Types 29-31)
 
 export interface DimensionWeights {
@@ -368,6 +383,29 @@ export interface EliteOptions {
   elites: EliteSummary[];
   currentEliteId: string;
   timestamp: number;
+}
+
+// Subscription message types for multiplexed WebSocket
+
+export interface SubscribeRequest {
+  conversationId: string;
+  fromSequence?: number;
+}
+
+export interface UnsubscribeRequest {
+  conversationId: string;
+}
+
+export interface SubscribeAck {
+  conversationId: string;
+  success: boolean;
+  error?: string;
+  missedMessages?: number;
+}
+
+export interface UnsubscribeAck {
+  conversationId: string;
+  success: boolean;
 }
 
 // Common features

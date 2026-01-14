@@ -9,6 +9,7 @@ import (
 // SendMessageRequest represents a request to send a message
 type SendMessageRequest struct {
 	Contents string `json:"contents" msgpack:"contents"`
+	LocalID  string `json:"local_id,omitempty" msgpack:"localId,omitempty"`
 }
 
 // SwitchBranchRequest represents a request to switch the conversation tip to a different message
@@ -16,18 +17,68 @@ type SwitchBranchRequest struct {
 	TipMessageID string `json:"tip_message_id" msgpack:"tipMessageId"`
 }
 
+// ToolUseResponse represents a tool use in API responses
+type ToolUseResponse struct {
+	ID             string         `json:"id" msgpack:"id"`
+	MessageID      string         `json:"message_id" msgpack:"messageId"`
+	ToolName       string         `json:"tool_name" msgpack:"toolName"`
+	Arguments      map[string]any `json:"arguments,omitempty" msgpack:"arguments,omitempty"`
+	Result         any            `json:"result,omitempty" msgpack:"result,omitempty"`
+	Status         string         `json:"status" msgpack:"status"`
+	ErrorMessage   string         `json:"error_message,omitempty" msgpack:"errorMessage,omitempty"`
+	SequenceNumber int            `json:"sequence_number" msgpack:"sequenceNumber"`
+	CompletedAt    *string        `json:"completed_at,omitempty" msgpack:"completedAt,omitempty"`
+	CreatedAt      string         `json:"created_at" msgpack:"createdAt"`
+	UpdatedAt      string         `json:"updated_at" msgpack:"updatedAt"`
+}
+
+// FromToolUseModel converts a domain model to a response DTO
+func FromToolUseModel(tu *models.ToolUse) *ToolUseResponse {
+	var completedAt *string
+	if tu.CompletedAt != nil {
+		formatted := tu.CompletedAt.Format(time.RFC3339)
+		completedAt = &formatted
+	}
+	return &ToolUseResponse{
+		ID:             tu.ID,
+		MessageID:      tu.MessageID,
+		ToolName:       tu.ToolName,
+		Arguments:      tu.Arguments,
+		Result:         tu.Result,
+		Status:         string(tu.Status),
+		ErrorMessage:   tu.ErrorMessage,
+		SequenceNumber: tu.SequenceNumber,
+		CompletedAt:    completedAt,
+		CreatedAt:      tu.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      tu.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+// FromToolUseModelList converts a list of tool use domain models to response DTOs
+func FromToolUseModelList(toolUses []*models.ToolUse) []*ToolUseResponse {
+	if toolUses == nil {
+		return nil
+	}
+	responses := make([]*ToolUseResponse, len(toolUses))
+	for i, tu := range toolUses {
+		responses[i] = FromToolUseModel(tu)
+	}
+	return responses
+}
+
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID             string `json:"id" msgpack:"id"`
-	ConversationID string `json:"conversation_id" msgpack:"conversationId"`
-	SequenceNumber int    `json:"sequence_number" msgpack:"sequenceNumber"`
-	PreviousID     string `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
-	Role           string `json:"role" msgpack:"role"`
-	Contents       string `json:"contents" msgpack:"contents"`
-	LocalID        string `json:"local_id,omitempty" msgpack:"localId,omitempty"`
-	ServerID       string `json:"server_id,omitempty" msgpack:"serverId,omitempty"`
-	CreatedAt      string `json:"created_at" msgpack:"createdAt"`
-	UpdatedAt      string `json:"updated_at" msgpack:"updatedAt"`
+	ID             string             `json:"id" msgpack:"id"`
+	ConversationID string             `json:"conversation_id" msgpack:"conversationId"`
+	SequenceNumber int                `json:"sequence_number" msgpack:"sequenceNumber"`
+	PreviousID     string             `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
+	Role           string             `json:"role" msgpack:"role"`
+	Contents       string             `json:"contents" msgpack:"contents"`
+	LocalID        string             `json:"local_id,omitempty" msgpack:"localId,omitempty"`
+	ServerID       string             `json:"server_id,omitempty" msgpack:"serverId,omitempty"`
+	ToolUses       []*ToolUseResponse `json:"tool_uses,omitempty" msgpack:"toolUses,omitempty"`
+	CreatedAt      string             `json:"created_at" msgpack:"createdAt"`
+	UpdatedAt      string             `json:"updated_at" msgpack:"updatedAt"`
 }
 
 // MessageListResponse represents a list of messages
@@ -47,6 +98,7 @@ func (r *MessageResponse) FromModel(msg *models.Message) *MessageResponse {
 		Contents:       msg.Contents,
 		LocalID:        msg.LocalID,
 		ServerID:       msg.ServerID,
+		ToolUses:       FromToolUseModelList(msg.ToolUses),
 		CreatedAt:      msg.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      msg.UpdatedAt.Format(time.RFC3339),
 	}

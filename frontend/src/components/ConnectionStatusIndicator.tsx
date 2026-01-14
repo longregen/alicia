@@ -12,15 +12,15 @@ export function ConnectionStatusIndicator({ isCollapsed }: ConnectionStatusIndic
   const getStatusColor = () => {
     switch (status) {
       case ConnectionStatus.Connected:
-        return 'bg-green-500';
+        return 'bg-success';
       case ConnectionStatus.Connecting:
       case ConnectionStatus.Reconnecting:
-        return 'bg-yellow-500';
+        return 'bg-warning';
       case ConnectionStatus.Disconnected:
       case ConnectionStatus.Error:
-        return 'bg-red-500';
+        return 'bg-destructive';
       default:
-        return 'bg-gray-500';
+        return 'bg-muted-foreground';
     }
   };
 
@@ -47,22 +47,20 @@ export function ConnectionStatusIndicator({ isCollapsed }: ConnectionStatusIndic
   return (
     <div
       className={cls(
-        'layout-center-gap p-2 rounded transition-colors',
+        'row-2 p-2 rounded transition-colors',
         isCollapsed && 'justify-center'
       )}
       title={isCollapsed ? getStatusText() : showError ? error : undefined}
       data-testid="connection-status-indicator"
     >
-      <div className="relative">
-        <div
-          className={cls(
-            'w-2 h-2 rounded-full',
-            getStatusColor(),
-            isAnimated && 'animate-pulse'
-          )}
-          data-status={status}
-        />
-      </div>
+      <div
+        className={cls(
+          'status-dot',
+          getStatusColor(),
+          isAnimated && 'animate-pulse'
+        )}
+        data-status={status}
+      />
       {!isCollapsed && (
         <span className="text-xs text-muted-foreground">{getStatusText()}</span>
       )}
