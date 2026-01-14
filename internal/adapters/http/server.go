@@ -44,7 +44,6 @@ type Server struct {
 	embeddingClient         *embedding.Client
 	mcpAdapter              *mcp.Adapter
 	generateResponseUseCase ports.GenerateResponseUseCase
-	broadcaster             *handlers.SSEBroadcaster
 	wsBroadcaster           *handlers.WebSocketBroadcaster
 }
 
@@ -91,7 +90,6 @@ func NewServer(
 		embeddingClient:         embeddingClient,
 		mcpAdapter:              mcpAdapter,
 		generateResponseUseCase: generateResponseUseCase,
-		broadcaster:             handlers.NewSSEBroadcaster(),
 		wsBroadcaster:           handlers.NewWebSocketBroadcaster(),
 	}
 
@@ -144,23 +142,19 @@ func (s *Server) setupRouter() {
 		r.Patch("/conversations/{id}", conversationsHandler.Patch)
 		r.Delete("/conversations/{id}", conversationsHandler.Delete)
 
-		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.broadcaster, s.wsBroadcaster)
+		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.idGen, s.generateResponseUseCase, s.wsBroadcaster)
 		r.Get("/conversations/{id}/messages", messagesHandler.List)
 		r.Post("/conversations/{id}/messages", messagesHandler.Send)
 		r.Get("/messages/{id}/siblings", messagesHandler.GetSiblings)
 		r.Post("/conversations/{id}/switch-branch", messagesHandler.SwitchBranch)
 
-		syncHandler := handlers.NewSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.broadcaster)
+		syncHandler := handlers.NewSyncHandler(s.conversationRepo, s.messageRepo, s.idGen)
 		r.Post("/conversations/{id}/sync", syncHandler.SyncMessages)
 		r.Get("/conversations/{id}/sync/status", syncHandler.GetSyncStatus)
 
 		// WebSocket endpoint for MessagePack sync
 		wsHandler := handlers.NewWebSocketSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster, s.config.Server.CORSOrigins)
 		r.Get("/conversations/{id}/sync/ws", wsHandler.Handle)
-
-		// SSE endpoint for real-time events
-		sseHandler := handlers.NewSSEHandler(s.conversationRepo, s.broadcaster)
-		r.Get("/conversations/{id}/events", sseHandler.StreamEvents)
 
 		tokenHandler := handlers.NewTokenHandler(s.conversationRepo, s.liveKitService)
 		r.Post("/conversations/{id}/token", tokenHandler.Generate)
@@ -318,11 +312,10 @@ func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.Port)
 
 	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: s.router,
-		// Increased timeouts for SSE long-lived connections
+		Addr:         addr,
+		Handler:      s.router,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 0, // No write timeout for SSE streaming
+		WriteTimeout: 0, // No write timeout for WebSocket streaming
 		IdleTimeout:  120 * time.Second,
 	}
 

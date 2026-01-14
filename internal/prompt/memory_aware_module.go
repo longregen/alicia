@@ -119,10 +119,16 @@ func (m *MemoryAwareModule) constructQuery(inputs map[string]any) string {
 		return question
 	}
 
-	// Fallback: concatenate all string inputs
+	// Fallback: concatenate all string inputs in sorted key order for determinism
+	keys := make([]string, 0, len(inputs))
+	for k := range inputs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	query := ""
-	for _, v := range inputs {
-		if s, ok := v.(string); ok && s != "" {
+	for _, k := range keys {
+		if s, ok := inputs[k].(string); ok && s != "" {
 			if query != "" {
 				query += " "
 			}

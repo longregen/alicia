@@ -68,6 +68,30 @@ export const useConversationStore = create<ConversationStore>()(
     // Message actions
     addMessage: (message) =>
       set((state) => {
+        // Deduplication: Check if message already exists by ID
+        if (state.messages[message.id]) {
+          // Message with this ID already exists - update it instead of duplicating
+          state.messages[message.id] = message;
+          return;
+        }
+
+        // If message has local_id, check if we already have a message with that local_id
+        // This handles the case where a message was added with a local_id and later
+        // we receive the same message with a server-assigned ID
+        const localId = message.local_id;
+        if (localId) {
+          const existingMessage = Object.values(state.messages).find(
+            (m) => m.local_id === localId
+          );
+          if (existingMessage) {
+            // Found existing message with same local_id - update it
+            delete state.messages[existingMessage.id];
+            state.messages[message.id] = message;
+            return;
+          }
+        }
+
+        // No duplicate found - add the new message
         state.messages[message.id] = message;
       }),
 

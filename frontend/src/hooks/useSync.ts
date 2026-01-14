@@ -10,7 +10,7 @@ interface UseSyncOptions {
 
 interface UseSyncResult extends SyncState {
   syncNow: () => void;
-  isSSEConnected: boolean;
+  isConnected: boolean;
 }
 
 export function useSync(conversationId: string | null, options?: UseSyncOptions): UseSyncResult {
@@ -48,6 +48,6 @@ export function useSync(conversationId: string | null, options?: UseSyncOptions)
     lastSyncTime,
     syncError: error?.message || null,
     syncNow,
-    isSSEConnected: isConnected, // For compatibility
+    isConnected,
   };
 }

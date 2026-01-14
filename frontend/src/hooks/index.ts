@@ -22,7 +22,6 @@ export { useLiveQuery } from './useLiveQuery';
 export { useConversationStore } from './useConversationStore';
 
 // Internal-only hooks (not exported):
-// - useSSE: Internal streaming implementation
 // - useDatabase: Internal DB abstraction
 // - useSync: Internal sync layer (wrapped by useMessages)
 // - useVAD: Internal voice activity detection

@@ -240,16 +240,6 @@ async function setupApiMocks(page: Page, mockState: MockState) {
       return;
     }
 
-    // Handle events endpoint (SSE)
-    if (url.includes('/events')) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/event-stream',
-        body: '',
-      });
-      return;
-    }
-
     // Handle conversation CRUD
     if (method === 'GET') {
       const conversation = mockState.conversations.get(conversationId);

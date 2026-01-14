@@ -604,12 +604,73 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 
 	ctx := context.Background()
 
-	// Delete test messages first (before conversations due to FK constraints)
+	// Delete test training examples (must be before votes due to potential FK)
 	_, err := pool.Exec(ctx, `
+		DELETE FROM gepa_training_examples
+		WHERE id LIKE 'gte_test%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test training examples: %v", err)
+	}
+
+	// Delete test system prompt versions
+	_, err = pool.Exec(ctx, `
+		DELETE FROM system_prompt_versions
+		WHERE id LIKE 'spv_test%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test system prompt versions: %v", err)
+	}
+
+	// Delete test votes
+	_, err = pool.Exec(ctx, `
+		DELETE FROM alicia_votes
+		WHERE id LIKE 'vote_%test%'
+		   OR id LIKE 'av_test%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test votes: %v", err)
+	}
+
+	// Delete test tool uses
+	_, err = pool.Exec(ctx, `
+		DELETE FROM alicia_tool_uses
+		WHERE id LIKE 'tu_%test%'
+		   OR message_id LIKE 'msg_%test%'
+		   OR message_id LIKE 'msg_vote%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test tool uses: %v", err)
+	}
+
+	// Delete test memory usages
+	_, err = pool.Exec(ctx, `
+		DELETE FROM alicia_memory_used
+		WHERE id LIKE 'mu_%test%'
+		   OR memory_id LIKE 'mem_%test%'
+		   OR message_id LIKE 'msg_%test%'
+		   OR message_id LIKE 'msg_vote%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test memory usages: %v", err)
+	}
+
+	// Delete test memories
+	_, err = pool.Exec(ctx, `
+		DELETE FROM alicia_memory
+		WHERE id LIKE 'mem_%test%'
+	`)
+	if err != nil {
+		t.Logf("Warning: failed to clean up test memories: %v", err)
+	}
+
+	// Delete test messages first (before conversations due to FK constraints)
+	_, err = pool.Exec(ctx, `
 		DELETE FROM alicia_messages
 		WHERE id LIKE 'msg_test%'
 		   OR id LIKE 'msg_incomplete%'
 		   OR id LIKE 'msg_conv%'
+		   OR id LIKE 'msg_vote%'
 		   OR id LIKE 'am_%'
 		   OR conversation_id LIKE 'ac_test%'
 		   OR conversation_id LIKE 'ac_list%'
@@ -623,6 +684,7 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 		   OR conversation_id LIKE 'ac_msg_%'
 		   OR conversation_id LIKE 'ac_user_%'
 		   OR conversation_id LIKE 'ac_tx_%'
+		   OR conversation_id LIKE 'ac_vote%'
 	`)
 	if err != nil {
 		t.Logf("Warning: failed to clean up test messages: %v", err)
@@ -643,6 +705,7 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 		   OR id LIKE 'ac_msg_%'
 		   OR id LIKE 'ac_user_%'
 		   OR id LIKE 'ac_tx_%'
+		   OR id LIKE 'ac_vote%'
 	`)
 	if err != nil {
 		t.Logf("Warning: failed to clean up test conversations: %v", err)

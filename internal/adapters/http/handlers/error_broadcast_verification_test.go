@@ -4,34 +4,6 @@ import (
 	"testing"
 )
 
-// TestSSEBroadcaster_BroadcastErrorEvent verifies error broadcasting functionality
-func TestSSEBroadcaster_BroadcastErrorEvent(t *testing.T) {
-	broadcaster := NewSSEBroadcaster()
-	conversationID := "ac_test123"
-
-	// Subscribe to the conversation
-	ch := broadcaster.Subscribe(conversationID)
-	defer broadcaster.Unsubscribe(conversationID, ch)
-
-	// Broadcast an error
-	go broadcaster.BroadcastErrorEvent(conversationID, "generation_failed", "LLM API rate limit exceeded")
-
-	// Receive the event
-	event := <-ch
-
-	// Verify the event format
-	if event == "" {
-		t.Fatal("Expected event, got empty string")
-	}
-
-	// Basic verification that it's an error event
-	if len(event) < 10 {
-		t.Errorf("Event too short: %s", event)
-	}
-
-	t.Logf("Received error event: %s", event)
-}
-
 // TestWebSocketBroadcaster_BroadcastError verifies error broadcasting for WebSocket
 func TestWebSocketBroadcaster_BroadcastError(t *testing.T) {
 	broadcaster := NewWebSocketBroadcaster()

@@ -62,6 +62,143 @@ describe('conversationStore', () => {
       expect(state.messages['msg-2'].toolCallIds).toEqual([]);
       expect(state.messages['msg-2'].memoryTraceIds).toEqual([]);
     });
+
+    it('should not create duplicate messages when adding same ID twice', () => {
+      const message1: NormalizedMessage = {
+        id: createMessageId('msg-1'),
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'First version',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+      };
+
+      const message2: NormalizedMessage = {
+        id: createMessageId('msg-1'), // Same ID
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'Updated version',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+      };
+
+      useConversationStore.getState().addMessage(message1);
+      useConversationStore.getState().addMessage(message2);
+
+      const state = useConversationStore.getState();
+      // Should only have one message
+      expect(Object.keys(state.messages)).toHaveLength(1);
+      // Should have the updated content
+      expect(state.messages['msg-1'].content).toBe('Updated version');
+    });
+
+    it('should deduplicate messages by local_id', () => {
+      const messageWithLocalId: NormalizedMessage = {
+        id: createMessageId('local-temp-id'),
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'Hello from local',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+        sync_status: 'pending',
+      };
+      // Add local_id property (simulating offline message)
+      (messageWithLocalId as any).local_id = 'local-123';
+
+      const messageFromServer: NormalizedMessage = {
+        id: createMessageId('server-assigned-id'),
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'Hello from server',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+        sync_status: 'synced',
+      };
+      // Same local_id but different server ID
+      (messageFromServer as any).local_id = 'local-123';
+
+      useConversationStore.getState().addMessage(messageWithLocalId);
+      useConversationStore.getState().addMessage(messageFromServer);
+
+      const state = useConversationStore.getState();
+      // Should only have one message (server version replaced local version)
+      expect(Object.keys(state.messages)).toHaveLength(1);
+      // Local ID should be gone
+      expect(state.messages['local-temp-id']).toBeUndefined();
+      // Server ID should exist with updated content
+      expect(state.messages['server-assigned-id']).toBeDefined();
+      expect(state.messages['server-assigned-id'].content).toBe('Hello from server');
+      expect(state.messages['server-assigned-id'].sync_status).toBe('synced');
+    });
+
+    it('should not deduplicate messages without local_id', () => {
+      const message1: NormalizedMessage = {
+        id: createMessageId('msg-1'),
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'First message',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+      };
+
+      const message2: NormalizedMessage = {
+        id: createMessageId('msg-2'),
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'Second message',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+      };
+
+      useConversationStore.getState().addMessage(message1);
+      useConversationStore.getState().addMessage(message2);
+
+      const state = useConversationStore.getState();
+      // Should have both messages
+      expect(Object.keys(state.messages)).toHaveLength(2);
+      expect(state.messages['msg-1']).toBeDefined();
+      expect(state.messages['msg-2']).toBeDefined();
+    });
+
+    it('should handle message with local_id when no existing message has that local_id', () => {
+      const messageWithLocalId: NormalizedMessage = {
+        id: createMessageId('msg-1'),
+        conversationId: createConversationId('conv-1'),
+        role: 'user',
+        content: 'New local message',
+        status: MessageStatus.Complete,
+        createdAt: new Date(),
+        sentenceIds: [],
+        toolCallIds: [],
+        memoryTraceIds: [],
+      };
+      (messageWithLocalId as any).local_id = 'unique-local-id';
+
+      useConversationStore.getState().addMessage(messageWithLocalId);
+
+      const state = useConversationStore.getState();
+      expect(Object.keys(state.messages)).toHaveLength(1);
+      expect(state.messages['msg-1']).toBeDefined();
+      expect(state.messages['msg-1'].content).toBe('New local message');
+    });
   });
 
   describe('updateMessageStatus', () => {

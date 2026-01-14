@@ -16,20 +16,17 @@ type SyncHandler struct {
 	conversationRepo ports.ConversationRepository
 	messageRepo      ports.MessageRepository
 	idGen            ports.IDGenerator
-	broadcaster      *SSEBroadcaster
 }
 
 func NewSyncHandler(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
 	idGen ports.IDGenerator,
-	broadcaster *SSEBroadcaster,
 ) *SyncHandler {
 	return &SyncHandler{
 		conversationRepo: conversationRepo,
 		messageRepo:      messageRepo,
 		idGen:            idGen,
-		broadcaster:      broadcaster,
 	}
 }
 
@@ -199,12 +196,6 @@ func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msg
 	// Save to database
 	if err := h.messageRepo.Create(ctx, message); err != nil {
 		return dto.SyncedMessage{}, err
-	}
-
-	// Broadcast message to SSE subscribers (notify other devices)
-	if h.broadcaster != nil {
-		messageResponse := (&dto.MessageResponse{}).FromModel(message)
-		h.broadcaster.BroadcastMessageEvent(conversationID, messageResponse)
 	}
 
 	return dto.ToSyncedMessage(message), nil

@@ -113,6 +113,7 @@ export interface NormalizedMessage {
   toolCallIds: ToolCallId[];
   memoryTraceIds: MemoryTraceId[];
   sync_status?: 'pending' | 'synced' | 'conflict'; // snake_case for database compatibility
+  local_id?: string; // Client-generated ID for offline sync deduplication
 }
 
 // Normalized conversation store state

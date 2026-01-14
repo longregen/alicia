@@ -29,6 +29,7 @@ import {
 } from '../types/protocol';
 import { useMessageContext } from '../contexts/MessageContext';
 import { Message } from '../types/models';
+import { messageRepository } from '../db/repository';
 import { useFeedbackStore, VotableType, VoteType } from '../stores/feedbackStore';
 import { useServerInfoStore } from '../stores/serverInfoStore';
 import { useDimensionStore } from '../stores/dimensionStore';
@@ -192,7 +193,34 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
             created_at: new Date(userMsg.timestamp || timestamp).toISOString(),
             updated_at: new Date(userMsg.timestamp || timestamp).toISOString(),
           };
-          messageContextRef.current.addMessage(message);
+
+          // Check if this message already exists (handles deduplication)
+          // Check by server ID first
+          const existingByServerId = messageRepository.findByServerId(message.id);
+          if (existingByServerId) {
+            // Already have this message, skip to avoid duplicate
+            break;
+          }
+
+          // Also check by local_id if present
+          if (message.local_id) {
+            const existingByLocalId = messageRepository.findByLocalId(message.local_id);
+            if (existingByLocalId) {
+              break;
+            }
+          }
+
+          // Also check by the message ID itself
+          const existingById = messageRepository.findById(message.id);
+          if (existingById) {
+            break;
+          }
+
+          // Save message to repository
+          messageRepository.upsert({
+            ...message,
+            sync_status: 'synced',
+          });
           break;
         }
 
@@ -207,7 +235,34 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
             created_at: new Date(assistantMsg.timestamp || timestamp).toISOString(),
             updated_at: new Date(assistantMsg.timestamp || timestamp).toISOString(),
           };
-          messageContextRef.current.addMessage(message);
+
+          // Check if this message already exists (handles deduplication)
+          // Check by server ID first
+          const existingByServerId = messageRepository.findByServerId(message.id);
+          if (existingByServerId) {
+            // Already have this message, skip to avoid duplicate
+            break;
+          }
+
+          // Also check by local_id if present
+          if (message.local_id) {
+            const existingByLocalId = messageRepository.findByLocalId(message.local_id);
+            if (existingByLocalId) {
+              break;
+            }
+          }
+
+          // Also check by the message ID itself
+          const existingById = messageRepository.findById(message.id);
+          if (existingById) {
+            break;
+          }
+
+          // Save message to repository
+          messageRepository.upsert({
+            ...message,
+            sync_status: 'synced',
+          });
           break;
         }
 

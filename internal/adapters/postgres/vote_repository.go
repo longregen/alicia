@@ -401,7 +401,8 @@ func (r *VoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit in
 		var messageID, quickFeedback, note sql.NullString
 		var userRating sql.NullInt32
 		var createdBy, sourceType sql.NullString
-		var sourceInfo, tags []byte
+		var sourceInfo []byte
+		var tags []string
 		var muID, muConversationID, muMessageID, muMemoryID sql.NullString
 		var queryPrompt sql.NullString
 		var queryPromptMeta, muMeta []byte
@@ -450,9 +451,7 @@ func (r *VoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit in
 		}
 
 		if len(tags) > 0 {
-			if err := json.Unmarshal(tags, &mem.Tags); err != nil {
-				mem.Tags = []string{}
-			}
+			mem.Tags = tags
 		} else {
 			mem.Tags = []string{}
 		}
@@ -554,7 +553,8 @@ func (r *VoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, lim
 		var messageID, quickFeedback, note sql.NullString
 		var userRating sql.NullInt32
 		var createdBy, sourceType sql.NullString
-		var sourceInfo, tags []byte
+		var sourceInfo []byte
+		var tags []string
 		var queryPrompt sql.NullString
 		var queryPromptMeta, muMeta []byte
 		var positionInResults sql.NullInt32
@@ -623,9 +623,7 @@ func (r *VoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, lim
 		}
 
 		if len(tags) > 0 {
-			if err := json.Unmarshal(tags, &mem.Tags); err != nil {
-				mem.Tags = []string{}
-			}
+			mem.Tags = tags
 		} else {
 			mem.Tags = []string{}
 		}
@@ -656,7 +654,7 @@ func (r *VoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context
 			mem.id as mem_id, mem.content, mem.importance, mem.confidence, mem.user_rating, mem.created_by,
 			mem.source_type, mem.source_info, mem.tags, mem.pinned, mem.archived,
 			mem.created_at as mem_created_at, mem.updated_at as mem_updated_at,
-			msg.id as msg_id, msg.conversation_id, msg.sequence_number, msg.previous_id, msg.role, msg.contents,
+			msg.id as msg_id, msg.conversation_id, msg.sequence_number, msg.previous_id, msg.message_role, msg.contents,
 			msg.local_id, msg.server_id, msg.sync_status, msg.synced_at, msg.completion_status,
 			msg.created_at as msg_created_at, msg.updated_at as msg_updated_at
 		FROM alicia_votes v
@@ -682,7 +680,8 @@ func (r *VoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context
 		var messageID, quickFeedback, note sql.NullString
 		var userRating sql.NullInt32
 		var createdBy, sourceType sql.NullString
-		var sourceInfo, tags []byte
+		var sourceInfo []byte
+		var tags []string
 		var previousID, localID, serverID, syncStatus sql.NullString
 		var syncedAt sql.NullTime
 		var completionStatus sql.NullString
@@ -726,9 +725,7 @@ func (r *VoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context
 		}
 
 		if len(tags) > 0 {
-			if err := json.Unmarshal(tags, &mem.Tags); err != nil {
-				mem.Tags = []string{}
-			}
+			mem.Tags = tags
 		} else {
 			mem.Tags = []string{}
 		}

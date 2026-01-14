@@ -18,7 +18,6 @@ type MessagesHandler struct {
 	messageRepo             ports.MessageRepository
 	idGen                   ports.IDGenerator
 	generateResponseUseCase ports.GenerateResponseUseCase
-	broadcaster             *SSEBroadcaster
 	wsBroadcaster           *WebSocketBroadcaster
 }
 
@@ -27,7 +26,6 @@ func NewMessagesHandler(
 	messageRepo ports.MessageRepository,
 	idGen ports.IDGenerator,
 	generateResponseUseCase ports.GenerateResponseUseCase,
-	broadcaster *SSEBroadcaster,
 	wsBroadcaster *WebSocketBroadcaster,
 ) *MessagesHandler {
 	return &MessagesHandler{
@@ -35,7 +33,6 @@ func NewMessagesHandler(
 		messageRepo:             messageRepo,
 		idGen:                   idGen,
 		generateResponseUseCase: generateResponseUseCase,
-		broadcaster:             broadcaster,
 		wsBroadcaster:           wsBroadcaster,
 	}
 }
@@ -277,11 +274,8 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Broadcast message to SSE and WebSocket subscribers
+	// Broadcast message to WebSocket subscribers
 	messageResponse := (&dto.MessageResponse{}).FromModel(message)
-	if h.broadcaster != nil {
-		h.broadcaster.BroadcastMessageEvent(conversationID, messageResponse)
-	}
 	if h.wsBroadcaster != nil {
 		h.wsBroadcaster.BroadcastMessage(conversationID, messageResponse)
 	}
@@ -306,10 +300,7 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 			output, err := h.generateResponseUseCase.Execute(genCtx, input)
 			if err != nil {
 				log.Printf("Failed to generate response for REST API message %s: %v", message.ID, err)
-				// Broadcast error to SSE and WebSocket subscribers
-				if h.broadcaster != nil {
-					h.broadcaster.BroadcastErrorEvent(conversationID, "generation_failed", err.Error())
-				}
+				// Broadcast error to WebSocket subscribers
 				if h.wsBroadcaster != nil {
 					h.wsBroadcaster.BroadcastError(conversationID, "generation_failed", err.Error())
 				}
@@ -318,10 +309,7 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 			if output == nil || output.Message == nil {
 				log.Printf("Generate response returned nil output or message for REST API message %s", message.ID)
-				// Broadcast error to SSE and WebSocket subscribers
-				if h.broadcaster != nil {
-					h.broadcaster.BroadcastErrorEvent(conversationID, "generation_failed", "AI response generation returned no output")
-				}
+				// Broadcast error to WebSocket subscribers
 				if h.wsBroadcaster != nil {
 					h.wsBroadcaster.BroadcastError(conversationID, "generation_failed", "AI response generation returned no output")
 				}
@@ -330,11 +318,8 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 			log.Printf("Generated response for REST API message %s: %s", message.ID, output.Message.ID)
 
-			// Broadcast AI response to SSE and WebSocket subscribers
+			// Broadcast AI response to WebSocket subscribers
 			responseMsg := (&dto.MessageResponse{}).FromModel(output.Message)
-			if h.broadcaster != nil {
-				h.broadcaster.BroadcastMessageEvent(conversationID, responseMsg)
-			}
 			if h.wsBroadcaster != nil {
 				h.wsBroadcaster.BroadcastMessage(conversationID, responseMsg)
 			}

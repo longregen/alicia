@@ -471,21 +471,42 @@ export function handleTranscription(
 
   // Check for duplicate by content (race condition prevention)
   // This handles the case where REST API already loaded this message with a different ID
-  // TODO: Content-based duplicate detection is fragile - consider using message IDs
-  // May miss edge cases with whitespace differences or partial matches
   if (msg.final) {
     const allMessages = Object.values(store.messages);
-    const duplicateByContent = allMessages.find(
-      (m) =>
+
+    // Helper function to normalize content for comparison
+    const normalizeContent = (content: string): string => {
+      // Collapse multiple whitespace characters (spaces, tabs, newlines) to single space
+      // and trim leading/trailing whitespace
+      return content.replace(/\s+/g, ' ').trim();
+    };
+
+    const normalizedText = normalizeContent(msg.text);
+    const currentTime = Date.now();
+    const TIME_WINDOW_MS = 5000; // 5 seconds
+
+    const duplicateByContent = allMessages.find((m) => {
+      // Primary check: same message ID (most reliable)
+      if (m.id === messageId) {
+        return true;
+      }
+
+      // Secondary check: content-based with time window
+      if (
         m.role === 'user' &&
         m.conversationId === conversationId &&
-        m.content.trim() === msg.text.trim()
-        // Removed status check - deduplication should work regardless of status
-        // to handle race condition when optimistic message is still streaming
-    );
+        normalizeContent(m.content) === normalizedText
+      ) {
+        // Only consider it a duplicate if it was created within the time window
+        const messageAge = currentTime - m.createdAt.getTime();
+        return messageAge <= TIME_WINDOW_MS;
+      }
+
+      return false;
+    });
 
     if (duplicateByContent) {
-      // Message already exists from REST API, skip creating duplicate
+      // Message already exists from REST API or recent duplicate, skip creating duplicate
       return;
     }
   }

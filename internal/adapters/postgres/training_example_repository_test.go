@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -323,8 +324,50 @@ func TestTrainingExampleRepository_DeleteByVoteID(t *testing.T) {
 	pool := setupTestDB(t)
 	idGen := newTestIDGenerator()
 	repo := NewTrainingExampleRepository(pool, idGen)
+	voteRepo := NewVoteRepository(pool)
+	convRepo := NewConversationRepository(pool)
+	msgRepo := NewMessageRepository(pool)
 
-	voteID := "vote_test123"
+	ctx := context.Background()
+
+	// Create conversation and message for the vote
+	conv := models.NewConversation("ac_vote_delete_test", "test-user", "Vote Delete Test")
+	err := convRepo.Create(ctx, conv)
+	if err != nil {
+		t.Fatalf("Create conversation failed: %v", err)
+	}
+
+	msg := &models.Message{
+		ID:               "msg_vote_delete_test",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleUser,
+		Contents:         "Test message",
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+	err = msgRepo.Create(ctx, msg)
+	if err != nil {
+		t.Fatalf("Create message failed: %v", err)
+	}
+
+	// Create a vote to link to
+	vote := &models.Vote{
+		ID:         "vote_test123",
+		MessageID:  msg.ID,
+		TargetType: models.VoteTargetMessage,
+		TargetID:   msg.ID,
+		Value:      models.VoteValueUp,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	err = voteRepo.Create(ctx, vote)
+	if err != nil {
+		t.Fatalf("Create vote failed: %v", err)
+	}
+
+	voteID := vote.ID
 
 	// Create multiple examples linked to same vote
 	for i := 0; i < 3; i++ {
@@ -338,7 +381,7 @@ func TestTrainingExampleRepository_DeleteByVoteID(t *testing.T) {
 			Source:     "vote",
 			CreatedAt:  time.Now(),
 		}
-		if err := repo.Create(context.Background(), example); err != nil {
+		if err := repo.Create(ctx, example); err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
 	}
@@ -383,12 +426,12 @@ type testIDGenerator struct {
 
 func (g *testIDGenerator) GenerateTrainingExampleID() string {
 	g.counter++
-	return "gte_test" + string(rune(g.counter))
+	return fmt.Sprintf("gte_test_%d_%d", time.Now().UnixNano(), g.counter)
 }
 
 func (g *testIDGenerator) GenerateSystemPromptVersionID() string {
 	g.counter++
-	return "spv_test" + string(rune(g.counter))
+	return fmt.Sprintf("spv_test_%d_%d", time.Now().UnixNano(), g.counter)
 }
 
 // Implement other required methods (not used in these tests but required by interface)

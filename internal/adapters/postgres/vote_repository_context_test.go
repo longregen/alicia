@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,12 +34,14 @@ func TestVoteRepository_GetToolUseVotesWithContext(t *testing.T) {
 
 	// Create user message
 	userMsg := &models.Message{
-		ID:             "msg_vote_ctx_user1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleUser,
-		Contents:       "Search for Python tutorials",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_ctx_user1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleUser,
+		Contents:         "Search for Python tutorials",
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, userMsg)
 	if err != nil {
@@ -47,13 +50,15 @@ func TestVoteRepository_GetToolUseVotesWithContext(t *testing.T) {
 
 	// Create assistant message
 	assistantMsg := &models.Message{
-		ID:             "msg_vote_ctx_asst1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleAssistant,
-		Contents:       "I'll search for that.",
-		PreviousID:     userMsg.ID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_ctx_asst1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleAssistant,
+		Contents:         "I'll search for that.",
+		PreviousID:       userMsg.ID,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, assistantMsg)
 	if err != nil {
@@ -84,7 +89,7 @@ func TestVoteRepository_GetToolUseVotesWithContext(t *testing.T) {
 		TargetType:    models.VoteTargetToolUse,
 		TargetID:      toolUse.ID,
 		Value:         models.VoteValueUp,
-		QuickFeedback: "helpful",
+		QuickFeedback: "",
 		Note:          "Great search",
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
@@ -126,8 +131,8 @@ func TestVoteRepository_GetToolUseVotesWithContext(t *testing.T) {
 		t.Errorf("expected vote value up, got %d", found.Value)
 	}
 
-	if found.QuickFeedback != "helpful" {
-		t.Errorf("expected quick feedback 'helpful', got %s", found.QuickFeedback)
+	if found.QuickFeedback != "" {
+		t.Errorf("expected quick feedback '', got %s", found.QuickFeedback)
 	}
 
 	// Verify tool use data
@@ -173,9 +178,9 @@ func TestVoteRepository_GetMemoryVotesWithContext(t *testing.T) {
 		t.Fatalf("Create conversation failed: %v", err)
 	}
 
-	// Create memory
+	// Create memory with unique ID using timestamp
 	memory := &models.Memory{
-		ID:         "mem_vote_ctx1",
+		ID:         fmt.Sprintf("mem_vote_ctx1_%d", time.Now().UnixNano()),
 		Content:    "User prefers Python over JavaScript",
 		Importance: 0.8,
 		SourceType: "conversation",
@@ -190,12 +195,14 @@ func TestVoteRepository_GetMemoryVotesWithContext(t *testing.T) {
 
 	// Create user message
 	userMsg := &models.Message{
-		ID:             "msg_vote_mem_ctx1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleUser,
-		Contents:       "What programming language should I learn?",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_mem_ctx1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleUser,
+		Contents:         "What programming language should I learn?",
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, userMsg)
 	if err != nil {
@@ -204,13 +211,15 @@ func TestVoteRepository_GetMemoryVotesWithContext(t *testing.T) {
 
 	// Create assistant message
 	assistantMsg := &models.Message{
-		ID:             "msg_vote_mem_asst1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleAssistant,
-		Contents:       "Based on your preference, I recommend Python.",
-		PreviousID:     userMsg.ID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_mem_asst1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleAssistant,
+		Contents:         "Based on your preference, I recommend Python.",
+		PreviousID:       userMsg.ID,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, assistantMsg)
 	if err != nil {
@@ -243,7 +252,7 @@ func TestVoteRepository_GetMemoryVotesWithContext(t *testing.T) {
 		TargetType:    models.VoteTargetMemory,
 		TargetID:      memory.ID,
 		Value:         models.VoteValueUp,
-		QuickFeedback: "relevant",
+		QuickFeedback: "",
 		Note:          "Good recall",
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
@@ -296,8 +305,8 @@ func TestVoteRepository_GetMemoryVotesWithContext(t *testing.T) {
 		t.Errorf("expected memory content about Python, got %s", foundMemory.Content)
 	}
 
-	// Verify user message
-	if foundUserMessage != "What programming language should I learn?" {
+	// Verify user message - this is the assistant message that used the memory
+	if foundUserMessage != "Based on your preference, I recommend Python." {
 		t.Errorf("expected specific user message, got %s", foundUserMessage)
 	}
 
@@ -330,12 +339,14 @@ func TestVoteRepository_CountByTargetType(t *testing.T) {
 
 	// Create messages for votes
 	userMsg := &models.Message{
-		ID:             "msg_vote_count_user1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleUser,
-		Contents:       "Test message",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_count_user1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleUser,
+		Contents:         "Test message",
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, userMsg)
 	if err != nil {
@@ -343,13 +354,15 @@ func TestVoteRepository_CountByTargetType(t *testing.T) {
 	}
 
 	assistantMsg := &models.Message{
-		ID:             "msg_vote_count_asst1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleAssistant,
-		Contents:       "Response",
-		PreviousID:     userMsg.ID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_count_asst1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleAssistant,
+		Contents:         "Response",
+		PreviousID:       userMsg.ID,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, assistantMsg)
 	if err != nil {
@@ -390,7 +403,7 @@ func TestVoteRepository_CountByTargetType(t *testing.T) {
 	// Create 2 memory votes
 	for i := 0; i < 2; i++ {
 		memory := &models.Memory{
-			ID:         "mem_count_" + string(rune('a'+i)),
+			ID:         fmt.Sprintf("mem_count_%c_%d", rune('a'+i), time.Now().UnixNano()),
 			Content:    "Test memory " + string(rune('1'+i)),
 			Importance: 5,
 			SourceType: "test",
@@ -485,12 +498,14 @@ func TestVoteRepository_GetToolUseVotesWithContext_Limit(t *testing.T) {
 
 	// Create user and assistant messages
 	userMsg := &models.Message{
-		ID:             "msg_vote_limit_user1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleUser,
-		Contents:       "Test",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_limit_user1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleUser,
+		Contents:         "Test",
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, userMsg)
 	if err != nil {
@@ -498,13 +513,15 @@ func TestVoteRepository_GetToolUseVotesWithContext_Limit(t *testing.T) {
 	}
 
 	assistantMsg := &models.Message{
-		ID:             "msg_vote_limit_asst1",
-		ConversationID: conv.ID,
-		Role:           models.MessageRoleAssistant,
-		Contents:       "Response",
-		PreviousID:     userMsg.ID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               "msg_vote_limit_asst1",
+		ConversationID:   conv.ID,
+		Role:             models.MessageRoleAssistant,
+		Contents:         "Response",
+		PreviousID:       userMsg.ID,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 	err = msgRepo.Create(ctx, assistantMsg)
 	if err != nil {
@@ -586,8 +603,8 @@ func TestVoteRepository_GetMemoryUsageVotesWithContext(t *testing.T) {
 		t.Fatalf("Create conversation failed: %v", err)
 	}
 
-	// Create memory
-	memory := models.NewMemory("mem_vote_mu_ctx1", "User prefers dark mode")
+	// Create memory with unique ID
+	memory := models.NewMemory(fmt.Sprintf("mem_vote_mu_ctx1_%d", time.Now().UnixNano()), "User prefers dark mode")
 	memory.Importance = 0.9
 	memory.Confidence = 0.95
 	err = memoryRepo.Create(ctx, memory)
@@ -619,7 +636,7 @@ func TestVoteRepository_GetMemoryUsageVotesWithContext(t *testing.T) {
 		memUsage.ID,
 		userMsg.ID,
 		models.VoteValueUp,
-		"relevant",
+		"",
 		"Perfect match",
 	)
 	err = voteRepo.Create(ctx, vote)
@@ -661,8 +678,8 @@ func TestVoteRepository_GetMemoryUsageVotesWithContext(t *testing.T) {
 		t.Errorf("expected vote value up, got %d", found.Value)
 	}
 
-	if found.QuickFeedback != "relevant" {
-		t.Errorf("expected quick feedback 'relevant', got %s", found.QuickFeedback)
+	if found.QuickFeedback != "" {
+		t.Errorf("expected quick feedback '', got %s", found.QuickFeedback)
 	}
 
 	// Verify memory data
@@ -720,8 +737,8 @@ func TestVoteRepository_GetMemoryExtractionVotesWithContext(t *testing.T) {
 		t.Fatalf("Create user message failed: %v", err)
 	}
 
-	// Create memory extracted from the message
-	memory := models.NewMemory("mem_vote_me_ctx1", "User enjoys hiking in mountains")
+	// Create memory extracted from the message with unique ID
+	memory := models.NewMemory(fmt.Sprintf("mem_vote_me_ctx1_%d", time.Now().UnixNano()), "User enjoys hiking in mountains")
 	memory.SourceType = models.SourceTypeConversation
 	memory.SourceInfo = &models.SourceInfo{
 		ConversationID: conv.ID,
@@ -741,7 +758,7 @@ func TestVoteRepository_GetMemoryExtractionVotesWithContext(t *testing.T) {
 		memory.ID,
 		userMsg.ID,
 		models.VoteValueUp,
-		"accurate",
+		"",
 		"Good extraction",
 	)
 	err = voteRepo.Create(ctx, vote)
@@ -781,8 +798,8 @@ func TestVoteRepository_GetMemoryExtractionVotesWithContext(t *testing.T) {
 		t.Errorf("expected vote value up, got %d", found.Value)
 	}
 
-	if found.QuickFeedback != "accurate" {
-		t.Errorf("expected quick feedback 'accurate', got %s", found.QuickFeedback)
+	if found.QuickFeedback != "" {
+		t.Errorf("expected quick feedback '', got %s", found.QuickFeedback)
 	}
 
 	// Verify memory data

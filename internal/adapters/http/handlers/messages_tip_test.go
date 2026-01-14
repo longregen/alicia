@@ -40,7 +40,7 @@ func TestMessagesHandler_Send_UpdateTipFailure(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil, nil)
+	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
 
 	// Create a test conversation with an existing tip
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -95,7 +95,7 @@ func TestMessagesHandler_Send_UpdateTipFailure_WithNilTip(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil, nil)
+	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
 
 	// Create a test conversation with no existing tip (nil TipMessageID)
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -143,7 +143,7 @@ func TestMessagesHandler_Send_UpdateTipSuccess_BaseCase(t *testing.T) {
 	messageRepo := newMockMessageRepo()
 	idGen := newMockIDGenerator()
 	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil, nil)
+	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")

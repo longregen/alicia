@@ -42,7 +42,7 @@ describe('useSync', () => {
 
     const { result } = renderHook(() => useSync('conv1'));
 
-    expect(result.current.isSSEConnected).toBe(true);
+    expect(result.current.isConnected).toBe(true);
     expect(result.current.syncError).toBe(null);
     expect(result.current.isSyncing).toBe(false);
   });
@@ -59,7 +59,7 @@ describe('useSync', () => {
     const { result } = renderHook(() => useSync('conv1'));
 
     expect(result.current.syncError).toBe('WebSocket connection error');
-    expect(result.current.isSSEConnected).toBe(false);
+    expect(result.current.isConnected).toBe(false);
   });
 
   it('should update lastSyncTime when onSync callback is called', () => {
@@ -117,7 +117,7 @@ describe('useSync', () => {
   it('should disable sync when conversationId is null', () => {
     const { result } = renderHook(() => useSync(null));
 
-    expect(result.current.isSSEConnected).toBe(false);
+    expect(result.current.isConnected).toBe(false);
     expect(result.current.syncError).toBe(null);
   });
 

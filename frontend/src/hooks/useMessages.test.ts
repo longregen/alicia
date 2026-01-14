@@ -62,7 +62,7 @@ describe('useMessages', () => {
       lastSyncTime: null,
       syncError: null,
       syncNow: mockSyncNow,
-      isSSEConnected: false,
+      isConnected: false,
     });
 
     vi.mocked(messageRepository.findByConversation).mockReturnValue([]);
@@ -94,7 +94,7 @@ describe('useMessages', () => {
         lastSyncTime: new Date('2024-01-01'),
         syncError: 'Connection failed',
         syncNow: mockSyncNow,
-        isSSEConnected: true,
+        isConnected: true,
       });
 
       const { result } = renderHook(() => useMessages('conv-1'));
@@ -567,7 +567,7 @@ describe('useMessages', () => {
           lastSyncTime: null,
           syncError: null,
           syncNow: mockSyncNow,
-          isSSEConnected: false,
+          isConnected: false,
         };
       });
 
@@ -595,7 +595,7 @@ describe('useMessages', () => {
           lastSyncTime: null,
           syncError: null,
           syncNow: mockSyncNow,
-          isSSEConnected: false,
+          isConnected: false,
         };
       });
 
