@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -225,7 +226,9 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 
 	rows, err := r.conn(ctx).Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		log.Printf("[MemoryRepository.SearchMemories] Query failed: embeddingDims=%d, limit=%d, threshold=%v, includeScores=%v, error=%v",
+			len(opts.Embedding), opts.Limit, opts.Threshold, opts.IncludeScores, err)
+		return nil, fmt.Errorf("search query failed: %w", err)
 	}
 	defer rows.Close()
 
@@ -282,7 +285,8 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 		}
 
 		if err := rows.Scan(scanArgs...); err != nil {
-			return nil, err
+			log.Printf("[MemoryRepository.SearchMemories] Row scan failed: error=%v", err)
+			return nil, fmt.Errorf("scan memory row failed: %w", err)
 		}
 
 		if embeddings != nil {
@@ -324,7 +328,11 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 		})
 	}
 
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		log.Printf("[MemoryRepository.SearchMemories] rows.Err: %v", err)
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return results, nil
 }
 
 func (r *MemoryRepository) GetByTags(ctx context.Context, tags []string, limit int) ([]*models.Memory, error) {

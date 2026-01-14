@@ -25,6 +25,10 @@ const STORE_NAME = 'audio-chunks';
 class AudioManagerClass {
   private db: IDBPDatabase<AudioDB> | null = null;
   private initPromise: Promise<void> | null = null;
+  private audioElement: HTMLAudioElement | null = null;
+  private currentBlobUrl: string | null = null;
+  private audioQueue: AudioRefId[] = [];
+  private isProcessingQueue: boolean = false;
 
   constructor() {
     this.initPromise = this.initialize();
@@ -147,6 +151,140 @@ class AudioManagerClass {
     } catch (error) {
       console.error('Failed to cleanup audio storage:', error);
     }
+  }
+
+  /**
+   * Queue audio for playback. Audio will be played in order.
+   * @param id - The AudioRefId to queue for playback
+   */
+  queuePlayback(id: AudioRefId): void {
+    this.audioQueue.push(id);
+    this.processQueue();
+  }
+
+  /**
+   * Process the audio queue, playing the next audio if not already playing
+   */
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.audioQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    while (this.audioQueue.length > 0) {
+      const id = this.audioQueue.shift()!;
+      try {
+        await this.play(id);
+      } catch (error) {
+        console.error('Failed to play queued audio:', error);
+      }
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  /**
+   * Play audio by ID
+   * @param id - The AudioRefId to play
+   * @returns Promise that resolves when audio finishes playing
+   */
+  async play(id: AudioRefId): Promise<void> {
+    await this.ensureInitialized();
+
+    const audioStore = useAudioStore.getState();
+
+    try {
+      // Retrieve audio data
+      const audioData = await this.retrieve(id);
+      if (!audioData) {
+        throw new Error('Audio data not found');
+      }
+
+      // Clean up previous blob URL
+      if (this.currentBlobUrl) {
+        URL.revokeObjectURL(this.currentBlobUrl);
+        this.currentBlobUrl = null;
+      }
+
+      // Stop any currently playing audio
+      if (this.audioElement) {
+        this.audioElement.pause();
+        this.audioElement.src = '';
+      }
+
+      // Create audio element if needed
+      if (!this.audioElement) {
+        this.audioElement = new Audio();
+      }
+
+      const audio = this.audioElement;
+
+      // Create blob and object URL
+      const blob = new Blob([audioData], { type: 'audio/mpeg' });
+      this.currentBlobUrl = URL.createObjectURL(blob);
+
+      // Update store to indicate playback starting
+      audioStore.startPlayback(id);
+
+      // Return a promise that resolves when audio ends
+      return new Promise((resolve, reject) => {
+        audio.onended = () => {
+          audioStore.stopPlayback();
+          if (this.currentBlobUrl) {
+            URL.revokeObjectURL(this.currentBlobUrl);
+            this.currentBlobUrl = null;
+          }
+          resolve();
+        };
+
+        audio.onerror = (error) => {
+          console.error('Audio playback error:', error);
+          audioStore.stopPlayback();
+          if (this.currentBlobUrl) {
+            URL.revokeObjectURL(this.currentBlobUrl);
+            this.currentBlobUrl = null;
+          }
+          reject(error);
+        };
+
+        audio.ontimeupdate = () => {
+          if (audio.duration > 0) {
+            const progress = audio.currentTime / audio.duration;
+            audioStore.updatePlaybackProgress(progress);
+          }
+        };
+
+        // Apply volume settings
+        audio.volume = audioStore.playback.isMuted ? 0 : audioStore.playback.volume;
+
+        // Play audio
+        audio.src = this.currentBlobUrl!;
+        audio.play().catch(reject);
+      });
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      audioStore.stopPlayback();
+      throw error;
+    }
+  }
+
+  /**
+   * Stop current audio playback
+   */
+  stop(): void {
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement.currentTime = 0;
+    }
+    if (this.currentBlobUrl) {
+      URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = null;
+    }
+    // Clear queue
+    this.audioQueue = [];
+    this.isProcessingQueue = false;
+    useAudioStore.getState().stopPlayback();
   }
 }
 

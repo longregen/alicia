@@ -4,6 +4,7 @@ import InputArea from './InputArea';
 import ResponseControls from './ResponseControls';
 import VoiceVisualizer, { type VoiceState } from '../atoms/VoiceVisualizer';
 import { useConnectionStore, ConnectionStatus } from '../../stores/connectionStore';
+import { useAudioStore } from '../../stores/audioStore';
 import { useLiveKit } from '../../hooks/useLiveKit';
 import { useConfig } from '../../contexts/ConfigContext';
 import { cls } from '../../utils/cls';
@@ -28,8 +29,6 @@ export interface ChatWindowProps {
   conversationTitle?: string;
   useSileroVAD?: boolean;
   showControls?: boolean;
-  audioOutputEnabled?: boolean;
-  onAudioOutputToggle?: () => void;
   className?: string;
 }
 
@@ -41,8 +40,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   conversationTitle = 'Conversation',
   useSileroVAD = false,
   showControls = true,
-  audioOutputEnabled = true,
-  onAudioOutputToggle,
   className = '',
 }) => {
   const { config } = useConfig();
@@ -55,6 +52,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const connectionStatus = useConnectionStore((state) => state.status);
   const isConnected = connectionStatus === ConnectionStatus.Connected;
+
+  // Audio output state from store
+  const audioOutputEnabled = useAudioStore((state) => state.playback.audioOutputEnabled);
+  const toggleAudioOutput = useAudioStore((state) => state.toggleAudioOutput);
 
   const {
     connected: liveKitConnected,
@@ -83,9 +84,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const handleAudioToggle = () => {
-    if (onAudioOutputToggle) {
-      onAudioOutputToggle();
-    }
+    toggleAudioOutput();
   };
 
   const toggleVoiceSelector = () => {
@@ -395,6 +394,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         disabled={!isConnected}
         placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
         useSileroVAD={useSileroVAD || voiceModeActive}
+        conversationId={conversationId}
       />
     </div>
   );

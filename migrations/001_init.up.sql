@@ -22,6 +22,32 @@ CREATE TYPE completion_status AS ENUM ('pending', 'streaming', 'completed', 'fai
 CREATE TYPE optimization_status AS ENUM ('pending', 'running', 'completed', 'failed');
 
 -- ============================================================================
+-- system_prompt_versions (needed before alicia_conversations for FK)
+-- ============================================================================
+CREATE TABLE system_prompt_versions (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('spv'),
+    version_number SERIAL,
+    prompt_hash TEXT NOT NULL,
+    prompt_content TEXT NOT NULL,
+    prompt_type TEXT NOT NULL CHECK (prompt_type IN ('main', 'tool_selection', 'memory_selection', 'memory_extraction')),
+    description TEXT,
+    active BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    activated_at TIMESTAMP,
+    deactivated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    UNIQUE (prompt_type, version_number),
+    UNIQUE (prompt_type, prompt_hash)
+);
+
+CREATE INDEX idx_prompt_versions_type_active ON system_prompt_versions(prompt_type, active) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE system_prompt_versions IS 'Tracks versions of system prompts for GEPA optimization and A/B testing';
+COMMENT ON COLUMN system_prompt_versions.prompt_type IS 'Type of prompt: main (base system), tool_selection, memory_selection, memory_extraction';
+COMMENT ON COLUMN system_prompt_versions.prompt_hash IS 'SHA-256 hash of prompt_content for deduplication';
+COMMENT ON COLUMN system_prompt_versions.active IS 'Whether this version is currently active for new conversations';
+
+-- ============================================================================
 -- alicia_conversations
 -- ============================================================================
 CREATE TABLE alicia_conversations (
@@ -33,6 +59,7 @@ CREATE TABLE alicia_conversations (
     preferences JSONB DEFAULT '{}',
     last_client_stanza_id INTEGER NOT NULL DEFAULT 0,
     last_server_stanza_id INTEGER NOT NULL DEFAULT -1,
+    system_prompt_version_id TEXT REFERENCES system_prompt_versions(id),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP
@@ -46,6 +73,7 @@ CREATE INDEX idx_conversations_user_created ON alicia_conversations(user_id, cre
 COMMENT ON COLUMN alicia_conversations.user_id IS 'User identifier for multi-user support and cross-device sync';
 COMMENT ON COLUMN alicia_conversations.last_client_stanza_id IS 'Last stanza ID received from the client (for reconnection support)';
 COMMENT ON COLUMN alicia_conversations.last_server_stanza_id IS 'Last stanza ID sent by the server - negative values (for reconnection support)';
+COMMENT ON COLUMN alicia_conversations.system_prompt_version_id IS 'Version of the main system prompt used for this conversation';
 
 -- ============================================================================
 -- alicia_messages
@@ -79,6 +107,15 @@ COMMENT ON COLUMN alicia_messages.server_id IS 'Canonical server-assigned ID (fo
 COMMENT ON COLUMN alicia_messages.sync_status IS 'Synchronization state: pending, synced, or conflict';
 COMMENT ON COLUMN alicia_messages.synced_at IS 'Timestamp when the message was last synced with the server';
 COMMENT ON COLUMN alicia_messages.completion_status IS 'Tracks message completion: pending (created), streaming (being generated), completed (fully generated), failed (error during generation)';
+
+-- ============================================================================
+-- Add tip_message_id to conversations (after messages table exists)
+-- ============================================================================
+ALTER TABLE alicia_conversations ADD COLUMN tip_message_id TEXT REFERENCES alicia_messages(id);
+
+CREATE INDEX idx_conversations_tip_message ON alicia_conversations(tip_message_id) WHERE deleted_at IS NULL;
+
+COMMENT ON COLUMN alicia_conversations.tip_message_id IS 'Current head of the message chain for this conversation, enables message branching';
 
 -- ============================================================================
 -- alicia_sentences
@@ -141,6 +178,7 @@ CREATE TABLE alicia_memory (
     created_by TEXT,
     source_type TEXT,
     source_info JSONB DEFAULT '{}',
+    source_message_id TEXT REFERENCES alicia_messages(id),
     tags TEXT[] DEFAULT '{}',
     pinned BOOLEAN NOT NULL DEFAULT FALSE,
     archived BOOLEAN NOT NULL DEFAULT FALSE,
@@ -157,6 +195,7 @@ CREATE INDEX idx_memory_archived ON alicia_memory(archived) WHERE deleted_at IS 
 
 COMMENT ON COLUMN alicia_memory.pinned IS 'Whether this memory is pinned for priority access';
 COMMENT ON COLUMN alicia_memory.archived IS 'Whether this memory is archived and hidden from normal views';
+COMMENT ON COLUMN alicia_memory.source_message_id IS 'Message from which this memory was extracted (for memory_extraction voting)';
 
 -- ============================================================================
 -- alicia_memory_used
@@ -295,7 +334,7 @@ CREATE TABLE alicia_votes (
     id TEXT PRIMARY KEY DEFAULT generate_random_id('av'),
     conversation_id TEXT NOT NULL REFERENCES alicia_conversations(id) ON DELETE CASCADE,
     message_id TEXT REFERENCES alicia_messages(id) ON DELETE CASCADE,
-    target_type TEXT NOT NULL CHECK (target_type IN ('message', 'tool_use', 'memory', 'reasoning')),
+    target_type TEXT NOT NULL CHECK (target_type IN ('message', 'sentence', 'tool_use', 'memory', 'reasoning', 'memory_usage', 'memory_extraction')),
     target_id TEXT NOT NULL,
     vote TEXT NOT NULL CHECK (vote IN ('up', 'down', 'critical')),
     quick_feedback TEXT CHECK (quick_feedback IN ('wrong_tool', 'wrong_params', 'unnecessary', 'missing_context', 'outdated', 'wrong_context', 'too_generic', 'incorrect', 'incorrect_assumption', 'missed_consideration', 'overcomplicated', 'wrong_direction')),
@@ -309,8 +348,10 @@ CREATE INDEX idx_votes_conversation ON alicia_votes(conversation_id) WHERE delet
 CREATE INDEX idx_votes_message ON alicia_votes(message_id) WHERE message_id IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX idx_votes_target ON alicia_votes(target_type, target_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_votes_type_vote ON alicia_votes(target_type, vote) WHERE deleted_at IS NULL;
+CREATE INDEX idx_votes_memory_usage ON alicia_votes(target_id) WHERE target_type = 'memory_usage' AND deleted_at IS NULL;
+CREATE INDEX idx_votes_memory_extraction ON alicia_votes(target_id, message_id) WHERE target_type = 'memory_extraction' AND deleted_at IS NULL;
 
-COMMENT ON COLUMN alicia_votes.target_type IS 'Type of entity being voted on: message, tool_use, memory, or reasoning';
+COMMENT ON COLUMN alicia_votes.target_type IS 'Type of entity being voted on: message, sentence, tool_use, memory, reasoning, memory_usage, memory_extraction';
 COMMENT ON COLUMN alicia_votes.target_id IS 'ID of the target entity being voted on';
 COMMENT ON COLUMN alicia_votes.vote IS 'Vote type: up (positive), down (negative), critical (essential - for memories)';
 COMMENT ON COLUMN alicia_votes.quick_feedback IS 'Optional predefined feedback category for quick structured feedback';
@@ -355,6 +396,33 @@ COMMENT ON COLUMN alicia_session_stats.message_count IS 'Total number of message
 COMMENT ON COLUMN alicia_session_stats.tool_call_count IS 'Total number of tool calls made during the session';
 COMMENT ON COLUMN alicia_session_stats.memories_used IS 'Total number of unique memories retrieved during the session';
 COMMENT ON COLUMN alicia_session_stats.session_duration_seconds IS 'Total duration of the session in seconds';
+
+-- ============================================================================
+-- gepa_training_examples
+-- ============================================================================
+CREATE TABLE gepa_training_examples (
+    id TEXT PRIMARY KEY DEFAULT generate_random_id('gte'),
+    task_type TEXT NOT NULL CHECK (task_type IN ('tool_selection', 'memory_selection', 'memory_extraction')),
+    vote_id TEXT REFERENCES alicia_votes(id) ON DELETE SET NULL,
+    is_positive BOOLEAN NOT NULL,
+    inputs JSONB NOT NULL,
+    outputs JSONB NOT NULL,
+    vote_metadata JSONB,
+    source TEXT NOT NULL CHECK (source IN ('vote', 'synthetic')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_training_examples_task ON gepa_training_examples(task_type) WHERE deleted_at IS NULL;
+CREATE INDEX idx_training_examples_vote ON gepa_training_examples(vote_id) WHERE vote_id IS NOT NULL;
+
+COMMENT ON TABLE gepa_training_examples IS 'GEPA training examples derived from user votes or synthetic generation';
+COMMENT ON COLUMN gepa_training_examples.task_type IS 'GEPA task: tool_selection, memory_selection, or memory_extraction';
+COMMENT ON COLUMN gepa_training_examples.is_positive IS 'Whether this is a positive (upvote) or negative (downvote) example';
+COMMENT ON COLUMN gepa_training_examples.inputs IS 'GEPA input fields (user_message, context, available_tools, etc.)';
+COMMENT ON COLUMN gepa_training_examples.outputs IS 'GEPA output fields (selected_tool, arguments, memories, etc.)';
+COMMENT ON COLUMN gepa_training_examples.vote_metadata IS 'Vote metadata: quick_feedback, note, vote_value for diagnostic feedback';
+COMMENT ON COLUMN gepa_training_examples.source IS 'Origin of example: vote (user feedback) or synthetic (generated)';
 
 -- ============================================================================
 -- prompt_optimization_runs

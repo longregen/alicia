@@ -217,6 +217,54 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
       type: MessageType.ConversationUpdate,
       body: data,
     };
+  } else if ('feedbackId' in dto && 'targetType' in dto && 'aggregates' in dto) {
+    // FeedbackConfirmation
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.FeedbackConfirmation,
+      body: data,
+    };
+  } else if ('noteId' in dto && 'messageId' in dto && 'success' in dto) {
+    // NoteConfirmation
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.NoteConfirmation,
+      body: data,
+    };
+  } else if ('memoryId' in dto && 'action' in dto && 'success' in dto) {
+    // MemoryConfirmation
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.MemoryConfirmation,
+      body: data,
+    };
+  } else if ('connection' in dto && 'model' in dto && 'mcpServers' in dto) {
+    // ServerInfo
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.ServerInfo,
+      body: data,
+    };
+  } else if ('messageCount' in dto && 'toolCallCount' in dto && 'memoriesUsed' in dto) {
+    // SessionStats
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.SessionStats,
+      body: data,
+    };
+  } else if ('elites' in dto && 'currentEliteId' in dto) {
+    // EliteOptions
+    return {
+      stanzaId: 0,
+      conversationId: (dto.conversationId as string) || conversationId,
+      type: MessageType.EliteOptions,
+      body: data,
+    };
   }
 
   return {
@@ -239,6 +287,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isCleaningUpRef = useRef(false);
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const stanzaIdRef = useRef(0);
 
   // Pending subscription promises
@@ -384,6 +433,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.AudioChunk:
       case MessageType.Transcription:
       case MessageType.MemoryTrace:
+      case MessageType.FeedbackConfirmation:
+      case MessageType.NoteConfirmation:
+      case MessageType.MemoryConfirmation:
+      case MessageType.ServerInfo:
+      case MessageType.SessionStats:
+      case MessageType.EliteOptions:
         handleProtocolMessage(envelope);
         break;
 
@@ -573,6 +628,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
   // Connect on mount
   useEffect(() => {
+    // Cancel any pending cleanup from React StrictMode's first unmount
+    if (cleanupTimeoutRef.current) {
+      clearTimeout(cleanupTimeoutRef.current);
+      cleanupTimeoutRef.current = null;
+    }
+
     isCleaningUpRef.current = false;
     connect();
 
@@ -605,10 +666,15 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         reconnectTimeoutRef.current = null;
       }
 
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      // Delay WebSocket cleanup to handle React StrictMode's double-invoke.
+      // If the component remounts immediately (StrictMode), the timeout will be
+      // cancelled and the WebSocket stays alive. On true unmount, it will close.
+      cleanupTimeoutRef.current = setTimeout(() => {
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+      }, 0);
     };
   }, [connect]);
 

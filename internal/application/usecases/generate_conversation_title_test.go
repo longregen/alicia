@@ -24,6 +24,10 @@ func (m *mockConversationRepoForTitle) GetByID(ctx context.Context, id string) (
 	return m.conversation, nil
 }
 
+func (m *mockConversationRepoForTitle) GetByIDAndUserID(ctx context.Context, id, userID string) (*models.Conversation, error) {
+	return m.conversation, nil
+}
+
 func (m *mockConversationRepoForTitle) GetByLiveKitRoom(ctx context.Context, roomName string) (*models.Conversation, error) {
 	return m.conversation, nil
 }
@@ -34,7 +38,11 @@ func (m *mockConversationRepoForTitle) Update(ctx context.Context, c *models.Con
 	return nil
 }
 
-func (m *mockConversationRepoForTitle) UpdateTipMessageID(ctx context.Context, conversationID string, tipMessageID *string) error {
+func (m *mockConversationRepoForTitle) UpdateStanzaIDs(ctx context.Context, conversationID string, clientStanzaID, serverStanzaID int32) error {
+	return nil
+}
+
+func (m *mockConversationRepoForTitle) UpdateTip(ctx context.Context, conversationID, messageID string) error {
 	return nil
 }
 
@@ -46,7 +54,15 @@ func (m *mockConversationRepoForTitle) Delete(ctx context.Context, id string) er
 	return nil
 }
 
+func (m *mockConversationRepoForTitle) DeleteByIDAndUserID(ctx context.Context, id, userID string) error {
+	return nil
+}
+
 func (m *mockConversationRepoForTitle) List(ctx context.Context, limit, offset int) ([]*models.Conversation, error) {
+	return nil, nil
+}
+
+func (m *mockConversationRepoForTitle) ListByUserID(ctx context.Context, userID string, limit, offset int) ([]*models.Conversation, error) {
 	return nil, nil
 }
 
@@ -54,8 +70,8 @@ func (m *mockConversationRepoForTitle) ListActive(ctx context.Context, limit, of
 	return nil, nil
 }
 
-func (m *mockConversationRepoForTitle) UpdateStanzaIDs(ctx context.Context, conversationID string, clientStanzaID, serverStanzaID int32) error {
-	return nil
+func (m *mockConversationRepoForTitle) ListActiveByUserID(ctx context.Context, userID string, limit, offset int) ([]*models.Conversation, error) {
+	return nil, nil
 }
 
 type mockMessageRepoForTitle struct {
@@ -141,6 +157,14 @@ func (m *mockLLMServiceForTitle) ChatStreamWithTools(ctx context.Context, messag
 	return nil, nil
 }
 
+type mockBroadcasterForTitle struct {
+	broadcastCalled bool
+}
+
+func (m *mockBroadcasterForTitle) BroadcastConversationUpdate(conversation *models.Conversation) {
+	m.broadcastCalled = true
+}
+
 func TestNeedsTitleGeneration(t *testing.T) {
 	uc := &GenerateConversationTitle{}
 
@@ -151,9 +175,12 @@ func TestNeedsTitleGeneration(t *testing.T) {
 	}{
 		{"empty title", "", true},
 		{"auto-generated title", "Conversation 2024-01-15 14:30", true},
+		{"new chat title", "New Chat", true},
 		{"custom title", "My Custom Title", false},
 		{"another auto-generated", "Conversation 2023-12-01 09:00", true},
 		{"partial match", "Conversation about Python", false},
+		{"new chat lowercase", "new chat", false},
+		{"new chat with suffix", "New Chat 1", false},
 	}
 
 	for _, tt := range tests {
@@ -190,6 +217,20 @@ func TestGenerateConversationTitle_Execute(t *testing.T) {
 			llmResponse:   "Python List Sorting Help",
 			expectUpdate:  true,
 			expectedTitle: "Python List Sorting Help",
+		},
+		{
+			name: "generates title for New Chat",
+			conversation: &models.Conversation{
+				ID:    "conv-new-chat",
+				Title: "New Chat",
+			},
+			messages: []*models.Message{
+				{ID: "msg-1", Role: "user", Contents: "What is the weather like today?"},
+				{ID: "msg-2", Role: "assistant", Contents: "I don't have access to real-time weather data."},
+			},
+			llmResponse:   "Weather Inquiry",
+			expectUpdate:  true,
+			expectedTitle: "Weather Inquiry",
 		},
 		{
 			name: "skips if custom title already set",
@@ -234,8 +275,9 @@ func TestGenerateConversationTitle_Execute(t *testing.T) {
 			convRepo := &mockConversationRepoForTitle{conversation: tt.conversation}
 			msgRepo := &mockMessageRepoForTitle{messages: tt.messages}
 			llmService := &mockLLMServiceForTitle{response: tt.llmResponse}
+			broadcaster := &mockBroadcasterForTitle{}
 
-			uc := NewGenerateConversationTitle(convRepo, msgRepo, llmService)
+			uc := NewGenerateConversationTitle(convRepo, msgRepo, llmService, broadcaster)
 
 			err := uc.Execute(ctx, tt.conversation.ID)
 			if err != nil {

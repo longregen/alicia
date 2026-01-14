@@ -66,19 +66,62 @@ func FromToolUseModelList(toolUses []*models.ToolUse) []*ToolUseResponse {
 	return responses
 }
 
+// MemoryUsageResponse represents a memory usage in API responses
+type MemoryUsageResponse struct {
+	ID                string  `json:"id" msgpack:"id"`
+	ConversationID    string  `json:"conversation_id" msgpack:"conversationId"`
+	MessageID         string  `json:"message_id" msgpack:"messageId"`
+	MemoryID          string  `json:"memory_id" msgpack:"memoryId"`
+	MemoryContent     string  `json:"memory_content,omitempty" msgpack:"memoryContent,omitempty"`
+	SimilarityScore   float32 `json:"similarity_score" msgpack:"similarityScore"`
+	PositionInResults int     `json:"position_in_results" msgpack:"positionInResults"`
+	CreatedAt         string  `json:"created_at" msgpack:"createdAt"`
+}
+
+// FromMemoryUsageModel converts a domain model to a response DTO
+func FromMemoryUsageModel(mu *models.MemoryUsage) *MemoryUsageResponse {
+	resp := &MemoryUsageResponse{
+		ID:                mu.ID,
+		ConversationID:    mu.ConversationID,
+		MessageID:         mu.MessageID,
+		MemoryID:          mu.MemoryID,
+		SimilarityScore:   mu.SimilarityScore,
+		PositionInResults: mu.PositionInResults,
+		CreatedAt:         mu.CreatedAt.Format(time.RFC3339),
+	}
+	// Include memory content if the related memory is loaded
+	if mu.Memory != nil {
+		resp.MemoryContent = mu.Memory.Content
+	}
+	return resp
+}
+
+// FromMemoryUsageModelList converts a list of memory usage domain models to response DTOs
+func FromMemoryUsageModelList(memoryUsages []*models.MemoryUsage) []*MemoryUsageResponse {
+	if memoryUsages == nil {
+		return nil
+	}
+	responses := make([]*MemoryUsageResponse, len(memoryUsages))
+	for i, mu := range memoryUsages {
+		responses[i] = FromMemoryUsageModel(mu)
+	}
+	return responses
+}
+
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID             string             `json:"id" msgpack:"id"`
-	ConversationID string             `json:"conversation_id" msgpack:"conversationId"`
-	SequenceNumber int                `json:"sequence_number" msgpack:"sequenceNumber"`
-	PreviousID     string             `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
-	Role           string             `json:"role" msgpack:"role"`
-	Contents       string             `json:"contents" msgpack:"contents"`
-	LocalID        string             `json:"local_id,omitempty" msgpack:"localId,omitempty"`
-	ServerID       string             `json:"server_id,omitempty" msgpack:"serverId,omitempty"`
-	ToolUses       []*ToolUseResponse `json:"tool_uses,omitempty" msgpack:"toolUses,omitempty"`
-	CreatedAt      string             `json:"created_at" msgpack:"createdAt"`
-	UpdatedAt      string             `json:"updated_at" msgpack:"updatedAt"`
+	ID             string                 `json:"id" msgpack:"id"`
+	ConversationID string                 `json:"conversation_id" msgpack:"conversationId"`
+	SequenceNumber int                    `json:"sequence_number" msgpack:"sequenceNumber"`
+	PreviousID     string                 `json:"previous_id,omitempty" msgpack:"previousId,omitempty"`
+	Role           string                 `json:"role" msgpack:"role"`
+	Contents       string                 `json:"contents" msgpack:"contents"`
+	LocalID        string                 `json:"local_id,omitempty" msgpack:"localId,omitempty"`
+	ServerID       string                 `json:"server_id,omitempty" msgpack:"serverId,omitempty"`
+	ToolUses       []*ToolUseResponse     `json:"tool_uses,omitempty" msgpack:"toolUses,omitempty"`
+	MemoryUsages   []*MemoryUsageResponse `json:"memory_usages,omitempty" msgpack:"memoryUsages,omitempty"`
+	CreatedAt      string                 `json:"created_at" msgpack:"createdAt"`
+	UpdatedAt      string                 `json:"updated_at" msgpack:"updatedAt"`
 }
 
 // MessageListResponse represents a list of messages
@@ -99,6 +142,7 @@ func (r *MessageResponse) FromModel(msg *models.Message) *MessageResponse {
 		LocalID:        msg.LocalID,
 		ServerID:       msg.ServerID,
 		ToolUses:       FromToolUseModelList(msg.ToolUses),
+		MemoryUsages:   FromMemoryUsageModelList(msg.MemoryUsages),
 		CreatedAt:      msg.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:      msg.UpdatedAt.Format(time.RFC3339),
 	}

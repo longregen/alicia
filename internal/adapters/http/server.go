@@ -28,6 +28,7 @@ type Server struct {
 	conversationRepo        ports.ConversationRepository
 	messageRepo             ports.MessageRepository
 	toolUseRepo             ports.ToolUseRepository
+	memoryUsageRepo         ports.MemoryUsageRepository
 	noteRepo                ports.NoteRepository
 	voteRepo                ports.VoteRepository
 	sessionStatsRepo        ports.SessionStatsRepository
@@ -53,6 +54,7 @@ func NewServer(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
 	toolUseRepo ports.ToolUseRepository,
+	memoryUsageRepo ports.MemoryUsageRepository,
 	noteRepo ports.NoteRepository,
 	voteRepo ports.VoteRepository,
 	sessionStatsRepo ports.SessionStatsRepository,
@@ -77,6 +79,7 @@ func NewServer(
 		conversationRepo:        conversationRepo,
 		messageRepo:             messageRepo,
 		toolUseRepo:             toolUseRepo,
+		memoryUsageRepo:         memoryUsageRepo,
 		noteRepo:                noteRepo,
 		voteRepo:                voteRepo,
 		sessionStatsRepo:        sessionStatsRepo,
@@ -146,7 +149,7 @@ func (s *Server) setupRouter() {
 		r.Patch("/conversations/{id}", conversationsHandler.Patch)
 		r.Delete("/conversations/{id}", conversationsHandler.Delete)
 
-		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.toolUseRepo, s.idGen, s.generateResponseUseCase, s.wsBroadcaster)
+		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.toolUseRepo, s.memoryUsageRepo, s.idGen, s.generateResponseUseCase, s.wsBroadcaster)
 		r.Get("/conversations/{id}/messages", messagesHandler.List)
 		r.Post("/conversations/{id}/messages", messagesHandler.Send)
 		r.Get("/messages/{id}/siblings", messagesHandler.GetSiblings)

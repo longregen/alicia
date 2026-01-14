@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -80,14 +81,20 @@ func (c *Client) Embed(ctx context.Context, text string) (*ports.EmbeddingResult
 
 		results, err := c.embedBatchInternal(ctx, []string{text})
 		if err != nil {
+			log.Printf("[EmbeddingClient.Embed] embedBatchInternal failed: baseURL=%s, model=%s, textLen=%d, error=%v",
+				c.baseURL, c.model, len(text), err)
 			return err
 		}
 		if len(results) == 0 {
+			log.Printf("[EmbeddingClient.Embed] no embedding returned: baseURL=%s, model=%s", c.baseURL, c.model)
 			return fmt.Errorf("no embedding returned")
 		}
 		result = results[0]
 		return nil
 	})
+	if err != nil {
+		log.Printf("[EmbeddingClient.Embed] circuit breaker error: %v (state may be open)", err)
+	}
 	return result, err
 }
 
@@ -162,6 +169,7 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 
 		resp, err := c.httpClient.Do(httpReq)
 		if err != nil {
+			log.Printf("[EmbeddingClient] HTTP request failed: url=%s/v1/embeddings, error=%v", c.baseURL, err)
 			return 0, fmt.Errorf("failed to send request: %w", err)
 		}
 		defer resp.Body.Close()
@@ -173,6 +181,7 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			log.Printf("[EmbeddingClient] API error: url=%s/v1/embeddings, status=%d, body=%s", c.baseURL, resp.StatusCode, string(respBody))
 			return statusCode, fmt.Errorf("API error: %s - %s", resp.Status, string(respBody))
 		}
 
@@ -193,6 +202,7 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 	for _, data := range embeddingResp.Data {
 		dimensions := len(data.Embedding)
 		if c.dimensions > 0 && dimensions != c.dimensions {
+			log.Printf("[EmbeddingClient] dimension mismatch: expected=%d, got=%d, model=%s", c.dimensions, dimensions, embeddingResp.Model)
 			return nil, fmt.Errorf("expected %d dimensions but got %d", c.dimensions, dimensions)
 		}
 

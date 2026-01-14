@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import RecordingButtonForInput from '../atoms/RecordingButtonForInput';
 import InputSendButton from '../atoms/InputSendButton';
 import MicrophoneVAD from '../molecules/MicrophoneVAD';
@@ -30,6 +30,8 @@ export interface InputAreaProps {
   placeholder?: string;
   /** Whether to use Silero VAD for voice input */
   useSileroVAD?: boolean;
+  /** Current conversation ID - used to autofocus when switching conversations */
+  conversationId?: string | null;
   className?: string;
 }
 
@@ -39,11 +41,20 @@ const InputArea: React.FC<InputAreaProps> = ({
   disabled = false,
   placeholder = 'Type a message...',
   useSileroVAD = false,
+  conversationId,
   className = '',
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [recordingState, setRecordingState] = useState<RecordingState>(RECORDING_STATES.IDLE);
   const trackPublishedRef = useRef<boolean>(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Autofocus input when conversation changes
+  useEffect(() => {
+    if (conversationId && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [conversationId]);
 
   // Initialize VAD hook with LiveKit audio streaming
   const { status: microphoneStatus, vadManager } = useVAD({
@@ -143,6 +154,7 @@ const InputArea: React.FC<InputAreaProps> = ({
       {/* Text input - using simple input for e2e test compatibility */}
       <div className="flex-1">
         <input
+          ref={inputRef}
           type="text"
           value={inputValue}
           onChange={handleInputChange}

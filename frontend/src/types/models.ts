@@ -17,6 +17,18 @@ export interface ToolUseResponse {
   updated_at: string;
 }
 
+// MemoryUsageResponse matches the DTO format from the server's REST API
+export interface MemoryUsageResponse {
+  id: string;
+  conversation_id: string;
+  message_id: string;
+  memory_id: string;
+  memory_content?: string;
+  similarity_score: number;
+  position_in_results: number;
+  created_at: string;
+}
+
 export interface ConversationPreferences {
   tts_voice?: string;
   tts_speed?: number;
@@ -70,6 +82,7 @@ export interface Message {
   sentences?: AssistantSentence[];
   audio?: AudioChunk;
   tool_uses?: ToolUseResponse[];
+  memory_usages?: MemoryUsageResponse[];
   reasoning_steps?: ReasoningStep[];
 }
 

@@ -167,9 +167,11 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 	}
 
 	// Generate response asynchronously
+	// Use context.Background() so generation continues even if user disconnects
+	// The response will be saved to DB and can be retrieved when user reconnects
 	go func() {
 		// 5 minute timeout for LLM generation to prevent indefinite hangs
-		genCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		// Register the generation for cancellation with the correct ID
@@ -179,8 +181,11 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 		output, err := d.generateResponseUseCase.Execute(genCtx, input)
 		if err != nil {
 			log.Printf("Failed to generate response: %v", err)
-			_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
-				fmt.Sprintf("Failed to generate response: %v", err), true)
+			// Don't send error if context was cancelled (user disconnected)
+			if genCtx.Err() == nil {
+				_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+					fmt.Sprintf("Failed to generate response: %v", err), true)
+			}
 			return
 		}
 
@@ -755,10 +760,10 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 		}
 
 		// Generate response asynchronously
+		// Use context.Background() so generation continues even if user disconnects
 		go func() {
 			// 5 minute timeout for LLM generation to prevent indefinite hangs
-			// Use parent context for proper cancellation propagation
-			genCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
 			// Register the generation for cancellation with the correct ID
@@ -768,8 +773,11 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 			output, err := d.generateResponseUseCase.Execute(genCtx, input)
 			if err != nil {
 				log.Printf("Failed to regenerate response: %v", err)
-				_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
-					fmt.Sprintf("Failed to regenerate response: %v", err), true)
+				// Don't send error if context was cancelled (user disconnected)
+				if genCtx.Err() == nil {
+					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+						fmt.Sprintf("Failed to regenerate response: %v", err), true)
+				}
 				return
 			}
 
@@ -899,10 +907,10 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 		}
 
 		// Generate continuation asynchronously
+		// Use context.Background() so generation continues even if user disconnects
 		go func() {
 			// 5 minute timeout for LLM generation to prevent indefinite hangs
-			// Use parent context for proper cancellation propagation
-			genCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
 			// Register the generation for cancellation with the correct ID
@@ -912,8 +920,11 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 			output, err := d.generateResponseUseCase.Execute(genCtx, input)
 			if err != nil {
 				log.Printf("Failed to continue response: %v", err)
-				_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
-					fmt.Sprintf("Failed to continue response: %v", err), true)
+				// Don't send error if context was cancelled (user disconnected)
+				if genCtx.Err() == nil {
+					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+						fmt.Sprintf("Failed to continue response: %v", err), true)
+				}
 				return
 			}
 

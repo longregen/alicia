@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { api } from '../services/api';
 import { useMessageContext } from '../contexts/MessageContext';
 import { useAsync } from './useAsync';
@@ -13,6 +13,10 @@ function generateLocalId(): string {
 
 export function useMessages(conversationId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
+  // Store server messages with their related entities (tool_uses, memory_usages)
+  // These are not stored in SQLite, so we keep them in memory
+  // Using a ref to avoid circular dependency in refreshMessages
+  const serverMessagesCacheRef = useRef<Map<string, Message>>(new Map());
   const { clearMessages: clearProtocolMessages } = useMessageContext();
   const [sending, setSending] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
@@ -28,19 +32,41 @@ export function useMessages(conversationId: string | null) {
     onMessage: handleSyncComplete, // Also refresh UI when new messages arrive via WebSocket
   });
 
-  // Refresh messages from SQLite
+  // Refresh messages from SQLite and merge with server cache for related entities
   const refreshMessages = useCallback(() => {
     if (!conversationId) {
       setMessages([]);
       return;
     }
     const dbMessages = messageRepository.findByConversation(conversationId);
-    setMessages(dbMessages);
+
+    // Merge SQLite messages with cached server data for related entities
+    const mergedMessages = dbMessages.map(dbMsg => {
+      const cachedMsg = serverMessagesCacheRef.current.get(dbMsg.id);
+      if (cachedMsg) {
+        // Preserve tool_uses and memory_usages from server response
+        return {
+          ...dbMsg,
+          tool_uses: cachedMsg.tool_uses,
+          memory_usages: cachedMsg.memory_usages,
+        };
+      }
+      return dbMsg;
+    });
+
+    setMessages(mergedMessages);
   }, [conversationId]);
 
   // Wrap onSuccess callback to merge server messages into SQLite
   const handleFetchSuccess = useCallback((data: Message[]) => {
-    // Save server messages to SQLite
+    // Cache server messages with their related entities
+    const newCache = new Map<string, Message>();
+    data.forEach(msg => {
+      newCache.set(msg.id, msg);
+    });
+    serverMessagesCacheRef.current = newCache;
+
+    // Save server messages to SQLite (core fields only)
     data.forEach(msg => {
       messageRepository.upsert({
         ...msg,
@@ -69,9 +95,13 @@ export function useMessages(conversationId: string | null) {
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
+      serverMessagesCacheRef.current = new Map();
       clearProtocolMessages();
       return;
     }
+
+    // Clear cache when switching conversations
+    serverMessagesCacheRef.current = new Map();
 
     // Load from SQLite immediately
     refreshMessages();

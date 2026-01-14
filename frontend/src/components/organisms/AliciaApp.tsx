@@ -63,11 +63,6 @@ export function AliciaApp() {
     }
   }, [activeConversationId, clearConversation, setCurrentConversationId]);
 
-  // Log conversation errors (could be enhanced with toast notifications)
-  if (conversationsError) {
-    console.error('Conversations error:', conversationsError);
-  }
-
   // Handlers
   const handleNewConversation = async () => {
     const newConversation = await createConversation();
@@ -151,6 +146,13 @@ export function AliciaApp() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
+      {/* Error banner */}
+      {conversationsError && (
+        <div className="fixed top-0 left-0 right-0 bg-destructive text-destructive-foreground p-3 text-center z-[1000]">
+          {conversationsError}
+        </div>
+      )}
+
       {/* Sidebar with panel navigation */}
       <Sidebar
         conversations={conversations}

@@ -75,6 +75,7 @@ func (b *WebSocketBroadcaster) BroadcastBinary(conversationID string, data []byt
 
 	// Broadcast to all connections
 	for _, conn := range targets {
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 			log.Printf("Failed to broadcast to WebSocket connection: %v", err)
 			// Remove failed connection
@@ -139,13 +140,9 @@ func (b *WebSocketBroadcaster) BroadcastConversationUpdate(conversation *models.
 		UpdatedAt:      conversation.UpdatedAt.Format(time.RFC3339),
 	}
 
-	// Wrap in envelope with message type
-	envelope := map[string]interface{}{
-		"type": protocol.TypeConversationUpdate,
-		"body": update,
-	}
-
-	data, err := msgpack.Marshal(envelope)
+	// Send flat structure (consistent with BroadcastMessage)
+	// Frontend wrapInEnvelope detects type by field presence
+	data, err := msgpack.Marshal(update)
 	if err != nil {
 		log.Printf("Failed to encode conversation update for WebSocket broadcast: %v", err)
 		return

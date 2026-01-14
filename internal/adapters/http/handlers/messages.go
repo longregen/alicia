@@ -17,6 +17,7 @@ type MessagesHandler struct {
 	conversationRepo        ports.ConversationRepository
 	messageRepo             ports.MessageRepository
 	toolUseRepo             ports.ToolUseRepository
+	memoryUsageRepo         ports.MemoryUsageRepository
 	idGen                   ports.IDGenerator
 	generateResponseUseCase ports.GenerateResponseUseCase
 	wsBroadcaster           *WebSocketBroadcaster
@@ -26,6 +27,7 @@ func NewMessagesHandler(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
 	toolUseRepo ports.ToolUseRepository,
+	memoryUsageRepo ports.MemoryUsageRepository,
 	idGen ports.IDGenerator,
 	generateResponseUseCase ports.GenerateResponseUseCase,
 	wsBroadcaster *WebSocketBroadcaster,
@@ -34,6 +36,7 @@ func NewMessagesHandler(
 		conversationRepo:        conversationRepo,
 		messageRepo:             messageRepo,
 		toolUseRepo:             toolUseRepo,
+		memoryUsageRepo:         memoryUsageRepo,
 		idGen:                   idGen,
 		generateResponseUseCase: generateResponseUseCase,
 		wsBroadcaster:           wsBroadcaster,
@@ -58,6 +61,7 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 		if err == pgx.ErrNoRows {
 			respondError(w, "not_found", "Conversation not found or access denied", http.StatusNotFound)
 		} else {
+			log.Printf("Failed to retrieve conversation %s for listing messages: %v", conversationID, err)
 			respondError(w, "internal_error", "Failed to retrieve conversation", http.StatusInternalServerError)
 		}
 		return
@@ -78,6 +82,7 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		log.Printf("Failed to list messages for conversation %s: %v", conversationID, err)
 		respondError(w, "internal_error", "Failed to list messages", http.StatusInternalServerError)
 		return
 	}
@@ -92,6 +97,19 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			msg.ToolUses = toolUses
+		}
+	}
+
+	// Load memory usages for each message
+	if h.memoryUsageRepo != nil {
+		for _, msg := range messages {
+			memoryUsages, err := h.memoryUsageRepo.GetByMessage(r.Context(), msg.ID)
+			if err != nil {
+				// Log error but don't fail the request - memory usages are supplementary
+				log.Printf("Warning: Failed to load memory usages for message %s: %v", msg.ID, err)
+				continue
+			}
+			msg.MemoryUsages = memoryUsages
 		}
 	}
 

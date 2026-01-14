@@ -43,6 +43,7 @@ import {
 } from '../types/streaming';
 import { useConversationStore } from '../stores/conversationStore';
 import { audioManager } from '../utils/audioManager';
+import { useAudioStore } from '../stores/audioStore';
 import { useFeedbackStore, type VotableType } from '../stores/feedbackStore';
 import { useServerInfoStore, type ConnectionStatus, type MCPServerStatus } from '../stores/serverInfoStore';
 import { useDimensionStore } from '../stores/dimensionStore';
@@ -441,6 +442,12 @@ export async function handleAudioChunk(
         ctx.sentenceAudioMap.set(sentenceId, createAudioRefId(audioRefId));
         scheduleCleanup(sentenceId, ctx);
       }
+    }
+
+    // Auto-play audio if audio output is enabled
+    const audioStore = useAudioStore.getState();
+    if (audioStore.playback.audioOutputEnabled) {
+      audioManager.queuePlayback(createAudioRefId(audioRefId));
     }
   } catch (error) {
     console.error('Failed to store audio chunk:', error);

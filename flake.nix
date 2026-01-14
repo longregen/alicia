@@ -128,6 +128,50 @@
             license = pkgs.lib.licenses.mit;
           };
         };
+        # Shared development shell components
+        goDevInputs = with pkgs; [
+          go
+          go-tools # staticcheck
+          gcc
+          pkg-config
+          libopus
+          opusfile
+          libogg
+        ];
+
+        # Simple migration helper script (go-migrate has snowflake driver bug in nixpkgs)
+        db-migrate = pkgs.writeShellScriptBin "db-migrate" ''
+          for f in migrations/*.up.sql; do
+            echo "Applying $f..."
+            psql -d alicia -f "$f" 2>&1 | grep -v "already exists" || true
+          done
+          echo "Migrations complete."
+        '';
+
+        # Development helper script to run the backend
+        alicia-dev = pkgs.writeShellScriptBin "alicia" ''
+          if [ -f .env ]; then
+            set -a
+            source .env
+            set +a
+          fi
+          exec go run ./cmd/alicia "$@"
+        '';
+
+        frontendDevInputs = with pkgs; [
+          nodejs_22
+        ];
+
+        frontendShellHook = ''
+          mkdir -p frontend/public/models
+          mkdir -p frontend/public/onnx
+
+          ln -sf ${vad-dependencies}/models/* frontend/public/models/
+          ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
+          ln -sf ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm frontend/public/sql-wasm.wasm
+
+          echo "VAD dependencies linked to frontend/public/"
+        '';
       in {
         packages = rec {
           # Main Alicia Go application
@@ -479,32 +523,13 @@
 
         # Go-only shell for backend CI
         devShells.go = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            go
-            go-tools # staticcheck
-            gcc
-            pkg-config
-            libopus
-            opusfile
-            libogg
-          ];
+          buildInputs = goDevInputs ++ [db-migrate alicia-dev];
         };
 
         # Frontend-only shell for frontend CI
         devShells.frontend = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            nodejs_22
-          ];
-          shellHook = ''
-            mkdir -p frontend/public/models
-            mkdir -p frontend/public/onnx
-
-            ln -sf ${vad-dependencies}/models/* frontend/public/models/
-            ln -sf ${vad-dependencies}/onnx/* frontend/public/onnx/
-            ln -sf ${pkgs.sqlWasmFile}/share/sql-wasm/sql-wasm.wasm frontend/public/sql-wasm.wasm
-
-            echo "VAD dependencies linked to frontend/public/"
-          '';
+          buildInputs = frontendDevInputs;
+          shellHook = frontendShellHook;
         };
 
         # E2E testing shell with headless Chromium for Playwright tests
@@ -583,19 +608,12 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs =
-            (with pkgs; [
-              # Go development tools
-              go
+            goDevInputs
+            ++ frontendDevInputs
+            ++ (with pkgs; [
+              # Additional Go dev tools
               gopls
               delve
-              go-tools
-
-              # C compiler and build tools (required for CGO)
-              gcc
-              pkg-config
-              libopus
-              opusfile
-              libogg
 
               # Database tools
               postgresWithVector
@@ -603,9 +621,6 @@
 
               # Code generation
               sqlc
-
-              # Frontend development
-              nodejs_22
 
               # Documentation
               mdbook
@@ -618,6 +633,10 @@
             ++ [
               # gomod2nix from flake input
               gomod2nix.packages.${system}.default
+              # Migration helper
+              db-migrate
+              # Dev helper to run backend
+              alicia-dev
             ];
 
           shellHook = ''
@@ -634,15 +653,6 @@
             export PGUSER="postgres"
             export PGPORT=5555
             export ALICIA_POSTGRES_URL="postgres://postgres@localhost:5555/alicia?host=$PGDATA&sslmode=disable"
-
-            # Simple migration helper (go-migrate has snowflake driver bug in nixpkgs)
-            db-migrate() {
-              for f in migrations/*.up.sql; do
-                echo "Applying $f..."
-                psql -d alicia -f "$f" 2>&1 | grep -v "already exists" || true
-              done
-              echo "Migrations complete."
-            }
 
             # Initialize PostgreSQL if needed
             if [ ! -d "$PGDATA" ]; then

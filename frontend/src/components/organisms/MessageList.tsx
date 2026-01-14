@@ -122,7 +122,7 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
         itemContent={renderItem}
         followOutput="smooth"
         alignToBottom
-        className="h-full"
+        className="h-full mx-2"
       />
     </div>
   );

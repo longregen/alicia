@@ -6,11 +6,13 @@ import {
   createMessageId,
   createConversationId,
   createToolCallId,
+  createMemoryTraceId,
   MessageStatus,
   NormalizedMessage,
   ToolCall,
+  MemoryTrace,
 } from '../../types/streaming';
-import { Message, ToolUseResponse } from '../../types/models';
+import { Message, ToolUseResponse, MemoryUsageResponse } from '../../types/models';
 
 /**
  * ChatWindowBridge component.
@@ -29,6 +31,19 @@ export interface ChatWindowBridgeProps {
   onSendMessage: (content: string) => void;
   conversationId: string | null;
   syncError?: string | null;
+}
+
+/**
+ * Convert REST API MemoryUsageResponse to store MemoryTrace format
+ */
+function convertToMemoryTrace(memoryUsage: MemoryUsageResponse): MemoryTrace {
+  return {
+    id: createMemoryTraceId(memoryUsage.id),
+    messageId: createMessageId(memoryUsage.message_id),
+    content: memoryUsage.memory_content || '',
+    relevance: memoryUsage.similarity_score,
+    source: memoryUsage.memory_id,
+  };
 }
 
 /**
@@ -77,6 +92,8 @@ function convertToToolCall(toolUse: ToolUseResponse, messageId: string): ToolCal
 function convertToStreamingMessage(legacyMessage: Message): NormalizedMessage {
   // Extract tool call IDs if present
   const toolCallIds = (legacyMessage.tool_uses || []).map(tu => createToolCallId(tu.id));
+  // Extract memory trace IDs if present
+  const memoryTraceIds = (legacyMessage.memory_usages || []).map(mu => createMemoryTraceId(mu.id));
 
   return {
     id: createMessageId(legacyMessage.id),
@@ -87,7 +104,7 @@ function convertToStreamingMessage(legacyMessage: Message): NormalizedMessage {
     createdAt: new Date(legacyMessage.created_at),
     sentenceIds: [],
     toolCallIds,
-    memoryTraceIds: [],
+    memoryTraceIds,
     sync_status: legacyMessage.sync_status,
     local_id: legacyMessage.local_id, // Required for deduplication when server responds
   };
@@ -103,6 +120,7 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
 }) => {
   const mergeMessages = useConversationStore((state) => state.mergeMessages);
   const addToolCall = useConversationStore((state) => state.addToolCall);
+  const addMemoryTrace = useConversationStore((state) => state.addMemoryTrace);
   const setCurrentConversationId = useConversationStore((state) => state.setCurrentConversationId);
   const clearConversation = useConversationStore((state) => state.clearConversation);
   const setConnectionStatus = useConnectionStore((state) => state.setConnectionStatus);
@@ -133,8 +151,17 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
           });
         }
       });
+
+      // Add memory traces to the store (after mergeMessages so messages exist)
+      messages.forEach(msg => {
+        if (msg.memory_usages) {
+          msg.memory_usages.forEach(memoryUsage => {
+            addMemoryTrace(convertToMemoryTrace(memoryUsage));
+          });
+        }
+      });
     }
-  }, [conversationId, messages, mergeMessages, addToolCall]);
+  }, [conversationId, messages, mergeMessages, addToolCall, addMemoryTrace]);
 
   // Synchronize connection state to connectionStore
   // Skip in E2E tests where connection is mocked

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -116,10 +117,12 @@ func listCmd() *cobra.Command {
 
 // showCmd shows messages in a conversation
 func showCmd() *cobra.Command {
-	return &cobra.Command{
+	var verbose bool
+
+	cmd := &cobra.Command{
 		Use:   "show <conversation-id>",
 		Short: "Show messages in a conversation",
-		Long:  `Display all messages in the specified conversation.`,
+		Long:  `Display all messages in the specified conversation with tool use and memory indicators.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -133,6 +136,9 @@ func showCmd() *cobra.Command {
 
 			conversationRepo := postgres.NewConversationRepository(pool)
 			messageRepo := postgres.NewMessageRepository(pool)
+			toolUseRepo := postgres.NewToolUseRepository(pool)
+			memoryUsageRepo := postgres.NewMemoryUsageRepository(pool)
+			memoryRepo := postgres.NewMemoryRepository(pool)
 
 			// Get conversation details
 			conversation, err := conversationRepo.GetByID(ctx, conversationID)
@@ -160,19 +166,144 @@ func showCmd() *cobra.Command {
 				return nil
 			}
 
-			// Display messages
+			// Display messages with tool use and memory indicators
 			for i, msg := range messages {
 				if i > 0 {
 					fmt.Println()
 				}
-				fmt.Printf("[%s] %s:\n", msg.CreatedAt.Format("15:04:05"), msg.Role)
+
+				// Load tool uses for this message
+				toolUses, err := toolUseRepo.GetByMessage(ctx, msg.ID)
+				if err != nil {
+					toolUses = nil // Continue without tool uses on error
+				}
+
+				// Load memory usages for this message
+				memoryUsages, err := memoryUsageRepo.GetByMessage(ctx, msg.ID)
+				if err != nil {
+					memoryUsages = nil // Continue without memory usages on error
+				}
+
+				// Build indicators string
+				var indicators []string
+
+				// Add response type indicator for assistant messages
+				if msg.Role == models.MessageRoleAssistant {
+					indicators = append(indicators, "[response]")
+				}
+
+				// Add tool use indicator
+				if len(toolUses) > 0 {
+					toolNames := make([]string, 0, len(toolUses))
+					for _, tu := range toolUses {
+						status := ""
+						switch tu.Status {
+						case models.ToolStatusSuccess:
+							status = "+"
+						case models.ToolStatusError:
+							status = "!"
+						case models.ToolStatusRunning:
+							status = "~"
+						case models.ToolStatusPending:
+							status = "?"
+						}
+						toolNames = append(toolNames, fmt.Sprintf("%s%s", tu.ToolName, status))
+					}
+					indicators = append(indicators, fmt.Sprintf("[tools: %s]", strings.Join(toolNames, ", ")))
+				}
+
+				// Add memory use indicator
+				if len(memoryUsages) > 0 {
+					indicators = append(indicators, fmt.Sprintf("[memory: %d used]", len(memoryUsages)))
+				}
+
+				// Print message header with indicators
+				indicatorStr := ""
+				if len(indicators) > 0 {
+					indicatorStr = " " + strings.Join(indicators, " ")
+				}
+				fmt.Printf("[%s] %s:%s\n", msg.CreatedAt.Format("15:04:05"), msg.Role, indicatorStr)
+
+				// Print message content
 				fmt.Println(msg.Contents)
+
+				// Print detailed tool use info in verbose mode
+				if verbose && len(toolUses) > 0 {
+					fmt.Println("  Tool Uses:")
+					for _, tu := range toolUses {
+						fmt.Printf("    - %s [%s]\n", tu.ToolName, tu.Status)
+
+						// Show arguments (query)
+						if len(tu.Arguments) > 0 {
+							fmt.Println("      Arguments:")
+							argsJSON, err := json.MarshalIndent(tu.Arguments, "        ", "  ")
+							if err == nil {
+								fmt.Printf("        %s\n", string(argsJSON))
+							}
+						}
+
+						// Show result
+						if tu.Result != nil {
+							fmt.Println("      Result:")
+							resultJSON, err := json.MarshalIndent(tu.Result, "        ", "  ")
+							if err == nil {
+								resultStr := string(resultJSON)
+								// Truncate long results
+								if len(resultStr) > 500 {
+									resultStr = resultStr[:500] + "..."
+								}
+								fmt.Printf("        %s\n", resultStr)
+							}
+						}
+
+						// Show error if present
+						if tu.ErrorMessage != "" {
+							fmt.Printf("      Error: %s\n", tu.ErrorMessage)
+						}
+					}
+				}
+
+				// Print detailed memory usage info in verbose mode
+				if verbose && len(memoryUsages) > 0 {
+					fmt.Println("  Memory Used:")
+					for _, mu := range memoryUsages {
+						fmt.Printf("    - Memory %s (score: %.2f, pos: %d)\n",
+							mu.MemoryID[:8], mu.SimilarityScore, mu.PositionInResults)
+
+						// Show query prompt
+						if mu.QueryPrompt != "" {
+							fmt.Println("      Query:")
+							fmt.Printf("        %s\n", mu.QueryPrompt)
+						}
+
+						// Load and show memory content
+						memory, err := memoryRepo.GetByID(ctx, mu.MemoryID)
+						if err == nil && memory != nil {
+							fmt.Println("      Content:")
+							content := memory.Content
+							// Truncate long content
+							if len(content) > 300 {
+								content = content[:300] + "..."
+							}
+							// Indent each line of content
+							lines := strings.Split(content, "\n")
+							for _, line := range lines {
+								fmt.Printf("        %s\n", line)
+							}
+						}
+					}
+				}
+
 				fmt.Println(strings.Repeat("-", 80))
 			}
 
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show detailed tool use and memory information")
+
+	return cmd
 }
 
 // deleteCmd deletes a conversation

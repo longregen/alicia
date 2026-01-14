@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -49,10 +50,25 @@ Optional:
 	}
 }
 
+// maskDatabaseURL masks the password in a database URL for safe logging
+func maskDatabaseURL(dbURL string) string {
+	parsed, err := url.Parse(dbURL)
+	if err != nil {
+		return "[invalid URL]"
+	}
+	if parsed.User != nil {
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			parsed.User = url.UserPassword(parsed.User.Username(), "****")
+		}
+	}
+	return parsed.String()
+}
+
 // runServer initializes and starts the HTTP API server
 func runServer(ctx context.Context) error {
 	log.Println("Starting Alicia API server...")
 	log.Printf("  HTTP:     http://%s:%d", cfg.Server.Host, cfg.Server.Port)
+	log.Printf("  Postgres: %s", maskDatabaseURL(cfg.Database.PostgresURL))
 	log.Printf("  LLM:      %s", cfg.LLM.URL)
 
 	if cfg.IsLiveKitConfigured() {
@@ -266,6 +282,7 @@ func runServer(ctx context.Context) error {
 		conversationRepo,
 		messageRepo,
 		toolUseRepo,
+		memoryUsageRepo,
 		noteRepo,
 		voteRepo,
 		sessionStatsRepo,

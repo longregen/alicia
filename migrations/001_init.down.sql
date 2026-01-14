@@ -31,6 +31,7 @@ DROP TABLE IF EXISTS optimized_programs;
 DROP TABLE IF EXISTS prompt_evaluations;
 DROP TABLE IF EXISTS prompt_candidates;
 DROP TABLE IF EXISTS prompt_optimization_runs;
+DROP TABLE IF EXISTS gepa_training_examples;
 DROP TABLE IF EXISTS alicia_session_stats;
 DROP TABLE IF EXISTS alicia_notes;
 DROP TABLE IF EXISTS alicia_votes;
@@ -46,6 +47,7 @@ DROP TABLE IF EXISTS alicia_audio;
 DROP TABLE IF EXISTS alicia_sentences;
 DROP TABLE IF EXISTS alicia_messages;
 DROP TABLE IF EXISTS alicia_conversations;
+DROP TABLE IF EXISTS system_prompt_versions;
 
 -- Drop enum types
 DROP TYPE IF EXISTS optimization_status;

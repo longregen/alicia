@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"log"
 	"math"
 	"sort"
 	"time"
@@ -209,8 +210,10 @@ func (s *MemoryService) Search(ctx context.Context, query string, limit int) ([]
 
 	result, err := s.embedding.Embed(ctx, query)
 	if err != nil {
+		log.Printf("[MemoryService.Search] embedding.Embed failed: query=%q, error=%v", query, err)
 		return nil, domain.NewDomainError(err, "failed to generate query embeddings")
 	}
+	log.Printf("[MemoryService.Search] embedding generated: dims=%d, model=%s", len(result.Embedding), result.Model)
 
 	results, err := s.memoryRepo.SearchMemories(ctx, ports.MemorySearchOptions{
 		Embedding:     result.Embedding,
@@ -219,8 +222,10 @@ func (s *MemoryService) Search(ctx context.Context, query string, limit int) ([]
 		IncludeScores: false,
 	})
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrMemorySearchFailed, "memory search failed")
+		log.Printf("[MemoryService.Search] SearchMemories failed: limit=%d, embeddingDims=%d, error=%v", limit, len(result.Embedding), err)
+		return nil, domain.NewDomainError(domain.ErrMemorySearchFailed, "memory search failed: "+err.Error())
 	}
+	log.Printf("[MemoryService.Search] found %d memories", len(results))
 
 	memories := make([]*models.Memory, len(results))
 	for i, r := range results {
@@ -562,6 +567,7 @@ func (s *MemoryService) SearchWithScores(ctx context.Context, query string, thre
 
 	result, err := s.embedding.Embed(ctx, query)
 	if err != nil {
+		log.Printf("[MemoryService.SearchWithScores] embedding.Embed failed: query=%q, error=%v", query, err)
 		return nil, domain.NewDomainError(err, "failed to generate query embeddings")
 	}
 
@@ -572,7 +578,8 @@ func (s *MemoryService) SearchWithScores(ctx context.Context, query string, thre
 		IncludeScores: true,
 	})
 	if err != nil {
-		return nil, domain.NewDomainError(domain.ErrMemorySearchFailed, "memory search failed")
+		log.Printf("[MemoryService.SearchWithScores] SearchMemories failed: limit=%d, threshold=%.2f, error=%v", limit, threshold, err)
+		return nil, domain.NewDomainError(domain.ErrMemorySearchFailed, "memory search failed: "+err.Error())
 	}
 
 	// Return the search results directly (already in MemorySearchResult format)

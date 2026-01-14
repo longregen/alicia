@@ -939,6 +939,7 @@ func TestGenerateResponse_BasicNonStreaming(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	// Create a user message first
@@ -1012,6 +1013,7 @@ func TestGenerateResponse_WithReasoning(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1099,6 +1101,7 @@ func TestGenerateResponse_WithMemoryRetrieval(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1186,6 +1189,7 @@ func TestGenerateResponse_WithToolExecution(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1240,6 +1244,7 @@ func TestGenerateResponse_LLMError(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1311,6 +1316,7 @@ func TestGenerateResponse_ToolExecutionError(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1375,6 +1381,7 @@ func TestGenerateResponse_StreamingMode(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1458,6 +1465,7 @@ func TestGenerateResponse_StreamingError(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{
@@ -1501,6 +1509,7 @@ func TestGenerateResponse_WithPreGeneratedMessageID(t *testing.T) {
 		nil, // No prompt version service
 		idGen,
 		txManager,
+		nil, // No broadcaster
 	)
 
 	input := &ports.GenerateResponseInput{

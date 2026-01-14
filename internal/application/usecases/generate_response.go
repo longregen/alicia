@@ -126,6 +126,11 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 		return nil, fmt.Errorf("failed to create message: %w", err)
 	}
 
+	// Update conversation tip to point to the new assistant message
+	if err := uc.conversationRepo.UpdateTip(ctx, input.ConversationID, message.ID); err != nil {
+		return nil, fmt.Errorf("failed to update conversation tip: %w", err)
+	}
+
 	if input.EnableStreaming {
 		return uc.executeStreaming(ctx, input, message, llmMessages, tools)
 	}

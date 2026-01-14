@@ -63,6 +63,7 @@ type Message struct {
 	Audio          *Audio           `json:"audio,omitempty"`
 	ToolUses       []*ToolUse       `json:"tool_uses,omitempty"`
 	ReasoningSteps []*ReasoningStep `json:"reasoning_steps,omitempty"`
+	MemoryUsages   []*MemoryUsage   `json:"memory_usages,omitempty"`
 }
 
 func NewMessage(id, conversationID string, sequence int, role MessageRole, contents string) *Message {

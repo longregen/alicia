@@ -8,6 +8,7 @@ export interface AudioPlaybackState {
   isPlaying: boolean;
   volume: number; // 0-1
   isMuted: boolean;
+  audioOutputEnabled: boolean; // Whether to auto-play incoming audio
 }
 
 interface AudioStoreState {
@@ -29,6 +30,8 @@ interface AudioStoreActions {
   updatePlaybackProgress: (progress: number) => void;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
+  setAudioOutputEnabled: (enabled: boolean) => void;
+  toggleAudioOutput: () => void;
 
   // Bulk operations
   clearAudioStore: () => void;
@@ -44,6 +47,7 @@ const initialState: AudioStoreState = {
     isPlaying: false,
     volume: 1.0,
     isMuted: false,
+    audioOutputEnabled: true, // Auto-play audio by default
   },
 };
 
@@ -91,6 +95,16 @@ export const useAudioStore = create<AudioStore>()(
         state.playback.isMuted = !state.playback.isMuted;
       }),
 
+    setAudioOutputEnabled: (enabled) =>
+      set((state) => {
+        state.playback.audioOutputEnabled = enabled;
+      }),
+
+    toggleAudioOutput: () =>
+      set((state) => {
+        state.playback.audioOutputEnabled = !state.playback.audioOutputEnabled;
+      }),
+
     // Bulk operations
     clearAudioStore: () =>
       set((state) => {
@@ -107,3 +121,6 @@ export const selectCurrentlyPlayingAudio = (state: AudioStore) =>
 
 export const selectAllAudioRefs = (state: AudioStore) =>
   Object.values(state.audioRefs);
+
+export const selectAudioOutputEnabled = (state: AudioStore) =>
+  state.playback.audioOutputEnabled;

@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"errors"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
+	"github.com/longregen/alicia/internal/domain"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
 )
@@ -172,15 +175,20 @@ func (h *MemoryHandler) ListMemories(w http.ResponseWriter, r *http.Request) {
 	if len(tags) > 0 {
 		// Filter by tags
 		memories, err = h.memoryService.GetByTags(r.Context(), tags, limit)
+		if err != nil {
+			log.Printf("[MemoryHandler.ListMemories] GetByTags failed: tags=%v, limit=%d, error=%v", tags, limit, err)
+			respondError(w, "list_error", err.Error(), http.StatusInternalServerError)
+			return
+		}
 	} else {
 		// No filtering - search returns all memories ordered by importance
 		// Use a high-dimensional zero vector to get all memories
 		memories, err = h.memoryService.Search(r.Context(), " ", limit)
-	}
-
-	if err != nil {
-		respondError(w, "list_error", err.Error(), http.StatusInternalServerError)
-		return
+		if err != nil {
+			log.Printf("[MemoryHandler.ListMemories] Search failed: limit=%d, error=%v", limit, err)
+			respondError(w, "list_error", err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	responses := make([]MemoryResponse, len(memories))
@@ -294,6 +302,10 @@ func (h *MemoryHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
 
 	err := h.memoryService.Delete(r.Context(), memoryID)
 	if err != nil {
+		if errors.Is(err, domain.ErrMemoryNotFound) {
+			respondError(w, "not_found", "Memory not found", http.StatusNotFound)
+			return
+		}
 		respondError(w, "delete_error", err.Error(), http.StatusInternalServerError)
 		return
 	}
