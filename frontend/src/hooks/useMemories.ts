@@ -38,7 +38,7 @@ export interface SearchResultsResponse {
  * Convert API response to store memory format.
  * Moved outside hook since it has no dependencies on hook state.
  */
-function apiToStoreMemory(apiMemory: MemoryAPIResponse): Partial<Memory> {
+function apiToStoreMemory(apiMemory: MemoryAPIResponse): Memory {
   // Map tags to category (use first tag or default to 'fact')
   const category: MemoryCategory = apiMemory.tags[0] as MemoryCategory || 'fact';
 
@@ -46,10 +46,13 @@ function apiToStoreMemory(apiMemory: MemoryAPIResponse): Partial<Memory> {
     id: apiMemory.id,
     content: apiMemory.content,
     category,
+    tags: apiMemory.tags || [],
+    importance: apiMemory.importance || 0.5,
     createdAt: apiMemory.created_at * 1000, // Convert to milliseconds
     updatedAt: apiMemory.updated_at * 1000,
     pinned: apiMemory.pinned || false,
     archived: apiMemory.archived || false,
+    usageCount: 0,
   };
 }
 
@@ -76,7 +79,7 @@ export function useMemories() {
   const [isFetching, setIsFetching] = useState(false);
 
   // Store actions
-  const createMemory = useMemoryStore((state) => state.createMemory);
+  const setMemory = useMemoryStore((state) => state.setMemory);
   const updateMemory = useMemoryStore((state) => state.updateMemory);
   const deleteMemory = useMemoryStore((state) => state.deleteMemory);
   const pinMemory = useMemoryStore((state) => state.pinMemory);
@@ -108,13 +111,11 @@ export function useMemories() {
 
       const data: MemoryListResponse = await response.json();
 
-      // Clear and repopulate store
+      // Clear and repopulate store with correct IDs from API
       clearMemories();
       data.memories.forEach((apiMemory) => {
         const memory = apiToStoreMemory(apiMemory);
-        if (memory.content && memory.category) {
-          createMemory(memory.content, memory.category);
-        }
+        setMemory(memory);
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch memories';
@@ -123,7 +124,7 @@ export function useMemories() {
     } finally {
       setIsFetching(false);
     }
-  }, [createMemory, clearMemories]);
+  }, [setMemory, clearMemories]);
 
   // Load memories on mount
   useEffect(() => {
@@ -153,9 +154,8 @@ export function useMemories() {
       const apiMemory: MemoryAPIResponse = await response.json();
       const memory = apiToStoreMemory(apiMemory);
 
-      if (memory.content && memory.category) {
-        createMemory(memory.content, memory.category);
-      }
+      // Use setMemory to preserve the API-assigned ID
+      setMemory(memory);
 
       return apiMemory.id;
     } catch (err) {
@@ -166,7 +166,7 @@ export function useMemories() {
     } finally {
       setIsLoading(false);
     }
-  }, [createMemory]);
+  }, [setMemory]);
 
   // Update existing memory
   const update = useCallback(async (id: string, content: string, category?: MemoryCategory) => {

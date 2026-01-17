@@ -15,6 +15,8 @@ import {
   ServerInfo,
   SessionStats,
   EliteOptions,
+  OptimizationProgress,
+  DimensionScores,
   Feedback,
   UserNote,
   MemoryAction,
@@ -47,6 +49,7 @@ import { useAudioStore } from '../stores/audioStore';
 import { useFeedbackStore, type VotableType } from '../stores/feedbackStore';
 import { useServerInfoStore, type ConnectionStatus, type MCPServerStatus } from '../stores/serverInfoStore';
 import { useDimensionStore } from '../stores/dimensionStore';
+import { useOptimizationProgressStore } from '../stores/optimizationProgressStore';
 import { messageRepository } from '../db/repository';
 
 /**
@@ -180,6 +183,10 @@ export function handleProtocolMessage(envelope: Envelope): void {
 
     case MessageType.EliteOptions:
       handleEliteOptions(envelope.body as EliteOptions);
+      break;
+
+    case MessageType.OptimizationProgress:
+      handleOptimizationProgress(envelope.body as OptimizationProgress);
       break;
 
     default:
@@ -676,6 +683,27 @@ export function handleEliteOptions(msg: EliteOptions): void {
   const dimensionStore = useDimensionStore.getState();
 
   dimensionStore.updateElites(msg.elites, msg.currentEliteId);
+}
+
+/**
+ * Handle OptimizationProgress: Update optimization progress store with run status
+ */
+export function handleOptimizationProgress(msg: OptimizationProgress): void {
+  const optimizationStore = useOptimizationProgressStore.getState();
+
+  // Map protocol message to store format
+  // Note: dimensionScores needs type assertion as protocol uses Record<string, number>
+  // but store uses the more specific DimensionScores type
+  optimizationStore.updateProgress(msg.runId, {
+    runId: msg.runId,
+    status: msg.status,
+    iteration: msg.iteration,
+    maxIterations: msg.maxIterations,
+    currentScore: msg.currentScore,
+    bestScore: msg.bestScore,
+    dimensionScores: msg.dimensionScores as DimensionScores | undefined,
+    errorMessage: msg.message,
+  });
 }
 
 /**

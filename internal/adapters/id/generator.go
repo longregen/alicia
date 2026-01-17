@@ -101,3 +101,7 @@ func (g *Generator) GenerateTrainingExampleID() string {
 func (g *Generator) GenerateSystemPromptVersionID() string {
 	return g.generate("spv")
 }
+
+func (g *Generator) GenerateRequestID() string {
+	return g.generate("areq")
+}

@@ -527,3 +527,21 @@ func (r *MemoryRepository) Archive(ctx context.Context, id string) error {
 	_, err := r.conn(ctx).Exec(ctx, query, id)
 	return err
 }
+
+// DeleteByConversationID soft-deletes all memories that were extracted from messages
+// belonging to the specified conversation (via source_message_id)
+func (r *MemoryRepository) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `
+		UPDATE alicia_memory m
+		SET deleted_at = NOW()
+		FROM alicia_messages msg
+		WHERE m.source_message_id = msg.id
+		  AND msg.conversation_id = $1
+		  AND m.deleted_at IS NULL`
+
+	_, err := r.conn(ctx).Exec(ctx, query, conversationID)
+	return err
+}

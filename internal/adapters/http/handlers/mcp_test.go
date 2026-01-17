@@ -115,6 +115,10 @@ func (m *mockMCPServerRepository) List(ctx context.Context) ([]*models.MCPServer
 	return nil, nil
 }
 
+func (m *mockMCPServerRepository) WasDeleted(ctx context.Context, name string) (bool, error) {
+	return false, nil
+}
+
 func TestMCPHandler_ListServers(t *testing.T) {
 	ctx := context.Background()
 	toolService := &mockToolService{}

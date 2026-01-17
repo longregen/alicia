@@ -59,6 +59,7 @@ func (m *MockIDGenerator) GeneratePromptCandidateID() string     { return m.next
 func (m *MockIDGenerator) GeneratePromptEvaluationID() string    { return m.nextID("eval") }
 func (m *MockIDGenerator) GenerateSystemPromptVersionID() string { return m.nextID("spv") }
 func (m *MockIDGenerator) GenerateTrainingExampleID() string     { return m.nextID("tex") }
+func (m *MockIDGenerator) GenerateRequestID() string             { return m.nextID("req") }
 
 // MockVoteRepository is a mock vote repository for testing
 type MockVoteRepository struct {

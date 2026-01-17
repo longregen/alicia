@@ -127,17 +127,21 @@ func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]
 	return nil, nil
 }
 
-// Mock GenerateResponseUseCase
-type mockGenerateResponseUseCase struct {
-	output *ports.GenerateResponseOutput
+func (m *mockMessageRepo) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	return nil
+}
+
+// Mock SendMessageUseCase
+type mockSendMessageUseCase struct {
+	output *ports.SendMessageOutput
 	err    error
 }
 
-func newMockGenerateResponseUseCase() *mockGenerateResponseUseCase {
-	return &mockGenerateResponseUseCase{}
+func newMockSendMessageUseCase() *mockSendMessageUseCase {
+	return &mockSendMessageUseCase{}
 }
 
-func (m *mockGenerateResponseUseCase) Execute(ctx context.Context, input *ports.GenerateResponseInput) (*ports.GenerateResponseOutput, error) {
+func (m *mockSendMessageUseCase) Execute(ctx context.Context, input *ports.SendMessageInput) (*ports.SendMessageOutput, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -149,9 +153,8 @@ func (m *mockGenerateResponseUseCase) Execute(ctx context.Context, input *ports.
 func TestMessagesHandler_List_Success(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -190,9 +193,8 @@ func TestMessagesHandler_List_Success(t *testing.T) {
 func TestMessagesHandler_List_ConversationNotFound(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/conversations/nonexistent/messages", nil)
 	rr := httptest.NewRecorder()
@@ -222,9 +224,8 @@ func TestMessagesHandler_List_ConversationNotFound(t *testing.T) {
 func TestMessagesHandler_List_InactiveConversation(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create an archived conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -260,9 +261,8 @@ func TestMessagesHandler_List_RepositoryError(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
 	messageRepo.getErr = errors.New("database error")
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -289,9 +289,8 @@ func TestMessagesHandler_List_RepositoryError(t *testing.T) {
 func TestMessagesHandler_Send_Success(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -310,8 +309,9 @@ func TestMessagesHandler_Send_Success(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	if rr.Code != http.StatusCreated {
-		t.Errorf("expected status 201, got %d", rr.Code)
+	// Now returns 202 Accepted since processing happens asynchronously
+	if rr.Code != http.StatusAccepted {
+		t.Errorf("expected status 202, got %d", rr.Code)
 	}
 
 	var response map[string]interface{}
@@ -319,25 +319,20 @@ func TestMessagesHandler_Send_Success(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if response["id"] != "am_test123" {
-		t.Errorf("expected id 'am_test123', got %v", response["id"])
+	if response["status"] != "accepted" {
+		t.Errorf("expected status 'accepted', got %v", response["status"])
 	}
 
-	if response["contents"] != "Hello, Alicia!" {
-		t.Errorf("expected contents 'Hello, Alicia!', got %v", response["contents"])
-	}
-
-	if response["role"] != "user" {
-		t.Errorf("expected role 'user', got %v", response["role"])
+	if response["conversation_id"] != "ac_test123" {
+		t.Errorf("expected conversation_id 'ac_test123', got %v", response["conversation_id"])
 	}
 }
 
 func TestMessagesHandler_Send_MissingContents(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -373,9 +368,8 @@ func TestMessagesHandler_Send_MissingContents(t *testing.T) {
 func TestMessagesHandler_Send_ConversationNotFound(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	body := `{"contents": "Hello, Alicia!"}`
 	req := httptest.NewRequest("POST", "/api/v1/conversations/nonexistent/messages", bytes.NewBufferString(body))
@@ -398,9 +392,8 @@ func TestMessagesHandler_Send_ConversationNotFound(t *testing.T) {
 func TestMessagesHandler_Send_InactiveConversation(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create an archived conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -437,9 +430,8 @@ func TestMessagesHandler_Send_InactiveConversation(t *testing.T) {
 func TestMessagesHandler_Send_InvalidJSON(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -463,13 +455,12 @@ func TestMessagesHandler_Send_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestMessagesHandler_Send_RepositoryError(t *testing.T) {
+func TestMessagesHandler_Send_UseCaseError(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	messageRepo.createErr = errors.New("database error")
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	sendMessageUseCase.err = errors.New("database error")
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -488,17 +479,18 @@ func TestMessagesHandler_Send_RepositoryError(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 500, got %d", rr.Code)
+	// The request is still accepted since processing is async
+	// The error will be broadcast via WebSocket
+	if rr.Code != http.StatusAccepted {
+		t.Errorf("expected status 202, got %d", rr.Code)
 	}
 }
 
 func TestMessagesHandler_Send_WithPreviousMessage(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
-	generateUseCase := newMockGenerateResponseUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, idGen, generateUseCase, nil)
+	sendMessageUseCase := newMockSendMessageUseCase()
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -527,8 +519,9 @@ func TestMessagesHandler_Send_WithPreviousMessage(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	if rr.Code != http.StatusCreated {
-		t.Errorf("expected status 201, got %d", rr.Code)
+	// Now returns 202 Accepted since processing happens asynchronously
+	if rr.Code != http.StatusAccepted {
+		t.Errorf("expected status 202, got %d", rr.Code)
 	}
 
 	var response map[string]interface{}
@@ -536,7 +529,7 @@ func TestMessagesHandler_Send_WithPreviousMessage(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if response["previous_id"] != "am_prev" {
-		t.Errorf("expected previous_id 'am_prev', got %v", response["previous_id"])
+	if response["status"] != "accepted" {
+		t.Errorf("expected status 'accepted', got %v", response["status"])
 	}
 }

@@ -47,7 +47,7 @@ func (m *mockOptimizationService) GetOptimizationRun(ctx context.Context, runID 
 	return m.run, nil
 }
 
-func (m *mockOptimizationService) ListOptimizationRuns(ctx context.Context, opts ports.ListOptimizationRunsOptions) ([]*models.OptimizationRun, error) {
+func (m *mockOptimizationService) ListOptimizationRuns(ctx context.Context, status string, limit, offset int) ([]*models.OptimizationRun, error) {
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
@@ -109,6 +109,18 @@ func (m *mockOptimizationService) RecordEvaluation(ctx context.Context, candidat
 	return &models.PromptEvaluation{}, nil
 }
 
+func (m *mockOptimizationService) UpdateRunProgress(ctx context.Context, runID string, iteration int, bestScore float64, dimScores map[string]float64) error {
+	return nil
+}
+
+func (m *mockOptimizationService) SaveCandidate(ctx context.Context, runID string, candidate *models.PromptCandidate) error {
+	return nil
+}
+
+func (m *mockOptimizationService) SaveEvaluation(ctx context.Context, candidateID string, eval *models.PromptEvaluation) error {
+	return nil
+}
+
 // Tests for OptimizationHandler.CreateOptimization
 
 func TestOptimizationHandler_CreateOptimization_Success(t *testing.T) {
@@ -126,7 +138,7 @@ func TestOptimizationHandler_CreateOptimization_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{run: run}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	body := `{"name": "Test Optimization", "prompt_type": "conversation", "baseline_prompt": "Test prompt"}`
 	req := httptest.NewRequest("POST", "/api/v1/optimizations", bytes.NewBufferString(body))
@@ -156,7 +168,7 @@ func TestOptimizationHandler_CreateOptimization_Success(t *testing.T) {
 
 func TestOptimizationHandler_CreateOptimization_MissingName(t *testing.T) {
 	mockService := &mockOptimizationService{}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	body := `{"prompt_type": "conversation"}`
 	req := httptest.NewRequest("POST", "/api/v1/optimizations", bytes.NewBufferString(body))
@@ -173,7 +185,7 @@ func TestOptimizationHandler_CreateOptimization_MissingName(t *testing.T) {
 
 func TestOptimizationHandler_CreateOptimization_InvalidPromptType(t *testing.T) {
 	mockService := &mockOptimizationService{}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	body := `{"name": "Test", "prompt_type": "invalid_type"}`
 	req := httptest.NewRequest("POST", "/api/v1/optimizations", bytes.NewBufferString(body))
@@ -190,7 +202,7 @@ func TestOptimizationHandler_CreateOptimization_InvalidPromptType(t *testing.T) 
 
 func TestOptimizationHandler_CreateOptimization_ServiceError(t *testing.T) {
 	mockService := &mockOptimizationService{startErr: errors.New("service error")}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	body := `{"name": "Test", "prompt_type": "conversation"}`
 	req := httptest.NewRequest("POST", "/api/v1/optimizations", bytes.NewBufferString(body))
@@ -222,7 +234,7 @@ func TestOptimizationHandler_GetOptimization_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{run: run}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/aor_test123", nil)
 	req = addUserContext(req, "test-user")
@@ -254,7 +266,7 @@ func TestOptimizationHandler_GetOptimization_Success(t *testing.T) {
 
 func TestOptimizationHandler_GetOptimization_NotFound(t *testing.T) {
 	mockService := &mockOptimizationService{getErr: errors.New("not found")}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/nonexistent", nil)
 	req = addUserContext(req, "test-user")
@@ -293,7 +305,7 @@ func TestOptimizationHandler_ListOptimizations_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{runs: runs}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations", nil)
 	req = addUserContext(req, "test-user")
@@ -317,7 +329,7 @@ func TestOptimizationHandler_ListOptimizations_Success(t *testing.T) {
 
 func TestOptimizationHandler_ListOptimizations_WithFilters(t *testing.T) {
 	mockService := &mockOptimizationService{runs: []*models.OptimizationRun{}}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations?status=completed&limit=10&offset=5", nil)
 	req = addUserContext(req, "test-user")
@@ -354,7 +366,7 @@ func TestOptimizationHandler_GetCandidates_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{candidates: candidates}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/aor_test123/candidates", nil)
 	req = addUserContext(req, "test-user")
@@ -394,7 +406,7 @@ func TestOptimizationHandler_GetBestCandidate_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{candidate: candidate}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/aor_test123/best", nil)
 	req = addUserContext(req, "test-user")
@@ -432,7 +444,7 @@ func TestOptimizationHandler_GetOptimizedProgram_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{program: program}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/aor_test123/program", nil)
 	req = addUserContext(req, "test-user")
@@ -486,7 +498,7 @@ func TestOptimizationHandler_GetEvaluations_Success(t *testing.T) {
 	}
 
 	mockService := &mockOptimizationService{evals: evals}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/candidates/apc_test123/evaluations", nil)
 	req = addUserContext(req, "test-user")
@@ -514,7 +526,7 @@ func TestOptimizationHandler_GetEvaluations_Success(t *testing.T) {
 
 func TestOptimizationHandler_GetEvaluations_ServiceError(t *testing.T) {
 	mockService := &mockOptimizationService{getEvalsErr: errors.New("service error")}
-	handler := NewOptimizationHandler(mockService)
+	handler := NewOptimizationHandler(mockService, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/optimizations/candidates/apc_test123/evaluations", nil)
 	req = addUserContext(req, "test-user")

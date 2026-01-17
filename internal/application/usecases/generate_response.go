@@ -25,6 +25,7 @@ type GenerateResponse struct {
 	idGenerator          ports.IDGenerator
 	txManager            ports.TransactionManager
 	titleGenerator       *GenerateConversationTitle // Optional: auto-generates conversation titles
+	extractMemories      *ExtractMemories           // Memory extraction use case
 }
 
 func NewGenerateResponse(
@@ -60,6 +61,11 @@ func NewGenerateResponse(
 	// Initialize title generator with shared dependencies
 	gr.titleGenerator = NewGenerateConversationTitle(conversationRepo, messageRepo, llmService, broadcaster)
 
+	// Initialize memory extraction use case
+	if memoryService != nil {
+		gr.extractMemories = NewExtractMemories(memoryService, llmService, idGenerator)
+	}
+
 	return gr
 }
 
@@ -87,6 +93,17 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 			retrievedMemories := make([]*models.Memory, len(searchResults))
 			for i, result := range searchResults {
 				retrievedMemories[i] = result.Memory
+
+				// Notify about each retrieved memory
+				if input.Notifier != nil {
+					input.Notifier.NotifyMemoryRetrieved(
+						input.UserMessageID,
+						input.ConversationID,
+						result.Memory.ID,
+						result.Memory.Content,
+						result.Similarity,
+					)
+				}
 			}
 
 			// Merge with any memories already provided in input
@@ -97,8 +114,7 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 		}
 	}
 
-	llmMessages := uc.buildLLMContext(ctx, conversation, messages, relevantMemories)
-
+	// Get tools first so they can be included in the system prompt
 	var tools []*models.Tool
 	if input.EnableTools {
 		tools, err = uc.toolRepo.ListEnabled(ctx)
@@ -106,6 +122,8 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 			return nil, fmt.Errorf("failed to get enabled tools: %w", err)
 		}
 	}
+
+	llmMessages := uc.buildLLMContext(ctx, conversation, messages, relevantMemories, tools, input.ContinueFromContent)
 
 	sequenceNumber, err := uc.messageRepo.GetNextSequenceNumber(ctx, input.ConversationID)
 	if err != nil {
@@ -131,6 +149,11 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 		return nil, fmt.Errorf("failed to update conversation tip: %w", err)
 	}
 
+	// Notify that generation has started
+	if input.Notifier != nil {
+		input.Notifier.NotifyGenerationStarted(message.ID, input.PreviousID, input.ConversationID)
+	}
+
 	if input.EnableStreaming {
 		return uc.executeStreaming(ctx, input, message, llmMessages, tools)
 	}
@@ -138,25 +161,42 @@ func (uc *GenerateResponse) Execute(ctx context.Context, input *ports.GenerateRe
 	return uc.executeNonStreaming(ctx, input, message, llmMessages, tools)
 }
 
-func (uc *GenerateResponse) buildLLMContext(ctx context.Context, conversation *models.Conversation, messages []*models.Message, memories []*models.Memory) []ports.LLMMessage {
+// buildToolContextPrompt builds the tool descriptions section for the system prompt
+func buildToolContextPrompt(tools []*models.Tool) string {
+	if len(tools) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\n\nAvailable tools:\n")
+	for _, tool := range tools {
+		sb.WriteString(fmt.Sprintf("- %s: %s\n", tool.Name, tool.Description))
+	}
+	sb.WriteString("\nConsider using these tools when they would improve your response quality.")
+	return sb.String()
+}
+
+func (uc *GenerateResponse) buildLLMContext(ctx context.Context, conversation *models.Conversation, messages []*models.Message, memories []*models.Memory, tools []*models.Tool, continueFromContent string) []ports.LLMMessage {
 	llmMessages := []ports.LLMMessage{}
 
 	// Build system prompt
-	var systemPrompt string
+	var systemPrompt strings.Builder
+	systemPrompt.WriteString("You are Alicia, a helpful AI assistant with memory and tool capabilities.")
+
 	if len(memories) > 0 {
-		var memoryContent strings.Builder
-		memoryContent.WriteString("You are Alicia, a helpful AI assistant. Here are some relevant memories from our previous conversations:\n\n")
+		systemPrompt.WriteString("\n\nRelevant memories from previous conversations:\n")
 		for i, memory := range memories {
-			memoryContent.WriteString(fmt.Sprintf("%d. %s\n", i+1, memory.Content))
+			systemPrompt.WriteString(fmt.Sprintf("%d. %s\n", i+1, memory.Content))
 		}
-		systemPrompt = memoryContent.String()
-	} else {
-		systemPrompt = "You are Alicia, a helpful AI assistant."
 	}
+
+	// Add tool descriptions to system prompt
+	systemPrompt.WriteString(buildToolContextPrompt(tools))
+
+	systemPromptStr := systemPrompt.String()
 
 	// Track the prompt version if promptVersionService is available
 	if uc.promptVersionService != nil && conversation.SystemPromptVersionID == "" {
-		versionID, err := uc.promptVersionService.GetOrCreateForConversation(ctx, systemPrompt)
+		versionID, err := uc.promptVersionService.GetOrCreateForConversation(ctx, systemPromptStr)
 		if err == nil {
 			// Update conversation with version ID
 			if err := uc.conversationRepo.UpdatePromptVersion(ctx, conversation.ID, versionID); err != nil {
@@ -171,7 +211,7 @@ func (uc *GenerateResponse) buildLLMContext(ctx context.Context, conversation *m
 
 	llmMessages = append(llmMessages, ports.LLMMessage{
 		Role:    "system",
-		Content: systemPrompt,
+		Content: systemPromptStr,
 	})
 
 	for _, msg := range messages {
@@ -182,6 +222,15 @@ func (uc *GenerateResponse) buildLLMContext(ctx context.Context, conversation *m
 		llmMessages = append(llmMessages, ports.LLMMessage{
 			Role:    role,
 			Content: msg.Contents,
+		})
+	}
+
+	// If continuing from existing content, add partial assistant message
+	// This tells the LLM to continue from where the previous response left off
+	if continueFromContent != "" {
+		llmMessages = append(llmMessages, ports.LLMMessage{
+			Role:    "assistant",
+			Content: continueFromContent,
 		})
 	}
 
@@ -234,13 +283,27 @@ func (uc *GenerateResponse) executeNonStreaming(
 			}
 
 			output.ReasoningSteps = append(output.ReasoningSteps, step)
+
+			// Notify about reasoning step
+			if input.Notifier != nil {
+				input.Notifier.NotifyReasoningStep(stepID, message.ID, input.ConversationID, 0, response.Reasoning)
+			}
 		}
 
 		return nil
 	})
 
 	if err != nil {
+		// Notify about generation failure
+		if input.Notifier != nil {
+			input.Notifier.NotifyGenerationFailed(message.ID, input.ConversationID, err)
+		}
 		return nil, err
+	}
+
+	// Notify about successful generation completion
+	if input.Notifier != nil {
+		input.Notifier.NotifyGenerationComplete(message.ID, input.ConversationID, message.Contents)
 	}
 
 	// Extract and store important memories from the response (async, non-blocking)
@@ -305,13 +368,27 @@ func (uc *GenerateResponse) executeWithToolLoop(
 					}
 
 					output.ReasoningSteps = append(output.ReasoningSteps, step)
+
+					// Notify about reasoning step
+					if input.Notifier != nil {
+						input.Notifier.NotifyReasoningStep(stepID, message.ID, input.ConversationID, 0, response.Reasoning)
+					}
 				}
 
 				return nil
 			})
 
 			if err != nil {
+				// Notify about generation failure
+				if input.Notifier != nil {
+					input.Notifier.NotifyGenerationFailed(message.ID, input.ConversationID, err)
+				}
 				return nil, err
+			}
+
+			// Notify about successful generation completion
+			if input.Notifier != nil {
+				input.Notifier.NotifyGenerationComplete(message.ID, input.ConversationID, message.Contents)
 			}
 
 			// Extract and store important memories from the response (async, non-blocking)
@@ -338,10 +415,24 @@ func (uc *GenerateResponse) executeWithToolLoop(
 					return fmt.Errorf("failed to create tool use for %s: %w", toolCall.Name, err)
 				}
 
+				// Notify about tool use start
+				if input.Notifier != nil {
+					input.Notifier.NotifyToolUseStart(toolUse.ID, message.ID, input.ConversationID, toolCall.Name, toolCall.Arguments)
+				}
+
 				// Execute the tool
 				toolUse, err = uc.toolService.ExecuteToolUse(txCtx, toolUse.ID)
 				if err != nil {
+					// Notify about tool use failure
+					if input.Notifier != nil {
+						input.Notifier.NotifyToolUseComplete(toolUse.ID, toolUse.ID, input.ConversationID, false, nil, err.Error())
+					}
 					return fmt.Errorf("failed to execute tool %s: %w", toolCall.Name, err)
+				}
+
+				// Notify about tool use completion
+				if input.Notifier != nil {
+					input.Notifier.NotifyToolUseComplete(toolUse.ID, toolUse.ID, input.ConversationID, true, toolUse.Result, "")
 				}
 
 				iterationToolUses = append(iterationToolUses, toolUse)
@@ -412,7 +503,7 @@ func (uc *GenerateResponse) executeStreaming(
 
 	outputChan := make(chan *ports.ResponseStreamChunk, 10)
 
-	go uc.processStream(ctx, message, streamChan, outputChan, input.EnableReasoning)
+	go uc.processStream(ctx, input, message, streamChan, outputChan)
 
 	return &ports.GenerateResponseOutput{
 		Message:        message,
@@ -425,14 +516,15 @@ func (uc *GenerateResponse) executeStreaming(
 
 func (uc *GenerateResponse) processStream(
 	ctx context.Context,
+	input *ports.GenerateResponseInput,
 	message *models.Message,
 	inputChan <-chan ports.LLMStreamChunk,
 	outputChan chan<- *ports.ResponseStreamChunk,
-	enableReasoning bool,
 ) {
 	// Track created sentence IDs for cleanup on failure
 	createdSentenceIDs := make([]string, 0, 50)
 	streamingSucceeded := false
+	notifier := input.Notifier
 
 	// Ensure cleanup happens on any exit path (normal return, panic, or error)
 	defer func() {
@@ -459,6 +551,11 @@ func (uc *GenerateResponse) processStream(
 				}
 			}
 
+			// Notify about generation failure
+			if notifier != nil {
+				notifier.NotifyGenerationFailed(message.ID, input.ConversationID, fmt.Errorf("panic during streaming: %v", r))
+			}
+
 			// Send error to output channel if still open
 			select {
 			case outputChan <- &ports.ResponseStreamChunk{Error: fmt.Errorf("panic during streaming: %v", r)}:
@@ -480,6 +577,11 @@ func (uc *GenerateResponse) processStream(
 						log.Printf("ERROR: failed to mark sentence %s as failed: %v", sentenceID, err)
 					}
 				}
+			}
+
+			// Notify about generation failure
+			if notifier != nil {
+				notifier.NotifyGenerationFailed(message.ID, input.ConversationID, fmt.Errorf("streaming ended abnormally"))
 			}
 		}
 	}()
@@ -530,6 +632,11 @@ func (uc *GenerateResponse) processStream(
 					IsFinal:    false,
 				}
 
+				// Notify about sentence
+				if notifier != nil {
+					notifier.NotifySentence(sentenceID, message.ID, input.ConversationID, sentenceSequence, sentenceText, false)
+				}
+
 				sentenceSequence++
 				bufferText = remaining
 			}
@@ -554,6 +661,11 @@ func (uc *GenerateResponse) processStream(
 				return
 			}
 
+			// Notify about tool use start
+			if notifier != nil {
+				notifier.NotifyToolUseStart(toolUseID, message.ID, input.ConversationID, chunk.ToolCall.Name, chunk.ToolCall.Arguments)
+			}
+
 			// Send ToolUseRequest notification before execution
 			outputChan <- &ports.ResponseStreamChunk{
 				ToolCall:              chunk.ToolCall,
@@ -566,6 +678,12 @@ func (uc *GenerateResponse) processStream(
 				executedToolUse, err := uc.toolService.ExecuteToolUse(ctx, toolUseID)
 				if err != nil {
 					log.Printf("Tool execution failed for %s: %v", chunk.ToolCall.Name, err)
+
+					// Notify about tool use failure
+					if notifier != nil {
+						notifier.NotifyToolUseComplete(toolUseID, toolUseID, input.ConversationID, false, nil, err.Error())
+					}
+
 					// Tool execution failure is already recorded in the ToolUse status
 					// Send the failed ToolUse result to client
 					outputChan <- &ports.ResponseStreamChunk{
@@ -574,6 +692,11 @@ func (uc *GenerateResponse) processStream(
 						IsToolExecutionResult: true,
 					}
 				} else {
+					// Notify about tool use completion
+					if notifier != nil {
+						notifier.NotifyToolUseComplete(executedToolUse.ID, toolUseID, input.ConversationID, true, executedToolUse.Result, "")
+					}
+
 					// Send ToolUseResult notification after successful execution
 					outputChan <- &ports.ResponseStreamChunk{
 						ToolCall:              chunk.ToolCall,
@@ -584,7 +707,7 @@ func (uc *GenerateResponse) processStream(
 			}
 		}
 
-		if enableReasoning && chunk.Reasoning != "" {
+		if input.EnableReasoning && chunk.Reasoning != "" {
 			stepID := uc.idGenerator.GenerateReasoningStepID()
 			step := &models.ReasoningStep{
 				ID:             stepID,
@@ -596,6 +719,11 @@ func (uc *GenerateResponse) processStream(
 			if err := uc.reasoningStepRepo.Create(ctx, step); err != nil {
 				outputChan <- &ports.ResponseStreamChunk{Error: fmt.Errorf("failed to create reasoning step: %w", err)}
 				return
+			}
+
+			// Notify about reasoning step
+			if notifier != nil {
+				notifier.NotifyReasoningStep(stepID, message.ID, input.ConversationID, reasoningSequence, chunk.Reasoning)
 			}
 
 			outputChan <- &ports.ResponseStreamChunk{
@@ -627,6 +755,11 @@ func (uc *GenerateResponse) processStream(
 						Text:       remainingText,
 						IsFinal:    true,
 					}
+
+					// Notify about final sentence
+					if notifier != nil {
+						notifier.NotifySentence(sentenceID, message.ID, input.ConversationID, sentenceSequence, remainingText, true)
+					}
 				}
 			}
 
@@ -650,6 +783,11 @@ func (uc *GenerateResponse) processStream(
 			}
 
 			streamingSucceeded = true
+
+			// Notify about successful generation completion
+			if notifier != nil {
+				notifier.NotifyGenerationComplete(message.ID, input.ConversationID, message.Contents)
+			}
 
 			// Extract and store important memories from the response (async, non-blocking)
 			// Use detached context with timeout to avoid being cancelled when parent completes
@@ -825,115 +963,29 @@ func (uc *GenerateResponse) trackMemoryUsageWithScores(ctx context.Context, conv
 
 // extractAndStoreMemories extracts important information from the assistant's response
 // and stores it as memories for future retrieval. This runs asynchronously to avoid
-// blocking the response flow.
+// blocking the response flow. Uses GEPA-optimized extraction and deduplication.
 func (uc *GenerateResponse) extractAndStoreMemories(ctx context.Context, message *models.Message, conversationID string) {
-	// Skip if memory service is not available
-	if uc.memoryService == nil {
+	// Skip if memory extraction use case is not available
+	if uc.extractMemories == nil {
 		return
 	}
 
-	// Skip if message content is too short (less than 50 characters)
-	if len(message.Contents) < 50 {
-		return
-	}
-
-	// Use LLM to extract important information from the response
-	extractionPrompt := []ports.LLMMessage{
-		{
-			Role: "system",
-			Content: `You are a memory extraction assistant. Your task is to identify important, factual information from the assistant's response that should be remembered for future conversations.
-
-Extract information that is:
-- Factual and specific (names, dates, preferences, facts)
-- Likely to be useful in future conversations
-- Not trivial or conversational filler
-
-For each piece of important information, output it as a separate line starting with "MEMORY:".
-If there's no important information to remember, output "NONE".
-
-Examples:
-Input: "I love hiking! My favorite trail is the Pacific Crest Trail. I usually go on weekends."
-Output:
-MEMORY: User's favorite trail is the Pacific Crest Trail
-MEMORY: User usually goes hiking on weekends
-
-Input: "Okay, let me help you with that."
-Output: NONE`,
-		},
-		{
-			Role:    "user",
-			Content: fmt.Sprintf("Extract important memories from this assistant response:\n\n%s", message.Contents),
-		},
-	}
-
-	extraction, err := uc.llmService.Chat(ctx, extractionPrompt)
+	// Use the dedicated ExtractMemories use case
+	output, err := uc.extractMemories.Execute(ctx, &ExtractMemoriesInput{
+		ConversationText: message.Contents,
+		ConversationID:   conversationID,
+		MessageID:        message.ID,
+	})
 	if err != nil {
-		log.Printf("warning: failed to extract memories from response: %v\n", err)
+		log.Printf("warning: failed to extract memories: %v\n", err)
 		return
 	}
 
-	// Parse the extraction result
-	if extraction.Content == "NONE" || extraction.Content == "" {
-		return
+	// Log results
+	if len(output.CreatedMemories) > 0 {
+		log.Printf("info: extracted %d memories from conversation (skipped %d duplicates/low-importance)\n",
+			len(output.CreatedMemories), output.SkippedCount)
+	} else if output.Reasoning != "" {
+		log.Printf("info: memory extraction: %s\n", output.Reasoning)
 	}
-
-	// Split by lines and process each memory
-	lines := strings.Split(extraction.Content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "MEMORY:") {
-			continue
-		}
-
-		// Extract the memory content
-		memoryContent := strings.TrimSpace(strings.TrimPrefix(line, "MEMORY:"))
-		if memoryContent == "" || len(memoryContent) < 10 {
-			continue
-		}
-
-		// Create memory from conversation with embeddings
-		memory, err := uc.memoryService.CreateFromConversation(ctx, memoryContent, conversationID, message.ID)
-		if err != nil {
-			log.Printf("warning: failed to create memory '%s': %v\n", memoryContent, err)
-			continue
-		}
-
-		// Set a default importance score based on content length and specificity
-		importance := calculateMemoryImportance(memoryContent)
-		_, err = uc.memoryService.SetImportance(ctx, memory.ID, importance)
-		if err != nil {
-			log.Printf("warning: failed to set memory importance: %v\n", err)
-		}
-
-		log.Printf("info: created memory from conversation: %s\n", memoryContent)
-	}
-}
-
-// calculateMemoryImportance calculates an importance score based on content characteristics
-func calculateMemoryImportance(content string) float32 {
-	// Base importance
-	importance := float32(0.5)
-
-	// Longer memories tend to be more detailed and important (up to +0.2)
-	if len(content) > 100 {
-		importance += 0.2
-	} else if len(content) > 50 {
-		importance += 0.1
-	}
-
-	// Memories with specific markers are often more important
-	specificMarkers := []string{"preference", "favorite", "always", "never", "important", "remember"}
-	for _, marker := range specificMarkers {
-		if strings.Contains(strings.ToLower(content), marker) {
-			importance += 0.1
-			break
-		}
-	}
-
-	// Cap at 1.0
-	if importance > 1.0 {
-		importance = 1.0
-	}
-
-	return importance
 }

@@ -20,15 +20,18 @@ const (
 
 type ConversationsHandler struct {
 	conversationRepo ports.ConversationRepository
+	memoryService    ports.MemoryService
 	idGen            ports.IDGenerator
 }
 
 func NewConversationsHandler(
 	conversationRepo ports.ConversationRepository,
+	memoryService ports.MemoryService,
 	idGen ports.IDGenerator,
 ) *ConversationsHandler {
 	return &ConversationsHandler{
 		conversationRepo: conversationRepo,
+		memoryService:    memoryService,
 		idGen:            idGen,
 	}
 }
@@ -156,6 +159,14 @@ func (h *ConversationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := validateURLParam(r, w, "id", "Conversation ID")
 	if !ok {
 		return
+	}
+
+	// Delete memories associated with this conversation first
+	// (memories extracted from messages in this conversation)
+	if err := h.memoryService.DeleteByConversationID(r.Context(), id); err != nil {
+		log.Printf("Failed to delete memories for conversation %s: %v", id, err)
+		// Continue with conversation deletion even if memory deletion fails
+		// The memories will become orphaned but won't cause data inconsistency
 	}
 
 	if err := h.conversationRepo.DeleteByIDAndUserID(r.Context(), id, userID); err != nil {

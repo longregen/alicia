@@ -11,13 +11,13 @@ import (
 // FeedbackHandler handles feedback-related API endpoints
 type FeedbackHandler struct {
 	voteRepo            ports.VoteRepository
-	optimizationService ports.OptimizationService
+	optimizationService ports.OptimizationServiceFull
 }
 
 // NewFeedbackHandler creates a new feedback handler
 func NewFeedbackHandler(
 	voteRepo ports.VoteRepository,
-	optimizationService ports.OptimizationService,
+	optimizationService ports.OptimizationServiceFull,
 ) *FeedbackHandler {
 	return &FeedbackHandler{
 		voteRepo:            voteRepo,

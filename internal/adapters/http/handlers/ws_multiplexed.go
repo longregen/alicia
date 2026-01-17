@@ -29,6 +29,7 @@ type connectionState struct {
 	subscriptions map[string]struct{} // conversationID -> struct{}
 	mu            sync.RWMutex
 	stanzaID      int32 // server stanza ID counter (negative, decrementing)
+	isAgent       bool  // true if this is the response generation agent
 }
 
 func (cs *connectionState) nextStanzaID() int32 {
@@ -127,6 +128,10 @@ func (h *MultiplexedWSHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		for _, convID := range state.getSubscriptions() {
 			h.broadcaster.Unsubscribe(convID, conn)
 		}
+		// Clean up agent connection if this was an agent
+		if state.isAgent {
+			h.broadcaster.UnsubscribeAgent(conn)
+		}
 		log.Printf("Multiplexed WebSocket connection closed, cleaned up %d subscriptions", len(state.subscriptions))
 	}()
 
@@ -202,8 +207,13 @@ func (h *MultiplexedWSHandler) readPump(ctx context.Context, state *connectionSt
 				h.sendError(state, envelope.ConversationID, "not_subscribed", "Not subscribed to conversation")
 			}
 		default:
-			// Forward other messages if subscribed
-			if envelope.ConversationID != "" && state.isSubscribed(envelope.ConversationID) {
+			// If sender is agent, re-broadcast response messages to other subscribers
+			if state.isAgent && envelope.ConversationID != "" {
+				// Agent sends response messages (AssistantMessage, AssistantSentence, ToolUseRequest, etc.)
+				// Re-broadcast to all subscribers in the conversation (excluding the agent)
+				h.broadcaster.BroadcastBinaryExcluding(envelope.ConversationID, data, state.conn)
+			} else if envelope.ConversationID != "" && state.isSubscribed(envelope.ConversationID) {
+				// Forward other messages if subscribed
 				// Broadcast to other subscribers
 				broadcastData, _ := msgpack.Marshal(&envelope)
 				h.broadcaster.BroadcastBinary(envelope.ConversationID, broadcastData)
@@ -224,6 +234,15 @@ func (h *MultiplexedWSHandler) handleSubscribe(ctx context.Context, state *conne
 	var req dto.SubscribeRequest
 	if err := msgpack.Unmarshal(bodyBytes, &req); err != nil {
 		h.sendSubscribeAck(state, "", false, "Invalid subscribe request")
+		return
+	}
+
+	// Check if this is an agent subscription
+	if req.AgentMode {
+		state.isAgent = true
+		h.broadcaster.SubscribeAgent(state.conn)
+		log.Printf("Agent connected and subscribed for response generation")
+		h.sendSubscribeAck(state, "", true, "")
 		return
 	}
 

@@ -265,6 +265,15 @@ func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]
 	return siblings, nil
 }
 
+func (m *mockMessageRepo) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	for id, msg := range m.store {
+		if msg.ConversationID == conversationID && msg.SequenceNumber > afterSequence {
+			delete(m.store, id)
+		}
+	}
+	return nil
+}
+
 // Tests
 
 func TestToolService_RegisterTool(t *testing.T) {

@@ -33,7 +33,7 @@ import { messageRepository } from '../db/repository';
 import { useFeedbackStore, VotableType, VoteType } from '../stores/feedbackStore';
 import { useServerInfoStore } from '../stores/serverInfoStore';
 import { useDimensionStore } from '../stores/dimensionStore';
-import { setMessageSender } from '../adapters/protocolAdapter';
+import { setMessageSender, handleProtocolMessage } from '../adapters/protocolAdapter';
 
 export interface LiveKitMessage {
   envelope: Envelope;

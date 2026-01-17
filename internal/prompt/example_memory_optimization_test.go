@@ -324,3 +324,7 @@ func (m *mockMemoryService) Pin(ctx context.Context, id string, pinned bool) (*m
 func (m *mockMemoryService) Archive(ctx context.Context, id string) (*models.Memory, error) {
 	return nil, nil
 }
+
+func (m *mockMemoryService) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}

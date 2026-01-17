@@ -107,6 +107,10 @@ func (m *mockMemoryService) Archive(ctx context.Context, id string) (*models.Mem
 	return nil, nil
 }
 
+func (m *mockMemoryService) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}
+
 func TestNewMemoryAwareModule(t *testing.T) {
 	sig := MustParseSignature("question -> answer")
 	memService := &mockMemoryService{}

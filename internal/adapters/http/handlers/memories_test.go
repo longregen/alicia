@@ -138,6 +138,10 @@ func (m *mockMemoryService) Archive(ctx context.Context, id string) (*models.Mem
 	return m.memory, nil
 }
 
+func (m *mockMemoryService) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}
+
 func (m *mockMemoryService) SearchWithThreshold(ctx context.Context, query string, threshold float32, limit int) ([]*models.Memory, error) {
 	if m.searchErr != nil {
 		return nil, m.searchErr

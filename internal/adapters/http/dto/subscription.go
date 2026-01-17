@@ -4,6 +4,7 @@ package dto
 type SubscribeRequest struct {
 	ConversationID string `json:"conversation_id" msgpack:"conversationId"`
 	FromSequence   *int   `json:"from_sequence,omitempty" msgpack:"fromSequence,omitempty"`
+	AgentMode      bool   `json:"agent_mode,omitempty" msgpack:"agentMode,omitempty"` // If true, subscribe as response generation agent
 }
 
 // UnsubscribeRequest represents a request to unsubscribe from a conversation

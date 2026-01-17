@@ -158,8 +158,8 @@ func (s *AgentService) GenerateResponse(ctx context.Context, input *ports.AgentI
 		}
 	}
 
-	// Step 7: Build LLM context with filtered memories
-	llmMessages := s.buildLLMContext(messages, selectedMemories, selectedToolNames)
+	// Step 7: Build LLM context with filtered memories and tool descriptions
+	llmMessages := s.buildLLMContext(messages, selectedMemories, tools, selectedToolNames)
 
 	// Step 8: Create assistant message
 	sequenceNumber, err := s.messageRepo.GetNextSequenceNumber(ctx, input.ConversationID)
@@ -288,13 +288,14 @@ func (s *AgentService) buildConversationContext(messages []*models.Message) stri
 func (s *AgentService) buildLLMContext(
 	messages []*models.Message,
 	memories []*models.Memory,
+	tools []*models.Tool,
 	selectedTools []string,
 ) []ports.LLMMessage {
 	llmMessages := []ports.LLMMessage{}
 
 	// Build system prompt
 	var systemPrompt strings.Builder
-	systemPrompt.WriteString("You are Alicia, a helpful AI assistant.")
+	systemPrompt.WriteString("You are Alicia, a helpful AI assistant with memory and tool capabilities.")
 
 	if len(memories) > 0 {
 		systemPrompt.WriteString("\n\nRelevant memories from previous conversations:\n")
@@ -303,9 +304,18 @@ func (s *AgentService) buildLLMContext(
 		}
 	}
 
+	// Add tool descriptions to system prompt
+	if len(tools) > 0 {
+		systemPrompt.WriteString("\n\nAvailable tools:\n")
+		for _, tool := range tools {
+			systemPrompt.WriteString(fmt.Sprintf("- %s: %s\n", tool.Name, tool.Description))
+		}
+		systemPrompt.WriteString("\nConsider using these tools when they would improve your response quality.")
+	}
+
+	// Note preferred tools if GEPA selected any
 	if len(selectedTools) > 0 {
-		systemPrompt.WriteString(fmt.Sprintf("\n\nPreferred tools for this request: %s\n", strings.Join(selectedTools, ", ")))
-		systemPrompt.WriteString("Consider using these tools if appropriate for the user's request.")
+		systemPrompt.WriteString(fmt.Sprintf("\n\nPreferred tools for this request: %s", strings.Join(selectedTools, ", ")))
 	}
 
 	llmMessages = append(llmMessages, ports.LLMMessage{

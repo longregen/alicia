@@ -67,6 +67,10 @@ func (m *mockMCPServerRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (m *mockMCPServerRepository) WasDeleted(ctx context.Context, name string) (bool, error) {
+	return false, nil
+}
+
 // mockMCPTransport implements mcp.Transport for testing
 type mockMCPTransport struct {
 	receiveCh   chan mcp.Message

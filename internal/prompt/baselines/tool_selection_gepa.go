@@ -21,7 +21,7 @@ SELECTION CRITERIA:
 1. Match user intent to tool capabilities precisely
 2. Consider conversation context for disambiguation
 3. Prefer specificity: choose the most targeted tool for the task
-4. When uncertain, prefer "none" over incorrect tool selection
+4. When a tool could improve response quality, prefer using it over responding without tools
 5. Extract all required arguments from the user message
 
 RESPONSE FORMAT:
@@ -29,7 +29,7 @@ RESPONSE FORMAT:
 - arguments: JSON object with tool parameters extracted from the message
 - reasoning: Brief explanation of why this tool was selected
 
-IMPORTANT: Only select a tool if the user's intent clearly requires it. Conversational messages don't need tools.`
+IMPORTANT: Select a tool when it would provide value - such as current information, user-specific data, calculations, or web searches. Only skip tools for purely conversational messages.`
 
 // ToolInfo represents a tool available for selection
 type ToolInfo struct {

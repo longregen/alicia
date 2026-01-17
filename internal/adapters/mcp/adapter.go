@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -35,6 +36,9 @@ func NewAdapter(ctx context.Context, toolService ports.ToolService, mcpRepo port
 
 // InitializeServers initializes all configured MCP servers and loads from database
 func (a *Adapter) InitializeServers(ctx context.Context, configs []config.MCPServerConfig) error {
+	// Auto-populate built-in MCP servers
+	a.autoPopulateBuiltinServers(ctx)
+
 	// First, load servers from database
 	dbServers, err := a.mcpRepo.List(ctx)
 	if err != nil {
@@ -65,6 +69,102 @@ func (a *Adapter) InitializeServers(ctx context.Context, configs []config.MCPSer
 			continue
 		}
 	}
+	return nil
+}
+
+// builtinMCPServer defines a built-in MCP server that can be auto-populated
+type builtinMCPServer struct {
+	Name       string
+	Command    string
+	EnvVars    []string // Environment variable names to check/pass through
+	RequireEnv string   // If set, only populate if this env var is set
+}
+
+// builtinServers defines the built-in MCP servers that are auto-populated
+var builtinServers = []builtinMCPServer{
+	{
+		Name:       "garden",
+		Command:    "mcp-garden",
+		RequireEnv: "GARDEN_DATABASE_URL",
+		EnvVars: []string{
+			"GARDEN_DATABASE_URL",
+			"DATABASE_DOC_PATH",
+			"MCP_MAX_CHARACTER_RESPONSE_SIZE",
+			"LLM_URL",
+			"LLM_API_KEY",
+			"LLM_MODEL",
+			"LLM_DEFAULT_MAX_TOKENS",
+		},
+	},
+	{
+		Name:    "web",
+		Command: "mcp-web",
+		EnvVars: []string{},
+	},
+}
+
+// autoPopulateBuiltinServers creates built-in MCP servers if they don't exist
+// and haven't been previously deleted
+func (a *Adapter) autoPopulateBuiltinServers(ctx context.Context) {
+	for _, builtin := range builtinServers {
+		if err := a.autoPopulateServer(ctx, builtin); err != nil {
+			log.Printf("Warning: Failed to auto-populate %s MCP server: %v", builtin.Name, err)
+		}
+	}
+}
+
+// autoPopulateServer creates a built-in MCP server if conditions are met
+func (a *Adapter) autoPopulateServer(ctx context.Context, builtin builtinMCPServer) error {
+	// Check if required env var is set (if specified)
+	if builtin.RequireEnv != "" && os.Getenv(builtin.RequireEnv) == "" {
+		return nil // Required env var not set, skip
+	}
+
+	// Check if the server was previously deleted (soft delete)
+	wasDeleted, err := a.mcpRepo.WasDeleted(ctx, builtin.Name)
+	if err != nil {
+		return fmt.Errorf("failed to check if %s server was deleted: %w", builtin.Name, err)
+	}
+	if wasDeleted {
+		log.Printf("%s MCP server was previously deleted, not auto-populating", builtin.Name)
+		return nil
+	}
+
+	// Check if the server already exists
+	existing, err := a.mcpRepo.GetByName(ctx, builtin.Name)
+	if err == nil && existing != nil {
+		return nil // Already exists
+	}
+
+	// Build environment variables
+	var env []string
+	for _, envVar := range builtin.EnvVars {
+		if value := os.Getenv(envVar); value != "" {
+			env = append(env, envVar+"="+value)
+		}
+	}
+
+	// Create the server
+	log.Printf("Auto-populating %s MCP server", builtin.Name)
+
+	server := &models.MCPServer{
+		ID:             a.idGen.GenerateMCPServerID(),
+		Name:           builtin.Name,
+		TransportType:  "stdio",
+		Command:        builtin.Command,
+		Args:           []string{},
+		Env:            env,
+		AutoReconnect:  true,
+		ReconnectDelay: 5,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := a.mcpRepo.Create(ctx, server); err != nil {
+		return fmt.Errorf("failed to create %s MCP server: %w", builtin.Name, err)
+	}
+
+	log.Printf("Successfully created %s MCP server", builtin.Name)
 	return nil
 }
 

@@ -92,7 +92,7 @@ func TestProcessUserMessage_WithTextOnly(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation with a tip message
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	tipID := "msg_previous_tip"
 	conv.TipMessageID = &tipID
 	convRepo.Create(context.Background(), conv)
@@ -160,7 +160,7 @@ func TestProcessUserMessage_WithAudio(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	convRepo.Create(context.Background(), conv)
 
 	asrService.transcribeFunc = func(ctx context.Context, audio []byte, format string) (*ports.ASRResult, error) {
@@ -228,7 +228,7 @@ func TestProcessUserMessage_WithMemoryRetrieval(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	convRepo.Create(context.Background(), conv)
 
 	memoryService.searchWithScoresFunc = func(ctx context.Context, query string, threshold float32, limit int) ([]*ports.MemorySearchResult, error) {
@@ -287,7 +287,7 @@ func TestProcessUserMessage_EmptyContent(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	convRepo.Create(context.Background(), conv)
 
 	uc := NewProcessUserMessage(
@@ -320,7 +320,7 @@ func TestProcessUserMessage_ASRServiceUnavailable(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	convRepo.Create(context.Background(), conv)
 
 	uc := NewProcessUserMessage(
@@ -356,7 +356,7 @@ func TestProcessUserMessage_ASRTranscriptionFails(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	convRepo.Create(context.Background(), conv)
 
 	asrService.transcribeFunc = func(ctx context.Context, audio []byte, format string) (*ports.ASRResult, error) {
@@ -396,7 +396,7 @@ func TestProcessUserMessage_WithConversationTip(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation with a tip message
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	tipID := "msg_previous_tip"
 	conv.TipMessageID = &tipID
 	convRepo.Create(context.Background(), conv)
@@ -443,7 +443,7 @@ func TestProcessUserMessage_MemoryServiceFailure(t *testing.T) {
 	txManager := &mockTransactionManager{}
 
 	// Create a conversation
-	conv := models.NewConversation("conv_123", "Test Conversation")
+	conv := models.NewConversation("conv_123", "Test Conversation", "Test Conversation")
 	convRepo.Create(context.Background(), conv)
 
 	memoryService.searchWithScoresFunc = func(ctx context.Context, query string, threshold float32, limit int) ([]*ports.MemorySearchResult, error) {

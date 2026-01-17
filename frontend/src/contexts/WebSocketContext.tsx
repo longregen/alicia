@@ -154,24 +154,28 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
       type: MessageType.Acknowledgement,
       body: data,
     };
-  } else if ('id' in dto && 'conversationId' in dto && 'previousId' in dto && ('answerType' in dto || 'plannedSentenceCount' in dto)) {
-    return {
-      stanzaId: 0,
-      conversationId: (dto.conversationId as string) || conversationId,
-      type: MessageType.StartAnswer,
-      body: data,
-    };
   } else if ('conversationId' in dto && 'sequence' in dto && 'text' in dto && 'previousId' in dto) {
+    // AssistantSentence - must check BEFORE StartAnswer since both have previousId
+    // AssistantSentence has 'sequence' and 'text', StartAnswer does not
     return {
       stanzaId: 0,
       conversationId: (dto.conversationId as string) || conversationId,
       type: MessageType.AssistantSentence,
       body: data,
     };
+  } else if ('id' in dto && 'conversationId' in dto && 'previousId' in dto && !('sequence' in dto) && !('text' in dto) && !('content' in dto)) {
+    // StartAnswer - has id, conversationId, previousId but NOT sequence, text, or content
+    // answerType and plannedSentenceCount are optional
+    return {
+      stanzaId: 0,
+      conversationId: (dto.conversationId as string) || conversationId,
+      type: MessageType.StartAnswer,
+      body: data,
+    };
   } else if ('id' in dto && 'messageId' in dto && 'toolName' in dto && 'parameters' in dto) {
     return {
       stanzaId: 0,
-      conversationId,
+      conversationId: (dto.conversationId as string) || conversationId,
       type: MessageType.ToolUseRequest,
       body: data,
     };
@@ -263,6 +267,14 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
       stanzaId: 0,
       conversationId: (dto.conversationId as string) || conversationId,
       type: MessageType.EliteOptions,
+      body: data,
+    };
+  } else if ('runId' in dto && 'iteration' in dto && 'maxIterations' in dto && 'currentScore' in dto) {
+    // OptimizationProgress
+    return {
+      stanzaId: 0,
+      conversationId,
+      type: MessageType.OptimizationProgress,
       body: data,
     };
   }
@@ -439,6 +451,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.ServerInfo:
       case MessageType.SessionStats:
       case MessageType.EliteOptions:
+      case MessageType.OptimizationProgress:
         handleProtocolMessage(envelope);
         break;
 

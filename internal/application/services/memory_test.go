@@ -153,6 +153,10 @@ func (m *mockMemoryRepo) Archive(ctx context.Context, id string) error {
 	return nil
 }
 
+func (m *mockMemoryRepo) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}
+
 type mockMemoryUsageRepo struct {
 	store map[string]*models.MemoryUsage
 }

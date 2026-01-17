@@ -252,7 +252,7 @@ func (m *MockOptimizationService) GetOptimizationRun(ctx context.Context, id str
 	return nil, nil
 }
 
-func (m *MockOptimizationService) ListOptimizationRuns(ctx context.Context, opts ports.ListOptimizationRunsOptions) ([]*models.OptimizationRun, error) {
+func (m *MockOptimizationService) ListOptimizationRuns(ctx context.Context, status string, limit, offset int) ([]*models.OptimizationRun, error) {
 	return nil, nil
 }
 
@@ -309,4 +309,16 @@ func (m *MockOptimizationService) GetDimensionWeights() map[string]float64 {
 
 func (m *MockOptimizationService) SetDimensionWeights(weights map[string]float64) {
 	m.weights = weights
+}
+
+func (m *MockOptimizationService) UpdateRunProgress(ctx context.Context, runID string, iteration int, bestScore float64, dimScores map[string]float64) error {
+	return nil
+}
+
+func (m *MockOptimizationService) SaveCandidate(ctx context.Context, runID string, candidate *models.PromptCandidate) error {
+	return nil
+}
+
+func (m *MockOptimizationService) SaveEvaluation(ctx context.Context, candidateID string, eval *models.PromptEvaluation) error {
+	return nil
 }

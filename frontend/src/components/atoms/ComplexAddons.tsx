@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AudioAddon from './AudioAddon';
 import FeedbackControls from './FeedbackControls';
 import BranchNavigator from './BranchNavigator';
+import { HoverPopover } from './HoverPopover';
 import { AUDIO_STATES } from '../../mockData';
 import { cls } from '../../utils/cls';
 import { flexCenterGap, uiPatterns } from '../../utils/uiPatterns';
@@ -15,13 +16,6 @@ export interface ToolDetail {
   description: string;
   result?: string;
   status?: 'pending' | 'running' | 'completed' | 'error';
-}
-
-// Separate component for tool details panel with feedback controls
-// This allows us to use hooks inside the expanded panel
-interface ToolDetailsPanelProps {
-  toolDetail: ToolDetail;
-  showFeedback?: boolean;
 }
 
 // Helper to get status badge styling
@@ -320,8 +314,13 @@ const formatToolResult = (result: string, toolName: string): React.ReactNode => 
   }
 };
 
-const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFeedback = false }) => {
-  // useFeedback hook for tool voting
+// Popover content component for tool details
+interface ToolPopoverContentProps {
+  toolDetail: ToolDetail;
+  showFeedback?: boolean;
+}
+
+const ToolPopoverContent: React.FC<ToolPopoverContentProps> = ({ toolDetail, showFeedback = false }) => {
   const {
     currentVote,
     vote,
@@ -329,7 +328,6 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
     isLoading: feedbackLoading,
   } = useFeedback('tool_use', toolDetail.id);
 
-  const statusBadge = getStatusBadge(toolDetail.status || 'pending');
   const lowerName = toolDetail.name.toLowerCase();
   const isWebSearch = lowerName.includes('web_search') || (lowerName.includes('search') && !lowerName.includes('memory'));
   const isMemory = lowerName.includes('memory');
@@ -338,18 +336,12 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
   // Render compact format for web_search
   if (isWebSearch && isCompleted && toolDetail.result && toolDetail.description) {
     return (
-      <div className={cls(
-        'transition-all duration-300 ease-in-out overflow-hidden',
-        'bg-white/[0.02] rounded-lg p-4 mt-3 border border-white/[0.06]'
-      )}>
-        {/* Compact web search output */}
+      <div className="space-y-3">
         <div className="max-h-64 overflow-y-auto pr-1 custom-scrollbar">
           {formatWebSearchCompact(toolDetail.name, toolDetail.description, toolDetail.result)}
         </div>
-
-        {/* Feedback controls */}
         {showFeedback && (
-          <div className="pt-3 mt-3 border-t border-white/[0.04]">
+          <div className="pt-3 border-t border-border-muted">
             <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
             <FeedbackControls
               currentVote={currentVote as 'up' | 'down' | null}
@@ -368,18 +360,12 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
   // Render compact format for memory
   if (isMemory && isCompleted && toolDetail.result && toolDetail.description) {
     return (
-      <div className={cls(
-        'transition-all duration-300 ease-in-out overflow-hidden',
-        'bg-white/[0.02] rounded-lg p-4 mt-3 border border-white/[0.06]'
-      )}>
-        {/* Compact memory output */}
+      <div className="space-y-3">
         <div className="max-h-64 overflow-y-auto pr-1 custom-scrollbar">
           {formatMemoryCompact(toolDetail.name, toolDetail.description, toolDetail.result)}
         </div>
-
-        {/* Feedback controls */}
         {showFeedback && (
-          <div className="pt-3 mt-3 border-t border-white/[0.04]">
+          <div className="pt-3 border-t border-border-muted">
             <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
             <FeedbackControls
               currentVote={currentVote as 'up' | 'down' | null}
@@ -395,19 +381,17 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
     );
   }
 
+  // Generic tool content
   return (
-    <div className={cls(
-      'transition-all duration-300 ease-in-out overflow-hidden',
-      'bg-white/[0.02] rounded-lg p-4 mt-3 border border-white/[0.06]'
-    )}>
+    <div className="space-y-3">
       {/* Header with tool name */}
-      <div className="mb-3">
+      <div>
         <span className="text-sm font-medium text-muted-foreground font-mono">{toolDetail.name}</span>
       </div>
 
       {/* Running indicator */}
       {toolDetail.status === 'running' && (
-        <div className="text-xs text-accent mb-3 flex items-center gap-1.5">
+        <div className="text-xs text-accent flex items-center gap-1.5">
           <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
           Processing...
         </div>
@@ -415,7 +399,7 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
 
       {/* Arguments section */}
       {toolDetail.description && (
-        <div className="mb-3">
+        <div>
           <div className="flex items-center gap-1.5 text-xs text-muted font-medium mb-2">
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -430,7 +414,7 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
 
       {/* Results section */}
       {toolDetail.result && (toolDetail.status === 'completed' || toolDetail.status === 'error') && (
-        <div className="mb-3">
+        <div>
           <div className={cls(
             'flex items-center gap-1.5 text-xs font-medium mb-2',
             toolDetail.status === 'error' ? 'text-error' : 'text-success'
@@ -446,7 +430,7 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
             )}
             {toolDetail.status === 'error' ? 'Error' : 'Result'}
           </div>
-          <div className="max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+          <div className="max-h-48 overflow-y-auto pr-1 custom-scrollbar">
             {formatToolResult(toolDetail.result, toolDetail.name)}
           </div>
         </div>
@@ -464,7 +448,7 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
 
       {/* Feedback controls for completed tools */}
       {showFeedback && toolDetail.status === 'completed' && (
-        <div className="pt-3 border-t border-white/[0.04]">
+        <div className="pt-3 border-t border-border-muted">
           <div className="text-xs text-muted mb-2">Was this tool use helpful?</div>
           <FeedbackControls
             currentVote={currentVote as 'up' | 'down' | null}
@@ -476,6 +460,52 @@ const ToolDetailsPanel: React.FC<ToolDetailsPanelProps> = ({ toolDetail, showFee
           />
         </div>
       )}
+    </div>
+  );
+};
+
+// Popover content component for memory
+interface MemoryPopoverContentProps {
+  memory: MemoryAddonData;
+  percentage: number;
+  relevanceBgColor: string;
+  relevanceColor: string;
+}
+
+const MemoryPopoverContent: React.FC<MemoryPopoverContentProps> = ({
+  memory,
+  percentage,
+  relevanceBgColor,
+  relevanceColor,
+}) => {
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🧠</span>
+          <span className="text-sm font-semibold text-accent">Memory Trace</span>
+        </div>
+        <div
+          className={cls(
+            'text-xs px-2 py-1 rounded-full font-semibold',
+            relevanceBgColor,
+            relevanceColor
+          )}
+        >
+          {percentage}% relevant
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="text-sm text-default leading-relaxed max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+        {memory.content}
+      </div>
+
+      {/* Footer */}
+      <div className="text-[11px] text-muted pt-3 border-t border-border-muted">
+        Memory ID: {memory.id}
+      </div>
     </div>
   );
 };
@@ -509,13 +539,8 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
   showFeedback = false,
   branchData,
 }) => {
-  const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
-  const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
-  const [hoveredMemoryId, setHoveredMemoryId] = useState<string | null>(null);
   const [audioState, setAudioState] = useState<AudioState>(AUDIO_STATES.IDLE);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-
-  // Audio addons are handled with special rendering in the renderAddon function below
 
   // Mock audio duration - in a real app this would come from the audio file
   const audioDuration = 45; // seconds
@@ -570,48 +595,41 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
 
   const renderMemoryBadge = (memory: MemoryAddonData) => {
     const percentage = getRelevancePercentage(memory.relevance);
-    const isHovered = hoveredMemoryId === memory.id;
-    const isExpanded = expandedMemoryId === memory.id;
+    const relevanceColor = getRelevanceColor(memory.relevance);
+    const relevanceBgColor = getRelevanceBgColor(memory.relevance);
 
     return (
-      <div key={memory.id} className="relative">
+      <HoverPopover
+        key={memory.id}
+        content={
+          <MemoryPopoverContent
+            memory={memory}
+            percentage={percentage}
+            relevanceBgColor={relevanceBgColor}
+            relevanceColor={relevanceColor}
+          />
+        }
+        side="top"
+        align="start"
+        sideOffset={8}
+        alignOffset={8}
+        openDelay={150}
+        closeDelay={300}
+      >
         <button
           className={cls(
             'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
             'transition-all duration-200 cursor-pointer',
-            'hover:scale-105',
-            getRelevanceBgColor(memory.relevance),
-            getRelevanceColor(memory.relevance),
-            isExpanded ? 'ring-2 ring-accent scale-105' : ''
+            'hover:scale-105 hover:ring-2 hover:ring-accent/50',
+            relevanceBgColor,
+            relevanceColor
           )}
-          onMouseEnter={() => setHoveredMemoryId(memory.id)}
-          onMouseLeave={() => setHoveredMemoryId(null)}
-          onClick={() => setExpandedMemoryId(expandedMemoryId === memory.id ? null : memory.id)}
           title={`Memory trace (${percentage}% relevant)`}
         >
           <span className="text-sm">🧠</span>
           <span className="font-semibold">{percentage}%</span>
         </button>
-
-        {/* Hover tooltip */}
-        {isHovered && !isExpanded && (
-          <div className={cls(
-            'absolute z-20 transition-all duration-200',
-            'bg-overlay backdrop-blur-sm text-on-emphasis text-xs rounded-md p-3 min-w-[16rem] max-w-[20rem]',
-            'pointer-events-none shadow-xl border border-border-emphasis',
-            'bottom-full left-1/2 transform -translate-x-1/2 mb-2'
-          )}>
-            <div className="font-semibold text-sm mb-1.5 text-accent">
-              Memory Trace ({percentage}% relevant)
-            </div>
-            <div className="text-subtle leading-relaxed">
-              {memory.content.length > 120 ? memory.content.substring(0, 120) + '...' : memory.content}
-            </div>
-            <div className="text-[11px] text-muted mt-2">Click to view full memory</div>
-            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-overlay" />
-          </div>
-        )}
-      </div>
+      </HoverPopover>
     );
   };
 
@@ -631,7 +649,7 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
       );
     }
 
-    // Memory addon - render memory badges inline
+    // Memory addon - render memory badges with hover popovers
     if (addon.type === 'memory' && addon.memoryData) {
       const sortedMemories = [...addon.memoryData].sort((a, b) => b.relevance - a.relevance);
       return (
@@ -660,121 +678,43 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
       );
     }
 
-    // Default rendering for tool/icon addon types
+    // Default rendering for tool/icon addon types - with hover popover
     const toolDetail = getToolDetail(addon.id);
-    const isExpanded = expandedToolId === addon.id;
 
-    // Render tool badge with inline expandable details
+    // Render tool badge with hover popover
     return (
-      <div key={addon.id} className="relative">
+      <HoverPopover
+        key={addon.id}
+        content={
+          toolDetail ? (
+            <ToolPopoverContent toolDetail={toolDetail} showFeedback={showFeedback} />
+          ) : (
+            <div className="text-sm text-muted">No details available</div>
+          )
+        }
+        side="top"
+        align="start"
+        sideOffset={8}
+        alignOffset={8}
+        openDelay={150}
+        closeDelay={300}
+        width="w-96"
+      >
         <button
           className={cls(
-            'inline-flex items-center gap-1.5 px-2 py-1 rounded-md',
-            'text-xs cursor-pointer transition-all duration-200',
-            'hover:bg-surface-hover border border-transparent',
+            'inline-flex items-center justify-center w-7 h-7 rounded-md',
+            'text-sm cursor-pointer transition-all duration-200',
+            'hover:bg-surface-hover hover:ring-2 hover:ring-accent/50 border border-transparent',
             toolDetail?.status === 'running' ? 'bg-accent/10 border-accent/30' : 'bg-surface',
             toolDetail?.status === 'completed' ? 'hover:border-success/30' : '',
             toolDetail?.status === 'error' ? 'bg-error/10 border-error/30' : '',
-            isExpanded ? 'bg-accent-subtle border-accent/50' : '',
             getAddonAnimation(addon, toolDetail)
           )}
-          onClick={() => {
-            if (addon.type === 'tool' || addon.type === 'icon') {
-              setExpandedToolId(expandedToolId === addon.id ? null : addon.id);
-            }
-          }}
-          title={`${toolDetail?.name || addon.tooltip} - Click to ${isExpanded ? 'collapse' : 'expand'}`}
+          title={`${toolDetail?.name || addon.tooltip} - Hover for details`}
         >
-          {/* Emoji icon */}
-          <span className="text-sm">{addon.emoji}</span>
-
-          {/* Tool name */}
-          <span className="font-medium font-mono text-default">
-            {toolDetail?.name || addon.tooltip}
-          </span>
-
-          {/* Status badge */}
-          {toolDetail?.status && (
-            <span className={cls(
-              'text-[9px] font-semibold px-1.5 py-0.5 rounded-full ml-0.5',
-              getStatusBadge(toolDetail.status).className
-            )}>
-              {getStatusBadge(toolDetail.status).icon}
-            </span>
-          )}
-
-          {/* Expand/collapse indicator */}
-          <svg
-            className={cls(
-              'w-3 h-3 text-muted transition-transform duration-200',
-              isExpanded ? 'rotate-180' : ''
-            )}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          {addon.emoji}
         </button>
-      </div>
-    );
-  };
-
-  const renderToolDetails = () => {
-    if (!expandedToolId) return null;
-
-    const toolDetail = getToolDetail(expandedToolId);
-    if (!toolDetail) return null;
-
-    return (
-      <ToolDetailsPanel
-        toolDetail={toolDetail}
-        showFeedback={showFeedback}
-      />
-    );
-  };
-
-  // Find memory data from memory addon for expanded panel
-  const getExpandedMemory = (): MemoryAddonData | null => {
-    if (!expandedMemoryId) return null;
-    const memoryAddon = addons.find(a => a.type === 'memory');
-    if (!memoryAddon?.memoryData) return null;
-    return memoryAddon.memoryData.find(m => m.id === expandedMemoryId) || null;
-  };
-
-  const renderMemoryDetails = () => {
-    const memory = getExpandedMemory();
-    if (!memory) return null;
-
-    const percentage = getRelevancePercentage(memory.relevance);
-
-    return (
-      <div className={cls(
-        'transition-all duration-300 ease-in-out overflow-hidden',
-        'bg-accent-subtle rounded-lg p-4 mt-2',
-        'border border-border',
-        'max-h-96 opacity-100'
-      )}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">🧠</span>
-            <span className="text-sm font-semibold text-accent">Memory Trace</span>
-          </div>
-          <div className={cls(
-            'text-xs px-2 py-1 rounded-full font-semibold',
-            getRelevanceBgColor(memory.relevance),
-            getRelevanceColor(memory.relevance)
-          )}>
-            {percentage}% relevant
-          </div>
-        </div>
-        <div className="text-sm text-default leading-relaxed max-h-64 overflow-y-auto pr-2">
-          {memory.content}
-        </div>
-        <div className="text-[11px] text-muted mt-3 pt-3 border-t border-border-muted">
-          Memory ID: {memory.id}
-        </div>
-      </div>
+      </HoverPopover>
     );
   };
 
@@ -821,10 +761,6 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Expanded Details (Tool or Memory) */}
-      {renderToolDetails()}
-      {renderMemoryDetails()}
     </div>
   );
 };

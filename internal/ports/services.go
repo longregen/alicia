@@ -220,6 +220,7 @@ type MemoryService interface {
 	// Memory management
 	Update(ctx context.Context, memory *models.Memory) error
 	Delete(ctx context.Context, id string) error
+	DeleteByConversationID(ctx context.Context, conversationID string) error
 	SetImportance(ctx context.Context, id string, importance float32) (*models.Memory, error)
 	SetConfidence(ctx context.Context, id string, confidence float32) (*models.Memory, error)
 	SetUserRating(ctx context.Context, id string, rating int) (*models.Memory, error)
@@ -244,64 +245,46 @@ type PromptVersionService interface {
 	ListVersions(ctx context.Context, promptType string, limit int) ([]*models.SystemPromptVersion, error)
 }
 
-// OptimizationService defines the interface for prompt optimization
-type OptimizationService interface {
-	// Run management
-	StartOptimizationRun(ctx context.Context, name, promptType, baselinePrompt string) (*models.OptimizationRun, error)
-	GetOptimizationRun(ctx context.Context, id string) (*models.OptimizationRun, error)
-	ListOptimizationRuns(ctx context.Context, opts ListOptimizationRunsOptions) ([]*models.OptimizationRun, error)
-	CompleteRun(ctx context.Context, runID string, bestScore float64) error
-	FailRun(ctx context.Context, runID string, reason string) error
-	UpdateProgress(ctx context.Context, runID string, iteration int, currentScore float64) error
-
-	// Candidate management
-	AddCandidate(ctx context.Context, runID, promptText string, iteration int) (*models.PromptCandidate, error)
-	GetCandidates(ctx context.Context, runID string) ([]*models.PromptCandidate, error)
-	GetBestCandidate(ctx context.Context, runID string) (*models.PromptCandidate, error)
-
-	// Evaluation management
-	RecordEvaluation(ctx context.Context, candidateID, runID, input, output string, score float64, success bool, latencyMs int64) (*models.PromptEvaluation, error)
-	GetEvaluations(ctx context.Context, candidateID string) ([]*models.PromptEvaluation, error)
-
-	// Optimized program retrieval
-	GetOptimizedProgram(ctx context.Context, runID string) (*OptimizedProgram, error)
-
-	// Dimension weight management - uses map for decoupling from prompt package
-	SetDimensionWeights(weights map[string]float64)
-	GetDimensionWeights() map[string]float64
-}
-
-// OptimizedProgram represents the result of an optimization run
-type OptimizedProgram struct {
-	RunID       string
-	BestPrompt  string
-	BestScore   float64
-	Iterations  int
-	CompletedAt string
-	Elites      []EliteSolution // Pareto-optimal solutions
-}
-
-// EliteSolution represents an elite solution from the Pareto archive
-type EliteSolution struct {
-	ID          string
-	Label       string
-	Description string
-	BestFor     string
-	Scores      EliteDimensionScores
-}
-
-// EliteDimensionScores holds per-dimension performance metrics for an elite
-type EliteDimensionScores struct {
-	SuccessRate    float64
-	Quality        float64
-	Efficiency     float64
-	Robustness     float64
-	Generalization float64
-	Diversity      float64
-	Innovation     float64
-}
-
 // ConversationBroadcaster defines the interface for broadcasting conversation updates
 type ConversationBroadcaster interface {
 	BroadcastConversationUpdate(conversation *models.Conversation)
+}
+
+// Note: OptimizationProgressBroadcaster, OptimizationProgressUpdate, OptimizationProgressEvent,
+// and OptimizationProgressPublisher are defined in optimization.go
+
+// GenerationNotifier receives notifications about response generation progress.
+// Implementations can use these notifications to stream updates to clients in real-time.
+// All methods are optional - implementations may choose which events to handle.
+// The notification shapes align with protocol message types for consistency.
+type GenerationNotifier interface {
+	// NotifyGenerationStarted is called when response generation begins.
+	// Corresponds to protocol.StartAnswer (Type 13).
+	NotifyGenerationStarted(messageID, previousID, conversationID string)
+
+	// NotifyMemoryRetrieved is called for each memory found during retrieval.
+	// Corresponds to protocol.MemoryTrace (Type 14).
+	NotifyMemoryRetrieved(messageID, conversationID string, memoryID string, content string, relevance float32)
+
+	// NotifyReasoningStep is called when a reasoning/thinking step is produced.
+	// Corresponds to protocol.ReasoningStep (Type 5).
+	NotifyReasoningStep(id, messageID, conversationID string, sequence int, content string)
+
+	// NotifyToolUseStart is called before a tool is executed.
+	// Corresponds to protocol.ToolUseRequest (Type 6).
+	NotifyToolUseStart(id, messageID, conversationID string, toolName string, arguments map[string]any)
+
+	// NotifyToolUseComplete is called after a tool execution completes.
+	// Corresponds to protocol.ToolUseResult (Type 7).
+	NotifyToolUseComplete(id, requestID, conversationID string, success bool, result any, errorMsg string)
+
+	// NotifySentence is called for each sentence chunk during streaming.
+	// Corresponds to protocol.AssistantSentence (Type 16).
+	NotifySentence(id, previousID, conversationID string, sequence int, text string, isFinal bool)
+
+	// NotifyGenerationComplete is called when response generation finishes successfully.
+	NotifyGenerationComplete(messageID, conversationID string, content string)
+
+	// NotifyGenerationFailed is called when response generation fails.
+	NotifyGenerationFailed(messageID, conversationID string, err error)
 }

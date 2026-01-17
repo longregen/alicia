@@ -127,7 +127,7 @@ func (ab *AudioBuffer) Duration() time.Duration {
 	// Calculate duration from sample count
 	// bytes / (sample_rate * channels * bytes_per_sample)
 	samples := len(ab.samples) / (ab.channels * 2) // 16-bit = 2 bytes per sample
-	return time.Duration(float64(samples)/float64(ab.sampleRate)) * time.Second
+	return time.Duration(float64(samples) / float64(ab.sampleRate) * float64(time.Second))
 }
 
 // IsEmpty returns true if buffer is empty
@@ -353,7 +353,7 @@ func (vp *VoicePipeline) handleSilenceTimeout(gen int64) {
 
 		// Reject low-confidence transcriptions to avoid processing hallucinations
 		// from background noise
-		if result.Confidence < vp.minConfidence {
+		if float64(result.Confidence) < vp.minConfidence {
 			log.Printf("Rejecting low-confidence transcription (%.2f < %.2f): %s",
 				result.Confidence, vp.minConfidence, result.Text)
 			return

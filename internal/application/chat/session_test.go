@@ -221,6 +221,15 @@ func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]
 	return siblings, nil
 }
 
+func (m *mockMessageRepo) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	for id, msg := range m.messages {
+		if msg.ConversationID == conversationID && msg.SequenceNumber > afterSequence {
+			delete(m.messages, id)
+		}
+	}
+	return nil
+}
+
 type mockIDGenerator struct {
 	counter int
 }
@@ -353,6 +362,12 @@ func (m *mockIDGenerator) GenerateLiveKitRoomName() string {
 	id := m.counter
 	m.counter++
 	return fmt.Sprintf("room_%d", id)
+}
+
+func (m *mockIDGenerator) GenerateRequestID() string {
+	id := m.counter
+	m.counter++
+	return fmt.Sprintf("areq_%d", id)
 }
 
 // TestSessionStartNew tests creating a new conversation session

@@ -29,6 +29,8 @@ export interface ChatWindowBridgeProps {
   loading: boolean;
   sending: boolean;
   onSendMessage: (content: string) => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
   conversationId: string | null;
   syncError?: string | null;
 }
@@ -115,6 +117,8 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   loading,
   sending,
   onSendMessage,
+  onArchive,
+  onDelete,
   conversationId,
   syncError = null,
 }) => {
@@ -193,6 +197,8 @@ const ChatWindowBridge: React.FC<ChatWindowBridgeProps> = ({
   return (
     <ChatWindow
       onSendMessage={handleSendMessage}
+      onArchive={onArchive}
+      onDelete={onDelete}
       conversationId={conversationId}
       showControls={false} // Disable controls in bridge mode since stop/regenerate not supported
     />

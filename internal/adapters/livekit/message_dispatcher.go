@@ -26,12 +26,19 @@ type DefaultMessageDispatcher struct {
 	voteRepo                  ports.VoteRepository
 	noteRepo                  ports.NoteRepository
 	memoryService             ports.MemoryService
-	optimizationService       ports.OptimizationService
+	optimizationService       ports.OptimizationServiceFull
 	conversationID            string
 	asrService                ports.ASRService
 	ttsService                ports.TTSService
 	idGenerator               ports.IDGenerator
 	generationManager         ResponseGenerationManager
+
+	// New use cases for message operations
+	sendMessageUseCase          ports.SendMessageUseCase
+	regenerateResponseUseCase   ports.RegenerateResponseUseCase
+	continueResponseUseCase     ports.ContinueResponseUseCase
+	editUserMessageUseCase      ports.EditUserMessageUseCase
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
 }
 
 // NewDefaultMessageDispatcher creates a new message dispatcher
@@ -47,31 +54,41 @@ func NewDefaultMessageDispatcher(
 	voteRepo ports.VoteRepository,
 	noteRepo ports.NoteRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationService,
+	optimizationService ports.OptimizationServiceFull,
 	conversationID string,
 	asrService ports.ASRService,
 	ttsService ports.TTSService,
 	idGenerator ports.IDGenerator,
 	generationManager ResponseGenerationManager,
+	sendMessageUseCase ports.SendMessageUseCase,
+	regenerateResponseUseCase ports.RegenerateResponseUseCase,
+	continueResponseUseCase ports.ContinueResponseUseCase,
+	editUserMessageUseCase ports.EditUserMessageUseCase,
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
 ) *DefaultMessageDispatcher {
 	return &DefaultMessageDispatcher{
-		protocolHandler:           protocolHandler,
-		handleToolUseCase:         handleToolUseCase,
-		generateResponseUseCase:   generateResponseUseCase,
-		processUserMessageUseCase: processUserMessageUseCase,
-		conversationRepo:          conversationRepo,
-		messageRepo:               messageRepo,
-		toolUseRepo:               toolUseRepo,
-		memoryUsageRepo:           memoryUsageRepo,
-		voteRepo:                  voteRepo,
-		noteRepo:                  noteRepo,
-		memoryService:             memoryService,
-		optimizationService:       optimizationService,
-		conversationID:            conversationID,
-		asrService:                asrService,
-		ttsService:                ttsService,
-		idGenerator:               idGenerator,
-		generationManager:         generationManager,
+		protocolHandler:             protocolHandler,
+		handleToolUseCase:           handleToolUseCase,
+		generateResponseUseCase:     generateResponseUseCase,
+		processUserMessageUseCase:   processUserMessageUseCase,
+		conversationRepo:            conversationRepo,
+		messageRepo:                 messageRepo,
+		toolUseRepo:                 toolUseRepo,
+		memoryUsageRepo:             memoryUsageRepo,
+		voteRepo:                    voteRepo,
+		noteRepo:                    noteRepo,
+		memoryService:               memoryService,
+		optimizationService:         optimizationService,
+		conversationID:              conversationID,
+		asrService:                  asrService,
+		ttsService:                  ttsService,
+		idGenerator:                 idGenerator,
+		generationManager:           generationManager,
+		sendMessageUseCase:          sendMessageUseCase,
+		regenerateResponseUseCase:   regenerateResponseUseCase,
+		continueResponseUseCase:     continueResponseUseCase,
+		editUserMessageUseCase:      editUserMessageUseCase,
+		editAssistantMessageUseCase: editAssistantMessageUseCase,
 	}
 }
 
@@ -133,6 +150,9 @@ func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope
 
 	case protocol.TypeEliteSelect:
 		return d.handleEliteSelect(ctx, envelope)
+
+	case protocol.TypeResponseGenerationRequest:
+		return d.handleResponseGenerationRequest(ctx, envelope)
 
 	// TypeFeedbackConfirmation (21), TypeNoteConfirmation (23), TypeMemoryConfirmation (25),
 	// TypeServerInfo (26), TypeSessionStats (27), TypeEliteOptions (31) are Server→Client only

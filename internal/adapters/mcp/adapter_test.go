@@ -251,6 +251,10 @@ func (m *mockMCPServerRepository) List(ctx context.Context) ([]*models.MCPServer
 	return servers, nil
 }
 
+func (m *mockMCPServerRepository) WasDeleted(ctx context.Context, name string) (bool, error) {
+	return false, nil
+}
+
 // Mock ID generator for testing
 type mockIDGenerator struct {
 	counter int
@@ -348,6 +352,11 @@ func (m *mockIDGenerator) GeneratePromptCandidateID() string {
 func (m *mockIDGenerator) GeneratePromptEvaluationID() string {
 	m.counter++
 	return "ape_test"
+}
+
+func (m *mockIDGenerator) GenerateRequestID() string {
+	m.counter++
+	return "areq_test"
 }
 
 func (m *mockIDGenerator) GenerateTrainingExampleID() string {

@@ -505,25 +505,33 @@ export const api = {
   // Optimization
   async listOptimizationRuns(params?: Record<string, string>): Promise<OptimizationRun[]> {
     const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs${queryString}`);
-    const data = await handleResponse<{ runs: OptimizationRun[] }>(response);
-    return data.runs || [];
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations${queryString}`);
+    return handleResponse<OptimizationRun[]>(response);
   },
 
   async getOptimizationRun(runId: string): Promise<OptimizationRun> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}`);
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations/${runId}`);
     return handleResponse<OptimizationRun>(response);
   },
 
   async getOptimizationCandidates(runId: string): Promise<OptimizationCandidate[]> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}/candidates`);
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations/${runId}/candidates`);
     const data = await handleResponse<{ candidates: OptimizationCandidate[] }>(response);
     return data.candidates || [];
   },
 
   async getOptimizationBestCandidate(runId: string): Promise<OptimizationCandidate> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimization/runs/${runId}/best`);
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations/${runId}/best`);
     return handleResponse<OptimizationCandidate>(response);
+  },
+
+  async createOptimizationRun(data: CreateOptimizationRequest): Promise<OptimizationRun> {
+    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return handleResponse<OptimizationRun>(response);
   },
 };
 
@@ -626,21 +634,26 @@ export interface MemoryListResponse {
 }
 
 // Optimization types
+export interface CreateOptimizationRequest {
+  name: string;
+  prompt_type: string;
+  baseline_prompt?: string;
+}
+
 export interface OptimizationRun {
   id: string;
   name: string;
-  description?: string;
-  status: string;
   prompt_type: string;
-  baseline_score?: number;
+  status: string;
   best_score: number;
   iterations: number;
   max_iterations: number;
+  config?: Record<string, unknown>;
+  created_at: string;
+  completed_at?: string;
+  // Additional fields that may be present in detailed responses
   dimension_weights?: Record<string, number>;
   best_dim_scores?: Record<string, number>;
-  config?: Record<string, unknown>;
-  started_at: string;
-  completed_at?: string;
 }
 
 export interface OptimizationCandidate {

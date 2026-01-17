@@ -10,7 +10,7 @@ interface OptimizationRun {
   best_score: number;
   iterations: number;
   max_iterations: number;
-  started_at: string;
+  created_at: string;
   completed_at?: string;
 }
 
@@ -126,7 +126,7 @@ export function OptimizationRunList({ onSelectRun }: OptimizationRunListProps) {
                       </div>
                     </td>
                     <td className="p-3 text-left border-b border">{run.best_score.toFixed(4)}</td>
-                    <td className="p-3 text-left border-b border">{formatDate(run.started_at)}</td>
+                    <td className="p-3 text-left border-b border">{formatDate(run.created_at)}</td>
                     <td className="p-3 text-left border-b border">
                       <button
                         className="btn btn-primary"

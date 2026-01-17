@@ -23,31 +23,38 @@ import (
 )
 
 type Server struct {
-	config                  *config.Config
-	router                  *chi.Mux
-	httpServer              *http.Server
-	conversationRepo        ports.ConversationRepository
-	messageRepo             ports.MessageRepository
-	toolUseRepo             ports.ToolUseRepository
-	memoryUsageRepo         ports.MemoryUsageRepository
-	noteRepo                ports.NoteRepository
-	voteRepo                ports.VoteRepository
-	sessionStatsRepo        ports.SessionStatsRepository
-	memoryService           ports.MemoryService
-	optimizationService     ports.OptimizationService
-	optimizationRepo        ports.PromptOptimizationRepository
-	trainingBuilderService  *services.TrainingSetBuilderService
-	promptVersionService    *services.PromptVersionService
-	liveKitService          ports.LiveKitService
-	idGen                   ports.IDGenerator
-	db                      *pgxpool.Pool
-	llmClient               *llm.Client
-	asrAdapter              *speech.ASRAdapter
-	ttsAdapter              *speech.TTSAdapter
-	embeddingClient         *embedding.Client
-	mcpAdapter              *mcp.Adapter
-	generateResponseUseCase ports.GenerateResponseUseCase
-	wsBroadcaster           *handlers.WebSocketBroadcaster
+	config                     *config.Config
+	router                     *chi.Mux
+	httpServer                 *http.Server
+	conversationRepo           ports.ConversationRepository
+	messageRepo                ports.MessageRepository
+	toolUseRepo                ports.ToolUseRepository
+	memoryUsageRepo            ports.MemoryUsageRepository
+	noteRepo                   ports.NoteRepository
+	voteRepo                   ports.VoteRepository
+	sessionStatsRepo           ports.SessionStatsRepository
+	memoryService              ports.MemoryService
+	optimizationService        ports.OptimizationServiceFull
+	optimizationRepo           ports.PromptOptimizationRepository
+	trainingBuilderService     *services.TrainingSetBuilderService
+	promptVersionService       *services.PromptVersionService
+	liveKitService             ports.LiveKitService
+	idGen                      ports.IDGenerator
+	db                         *pgxpool.Pool
+	llmClient                  *llm.Client
+	asrAdapter                 *speech.ASRAdapter
+	ttsAdapter                 *speech.TTSAdapter
+	embeddingClient            *embedding.Client
+	mcpAdapter                 *mcp.Adapter
+	generateResponseUseCase    ports.GenerateResponseUseCase
+	sendMessageUseCase         ports.SendMessageUseCase
+	syncMessagesUseCase        ports.SyncMessagesUseCase
+	regenerateResponseUseCase  ports.RegenerateResponseUseCase
+	continueResponseUseCase    ports.ContinueResponseUseCase
+	editUserMessageUseCase      ports.EditUserMessageUseCase
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
+	runOptimizationUseCase      ports.RunOptimizationUseCase
+	wsBroadcaster               *handlers.WebSocketBroadcaster
 }
 
 func NewServer(
@@ -60,7 +67,7 @@ func NewServer(
 	voteRepo ports.VoteRepository,
 	sessionStatsRepo ports.SessionStatsRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationService,
+	optimizationService ports.OptimizationServiceFull,
 	optimizationRepo ports.PromptOptimizationRepository,
 	trainingBuilderService *services.TrainingSetBuilderService,
 	promptVersionService *services.PromptVersionService,
@@ -73,32 +80,46 @@ func NewServer(
 	embeddingClient *embedding.Client,
 	mcpAdapter *mcp.Adapter,
 	generateResponseUseCase ports.GenerateResponseUseCase,
+	sendMessageUseCase ports.SendMessageUseCase,
+	syncMessagesUseCase ports.SyncMessagesUseCase,
+	regenerateResponseUseCase ports.RegenerateResponseUseCase,
+	continueResponseUseCase ports.ContinueResponseUseCase,
+	editUserMessageUseCase ports.EditUserMessageUseCase,
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
+	runOptimizationUseCase ports.RunOptimizationUseCase,
 	wsBroadcaster *handlers.WebSocketBroadcaster,
 ) *Server {
 	s := &Server{
-		config:                  cfg,
-		conversationRepo:        conversationRepo,
-		messageRepo:             messageRepo,
-		toolUseRepo:             toolUseRepo,
-		memoryUsageRepo:         memoryUsageRepo,
-		noteRepo:                noteRepo,
-		voteRepo:                voteRepo,
-		sessionStatsRepo:        sessionStatsRepo,
-		memoryService:           memoryService,
-		optimizationService:     optimizationService,
-		optimizationRepo:        optimizationRepo,
-		trainingBuilderService:  trainingBuilderService,
-		promptVersionService:    promptVersionService,
-		liveKitService:          liveKitService,
-		idGen:                   idGen,
-		db:                      db,
-		llmClient:               llmClient,
-		asrAdapter:              asrAdapter,
-		ttsAdapter:              ttsAdapter,
-		embeddingClient:         embeddingClient,
-		mcpAdapter:              mcpAdapter,
-		generateResponseUseCase: generateResponseUseCase,
-		wsBroadcaster:           wsBroadcaster,
+		config:                      cfg,
+		conversationRepo:            conversationRepo,
+		messageRepo:                 messageRepo,
+		toolUseRepo:                 toolUseRepo,
+		memoryUsageRepo:             memoryUsageRepo,
+		noteRepo:                    noteRepo,
+		voteRepo:                    voteRepo,
+		sessionStatsRepo:            sessionStatsRepo,
+		memoryService:               memoryService,
+		optimizationService:         optimizationService,
+		optimizationRepo:            optimizationRepo,
+		trainingBuilderService:      trainingBuilderService,
+		promptVersionService:        promptVersionService,
+		liveKitService:              liveKitService,
+		idGen:                       idGen,
+		db:                          db,
+		llmClient:                   llmClient,
+		asrAdapter:                  asrAdapter,
+		ttsAdapter:                  ttsAdapter,
+		embeddingClient:             embeddingClient,
+		mcpAdapter:                  mcpAdapter,
+		generateResponseUseCase:     generateResponseUseCase,
+		sendMessageUseCase:          sendMessageUseCase,
+		syncMessagesUseCase:         syncMessagesUseCase,
+		regenerateResponseUseCase:   regenerateResponseUseCase,
+		continueResponseUseCase:     continueResponseUseCase,
+		editUserMessageUseCase:      editUserMessageUseCase,
+		editAssistantMessageUseCase: editAssistantMessageUseCase,
+		runOptimizationUseCase:      runOptimizationUseCase,
+		wsBroadcaster:               wsBroadcaster,
 	}
 
 	s.setupRouter()
@@ -143,20 +164,39 @@ func (s *Server) setupRouter() {
 		// Apply authentication middleware to all API routes
 		r.Use(middleware.Auth)
 
-		conversationsHandler := handlers.NewConversationsHandler(s.conversationRepo, s.idGen)
+		conversationsHandler := handlers.NewConversationsHandler(s.conversationRepo, s.memoryService, s.idGen)
 		r.Post("/conversations", conversationsHandler.Create)
 		r.Get("/conversations", conversationsHandler.List)
 		r.Get("/conversations/{id}", conversationsHandler.Get)
 		r.Patch("/conversations/{id}", conversationsHandler.Patch)
 		r.Delete("/conversations/{id}", conversationsHandler.Delete)
 
-		messagesHandler := handlers.NewMessagesHandler(s.conversationRepo, s.messageRepo, s.toolUseRepo, s.memoryUsageRepo, s.idGen, s.generateResponseUseCase, s.wsBroadcaster)
+		messagesHandler := handlers.NewMessagesHandler(
+			s.conversationRepo,
+			s.messageRepo,
+			s.toolUseRepo,
+			s.memoryUsageRepo,
+			s.sendMessageUseCase,
+			nil, // processUserMessageUseCase - TODO: inject when agent-based generation is enabled
+			s.editAssistantMessageUseCase,
+			s.editUserMessageUseCase,
+			s.regenerateResponseUseCase,
+			s.continueResponseUseCase,
+			s.wsBroadcaster,
+			s.idGen,
+		)
 		r.Get("/conversations/{id}/messages", messagesHandler.List)
 		r.Post("/conversations/{id}/messages", messagesHandler.Send)
 		r.Get("/messages/{id}/siblings", messagesHandler.GetSiblings)
 		r.Post("/conversations/{id}/switch-branch", messagesHandler.SwitchBranch)
 
-		syncHandler := handlers.NewSyncHandler(s.conversationRepo, s.messageRepo, s.idGen)
+		// Message edit/regenerate/continue endpoints
+		r.Put("/messages/{id}", messagesHandler.EditAssistantMessage)
+		r.Put("/messages/{id}/edit-user", messagesHandler.EditUserMessage)
+		r.Post("/messages/{id}/regenerate", messagesHandler.Regenerate)
+		r.Post("/messages/{id}/continue", messagesHandler.Continue)
+
+		syncHandler := handlers.NewSyncHandler(s.conversationRepo, s.messageRepo, s.syncMessagesUseCase)
 		r.Post("/conversations/{id}/sync", syncHandler.SyncMessages)
 		r.Get("/conversations/{id}/sync/status", syncHandler.GetSyncStatus)
 
@@ -250,7 +290,7 @@ func (s *Server) setupRouter() {
 
 		// Optimization endpoints (only if optimization service is available)
 		if s.optimizationService != nil {
-			optHandler := handlers.NewOptimizationHandler(s.optimizationService)
+			optHandler := handlers.NewOptimizationHandler(s.optimizationService, s.runOptimizationUseCase)
 			r.Post("/optimizations", optHandler.CreateOptimization)
 			r.Get("/optimizations", optHandler.ListOptimizations)
 			r.Get("/optimizations/{id}", optHandler.GetOptimization)
@@ -258,17 +298,6 @@ func (s *Server) setupRouter() {
 			r.Get("/optimizations/{id}/best", optHandler.GetBestCandidate)
 			r.Get("/optimizations/{id}/program", optHandler.GetOptimizedProgram)
 			r.Get("/optimizations/candidates/{id}/evaluations", optHandler.GetEvaluations)
-
-			// Optimization progress streaming
-			if s.optimizationRepo != nil {
-				// Cast to concrete type to access progress channel methods
-				if concreteOptService, ok := s.optimizationService.(*services.OptimizationService); ok {
-					streamHandler := handlers.NewOptimizationStreamHandler(concreteOptService)
-					r.Get("/optimizations/{id}/stream", streamHandler.StreamOptimizationProgress)
-				} else {
-					log.Printf("Warning: optimization service is not *services.OptimizationService, SSE streaming disabled")
-				}
-			}
 
 			// Feedback integration endpoints
 			feedbackHandler := handlers.NewFeedbackHandler(s.voteRepo, s.optimizationService)

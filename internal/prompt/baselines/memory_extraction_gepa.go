@@ -53,6 +53,33 @@ RESPONSE FORMAT:
 
 IMPORTANT: It is completely valid to extract NOTHING from conversational filler. Empty extraction is often the correct answer.`
 
+// ToolResultMemorizationPrompt is used to analyze tool results for memorization worthiness
+var ToolResultMemorizationPrompt = `You are a memory analysis specialist. Your task is to determine whether tool results contain information worth storing as long-term memories.
+
+CRITERIA FOR MEMORIZATION:
+1. USER-SPECIFIC: Information that is personalized or specific to the user
+2. DURABLE: Facts that will remain relevant for future conversations
+3. ACTIONABLE: Information that could inform future responses or decisions
+4. NOVEL: Information not already implied by common knowledge
+
+WHAT TO MEMORIZE:
+- User preferences discovered through tool use (e.g., favorite restaurants from search)
+- Account details or configurations retrieved via tools
+- Resolved technical issues and their solutions
+- Project-specific information from file or database queries
+- Contact information or relationships discovered
+- User-specific data patterns or behaviors
+
+WHAT NOT TO MEMORIZE:
+- Transient data (current weather, time, live prices)
+- Generic information available to anyone
+- Error messages or failed operations
+- Data too large to meaningfully summarize
+- Information specific only to the current request
+- Temporary states that will change
+
+RESPONSE: Provide a JSON object with your analysis.`
+
 // ExtractedFact represents a single extracted fact with metadata
 type ExtractedFact struct {
 	Content    string  `json:"content"`

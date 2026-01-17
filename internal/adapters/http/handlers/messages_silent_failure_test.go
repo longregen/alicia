@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,16 +13,15 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-// TestMessagesHandler_Send_GenerateResponseFailure verifies that AI response
-// generation failures are broadcast to WebSocket subscribers as error events.
-func TestMessagesHandler_Send_GenerateResponseFailure(t *testing.T) {
+// TestMessagesHandler_Send_SendMessageFailure verifies that send message
+// failures are broadcast to WebSocket subscribers as error events.
+func TestMessagesHandler_Send_SendMessageFailure(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
 
 	// Mock use case that returns an error
-	generateUseCase := newMockGenerateResponseUseCase()
-	generateUseCase.err = errors.New("LLM API rate limit exceeded")
+	sendMessageUseCase := newMockSendMessageUseCase()
+	sendMessageUseCase.err = errors.New("LLM API rate limit exceeded")
 
 	// Create WebSocket broadcaster to capture events
 	wsBroadcaster := NewWebSocketBroadcaster()
@@ -31,9 +29,16 @@ func TestMessagesHandler_Send_GenerateResponseFailure(t *testing.T) {
 	handler := NewMessagesHandler(
 		conversationRepo,
 		messageRepo,
-		idGen,
-		generateUseCase,
+		nil, // toolUseRepo
+		nil, // memoryUsageRepo
+		sendMessageUseCase,
+		nil, // processUserMessageUseCase
+		nil, // editAssistantMessageUseCase
+		nil, // editUserMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
 		wsBroadcaster,
+		nil, // idGen
 	)
 
 	// Create a test conversation
@@ -54,18 +59,9 @@ func TestMessagesHandler_Send_GenerateResponseFailure(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	// The user message should be created successfully
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", rr.Code)
-	}
-
-	var response map[string]interface{}
-	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if response["contents"] != "Hello, Alicia!" {
-		t.Errorf("expected contents 'Hello, Alicia!', got %v", response["contents"])
+	// The request should be accepted (async processing)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d", rr.Code)
 	}
 
 	// Note: Testing actual WebSocket broadcasts requires a more complex setup
@@ -74,26 +70,32 @@ func TestMessagesHandler_Send_GenerateResponseFailure(t *testing.T) {
 	t.Log("Handler processed request successfully")
 }
 
-// TestMessagesHandler_Send_GenerateResponseNilOutput verifies that nil output
+// TestMessagesHandler_Send_SendMessageNilOutput verifies that nil output
 // cases are handled correctly.
-func TestMessagesHandler_Send_GenerateResponseNilOutput(t *testing.T) {
+func TestMessagesHandler_Send_SendMessageNilOutput(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
 
 	// Mock use case that returns nil output (unexpected behavior)
-	generateUseCase := newMockGenerateResponseUseCase()
-	generateUseCase.output = nil
-	generateUseCase.err = nil
+	sendMessageUseCase := newMockSendMessageUseCase()
+	sendMessageUseCase.output = nil
+	sendMessageUseCase.err = nil
 
 	wsBroadcaster := NewWebSocketBroadcaster()
 
 	handler := NewMessagesHandler(
 		conversationRepo,
 		messageRepo,
-		idGen,
-		generateUseCase,
+		nil, // toolUseRepo
+		nil, // memoryUsageRepo
+		sendMessageUseCase,
+		nil, // processUserMessageUseCase
+		nil, // editAssistantMessageUseCase
+		nil, // editUserMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
 		wsBroadcaster,
+		nil, // idGen
 	)
 
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -111,25 +113,26 @@ func TestMessagesHandler_Send_GenerateResponseNilOutput(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", rr.Code)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d", rr.Code)
 	}
 
 	t.Log("Handler processed nil output case successfully")
 }
 
-// TestMessagesHandler_Send_WithWorkingBroadcasters verifies that when generation
+// TestMessagesHandler_Send_WithWorkingBroadcasters verifies that when send message
 // SUCCEEDS, the response IS properly broadcast to subscribers.
 func TestMessagesHandler_Send_WithWorkingBroadcasters(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
-	idGen := newMockIDGenerator()
 
 	// Mock use case that succeeds
-	generateUseCase := newMockGenerateResponseUseCase()
+	sendMessageUseCase := newMockSendMessageUseCase()
+	userMsg := models.NewUserMessage("am_user", "ac_test123", 1, "Hi")
 	assistantMsg := models.NewAssistantMessage("am_response", "ac_test123", 2, "Hello! How can I help?")
-	generateUseCase.output = &ports.GenerateResponseOutput{
-		Message: assistantMsg,
+	sendMessageUseCase.output = &ports.SendMessageOutput{
+		UserMessage:      userMsg,
+		AssistantMessage: assistantMsg,
 	}
 
 	wsBroadcaster := NewWebSocketBroadcaster()
@@ -137,9 +140,16 @@ func TestMessagesHandler_Send_WithWorkingBroadcasters(t *testing.T) {
 	handler := NewMessagesHandler(
 		conversationRepo,
 		messageRepo,
-		idGen,
-		generateUseCase,
+		nil, // toolUseRepo
+		nil, // memoryUsageRepo
+		sendMessageUseCase,
+		nil, // processUserMessageUseCase
+		nil, // editAssistantMessageUseCase
+		nil, // editUserMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
 		wsBroadcaster,
+		nil, // idGen
 	)
 
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -157,9 +167,9 @@ func TestMessagesHandler_Send_WithWorkingBroadcasters(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", rr.Code)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d", rr.Code)
 	}
 
-	t.Log("Handler processed successful generation case")
+	t.Log("Handler processed successful send message case")
 }

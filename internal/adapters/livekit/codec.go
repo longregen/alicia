@@ -45,10 +45,11 @@ var messageTypeRegistry = map[protocol.MessageType]messageFactory{
 	// Server info and stats (26-27)
 	protocol.TypeServerInfo:   func() interface{} { return &protocol.ServerInfo{} },
 	protocol.TypeSessionStats: func() interface{} { return &protocol.SessionStats{} },
-	// Dimension optimization messages (29-31)
-	protocol.TypeDimensionPreference: func() interface{} { return &protocol.DimensionPreference{} },
-	protocol.TypeEliteSelect:         func() interface{} { return &protocol.EliteSelect{} },
-	protocol.TypeEliteOptions:        func() interface{} { return &protocol.EliteOptions{} },
+	// Dimension optimization messages (29-32)
+	protocol.TypeDimensionPreference:   func() interface{} { return &protocol.DimensionPreference{} },
+	protocol.TypeEliteSelect:           func() interface{} { return &protocol.EliteSelect{} },
+	protocol.TypeEliteOptions:          func() interface{} { return &protocol.EliteOptions{} },
+	protocol.TypeOptimizationProgress:  func() interface{} { return &protocol.OptimizationProgress{} },
 }
 
 // Encode serializes an envelope to MessagePack bytes

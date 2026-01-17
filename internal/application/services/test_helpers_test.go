@@ -112,6 +112,10 @@ func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
 	return "spv_test"
 }
 
+func (m *mockIDGenerator) GenerateRequestID() string {
+	return "areq_test"
+}
+
 type mockTransactionManager struct{}
 
 func (m *mockTransactionManager) WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error {

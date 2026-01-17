@@ -46,6 +46,11 @@ func TestNewDefaultMessageDispatcher(t *testing.T) {
 		ttsService,
 		idGenerator,
 		generationManager,
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	if dispatcher == nil {

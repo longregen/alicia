@@ -156,7 +156,7 @@ export function MCPSettings() {
 
   const getServerTools = (serverName: string): MCPTool[] => {
     const server = servers.find(s => s.name === serverName);
-    if (!server) return [];
+    if (!server || !server.tools) return [];
 
     return tools.filter(tool => server.tools.includes(tool.name));
   };
@@ -316,7 +316,7 @@ export function MCPSettings() {
                   <span className="font-semibold text-muted-foreground min-w-[80px]">Command:</span>
                   <span className="detail-value text-foreground break-all">{server.command}</span>
                 </div>
-                {server.args.length > 0 && (
+                {server.args && server.args.length > 0 && (
                   <div className="flex gap-2 text-sm">
                     <span className="font-semibold text-muted-foreground min-w-[80px]">Args:</span>
                     <span className="detail-value text-foreground break-all">{server.args.join(', ')}</span>
@@ -330,14 +330,14 @@ export function MCPSettings() {
                 )}
               </div>
 
-              {server.tools.length > 0 && (
+              {server.tools && server.tools.length > 0 && (
                 <div className="tools-section mt-3 pt-3 border-t border-border">
                   <button
                     className="tools-toggle bg-transparent border-0 text-accent text-sm font-medium cursor-pointer py-2 px-0 layout-center-gap transition-colors hover:text-accent/80"
                     onClick={() => toggleServerExpanded(server.name)}
                   >
                     {expandedServers.has(server.name) ? '▼' : '▶'}
-                    {' '}Tools ({server.tools.length})
+                    {' '}Tools ({server.tools?.length || 0})
                   </button>
 
                   {expandedServers.has(server.name) && (

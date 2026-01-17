@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -65,9 +66,9 @@ func (r *MCPServerRepository) GetByID(ctx context.Context, id string) (*models.M
 
 	query := `
 		SELECT id, name, transport_type, command, args, env, url, api_key,
-		       auto_reconnect, reconnect_delay, created_at, updated_at
+		       auto_reconnect, reconnect_delay, created_at, updated_at, deleted_at
 		FROM alicia_mcp_servers
-		WHERE id = $1`
+		WHERE id = $1 AND deleted_at IS NULL`
 
 	return r.scanMCPServer(r.conn(ctx).QueryRow(ctx, query, id))
 }
@@ -78,11 +79,29 @@ func (r *MCPServerRepository) GetByName(ctx context.Context, name string) (*mode
 
 	query := `
 		SELECT id, name, transport_type, command, args, env, url, api_key,
-		       auto_reconnect, reconnect_delay, created_at, updated_at
+		       auto_reconnect, reconnect_delay, created_at, updated_at, deleted_at
 		FROM alicia_mcp_servers
-		WHERE name = $1`
+		WHERE name = $1 AND deleted_at IS NULL`
 
 	return r.scanMCPServer(r.conn(ctx).QueryRow(ctx, query, name))
+}
+
+// WasDeleted checks if a server with the given name was soft-deleted
+func (r *MCPServerRepository) WasDeleted(ctx context.Context, name string) (bool, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	query := `SELECT deleted_at IS NOT NULL FROM alicia_mcp_servers WHERE name = $1`
+
+	var wasDeleted bool
+	err := r.conn(ctx).QueryRow(ctx, query, name).Scan(&wasDeleted)
+	if err != nil {
+		if checkNoRows(err) {
+			return false, nil // Never existed, not deleted
+		}
+		return false, err
+	}
+	return wasDeleted, nil
 }
 
 func (r *MCPServerRepository) Update(ctx context.Context, server *models.MCPServer) error {
@@ -129,24 +148,27 @@ func (r *MCPServerRepository) Update(ctx context.Context, server *models.MCPServ
 	return err
 }
 
+// Delete performs a soft delete by setting deleted_at timestamp
 func (r *MCPServerRepository) Delete(ctx context.Context, id string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	query := `DELETE FROM alicia_mcp_servers WHERE id = $1`
+	query := `UPDATE alicia_mcp_servers SET deleted_at = $2, updated_at = $2 WHERE id = $1`
 
-	_, err := r.conn(ctx).Exec(ctx, query, id)
+	_, err := r.conn(ctx).Exec(ctx, query, id, time.Now())
 	return err
 }
 
+// List returns all non-deleted MCP servers
 func (r *MCPServerRepository) List(ctx context.Context) ([]*models.MCPServer, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
 	query := `
 		SELECT id, name, transport_type, command, args, env, url, api_key,
-		       auto_reconnect, reconnect_delay, created_at, updated_at
+		       auto_reconnect, reconnect_delay, created_at, updated_at, deleted_at
 		FROM alicia_mcp_servers
+		WHERE deleted_at IS NULL
 		ORDER BY created_at DESC`
 
 	rows, err := r.conn(ctx).Query(ctx, query)
@@ -162,6 +184,7 @@ func (r *MCPServerRepository) scanMCPServer(row pgx.Row) (*models.MCPServer, err
 	var s models.MCPServer
 	var env []byte
 	var command, url, apiKey sql.NullString
+	var deletedAt sql.NullTime
 
 	err := row.Scan(
 		&s.ID,
@@ -176,6 +199,7 @@ func (r *MCPServerRepository) scanMCPServer(row pgx.Row) (*models.MCPServer, err
 		&s.ReconnectDelay,
 		&s.CreatedAt,
 		&s.UpdatedAt,
+		&deletedAt,
 	)
 
 	if err != nil {
@@ -188,6 +212,9 @@ func (r *MCPServerRepository) scanMCPServer(row pgx.Row) (*models.MCPServer, err
 	s.Command = getString(command)
 	s.URL = getString(url)
 	s.APIKey = getString(apiKey)
+	if deletedAt.Valid {
+		s.DeletedAt = &deletedAt.Time
+	}
 
 	s.Env, err = unmarshalJSONSlice[string](env)
 	if err != nil {
@@ -204,6 +231,7 @@ func (r *MCPServerRepository) scanMCPServers(rows pgx.Rows) ([]*models.MCPServer
 		var s models.MCPServer
 		var env []byte
 		var command, url, apiKey sql.NullString
+		var deletedAt sql.NullTime
 
 		err := rows.Scan(
 			&s.ID,
@@ -218,6 +246,7 @@ func (r *MCPServerRepository) scanMCPServers(rows pgx.Rows) ([]*models.MCPServer
 			&s.ReconnectDelay,
 			&s.CreatedAt,
 			&s.UpdatedAt,
+			&deletedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -226,6 +255,9 @@ func (r *MCPServerRepository) scanMCPServers(rows pgx.Rows) ([]*models.MCPServer
 		s.Command = getString(command)
 		s.URL = getString(url)
 		s.APIKey = getString(apiKey)
+		if deletedAt.Valid {
+			s.DeletedAt = &deletedAt.Time
+		}
 
 		s.Env, err = unmarshalJSONSlice[string](env)
 		if err != nil {
