@@ -137,6 +137,10 @@ func (m *mockMessageRepoForTitle) GetIncompleteByConversation(ctx context.Contex
 	return nil, nil
 }
 
+func (m *mockMessageRepoForTitle) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	return nil
+}
+
 type mockLLMServiceForTitle struct {
 	response string
 }

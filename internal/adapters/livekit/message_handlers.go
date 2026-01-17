@@ -63,7 +63,65 @@ func (d *DefaultMessageDispatcher) handleUserMessage(ctx context.Context, envelo
 		return fmt.Errorf("conversation ID mismatch: expected %s, got %s", d.conversationID, userMsg.ConversationID)
 	}
 
-	// Process the user message
+	// Use SendMessageUseCase if available
+	if d.sendMessageUseCase != nil {
+		input := &ports.SendMessageInput{
+			ConversationID:  userMsg.ConversationID,
+			TextContent:     userMsg.Content,
+			PreviousID:      userMsg.PreviousID,
+			LocalID:         userMsg.ID,
+			EnableTools:     true,
+			EnableReasoning: true,
+			EnableStreaming: true,
+		}
+
+		// Execute asynchronously to avoid blocking
+		go func() {
+			// 5 minute timeout for LLM generation
+			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			output, err := d.sendMessageUseCase.Execute(genCtx, input)
+			if err != nil {
+				log.Printf("Failed to send message: %v", err)
+				if genCtx.Err() == nil {
+					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+						fmt.Sprintf("Failed to send message: %v", err), true)
+				}
+				return
+			}
+
+			// Send memory traces for retrieved memories
+			if output.UserMessage != nil && len(output.RelevantMemories) > 0 {
+				d.sendMemoryTraces(genCtx, output.UserMessage.ID, output.RelevantMemories)
+			}
+
+			// Handle streaming response
+			if output.StreamChannel != nil {
+				// Build a GenerateResponseOutput-like structure for processStreamingResponse
+				streamOutput := &ports.GenerateResponseOutput{
+					Message:       output.AssistantMessage,
+					StreamChannel: output.StreamChannel,
+				}
+				_, err = d.processStreamingResponse(genCtx, userMsg.ConversationID, streamOutput)
+				if err != nil {
+					log.Printf("Error processing streaming response: %v", err)
+				}
+			} else if output.AssistantMessage != nil {
+				// Non-streaming response
+				streamOutput := &ports.GenerateResponseOutput{
+					Message: output.AssistantMessage,
+				}
+				d.sendNonStreamingResponse(genCtx, userMsg.ConversationID, streamOutput)
+			}
+
+			log.Printf("Completed message handling for user message: %s", userMsg.ID)
+		}()
+
+		return nil
+	}
+
+	// Fallback to old behavior if use case not available
 	processOutput, err := d.processUserInput(ctx, userMsg.ConversationID, userMsg.ID, userMsg.Content, userMsg.PreviousID)
 	if err != nil {
 		return err
@@ -162,7 +220,7 @@ func (d *DefaultMessageDispatcher) processUserInput(
 
 // generateResponseAsync triggers async response generation
 func (d *DefaultMessageDispatcher) generateResponseAsync(
-	ctx context.Context,
+	_ context.Context, // unused - we create our own context for async operation
 	conversationID string,
 	userMessageID string,
 	processOutput *ports.ProcessUserMessageOutput,
@@ -174,17 +232,6 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 	// Pre-generate the message ID so we can register it for cancellation
 	assistantMsgID := d.idGenerator.GenerateMessageID()
 
-	input := &ports.GenerateResponseInput{
-		ConversationID:   conversationID,
-		UserMessageID:    processOutput.Message.ID,
-		MessageID:        assistantMsgID,
-		RelevantMemories: processOutput.RelevantMemories,
-		EnableTools:      true,
-		EnableReasoning:  true,
-		EnableStreaming:  true,
-		PreviousID:       processOutput.Message.ID,
-	}
-
 	// Generate response asynchronously
 	// Use context.Background() so generation continues even if user disconnects
 	// The response will be saved to DB and can be retrieved when user reconnects
@@ -192,6 +239,21 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 		// 5 minute timeout for LLM generation to prevent indefinite hangs
 		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
+
+		// Create a notifier to send real-time progress updates to the client
+		notifier := NewProtocolNotifier(genCtx, d.protocolHandler, d.idGenerator)
+
+		input := &ports.GenerateResponseInput{
+			ConversationID:   conversationID,
+			UserMessageID:    processOutput.Message.ID,
+			MessageID:        assistantMsgID,
+			RelevantMemories: processOutput.RelevantMemories,
+			EnableTools:      true,
+			EnableReasoning:  true,
+			EnableStreaming:  true,
+			PreviousID:       processOutput.Message.ID,
+			Notifier:         notifier,
+		}
 
 		// Register the generation for cancellation with the correct ID
 		d.generationManager.RegisterGeneration(assistantMsgID, cancel)
@@ -787,8 +849,71 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 	// First, cancel any active generation for this message
 	_ = d.generationManager.CancelGeneration(targetMessage.ID)
 
+	// Use RegenerateResponseUseCase if available
+	if d.regenerateResponseUseCase != nil {
+		input := &ports.RegenerateResponseInput{
+			MessageID:       targetMessage.ID,
+			EnableTools:     true,
+			EnableReasoning: true,
+			EnableStreaming: true,
+		}
+
+		// Execute asynchronously
+		go func() {
+			// 5 minute timeout for LLM generation
+			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			output, err := d.regenerateResponseUseCase.Execute(genCtx, input)
+			if err != nil {
+				log.Printf("Failed to regenerate response: %v", err)
+				if genCtx.Err() == nil {
+					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+						fmt.Sprintf("Failed to regenerate response: %v", err), true)
+				}
+				return
+			}
+
+			log.Printf("Regenerated response, deleted message: %s, new message: %s",
+				output.DeletedMessageID, output.NewMessage.ID)
+
+			// Handle streaming response
+			if output.StreamChannel != nil {
+				streamOutput := &ports.GenerateResponseOutput{
+					Message:       output.NewMessage,
+					StreamChannel: output.StreamChannel,
+				}
+				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+				if err != nil {
+					log.Printf("Error processing streaming response: %v", err)
+				}
+			} else if output.NewMessage != nil {
+				// Non-streaming response
+				assistantMsg := &protocol.AssistantMessage{
+					ID:             output.NewMessage.ID,
+					PreviousID:     output.NewMessage.PreviousID,
+					ConversationID: output.NewMessage.ConversationID,
+					Content:        output.NewMessage.Contents,
+				}
+
+				responseEnvelope := &protocol.Envelope{
+					ConversationID: targetMessage.ConversationID,
+					Type:           protocol.TypeAssistantMessage,
+					Body:           assistantMsg,
+				}
+
+				if err := d.protocolHandler.SendEnvelope(genCtx, responseEnvelope); err != nil {
+					log.Printf("Failed to send regenerated message: %v", err)
+				}
+			}
+		}()
+
+		// Send acknowledgement
+		return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
+	}
+
+	// Fallback to old behavior if use case not available
 	// Delete the existing assistant message and related data
-	// This will be handled by cascade delete in the database for related entities
 	if err := d.messageRepo.Delete(ctx, targetMessage.ID); err != nil {
 		return d.sendError(ctx, protocol.ErrCodeInternalError,
 			fmt.Sprintf("Failed to delete old message: %v", err), true)
@@ -804,32 +929,33 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 	if d.generateResponseUseCase != nil {
 		// Pre-generate the message ID so we can register it for cancellation
 		assistantMsgID := d.idGenerator.GenerateMessageID()
+		conversationID := targetMessage.ConversationID
+		previousID := targetMessage.PreviousID
 
-		input := &ports.GenerateResponseInput{
-			ConversationID:  targetMessage.ConversationID,
-			UserMessageID:   targetMessage.PreviousID,
-			MessageID:       assistantMsgID, // Pass pre-generated ID to avoid race condition
-			EnableTools:     true,
-			EnableReasoning: true,
-			EnableStreaming: true,
-			PreviousID:      targetMessage.PreviousID,
-		}
-
-		// Generate response asynchronously
-		// Use context.Background() so generation continues even if user disconnects
 		go func() {
-			// 5 minute timeout for LLM generation to prevent indefinite hangs
 			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			// Register the generation for cancellation with the correct ID
+			// Create a notifier to send real-time progress updates to the client
+			notifier := NewProtocolNotifier(genCtx, d.protocolHandler, d.idGenerator)
+
+			input := &ports.GenerateResponseInput{
+				ConversationID:  conversationID,
+				UserMessageID:   previousID,
+				MessageID:       assistantMsgID,
+				EnableTools:     true,
+				EnableReasoning: true,
+				EnableStreaming: true,
+				PreviousID:      previousID,
+				Notifier:        notifier,
+			}
+
 			d.generationManager.RegisterGeneration(assistantMsgID, cancel)
 			defer d.generationManager.UnregisterGeneration(assistantMsgID)
 
 			output, err := d.generateResponseUseCase.Execute(genCtx, input)
 			if err != nil {
 				log.Printf("Failed to regenerate response: %v", err)
-				// Don't send error if context was cancelled (user disconnected)
 				if genCtx.Err() == nil {
 					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
 						fmt.Sprintf("Failed to regenerate response: %v", err), true)
@@ -837,46 +963,12 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 				return
 			}
 
-			log.Printf("Regenerated response for user message: %s", targetMessage.PreviousID)
+			log.Printf("Regenerated response for user message: %s", previousID)
 
-			// If not streaming, send the complete response
-			if !input.EnableStreaming && output.Message != nil {
-				assistantMsg := &protocol.AssistantMessage{
-					ID:             output.Message.ID,
-					PreviousID:     output.Message.PreviousID,
-					ConversationID: output.Message.ConversationID,
-					Content:        output.Message.Contents,
-				}
-
-				responseEnvelope := &protocol.Envelope{
-					ConversationID: targetMessage.ConversationID,
-					Type:           protocol.TypeAssistantMessage,
-					Body:           assistantMsg,
-				}
-
-				if err := d.protocolHandler.SendEnvelope(genCtx, responseEnvelope); err != nil {
-					log.Printf("Failed to send regenerated message: %v", err)
-				}
-
-				// Send ReasoningStep messages for non-streaming responses
-				for _, step := range output.ReasoningSteps {
-					reasoningStep := &protocol.ReasoningStep{
-						ID:             step.ID,
-						MessageID:      step.MessageID,
-						ConversationID: targetMessage.ConversationID,
-						Sequence:       int32(step.SequenceNumber),
-						Content:        step.Content,
-					}
-
-					if err := d.protocolHandler.SendEnvelope(genCtx, &protocol.Envelope{
-						ConversationID: targetMessage.ConversationID,
-						Type:           protocol.TypeReasoningStep,
-						Body:           reasoningStep,
-					}); err != nil {
-						log.Printf("Failed to send ReasoningStep: %v", err)
-						// Don't fail the whole operation if reasoning step sending fails
-					}
-				}
+			if output.StreamChannel != nil {
+				_, _ = d.processStreamingResponse(genCtx, conversationID, output)
+			} else if output.Message != nil {
+				d.sendNonStreamingResponse(genCtx, conversationID, output)
 			}
 		}()
 	}
@@ -898,6 +990,50 @@ func (d *DefaultMessageDispatcher) handleAssistantEdit(ctx context.Context, enve
 	// First, cancel any active generation for this message
 	_ = d.generationManager.CancelGeneration(targetMessage.ID)
 
+	// Use EditAssistantMessageUseCase if available
+	if d.editAssistantMessageUseCase != nil {
+		input := &ports.EditAssistantMessageInput{
+			ConversationID:  targetMessage.ConversationID,
+			TargetMessageID: targetMessage.ID,
+			NewContent:      newContent,
+		}
+
+		output, err := d.editAssistantMessageUseCase.Execute(ctx, input)
+		if err != nil {
+			log.Printf("Failed to edit assistant message: %v", err)
+			return d.sendError(ctx, protocol.ErrCodeInternalError,
+				fmt.Sprintf("Failed to edit assistant message: %v", err), true)
+		}
+
+		log.Printf("Edited assistant message: %s", output.UpdatedMessage.ID)
+
+		// Send updated AssistantMessage back to the client
+		assistantMsg := &protocol.AssistantMessage{
+			ID:             output.UpdatedMessage.ID,
+			PreviousID:     output.UpdatedMessage.PreviousID,
+			ConversationID: output.UpdatedMessage.ConversationID,
+			Content:        output.UpdatedMessage.Contents,
+		}
+
+		responseEnvelope := &protocol.Envelope{
+			ConversationID: targetMessage.ConversationID,
+			Type:           protocol.TypeAssistantMessage,
+			Body:           assistantMsg,
+		}
+
+		if err := d.protocolHandler.SendEnvelope(ctx, responseEnvelope); err != nil {
+			log.Printf("Failed to send updated message: %v", err)
+			return d.sendError(ctx, protocol.ErrCodeInternalError,
+				fmt.Sprintf("Failed to send updated message: %v", err), true)
+		}
+
+		log.Printf("Sent updated assistant message to client: %s", output.UpdatedMessage.ID)
+
+		// Send acknowledgement
+		return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
+	}
+
+	// Fallback to old behavior if use case not available
 	// Update the message content
 	targetMessage.Contents = newContent
 	targetMessage.UpdatedAt = time.Now()
@@ -944,10 +1080,92 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 			"NewContent is required for user message edit", true)
 	}
 
-	// 1. Cancel any ongoing generation (the manager tracks all active generations)
+	// Cancel any ongoing generation
 	d.generationManager.CancelAll()
 
-	// 2. Update the user message content
+	// Use EditUserMessageUseCase if available
+	if d.editUserMessageUseCase != nil {
+		input := &ports.EditUserMessageInput{
+			ConversationID:  targetMessage.ConversationID,
+			TargetMessageID: targetMessage.ID,
+			NewContent:      newContent,
+			EnableTools:     true,
+			EnableReasoning: true,
+			EnableStreaming: true,
+		}
+
+		// Send acknowledgement first
+		if err := d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true); err != nil {
+			log.Printf("Failed to send acknowledgement: %v", err)
+			return err
+		}
+
+		// Execute asynchronously
+		go func() {
+			// 5 minute timeout for LLM generation
+			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			output, err := d.editUserMessageUseCase.Execute(genCtx, input)
+			if err != nil {
+				log.Printf("Failed to edit user message: %v", err)
+				if genCtx.Err() == nil {
+					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+						fmt.Sprintf("Failed to edit user message: %v", err), true)
+				}
+				return
+			}
+
+			log.Printf("Edited user message: %s, deleted %d subsequent messages",
+				output.UpdatedMessage.ID, output.DeletedCount)
+
+			// Send updated UserMessage back to client
+			userMsg := &protocol.UserMessage{
+				ID:             output.UpdatedMessage.ID,
+				ConversationID: output.UpdatedMessage.ConversationID,
+				Content:        output.UpdatedMessage.Contents,
+				PreviousID:     output.UpdatedMessage.PreviousID,
+			}
+			userEnvelope := &protocol.Envelope{
+				ConversationID: targetMessage.ConversationID,
+				Type:           protocol.TypeUserMessage,
+				Body:           userMsg,
+			}
+			if err := d.protocolHandler.SendEnvelope(genCtx, userEnvelope); err != nil {
+				log.Printf("Failed to send updated user message: %v", err)
+			}
+
+			// Send memory traces for retrieved memories
+			if len(output.RelevantMemories) > 0 {
+				d.sendMemoryTraces(genCtx, output.UpdatedMessage.ID, output.RelevantMemories)
+			}
+
+			// Handle streaming response
+			if output.StreamChannel != nil {
+				streamOutput := &ports.GenerateResponseOutput{
+					Message:       output.AssistantMessage,
+					StreamChannel: output.StreamChannel,
+				}
+				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+				if err != nil {
+					log.Printf("Error processing streaming response: %v", err)
+				}
+			} else if output.AssistantMessage != nil {
+				// Non-streaming response
+				streamOutput := &ports.GenerateResponseOutput{
+					Message: output.AssistantMessage,
+				}
+				d.sendNonStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+			}
+
+			log.Printf("Completed handling edited user message: %s", targetMessage.ID)
+		}()
+
+		return nil
+	}
+
+	// Fallback to old behavior if use case not available
+	// Update the user message content
 	targetMessage.Contents = newContent
 	targetMessage.UpdatedAt = time.Now()
 	if err := d.messageRepo.Update(ctx, targetMessage); err != nil {
@@ -957,7 +1175,7 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 
 	log.Printf("Updated user message content: %s", targetMessage.ID)
 
-	// 3. Delete all messages that came AFTER this user message
+	// Delete all messages that came AFTER this user message
 	if err := d.messageRepo.DeleteAfterSequence(ctx, targetMessage.ConversationID, targetMessage.SequenceNumber); err != nil {
 		return d.sendError(ctx, protocol.ErrCodeInternalError,
 			fmt.Sprintf("Failed to clear subsequent messages: %v", err), true)
@@ -965,13 +1183,13 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 
 	log.Printf("Deleted messages after sequence %d in conversation %s", targetMessage.SequenceNumber, targetMessage.ConversationID)
 
-	// 4. Send acknowledgement for the edit
+	// Send acknowledgement for the edit
 	if err := d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true); err != nil {
 		log.Printf("Failed to send acknowledgement: %v", err)
 		return err
 	}
 
-	// 5. Send updated UserMessage back to client
+	// Send updated UserMessage back to client
 	userMsg := &protocol.UserMessage{
 		ID:             targetMessage.ID,
 		ConversationID: targetMessage.ConversationID,
@@ -985,19 +1203,15 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 	}
 	if err := d.protocolHandler.SendEnvelope(ctx, userEnvelope); err != nil {
 		log.Printf("Failed to send updated user message: %v", err)
-		// Non-fatal, continue with regeneration
 	}
 
-	// 6. Trigger new assistant response generation
-	// Reuse the same flow as when a new UserMessage is received
+	// Trigger new assistant response generation
 	processOutput := &ports.ProcessUserMessageOutput{
 		Message:          targetMessage,
 		RelevantMemories: []*models.Memory{},
 	}
 
-	// Retrieve relevant memories for the edited message
 	if d.processUserMessageUseCase != nil {
-		// Use the process use case to get memories
 		processInput := &ports.ProcessUserMessageInput{
 			ConversationID: targetMessage.ConversationID,
 			TextContent:    newContent,
@@ -1006,10 +1220,8 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 		output, err := d.processUserMessageUseCase.Execute(ctx, processInput)
 		if err != nil {
 			log.Printf("Failed to retrieve memories for edited message: %v", err)
-			// Continue without memories
 		} else {
 			processOutput.RelevantMemories = output.RelevantMemories
-			// Send memory traces for retrieved memories
 			d.sendMemoryTraces(ctx, targetMessage.ID, output.RelevantMemories)
 		}
 	}
@@ -1030,39 +1242,24 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 			"Cannot continue: target message has no previous message reference", true)
 	}
 
-	// Trigger continuation by regenerating with the existing content as context
-	// Note: This is a simplified implementation. A full implementation would require
-	// the GenerateResponseUseCase to support continuation mode where it appends to
-	// the existing message rather than creating a new one.
-	if d.generateResponseUseCase != nil {
-		// Pre-generate the continuation message ID so we can register it for cancellation
-		continuationMsgID := d.idGenerator.GenerateMessageID()
-
-		input := &ports.GenerateResponseInput{
-			ConversationID:  targetMessage.ConversationID,
-			UserMessageID:   targetMessage.PreviousID,
-			MessageID:       continuationMsgID, // Pass pre-generated ID to avoid race condition
+	// Use ContinueResponseUseCase if available
+	if d.continueResponseUseCase != nil {
+		input := &ports.ContinueResponseInput{
+			TargetMessageID: targetMessage.ID,
 			EnableTools:     true,
 			EnableReasoning: true,
 			EnableStreaming: true,
-			PreviousID:      targetMessage.ID, // Use current message as previous
 		}
 
-		// Generate continuation asynchronously
-		// Use context.Background() so generation continues even if user disconnects
+		// Execute asynchronously
 		go func() {
-			// 5 minute timeout for LLM generation to prevent indefinite hangs
+			// 5 minute timeout for LLM generation
 			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			// Register the generation for cancellation with the correct ID
-			d.generationManager.RegisterGeneration(continuationMsgID, cancel)
-			defer d.generationManager.UnregisterGeneration(continuationMsgID)
-
-			output, err := d.generateResponseUseCase.Execute(genCtx, input)
+			output, err := d.continueResponseUseCase.Execute(genCtx, input)
 			if err != nil {
 				log.Printf("Failed to continue response: %v", err)
-				// Don't send error if context was cancelled (user disconnected)
 				if genCtx.Err() == nil {
 					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
 						fmt.Sprintf("Failed to continue response: %v", err), true)
@@ -1070,9 +1267,84 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 				return
 			}
 
-			log.Printf("Continued response for message: %s", targetMessage.ID)
+			log.Printf("Continued response for message: %s, appended content length: %d",
+				targetMessage.ID, len(output.AppendedContent))
 
-			// Update the target message with appended content
+			// Handle streaming response
+			if output.StreamChannel != nil {
+				streamOutput := &ports.GenerateResponseOutput{
+					Message:       output.TargetMessage,
+					StreamChannel: output.StreamChannel,
+				}
+				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+				if err != nil {
+					log.Printf("Error processing streaming response: %v", err)
+				}
+			} else if output.TargetMessage != nil {
+				// Non-streaming response - send the updated message
+				assistantMsg := &protocol.AssistantMessage{
+					ID:             output.TargetMessage.ID,
+					PreviousID:     output.TargetMessage.PreviousID,
+					ConversationID: output.TargetMessage.ConversationID,
+					Content:        output.TargetMessage.Contents,
+				}
+
+				responseEnvelope := &protocol.Envelope{
+					ConversationID: targetMessage.ConversationID,
+					Type:           protocol.TypeAssistantMessage,
+					Body:           assistantMsg,
+				}
+
+				if err := d.protocolHandler.SendEnvelope(genCtx, responseEnvelope); err != nil {
+					log.Printf("Failed to send continued message: %v", err)
+				}
+			}
+		}()
+
+		// Send acknowledgement
+		return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
+	}
+
+	// Fallback to old behavior if use case not available
+	if d.generateResponseUseCase != nil {
+		continuationMsgID := d.idGenerator.GenerateMessageID()
+		conversationID := targetMessage.ConversationID
+		previousID := targetMessage.PreviousID
+		targetMsgID := targetMessage.ID
+
+		go func() {
+			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			// Create a notifier to send real-time progress updates to the client
+			notifier := NewProtocolNotifier(genCtx, d.protocolHandler, d.idGenerator)
+
+			input := &ports.GenerateResponseInput{
+				ConversationID:  conversationID,
+				UserMessageID:   previousID,
+				MessageID:       continuationMsgID,
+				EnableTools:     true,
+				EnableReasoning: true,
+				EnableStreaming: true,
+				PreviousID:      targetMsgID,
+				Notifier:        notifier,
+			}
+
+			d.generationManager.RegisterGeneration(continuationMsgID, cancel)
+			defer d.generationManager.UnregisterGeneration(continuationMsgID)
+
+			output, err := d.generateResponseUseCase.Execute(genCtx, input)
+			if err != nil {
+				log.Printf("Failed to continue response: %v", err)
+				if genCtx.Err() == nil {
+					_ = d.sendError(genCtx, protocol.ErrCodeInternalError,
+						fmt.Sprintf("Failed to continue response: %v", err), true)
+				}
+				return
+			}
+
+			log.Printf("Continued response for message: %s", targetMsgID)
+
 			if output.Message != nil {
 				targetMessage.Contents += "\n\n" + output.Message.Contents
 				targetMessage.UpdatedAt = time.Now()
@@ -1082,16 +1354,15 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 					return
 				}
 
-				// Send the updated message back to client
 				assistantMsg := &protocol.AssistantMessage{
 					ID:             targetMessage.ID,
 					PreviousID:     targetMessage.PreviousID,
-					ConversationID: targetMessage.ConversationID,
+					ConversationID: conversationID,
 					Content:        targetMessage.Contents,
 				}
 
 				responseEnvelope := &protocol.Envelope{
-					ConversationID: targetMessage.ConversationID,
+					ConversationID: conversationID,
 					Type:           protocol.TypeAssistantMessage,
 					Body:           assistantMsg,
 				}
@@ -1675,4 +1946,299 @@ func (d *DefaultMessageDispatcher) SendEliteOptions(ctx context.Context) error {
 	}
 
 	return d.protocolHandler.SendEnvelope(ctx, envelope)
+}
+
+// handleResponseGenerationRequest handles ResponseGenerationRequest messages from the serve process
+// This is called when the agent receives a request to generate a response for a user message
+func (d *DefaultMessageDispatcher) handleResponseGenerationRequest(ctx context.Context, envelope *protocol.Envelope) error {
+	req, ok := envelope.Body.(*protocol.ResponseGenerationRequest)
+	if !ok {
+		// Try to decode from map if body is a generic interface
+		bodyMap, isMap := envelope.Body.(map[string]interface{})
+		if !isMap {
+			log.Printf("Invalid ResponseGenerationRequest message type: %T", envelope.Body)
+			return fmt.Errorf("invalid ResponseGenerationRequest message type")
+		}
+
+		req = &protocol.ResponseGenerationRequest{}
+		if id, ok := bodyMap["id"].(string); ok {
+			req.ID = id
+		}
+		if messageID, ok := bodyMap["messageId"].(string); ok {
+			req.MessageID = messageID
+		}
+		if conversationID, ok := bodyMap["conversationId"].(string); ok {
+			req.ConversationID = conversationID
+		}
+		if requestType, ok := bodyMap["requestType"].(string); ok {
+			req.RequestType = requestType
+		}
+		if enableTools, ok := bodyMap["enableTools"].(bool); ok {
+			req.EnableTools = enableTools
+		}
+		if enableReasoning, ok := bodyMap["enableReasoning"].(bool); ok {
+			req.EnableReasoning = enableReasoning
+		}
+		if enableStreaming, ok := bodyMap["enableStreaming"].(bool); ok {
+			req.EnableStreaming = enableStreaming
+		}
+		if previousID, ok := bodyMap["previousId"].(string); ok {
+			req.PreviousID = previousID
+		}
+	}
+
+	log.Printf("Received ResponseGenerationRequest (type: %s, messageID: %s, conversationID: %s)",
+		req.RequestType, req.MessageID, req.ConversationID)
+
+	// Execute based on request type
+	switch req.RequestType {
+	case "send":
+		return d.handleGenerateForUserMessage(ctx, req)
+	case "regenerate":
+		return d.handleRegenerateFromRequest(ctx, req)
+	case "continue":
+		return d.handleContinueFromRequest(ctx, req)
+	case "edit":
+		return d.handleGenerateForEditedMessage(ctx, req)
+	default:
+		log.Printf("Unknown request type: %s", req.RequestType)
+		return fmt.Errorf("unknown request type: %s", req.RequestType)
+	}
+}
+
+// handleGenerateForUserMessage generates a response for a user message
+func (d *DefaultMessageDispatcher) handleGenerateForUserMessage(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
+	if d.generateResponseUseCase == nil {
+		return fmt.Errorf("generateResponseUseCase not available")
+	}
+
+	// Execute response generation asynchronously
+	go func() {
+		// 5 minute timeout for LLM generation
+		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		input := &ports.GenerateResponseInput{
+			ConversationID:  req.ConversationID,
+			UserMessageID:   req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+			Notifier:        d.protocolHandler.(ports.GenerationNotifier),
+		}
+
+		output, err := d.generateResponseUseCase.Execute(genCtx, input)
+		if err != nil {
+			log.Printf("Failed to generate response for message %s: %v", req.MessageID, err)
+			// Notify failure via protocol handler
+			errMsg := &protocol.ErrorMessage{
+				ConversationID: req.ConversationID,
+				Code:           protocol.ErrCodeInternalError,
+				Message:        err.Error(),
+				Severity:       protocol.SeverityError,
+				Recoverable:    true,
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeErrorMessage,
+				Body:           errMsg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+			return
+		}
+
+		// If not streaming, send the complete response via AssistantMessage
+		if output.Message != nil && output.Message.Contents != "" && !req.EnableStreaming {
+			msg := &protocol.AssistantMessage{
+				ID:             output.Message.ID,
+				PreviousID:     req.MessageID,
+				ConversationID: req.ConversationID,
+				Content:        output.Message.Contents,
+				Timestamp:      time.Now().UnixMilli(),
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeAssistantMessage,
+				Body:           msg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+		}
+	}()
+
+	return nil
+}
+
+// handleRegenerateFromRequest regenerates a response for a message
+func (d *DefaultMessageDispatcher) handleRegenerateFromRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
+	if d.regenerateResponseUseCase == nil {
+		return fmt.Errorf("regenerateResponseUseCase not available")
+	}
+
+	// Execute regeneration asynchronously
+	go func() {
+		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		input := &ports.RegenerateResponseInput{
+			MessageID:       req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+		}
+
+		output, err := d.regenerateResponseUseCase.Execute(genCtx, input)
+		if err != nil {
+			log.Printf("Failed to regenerate response for message %s: %v", req.MessageID, err)
+			errMsg := &protocol.ErrorMessage{
+				ConversationID: req.ConversationID,
+				Code:           protocol.ErrCodeInternalError,
+				Message:        err.Error(),
+				Severity:       protocol.SeverityError,
+				Recoverable:    true,
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeErrorMessage,
+				Body:           errMsg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+			return
+		}
+
+		// Send complete response if not streaming
+		if output.NewMessage != nil && output.NewMessage.Contents != "" && !req.EnableStreaming {
+			msg := &protocol.AssistantMessage{
+				ID:             output.NewMessage.ID,
+				ConversationID: req.ConversationID,
+				Content:        output.NewMessage.Contents,
+				Timestamp:      time.Now().UnixMilli(),
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeAssistantMessage,
+				Body:           msg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+		}
+	}()
+
+	return nil
+}
+
+// handleContinueFromRequest continues a response for a message
+func (d *DefaultMessageDispatcher) handleContinueFromRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
+	if d.continueResponseUseCase == nil {
+		return fmt.Errorf("continueResponseUseCase not available")
+	}
+
+	// Execute continuation asynchronously
+	go func() {
+		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		input := &ports.ContinueResponseInput{
+			TargetMessageID: req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+		}
+
+		output, err := d.continueResponseUseCase.Execute(genCtx, input)
+		if err != nil {
+			log.Printf("Failed to continue response for message %s: %v", req.MessageID, err)
+			errMsg := &protocol.ErrorMessage{
+				ConversationID: req.ConversationID,
+				Code:           protocol.ErrCodeInternalError,
+				Message:        err.Error(),
+				Severity:       protocol.SeverityError,
+				Recoverable:    true,
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeErrorMessage,
+				Body:           errMsg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+			return
+		}
+
+		// Send complete response if not streaming
+		if output.TargetMessage != nil && output.AppendedContent != "" && !req.EnableStreaming {
+			msg := &protocol.AssistantMessage{
+				ID:             output.TargetMessage.ID,
+				ConversationID: req.ConversationID,
+				Content:        output.TargetMessage.Contents, // Updated message content
+				Timestamp:      time.Now().UnixMilli(),
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeAssistantMessage,
+				Body:           msg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+		}
+	}()
+
+	return nil
+}
+
+// handleGenerateForEditedMessage generates a response for an edited user message
+func (d *DefaultMessageDispatcher) handleGenerateForEditedMessage(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
+	if d.generateResponseUseCase == nil {
+		return fmt.Errorf("generateResponseUseCase not available")
+	}
+
+	// Execute response generation asynchronously (same as handleGenerateForUserMessage)
+	// The message has already been updated by the HTTP handler
+	go func() {
+		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		input := &ports.GenerateResponseInput{
+			ConversationID:  req.ConversationID,
+			UserMessageID:   req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+			Notifier:        d.protocolHandler.(ports.GenerationNotifier),
+		}
+
+		output, err := d.generateResponseUseCase.Execute(genCtx, input)
+		if err != nil {
+			log.Printf("Failed to generate response for edited message %s: %v", req.MessageID, err)
+			errMsg := &protocol.ErrorMessage{
+				ConversationID: req.ConversationID,
+				Code:           protocol.ErrCodeInternalError,
+				Message:        err.Error(),
+				Severity:       protocol.SeverityError,
+				Recoverable:    true,
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeErrorMessage,
+				Body:           errMsg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+			return
+		}
+
+		// If not streaming, send the complete response
+		if output.Message != nil && output.Message.Contents != "" && !req.EnableStreaming {
+			msg := &protocol.AssistantMessage{
+				ID:             output.Message.ID,
+				PreviousID:     req.MessageID,
+				ConversationID: req.ConversationID,
+				Content:        output.Message.Contents,
+				Timestamp:      time.Now().UnixMilli(),
+			}
+			envelope := &protocol.Envelope{
+				ConversationID: req.ConversationID,
+				Type:           protocol.TypeAssistantMessage,
+				Body:           msg,
+			}
+			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+		}
+	}()
+
+	return nil
 }

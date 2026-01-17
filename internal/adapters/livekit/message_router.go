@@ -38,13 +38,18 @@ func NewMessageRouter(
 	voteRepo ports.VoteRepository,
 	noteRepo ports.NoteRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationService,
+	optimizationService ports.OptimizationServiceFull,
 	conversationID string,
 	asrService ports.ASRService,
 	ttsService ports.TTSService,
 	idGenerator ports.IDGenerator,
 	agent *Agent,
 	asrMinConfidence float64,
+	sendMessageUseCase ports.SendMessageUseCase,
+	regenerateResponseUseCase ports.RegenerateResponseUseCase,
+	continueResponseUseCase ports.ContinueResponseUseCase,
+	editUserMessageUseCase ports.EditUserMessageUseCase,
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
 ) *MessageRouter {
 	// Create the generation manager
 	generationManager := NewDefaultResponseGenerationManager()
@@ -68,6 +73,11 @@ func NewMessageRouter(
 		ttsService,
 		idGenerator,
 		generationManager,
+		sendMessageUseCase,
+		regenerateResponseUseCase,
+		continueResponseUseCase,
+		editUserMessageUseCase,
+		editAssistantMessageUseCase,
 	)
 
 	router := &MessageRouter{

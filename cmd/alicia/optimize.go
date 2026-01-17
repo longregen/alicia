@@ -12,7 +12,6 @@ import (
 	"github.com/longregen/alicia/internal/adapters/postgres"
 	"github.com/longregen/alicia/internal/application/services"
 	"github.com/longregen/alicia/internal/llm"
-	"github.com/longregen/alicia/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -71,15 +70,13 @@ func optimizeListCmd() *cobra.Command {
 				optimizationConfig,
 			)
 
-			opts := ports.ListOptimizationRunsOptions{}
-			if status != "" {
-				opts.Status = status
-			}
-			if limit > 0 {
-				opts.Limit = limit
+			statusFilter := status
+			limitValue := limit
+			if limitValue <= 0 {
+				limitValue = 50 // default limit
 			}
 
-			runs, err := optimizationService.ListOptimizationRuns(ctx, opts)
+			runs, err := optimizationService.ListOptimizationRuns(ctx, statusFilter, limitValue, 0)
 			if err != nil {
 				return fmt.Errorf("failed to list runs: %w", err)
 			}

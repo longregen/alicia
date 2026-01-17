@@ -349,3 +349,29 @@ type EliteOptions struct {
 	CurrentEliteID string         `msgpack:"currentEliteId" json:"currentEliteId"`
 	Timestamp      int64          `msgpack:"timestamp" json:"timestamp"`
 }
+
+// OptimizationProgress (Type 32) represents real-time optimization progress updates
+type OptimizationProgress struct {
+	RunID           string             `msgpack:"runId" json:"runId"`
+	Status          string             `msgpack:"status" json:"status"` // running, completed, failed
+	Iteration       int32              `msgpack:"iteration" json:"iteration"`
+	MaxIterations   int32              `msgpack:"maxIterations" json:"maxIterations"`
+	CurrentScore    float64            `msgpack:"currentScore" json:"currentScore"`
+	BestScore       float64            `msgpack:"bestScore" json:"bestScore"`
+	DimensionScores map[string]float64 `msgpack:"dimensionScores,omitempty" json:"dimensionScores,omitempty"`
+	Message         string             `msgpack:"message,omitempty" json:"message,omitempty"`
+	Timestamp       int64              `msgpack:"timestamp" json:"timestamp"`
+}
+
+// ResponseGenerationRequest (Type 33) requests the agent to generate a response
+type ResponseGenerationRequest struct {
+	ID              string `msgpack:"id" json:"id"`
+	MessageID       string `msgpack:"messageId" json:"messageId"`
+	ConversationID  string `msgpack:"conversationId" json:"conversationId"`
+	RequestType     string `msgpack:"requestType" json:"requestType"` // send, regenerate, continue, edit
+	EnableTools     bool   `msgpack:"enableTools" json:"enableTools"`
+	EnableReasoning bool   `msgpack:"enableReasoning" json:"enableReasoning"`
+	EnableStreaming bool   `msgpack:"enableStreaming" json:"enableStreaming"`
+	PreviousID      string `msgpack:"previousId,omitempty" json:"previousId,omitempty"`
+	Timestamp       int64  `msgpack:"timestamp" json:"timestamp"`
+}

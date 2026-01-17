@@ -1,23 +1,60 @@
 package handlers
 
 import (
+	"context"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
+	"github.com/longregen/alicia/internal/application/usecases"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
 )
 
 type VoteHandler struct {
-	voteRepo    ports.VoteRepository
-	idGenerator ports.IDGenerator
+	voteRepo           ports.VoteRepository
+	idGenerator        ports.IDGenerator
+	memorizeFromUpvote *usecases.MemorizeFromUpvote
 }
 
-func NewVoteHandler(voteRepo ports.VoteRepository, idGenerator ports.IDGenerator) *VoteHandler {
+func NewVoteHandler(voteRepo ports.VoteRepository, idGenerator ports.IDGenerator, memorizeFromUpvote *usecases.MemorizeFromUpvote) *VoteHandler {
 	return &VoteHandler{
-		voteRepo:    voteRepo,
-		idGenerator: idGenerator,
+		voteRepo:           voteRepo,
+		idGenerator:        idGenerator,
+		memorizeFromUpvote: memorizeFromUpvote,
 	}
+}
+
+// triggerMemorizeFromUpvote asynchronously triggers memory extraction from upvoted content
+func (h *VoteHandler) triggerMemorizeFromUpvote(ctx context.Context, targetType, targetID string, vote int) {
+	if h.memorizeFromUpvote == nil {
+		return
+	}
+
+	// Only trigger for upvotes on messages or conversations
+	if vote != 1 {
+		return
+	}
+	if targetType != "message" && targetType != "conversation" {
+		return
+	}
+
+	// Run asynchronously with a detached context and timeout
+	go func() {
+		memCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+
+		_, err := h.memorizeFromUpvote.Execute(memCtx, &usecases.MemorizeFromUpvoteInput{
+			TargetType: targetType,
+			TargetID:   targetID,
+			Vote:       vote,
+			MinUpvotes: 1,
+		})
+		if err != nil {
+			log.Printf("warning: failed to extract memories from upvoted %s %s: %v\n", targetType, targetID, err)
+		}
+	}()
 }
 
 // VoteRequest represents a vote submission
@@ -95,6 +132,11 @@ func (h *VoteHandler) VoteOnMessage(w http.ResponseWriter, r *http.Request) {
 	if err := h.voteRepo.Create(r.Context(), vote); err != nil {
 		respondError(w, "database_error", "Failed to create vote", http.StatusInternalServerError)
 		return
+	}
+
+	// Trigger memory extraction for upvotes on messages (async, non-blocking)
+	if voteValue == models.VoteValueUp {
+		h.triggerMemorizeFromUpvote(r.Context(), "message", messageID, int(voteValue))
 	}
 
 	// Get aggregates

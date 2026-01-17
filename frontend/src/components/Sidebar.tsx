@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Brain, Server, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit2, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { Brain, Server, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit2, Archive, ArchiveRestore, Trash2, X } from 'lucide-react';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import { Conversation } from '../types/models';
 import type { AppView } from '../App';
 import { useSidebarStore, COLLAPSED_WIDTH } from '../stores/sidebarStore';
@@ -22,6 +23,9 @@ import {
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './atoms/Collapsible';
 import { ConnectionStatusIndicator } from './ConnectionStatusIndicator';
 
+// Consistent icon size for header buttons
+const HEADER_ICON_SIZE = 'w-4 h-4';
+
 interface SidebarProps {
   conversations: Conversation[];
   selectedId: string | null;
@@ -35,6 +39,73 @@ interface SidebarProps {
   onSettings: () => void;
   onPanelChange: (panel: 'memory' | 'server' | 'settings') => void;
   loading: boolean;
+  /** Called when the mobile sidebar should close (only used on mobile) */
+  onClose?: () => void;
+}
+
+/** Mobile header with close button */
+function MobileHeader({ onClose, onNew }: { onClose?: () => void; onNew: () => void }) {
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-2xl font-semibold">Alicia</h2>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-sidebar-accent rounded transition-colors"
+          aria-label="Close sidebar"
+        >
+          <X className={HEADER_ICON_SIZE} />
+        </button>
+      </div>
+      <button
+        onClick={onNew}
+        className="btn btn-secondary w-full"
+        data-testid="new-chat-btn"
+      >
+        New Chat
+      </button>
+    </>
+  );
+}
+
+/** Desktop expanded header with collapse toggle */
+function DesktopExpandedHeader({ onToggle, onNew }: { onToggle: () => void; onNew: () => void }) {
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-2xl font-semibold">Alicia</h2>
+        <button
+          onClick={onToggle}
+          className="p-1 hover:bg-sidebar-accent rounded transition-colors"
+          title="Collapse sidebar (⌘B)"
+          aria-label="Collapse sidebar"
+        >
+          <ChevronLeft className={HEADER_ICON_SIZE} />
+        </button>
+      </div>
+      <button
+        onClick={onNew}
+        className="btn btn-secondary w-full"
+        data-testid="new-chat-btn"
+      >
+        New Chat
+      </button>
+    </>
+  );
+}
+
+/** Desktop collapsed header with expand toggle */
+function DesktopCollapsedHeader({ onToggle }: { onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full p-2 hover:bg-sidebar-accent rounded transition-colors"
+      title="Expand sidebar (⌘B)"
+      aria-label="Expand sidebar"
+    >
+      <ChevronRight className="w-5 h-5 mx-auto" />
+    </button>
+  );
 }
 
 export function Sidebar({
@@ -50,6 +121,7 @@ export function Sidebar({
   onSettings,
   onPanelChange,
   loading,
+  onClose,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -58,14 +130,18 @@ export function Sidebar({
   const [archivedOpen, setArchivedOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
+  const isMobile = useIsMobile();
   const { isCollapsed, width, toggleCollapsed, setWidth } = useSidebarStore();
+
+  // On mobile, never show collapsed state - always show full sidebar
+  const showCollapsed = isCollapsed && !isMobile;
 
   // Separate conversations by status
   const activeConversations = conversations.filter(c => c.status === 'active');
   const archivedConversations = conversations.filter(c => c.status === 'archived');
 
   const handleStartEdit = (conv: Conversation) => {
-    if (isCollapsed) return; // Don't allow editing when collapsed
+    if (showCollapsed) return; // Don't allow editing when collapsed (desktop only)
     setEditingId(conv.id);
     setEditTitle(conv.title || 'New Conversation');
   };
@@ -131,7 +207,8 @@ export function Sidebar({
     }
   }, [isResizing, isCollapsed, setWidth]);
 
-  const actualWidth = isCollapsed ? COLLAPSED_WIDTH : width;
+  // On mobile, always use full width. On desktop, respect collapsed state.
+  const actualWidth = isMobile ? width : (isCollapsed ? COLLAPSED_WIDTH : width);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -145,7 +222,7 @@ export function Sidebar({
             'conversation-item p-3 mb-2 rounded-md cursor-pointer transition-colors',
             'hover:bg-sidebar-accent',
             selectedId === conv.id && 'bg-sidebar-accent border-l-2 border-accent',
-            isCollapsed && 'p-2 flex justify-center'
+            showCollapsed && 'p-2 flex justify-center'
           )}
           onClick={() => {
             if (editingId !== conv.id) {
@@ -158,9 +235,9 @@ export function Sidebar({
           }}
           data-conversation-id={conv.id}
           data-testid="conversation-item"
-          title={isCollapsed ? conv.title || 'New Conversation' : undefined}
+          title={showCollapsed ? conv.title || 'New Conversation' : undefined}
         >
-            {isCollapsed ? (
+            {showCollapsed ? (
               // Collapsed view: just show first letter
               <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-semibold">
                 {(conv.title || 'N')[0].toUpperCase()}
@@ -285,51 +362,27 @@ export function Sidebar({
         style={{ width: `${actualWidth}px` }}
       >
       {/* Header with toggle button */}
-      <div className={cls('p-5 border-b border-border', isCollapsed && 'p-3')}>
-        {!isCollapsed ? (
-          <>
-            <div className="layout-between mb-3">
-              <h2 className="text-2xl font-semibold">Alicia</h2>
-              <button
-                onClick={toggleCollapsed}
-                className="p-1 hover:bg-sidebar-accent rounded transition-colors"
-                title="Collapse sidebar (⌘B)"
-                aria-label="Collapse sidebar"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </div>
-            <button
-              onClick={onNew}
-              className="btn btn-secondary w-full"
-              data-testid="new-chat-btn"
-            >
-              New Chat
-            </button>
-          </>
+      <div className={cls('p-5 border-b border-border', showCollapsed && 'p-3')}>
+        {isMobile ? (
+          <MobileHeader onClose={onClose} onNew={onNew} />
+        ) : showCollapsed ? (
+          <DesktopCollapsedHeader onToggle={toggleCollapsed} />
         ) : (
-          <button
-            onClick={toggleCollapsed}
-            className="w-full p-2 hover:bg-sidebar-accent rounded transition-colors"
-            title="Expand sidebar (⌘B)"
-            aria-label="Expand sidebar"
-          >
-            <ChevronRight className="w-5 h-5 mx-auto" />
-          </button>
+          <DesktopExpandedHeader onToggle={toggleCollapsed} onNew={onNew} />
         )}
       </div>
 
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto p-2.5">
-        {loading && !isCollapsed && (
+        {loading && !showCollapsed && (
           <div className="text-center text-muted-foreground p-5">Loading...</div>
         )}
-        {!loading && conversations.length === 0 && !isCollapsed && (
+        {!loading && conversations.length === 0 && !showCollapsed && (
           <div className="text-center text-muted-foreground p-5">No conversations yet</div>
         )}
 
         {/* Active conversations */}
-        {!isCollapsed && activeConversations.length > 0 && (
+        {!showCollapsed && activeConversations.length > 0 && (
           <div className="mb-4">
             <div className="text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wide">
               Active ({activeConversations.length})
@@ -339,10 +392,10 @@ export function Sidebar({
         )}
 
         {/* Archived conversations (collapsible) */}
-        {!isCollapsed && archivedConversations.length > 0 && (
+        {!showCollapsed && archivedConversations.length > 0 && (
           <div className="mb-4">
             <Collapsible open={archivedOpen} onOpenChange={setArchivedOpen}>
-              <CollapsibleTrigger className="w-full layout-between text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wide hover:text-foreground transition-colors">
+              <CollapsibleTrigger className="w-full flex items-center justify-between text-xs font-semibold text-muted-foreground px-2 mb-2 uppercase tracking-wide hover:text-foreground transition-colors">
                 <span>Archived ({archivedConversations.length})</span>
                 {archivedOpen ? (
                   <ChevronUp className="w-3 h-3" />
@@ -358,15 +411,15 @@ export function Sidebar({
         )}
 
         {/* Collapsed view shows all conversations */}
-        {isCollapsed && conversations.map(conv => renderConversationItem(conv))}
+        {showCollapsed && conversations.map(conv => renderConversationItem(conv))}
       </div>
 
       {/* Bottom navigation */}
-      <div className={cls('border-t border-border', isCollapsed ? 'p-2' : 'p-2.5')}>
+      <div className={cls('border-t border-border', showCollapsed ? 'p-2' : 'p-2.5')}>
         {/* Connection status indicator */}
-        <ConnectionStatusIndicator isCollapsed={isCollapsed} />
+        <ConnectionStatusIndicator isCollapsed={showCollapsed} />
 
-        {isCollapsed ? (
+        {showCollapsed ? (
           // Collapsed: Icon-only buttons
           <div className="flex flex-col gap-1 mt-2">
             <button
@@ -410,7 +463,7 @@ export function Sidebar({
             <button
               onClick={() => onPanelChange('memory')}
               className={cls(
-                'layout-center-gap p-2 rounded transition-colors w-full text-left',
+                'flex items-center gap-2 p-2 rounded transition-colors w-full text-left',
                 activeView === 'memory' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
               )}
               title="Memory"
@@ -421,7 +474,7 @@ export function Sidebar({
             <button
               onClick={() => onPanelChange('server')}
               className={cls(
-                'layout-center-gap p-2 rounded transition-colors w-full text-left',
+                'flex items-center gap-2 p-2 rounded transition-colors w-full text-left',
                 activeView === 'server' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
               )}
               title="Server"
@@ -432,7 +485,7 @@ export function Sidebar({
             <button
               onClick={onSettings}
               className={cls(
-                'layout-center-gap p-2 rounded transition-colors w-full text-left',
+                'flex items-center gap-2 p-2 rounded transition-colors w-full text-left',
                 activeView === 'settings' ? 'bg-sidebar-accent text-accent' : 'hover:bg-sidebar-accent'
               )}
               title="Settings"
@@ -445,8 +498,8 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Resize handle */}
-      {!isCollapsed && (
+      {/* Resize handle - only on desktop when not collapsed */}
+      {!showCollapsed && !isMobile && (
         <div
           className={cls(
             'absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors',

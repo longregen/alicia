@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
@@ -13,6 +12,14 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 	"github.com/longregen/alicia/internal/prompt"
 	"github.com/longregen/alicia/internal/prompt/baselines"
+)
+
+// Optimization type constants for different optimization targets
+const (
+	OptimizationTypeToolSelection    = "tool_selection"
+	OptimizationTypeMemorySelection  = "memory_selection"
+	OptimizationTypeMemoryExtraction = "memory_extraction"
+	OptimizationTypePathSearch       = "path_search"
 )
 
 // OptimizationConfig configures the optimization service
@@ -44,20 +51,6 @@ func DefaultOptimizationConfig() OptimizationConfig {
 	}
 }
 
-// OptimizationProgressEvent represents a progress update during optimization
-type OptimizationProgressEvent struct {
-	Type            string             `json:"type"`
-	RunID           string             `json:"run_id"`
-	Iteration       int                `json:"iteration"`
-	MaxIterations   int                `json:"max_iterations"`
-	CurrentScore    float64            `json:"current_score"`
-	BestScore       float64            `json:"best_score"`
-	DimensionScores map[string]float64 `json:"dimension_scores,omitempty"`
-	Status          string             `json:"status"`
-	Message         string             `json:"message,omitempty"`
-	Timestamp       string             `json:"timestamp"`
-}
-
 // OptimizationService manages prompt optimization using DSPy/GEPA
 type OptimizationService struct {
 	repo         ports.PromptOptimizationRepository
@@ -66,9 +59,8 @@ type OptimizationService struct {
 	idGenerator  ports.IDGenerator
 	config       OptimizationConfig
 
-	// Progress channel infrastructure for push-based updates
-	progressChannels map[string][]chan OptimizationProgressEvent
-	progressMu       sync.RWMutex
+	// Progress publisher for real-time progress updates (WebSocket + SSE)
+	progressPublisher ports.OptimizationProgressPublisher
 }
 
 // NewOptimizationService creates a new optimization service
@@ -79,17 +71,29 @@ func NewOptimizationService(
 	config OptimizationConfig,
 ) *OptimizationService {
 	return &OptimizationService{
-		repo:             repo,
-		llmService:       llmService,
-		idGenerator:      idGenerator,
-		config:           config,
-		progressChannels: make(map[string][]chan OptimizationProgressEvent),
+		repo:              repo,
+		llmService:        llmService,
+		idGenerator:       idGenerator,
+		config:            config,
+		progressPublisher: NewOptimizationProgressPublisher(nil),
 	}
 }
 
 // WithReflectionLM sets a separate LLM for GEPA reflection (typically a stronger model)
 func (s *OptimizationService) WithReflectionLM(reflectionLM ports.LLMService) *OptimizationService {
 	s.reflectionLM = reflectionLM
+	return s
+}
+
+// WithBroadcaster sets the WebSocket broadcaster for real-time progress updates
+func (s *OptimizationService) WithBroadcaster(broadcaster ports.OptimizationProgressBroadcaster) *OptimizationService {
+	s.progressPublisher = NewOptimizationProgressPublisher(broadcaster)
+	return s
+}
+
+// WithProgressPublisher sets a custom progress publisher (useful for testing or custom implementations)
+func (s *OptimizationService) WithProgressPublisher(publisher ports.OptimizationProgressPublisher) *OptimizationService {
+	s.progressPublisher = publisher
 	return s
 }
 
@@ -142,13 +146,48 @@ func (s *OptimizationService) GetOptimizationRun(ctx context.Context, id string)
 }
 
 // ListOptimizationRuns retrieves a list of optimization runs with filtering and pagination
-func (s *OptimizationService) ListOptimizationRuns(ctx context.Context, opts ports.ListOptimizationRunsOptions) ([]*models.OptimizationRun, error) {
+func (s *OptimizationService) ListOptimizationRuns(ctx context.Context, status string, limit, offset int) ([]*models.OptimizationRun, error) {
+	opts := ports.ListOptimizationRunsOptions{
+		Status: status,
+		Limit:  limit,
+		Offset: offset,
+	}
 	runs, err := s.repo.ListRuns(ctx, opts)
 	if err != nil {
 		return nil, domain.NewDomainError(err, "failed to list optimization runs")
 	}
 
 	return runs, nil
+}
+
+// UpdateRunProgress updates the progress of an optimization run with dimension scores
+func (s *OptimizationService) UpdateRunProgress(ctx context.Context, runID string, iteration int, bestScore float64, dimScores map[string]float64) error {
+	run, err := s.repo.GetRun(ctx, runID)
+	if err != nil {
+		return domain.NewDomainError(err, "failed to get run for progress update")
+	}
+	run.Iterations = iteration
+	run.BestScore = bestScore
+	if err := s.repo.UpdateRun(ctx, run); err != nil {
+		return domain.NewDomainError(err, "failed to update run progress")
+	}
+	return nil
+}
+
+// SaveCandidate saves a prompt candidate to the repository
+func (s *OptimizationService) SaveCandidate(ctx context.Context, runID string, candidate *models.PromptCandidate) error {
+	if err := s.repo.SaveCandidate(ctx, runID, candidate); err != nil {
+		return domain.NewDomainError(err, "failed to save candidate")
+	}
+	return nil
+}
+
+// SaveEvaluation saves an evaluation result to the repository
+func (s *OptimizationService) SaveEvaluation(ctx context.Context, candidateID string, eval *models.PromptEvaluation) error {
+	if err := s.repo.SaveEvaluation(ctx, eval); err != nil {
+		return domain.NewDomainError(err, "failed to save evaluation")
+	}
+	return nil
 }
 
 // AddCandidate adds a new prompt candidate to an optimization run
@@ -431,51 +470,18 @@ func (s *OptimizationService) SetDimensionWeights(weights map[string]float64) {
 
 // SubscribeProgress subscribes to progress updates for a given run ID
 // Returns a channel that will receive progress events
-func (s *OptimizationService) SubscribeProgress(runID string) <-chan OptimizationProgressEvent {
-	s.progressMu.Lock()
-	defer s.progressMu.Unlock()
-
-	// Create a buffered channel to prevent blocking the publisher
-	ch := make(chan OptimizationProgressEvent, 100)
-	s.progressChannels[runID] = append(s.progressChannels[runID], ch)
-	return ch
+func (s *OptimizationService) SubscribeProgress(runID string) <-chan ports.OptimizationProgressEvent {
+	return s.progressPublisher.Subscribe(runID)
 }
 
 // UnsubscribeProgress removes a subscription for a given run ID
-func (s *OptimizationService) UnsubscribeProgress(runID string, ch <-chan OptimizationProgressEvent) {
-	s.progressMu.Lock()
-	defer s.progressMu.Unlock()
-
-	channels := s.progressChannels[runID]
-	for i, subscriberCh := range channels {
-		if subscriberCh == ch {
-			// Remove this channel from the slice
-			s.progressChannels[runID] = append(channels[:i], channels[i+1:]...)
-			close(subscriberCh)
-			break
-		}
-	}
-
-	// Clean up the map entry if no more subscribers
-	if len(s.progressChannels[runID]) == 0 {
-		delete(s.progressChannels, runID)
-	}
+func (s *OptimizationService) UnsubscribeProgress(runID string, ch <-chan ports.OptimizationProgressEvent) {
+	s.progressPublisher.Unsubscribe(runID, ch)
 }
 
 // publishProgress publishes a progress event to all subscribers of a run
-func (s *OptimizationService) publishProgress(runID string, event OptimizationProgressEvent) {
-	s.progressMu.RLock()
-	defer s.progressMu.RUnlock()
-
-	channels := s.progressChannels[runID]
-	for _, ch := range channels {
-		// Non-blocking send to prevent slow subscribers from blocking the optimization
-		select {
-		case ch <- event:
-		default:
-			// Channel buffer is full, skip this update
-		}
-	}
+func (s *OptimizationService) publishProgress(event ports.OptimizationProgressEvent) {
+	s.progressPublisher.PublishProgress(event)
 }
 
 // OptimizeFromVotes runs GEPA optimization using vote-derived training data
@@ -580,7 +586,7 @@ func (s *OptimizationService) OptimizeSignature(
 				_ = s.FailRun(optimizeCtx, run.ID, reason)
 
 				// Publish failure event to subscribers
-				s.publishProgress(run.ID, OptimizationProgressEvent{
+				s.publishProgress(ports.OptimizationProgressEvent{
 					Type:      "failed",
 					RunID:     run.ID,
 					Status:    string(models.OptimizationStatusFailed),
@@ -624,7 +630,7 @@ func (s *OptimizationService) OptimizeSignature(
 			_ = s.FailRun(optimizeCtx, run.ID, reason)
 
 			// Publish failure event to subscribers
-			s.publishProgress(run.ID, OptimizationProgressEvent{
+			s.publishProgress(ports.OptimizationProgressEvent{
 				Type:      "failed",
 				RunID:     run.ID,
 				Status:    string(models.OptimizationStatusFailed),
@@ -641,7 +647,7 @@ func (s *OptimizationService) OptimizeSignature(
 			_ = s.FailRun(optimizeCtx, run.ID, reason)
 
 			// Publish failure event to subscribers
-			s.publishProgress(run.ID, OptimizationProgressEvent{
+			s.publishProgress(ports.OptimizationProgressEvent{
 				Type:      "failed",
 				RunID:     run.ID,
 				Status:    string(models.OptimizationStatusFailed),
@@ -743,7 +749,7 @@ func (s *OptimizationService) OptimizeSignature(
 				_ = s.UpdateProgressWithDimensions(optimizeCtx, run.ID, i, candidateDimScores)
 
 				// Publish progress event to subscribers
-				s.publishProgress(run.ID, OptimizationProgressEvent{
+				s.publishProgress(ports.OptimizationProgressEvent{
 					Type:          "progress",
 					RunID:         run.ID,
 					Iteration:     i,
@@ -834,7 +840,7 @@ func (s *OptimizationService) OptimizeSignature(
 			_ = s.repo.UpdateRun(optimizeCtx, run)
 
 			// Publish completion event to subscribers
-			s.publishProgress(run.ID, OptimizationProgressEvent{
+			s.publishProgress(ports.OptimizationProgressEvent{
 				Type:          "completed",
 				RunID:         run.ID,
 				Iteration:     run.Iterations,
@@ -975,7 +981,7 @@ func (s *OptimizationService) OptimizeSignatureWithMemory(
 				_ = s.FailRun(optimizeCtx, run.ID, reason)
 
 				// Publish failure event to subscribers
-				s.publishProgress(run.ID, OptimizationProgressEvent{
+				s.publishProgress(ports.OptimizationProgressEvent{
 					Type:      "failed",
 					RunID:     run.ID,
 					Status:    string(models.OptimizationStatusFailed),
@@ -1116,7 +1122,7 @@ func (s *OptimizationService) OptimizeSignatureWithMemory(
 				_ = s.UpdateProgressWithDimensions(optimizeCtx, run.ID, i, candidateDimScores)
 
 				// Publish progress event to subscribers
-				s.publishProgress(run.ID, OptimizationProgressEvent{
+				s.publishProgress(ports.OptimizationProgressEvent{
 					Type:          "progress",
 					RunID:         run.ID,
 					Iteration:     i,
@@ -1242,4 +1248,49 @@ func (s *OptimizationService) GetOptimizedProgram(ctx context.Context, runID str
 	}
 
 	return program, nil
+}
+
+// SearchPaths explores solution space for a single query using GEPA path search.
+// This runs IN PARALLEL to existing prompt optimization - it finds the best answer
+// for ONE specific query through evolved reasoning strategies.
+//
+// Note: For hexagonal architecture compliance, prefer using the SolveWithParetoSearchStrategyEvolution
+// use case directly from internal/application/usecases/solve_with_pareto_search_strategy_evolution.go.
+func (s *OptimizationService) SearchPaths(ctx context.Context, query string, config *models.PathSearchConfig) (*models.PathSearchResult, error) {
+	if query == "" {
+		return nil, domain.NewDomainError(domain.ErrEmptyContent, "query cannot be empty")
+	}
+
+	// Use default config if nil
+	if config == nil {
+		config = models.NewPathSearchConfig()
+	}
+
+	// Validate config
+	if !config.Validate() {
+		return nil, domain.NewDomainError(domain.ErrInvalidState, "invalid path search configuration")
+	}
+
+	// Convert models.PathSearchConfig to services.PathSearchConfig
+	serviceConfig := &PathSearchConfig{
+		MaxGenerations:     config.MaxGenerations,
+		BranchesPerGen:     config.BranchesPerGen,
+		TargetScore:        config.TargetScore,
+		MaxToolCalls:       100, // Default budget
+		MaxLLMCalls:        50,  // Default budget
+		ParetoArchiveSize:  50,
+		EnableCrossover:    true,
+		ExecutionTimeoutMs: 30000,
+	}
+
+	// Create PathSearchController with the service's LLM and optional reflection LLM
+	controller := NewPathSearchController(s.llmService, s.reflectionLM, s.idGenerator, serviceConfig)
+
+	// Execute the path search using the controller's Search method
+	result, err := controller.Search(ctx, query, config)
+	if err != nil {
+		return nil, domain.NewDomainError(err, "path search failed")
+	}
+
+	return result, nil
 }

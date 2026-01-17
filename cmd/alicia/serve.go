@@ -133,6 +133,7 @@ func runServer(ctx context.Context) error {
 	reasoningStepRepo := postgres.NewReasoningStepRepository(pool)
 	toolRepo := postgres.NewToolRepository(pool)
 	toolUseRepo := postgres.NewToolUseRepository(pool)
+	audioRepo := postgres.NewAudioRepository(pool)
 	memoryRepo := postgres.NewMemoryRepository(pool)
 	memoryUsageRepo := postgres.NewMemoryUsageRepository(pool)
 	mcpRepo := postgres.NewMCPServerRepository(pool)
@@ -182,13 +183,21 @@ func runServer(ctx context.Context) error {
 		log.Println("Memory service initialized")
 	}
 
-	// Initialize optimization service
+	// Create WebSocket broadcaster (shared between server and use cases)
+	wsBroadcaster := handlers.NewWebSocketBroadcaster()
+	log.Println("WebSocket broadcaster initialized")
+
+	// Initialize optimization progress publisher with WebSocket broadcaster
+	progressPublisher := services.NewOptimizationProgressPublisher(wsBroadcaster)
+	log.Println("Optimization progress publisher initialized")
+
+	// Initialize optimization service with WebSocket broadcaster
 	optimizationService := services.NewOptimizationService(
 		optimizationRepo,
 		llmService,
 		idGen,
 		services.DefaultOptimizationConfig(),
-	)
+	).WithBroadcaster(wsBroadcaster)
 	log.Println("Optimization service initialized")
 
 	// Initialize prompt version service
@@ -216,28 +225,6 @@ func runServer(ctx context.Context) error {
 	} else {
 		log.Println("Built-in tools registered")
 	}
-
-	// Create WebSocket broadcaster (shared between server and use cases)
-	wsBroadcaster := handlers.NewWebSocketBroadcaster()
-	log.Println("WebSocket broadcaster initialized")
-
-	// Initialize use cases
-	generateResponseUseCase := usecases.NewGenerateResponse(
-		messageRepo,
-		sentenceRepo,
-		toolUseRepo,
-		toolRepo,
-		reasoningStepRepo,
-		conversationRepo,
-		llmService,
-		toolService,
-		memoryService,
-		promptVersionService,
-		idGen,
-		txManager,
-		wsBroadcaster,
-	)
-	log.Println("GenerateResponse use case initialized")
 
 	// Initialize MCP adapter (optional)
 	mcpAdapter := initMCPAdapter(ctx, toolService, mcpRepo, idGen)
@@ -276,6 +263,119 @@ func runServer(ctx context.Context) error {
 		log.Println("LiveKit not configured - voice features unavailable")
 	}
 
+	// Initialize use cases
+	generateResponseUseCase := usecases.NewGenerateResponse(
+		messageRepo,
+		sentenceRepo,
+		toolUseRepo,
+		toolRepo,
+		reasoningStepRepo,
+		conversationRepo,
+		llmService,
+		toolService,
+		memoryService,
+		promptVersionService,
+		idGen,
+		txManager,
+		wsBroadcaster,
+	)
+	log.Println("GenerateResponse use case initialized")
+
+	// Create ProcessUserMessage use case (needed by SendMessage)
+	processUserMessageUC := usecases.NewProcessUserMessage(
+		messageRepo,
+		audioRepo,
+		conversationRepo,
+		asrAdapter,
+		memoryService,
+		idGen,
+		txManager,
+	)
+	log.Println("ProcessUserMessage use case initialized")
+
+	// Create SendMessage orchestrating use case
+	sendMessageUC := usecases.NewSendMessage(
+		conversationRepo,
+		messageRepo,
+		processUserMessageUC,
+		generateResponseUseCase,
+		txManager,
+	)
+	log.Println("SendMessage use case initialized")
+
+	// Create SyncMessages use case
+	syncMessagesUC := usecases.NewSyncMessages(
+		messageRepo,
+		conversationRepo,
+		idGen,
+		txManager,
+	)
+	log.Println("SyncMessages use case initialized")
+
+	// Create RegenerateResponse use case
+	regenerateResponseUC := usecases.NewRegenerateResponse(
+		messageRepo,
+		conversationRepo,
+		generateResponseUseCase,
+		idGen,
+	)
+	log.Println("RegenerateResponse use case initialized")
+
+	// Create ContinueResponse use case
+	continueResponseUC := usecases.NewContinueResponse(
+		messageRepo,
+		conversationRepo,
+		generateResponseUseCase,
+		idGen,
+		txManager,
+	)
+	log.Println("ContinueResponse use case initialized")
+
+	// Create EditUserMessage use case
+	editUserMessageUC := usecases.NewEditUserMessage(
+		messageRepo,
+		conversationRepo,
+		memoryService,
+		generateResponseUseCase,
+		idGen,
+		txManager,
+	)
+	log.Println("EditUserMessage use case initialized")
+
+	// Create EditAssistantMessage use case
+	editAssistantMessageUC := usecases.NewEditAssistantMessage(messageRepo)
+	log.Println("EditAssistantMessage use case initialized")
+
+	// Create RunOptimization use case
+	runOptimizationUC := usecases.NewRunOptimization(
+		optimizationService,
+		progressPublisher,
+		wsBroadcaster,
+		llmService,
+		idGen,
+		optimizationRepo,
+	)
+	log.Println("RunOptimization use case initialized")
+
+	// Create ExtractMemories use case (needed by MemorizeFromUpvote)
+	var extractMemoriesUC *usecases.ExtractMemories
+	if memoryService != nil {
+		extractMemoriesUC = usecases.NewExtractMemories(memoryService, llmService, idGen)
+		log.Println("ExtractMemories use case initialized")
+	}
+
+	// Create MemorizeFromUpvote use case (optional - requires memory service)
+	var memorizeFromUpvoteUC *usecases.MemorizeFromUpvote
+	if extractMemoriesUC != nil {
+		memorizeFromUpvoteUC = usecases.NewMemorizeFromUpvote(
+			messageRepo,
+			conversationRepo,
+			voteRepo,
+			extractMemoriesUC,
+		)
+		log.Println("MemorizeFromUpvote use case initialized")
+	}
+
 	// Create HTTP server
 	server := http.NewServer(
 		cfg,
@@ -300,6 +400,14 @@ func runServer(ctx context.Context) error {
 		embeddingClient,
 		mcpAdapter,
 		generateResponseUseCase,
+		sendMessageUC,
+		syncMessagesUC,
+		regenerateResponseUC,
+		continueResponseUC,
+		editUserMessageUC,
+		editAssistantMessageUC,
+		runOptimizationUC,
+		memorizeFromUpvoteUC,
 		wsBroadcaster,
 	)
 

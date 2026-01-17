@@ -18,7 +18,7 @@ type AgentFactory struct {
 	voteRepo                  ports.VoteRepository
 	noteRepo                  ports.NoteRepository
 	memoryService             ports.MemoryService
-	optimizationService       ports.OptimizationService
+	optimizationService       ports.OptimizationServiceFull
 	handleToolUseCase         ports.HandleToolUseCase
 	generateResponseUseCase   ports.GenerateResponseUseCase
 	processUserMessageUseCase ports.ProcessUserMessageUseCase
@@ -26,6 +26,13 @@ type AgentFactory struct {
 	ttsService                ports.TTSService
 	idGenerator               ports.IDGenerator
 	asrMinConfidence          float64
+
+	// New use cases for message operations
+	sendMessageUseCase          ports.SendMessageUseCase
+	regenerateResponseUseCase   ports.RegenerateResponseUseCase
+	continueResponseUseCase     ports.ContinueResponseUseCase
+	editUserMessageUseCase      ports.EditUserMessageUseCase
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
 }
 
 // NewAgentFactory creates a new agent factory
@@ -40,7 +47,7 @@ func NewAgentFactory(
 	voteRepo ports.VoteRepository,
 	noteRepo ports.NoteRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationService,
+	optimizationService ports.OptimizationServiceFull,
 	handleToolUseCase ports.HandleToolUseCase,
 	generateResponseUseCase ports.GenerateResponseUseCase,
 	processUserMessageUseCase ports.ProcessUserMessageUseCase,
@@ -48,26 +55,36 @@ func NewAgentFactory(
 	ttsService ports.TTSService,
 	idGenerator ports.IDGenerator,
 	asrMinConfidence float64,
+	sendMessageUseCase ports.SendMessageUseCase,
+	regenerateResponseUseCase ports.RegenerateResponseUseCase,
+	continueResponseUseCase ports.ContinueResponseUseCase,
+	editUserMessageUseCase ports.EditUserMessageUseCase,
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
 ) *AgentFactory {
 	return &AgentFactory{
-		conversationRepo:          conversationRepo,
-		messageRepo:               messageRepo,
-		sentenceRepo:              sentenceRepo,
-		reasoningStepRepo:         reasoningStepRepo,
-		toolUseRepo:               toolUseRepo,
-		memoryUsageRepo:           memoryUsageRepo,
-		commentaryRepo:            commentaryRepo,
-		voteRepo:                  voteRepo,
-		noteRepo:                  noteRepo,
-		memoryService:             memoryService,
-		optimizationService:       optimizationService,
-		handleToolUseCase:         handleToolUseCase,
-		generateResponseUseCase:   generateResponseUseCase,
-		processUserMessageUseCase: processUserMessageUseCase,
-		asrService:                asrService,
-		ttsService:                ttsService,
-		idGenerator:               idGenerator,
-		asrMinConfidence:          asrMinConfidence,
+		conversationRepo:            conversationRepo,
+		messageRepo:                 messageRepo,
+		sentenceRepo:                sentenceRepo,
+		reasoningStepRepo:           reasoningStepRepo,
+		toolUseRepo:                 toolUseRepo,
+		memoryUsageRepo:             memoryUsageRepo,
+		commentaryRepo:              commentaryRepo,
+		voteRepo:                    voteRepo,
+		noteRepo:                    noteRepo,
+		memoryService:               memoryService,
+		optimizationService:         optimizationService,
+		handleToolUseCase:           handleToolUseCase,
+		generateResponseUseCase:     generateResponseUseCase,
+		processUserMessageUseCase:   processUserMessageUseCase,
+		asrService:                  asrService,
+		ttsService:                  ttsService,
+		idGenerator:                 idGenerator,
+		asrMinConfidence:            asrMinConfidence,
+		sendMessageUseCase:          sendMessageUseCase,
+		regenerateResponseUseCase:   regenerateResponseUseCase,
+		continueResponseUseCase:     continueResponseUseCase,
+		editUserMessageUseCase:      editUserMessageUseCase,
+		editAssistantMessageUseCase: editAssistantMessageUseCase,
 	}
 }
 
@@ -120,6 +137,11 @@ func (f *AgentFactory) CreateAgent(
 		f.idGenerator,
 		agent,
 		f.asrMinConfidence,
+		f.sendMessageUseCase,
+		f.regenerateResponseUseCase,
+		f.continueResponseUseCase,
+		f.editUserMessageUseCase,
+		f.editAssistantMessageUseCase,
 	)
 
 	// Wire up the agent with the message router as callbacks

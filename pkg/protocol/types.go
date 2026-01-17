@@ -66,6 +66,10 @@ const (
 	TypeEliteSelect MessageType = 30
 	// TypeEliteOptions (31) - Server sends available elite solutions
 	TypeEliteOptions MessageType = 31
+	// TypeOptimizationProgress (32) - Real-time optimization progress updates
+	TypeOptimizationProgress MessageType = 32
+	// TypeResponseGenerationRequest (33) - Request for agent to generate response
+	TypeResponseGenerationRequest MessageType = 33
 	// TypeSubscribe (40) - Client subscribes to a conversation
 	TypeSubscribe MessageType = 40
 	// TypeUnsubscribe (41) - Client unsubscribes from a conversation
@@ -139,6 +143,10 @@ func (t MessageType) String() string {
 		return "EliteSelect"
 	case TypeEliteOptions:
 		return "EliteOptions"
+	case TypeOptimizationProgress:
+		return "OptimizationProgress"
+	case TypeResponseGenerationRequest:
+		return "ResponseGenerationRequest"
 	case TypeSubscribe:
 		return "Subscribe"
 	case TypeUnsubscribe:

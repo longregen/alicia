@@ -48,6 +48,11 @@ func TestNewAgentFactory(t *testing.T) {
 		ttsService,
 		idGenerator,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	if factory == nil {
@@ -130,6 +135,11 @@ func TestCreateAgent(t *testing.T) {
 		ttsService,
 		idGenerator,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	// Create a conversation for testing
@@ -226,6 +236,12 @@ func TestCreateAgent_WithoutVoiceServices(t *testing.T) {
 		nil, // No ASR
 		nil, // No TTS
 		idGenerator,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	conversationID := "conv_test_no_voice"
@@ -307,6 +323,11 @@ func TestCreateAgent_InvalidConfig(t *testing.T) {
 		ttsService,
 		idGenerator,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	conversationID := "conv_test_invalid"
@@ -369,6 +390,11 @@ func TestCreateAgentWithCallbacks(t *testing.T) {
 		ttsService,
 		idGenerator,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	conversationID := "conv_test_callbacks"
@@ -456,6 +482,11 @@ func TestCreateAgentWithCallbacks_NilWrapper(t *testing.T) {
 		ttsService,
 		idGenerator,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	conversationID := "conv_test_nil_wrapper"
@@ -533,6 +564,11 @@ func TestAgentFactory_IntegrationWithAllComponents(t *testing.T) {
 		ttsService,
 		idGenerator,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	conversationID := "conv_test_integration"

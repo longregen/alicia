@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
 	"github.com/longregen/alicia/internal/domain/models"
+	"github.com/longregen/alicia/internal/ports"
 	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -17,6 +18,9 @@ type WebSocketBroadcaster struct {
 	// connections maps conversation ID to a set of WebSocket connections
 	connections map[string]map[*websocket.Conn]struct{}
 	mu          sync.RWMutex
+	// agentConn is the agent's WebSocket connection for receiving ResponseGenerationRequests
+	agentConn *websocket.Conn
+	agentMu   sync.RWMutex
 }
 
 // NewWebSocketBroadcaster creates a new WebSocket broadcaster
@@ -146,4 +150,158 @@ func (b *WebSocketBroadcaster) BroadcastConversationUpdate(conversation *models.
 	}
 
 	b.BroadcastBinary(conversation.ID, data)
+}
+
+// BroadcastOptimizationProgress broadcasts optimization progress to all subscribed clients
+// This broadcasts to all connections since optimization progress is a global event
+// (unlike conversation-specific messages)
+func (b *WebSocketBroadcaster) BroadcastOptimizationProgress(runID string, progress ports.OptimizationProgressUpdate) {
+	// Create the protocol message
+	progressMsg := protocol.OptimizationProgress{
+		RunID:           progress.RunID,
+		Status:          progress.Status,
+		Iteration:       int32(progress.Iteration),
+		MaxIterations:   int32(progress.MaxIterations),
+		CurrentScore:    progress.CurrentScore,
+		BestScore:       progress.BestScore,
+		DimensionScores: progress.DimensionScores,
+		Message:         progress.Message,
+		Timestamp:       progress.Timestamp,
+	}
+
+	// Create envelope with the optimization progress message
+	envelope := protocol.Envelope{
+		Type: protocol.TypeOptimizationProgress,
+		Body: progressMsg,
+	}
+
+	// Encode to MessagePack
+	data, err := msgpack.Marshal(envelope)
+	if err != nil {
+		log.Printf("Failed to encode optimization progress for WebSocket broadcast: %v", err)
+		return
+	}
+
+	// Broadcast to all connected clients
+	// Optimization progress is a global event, so we broadcast to all conversations
+	b.broadcastToAll(data)
+
+	log.Printf("Broadcasted optimization progress for run %s (iteration %d/%d, status: %s)",
+		runID, progress.Iteration, progress.MaxIterations, progress.Status)
+}
+
+// broadcastToAll broadcasts data to all connected WebSocket clients
+func (b *WebSocketBroadcaster) broadcastToAll(data []byte) {
+	b.mu.RLock()
+	// Collect all unique connections across all conversations
+	allConns := make(map[*websocket.Conn]struct{})
+	for _, conns := range b.connections {
+		for conn := range conns {
+			allConns[conn] = struct{}{}
+		}
+	}
+	b.mu.RUnlock()
+
+	if len(allConns) == 0 {
+		return
+	}
+
+	// Broadcast to all connections
+	for conn := range allConns {
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			log.Printf("Failed to broadcast optimization progress to WebSocket connection: %v", err)
+			// Note: we don't unsubscribe here since we don't know which conversation
+			// the connection belongs to. The connection will be cleaned up on next
+			// conversation-specific operation.
+		}
+	}
+}
+
+// SubscribeAgent registers the agent's WebSocket connection for receiving ResponseGenerationRequests
+func (b *WebSocketBroadcaster) SubscribeAgent(conn *websocket.Conn) {
+	b.agentMu.Lock()
+	defer b.agentMu.Unlock()
+	b.agentConn = conn
+	log.Printf("Agent WebSocket connection registered")
+}
+
+// UnsubscribeAgent removes the agent's WebSocket connection
+func (b *WebSocketBroadcaster) UnsubscribeAgent(conn *websocket.Conn) {
+	b.agentMu.Lock()
+	defer b.agentMu.Unlock()
+	if b.agentConn == conn {
+		b.agentConn = nil
+		log.Printf("Agent WebSocket connection unregistered")
+	}
+}
+
+// IsAgentConnected returns true if an agent is connected
+func (b *WebSocketBroadcaster) IsAgentConnected() bool {
+	b.agentMu.RLock()
+	defer b.agentMu.RUnlock()
+	return b.agentConn != nil
+}
+
+// BroadcastResponseGenerationRequest sends a ResponseGenerationRequest to the connected agent
+func (b *WebSocketBroadcaster) BroadcastResponseGenerationRequest(conversationID string, req *protocol.ResponseGenerationRequest) {
+	b.agentMu.RLock()
+	agentConn := b.agentConn
+	b.agentMu.RUnlock()
+
+	if agentConn == nil {
+		log.Printf("No agent connected, cannot send ResponseGenerationRequest for conversation %s", conversationID)
+		return
+	}
+
+	// Create envelope with the request
+	envelope := protocol.Envelope{
+		ConversationID: conversationID,
+		Type:           protocol.TypeResponseGenerationRequest,
+		Body:           req,
+	}
+
+	// Encode to MessagePack
+	data, err := msgpack.Marshal(envelope)
+	if err != nil {
+		log.Printf("Failed to encode ResponseGenerationRequest: %v", err)
+		return
+	}
+
+	agentConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if err := agentConn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+		log.Printf("Failed to send ResponseGenerationRequest to agent: %v", err)
+		// Unregister failed agent connection
+		b.UnsubscribeAgent(agentConn)
+		return
+	}
+
+	log.Printf("Sent ResponseGenerationRequest to agent for conversation %s (type: %s, messageID: %s)",
+		conversationID, req.RequestType, req.MessageID)
+}
+
+// BroadcastBinaryExcluding broadcasts binary data to all subscribers except the excluded connection
+func (b *WebSocketBroadcaster) BroadcastBinaryExcluding(conversationID string, data []byte, exclude *websocket.Conn) {
+	b.mu.RLock()
+	conns, ok := b.connections[conversationID]
+	if !ok || len(conns) == 0 {
+		b.mu.RUnlock()
+		return
+	}
+	targets := make([]*websocket.Conn, 0, len(conns))
+	for conn := range conns {
+		if conn != exclude {
+			targets = append(targets, conn)
+		}
+	}
+	b.mu.RUnlock()
+
+	// Broadcast to all connections except the excluded one
+	for _, conn := range targets {
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			log.Printf("Failed to broadcast to WebSocket connection: %v", err)
+			b.Unsubscribe(conversationID, conn)
+		}
+	}
 }

@@ -7,7 +7,7 @@ pkgs.buildNpmPackage {
   pname = "alicia-frontend";
   inherit version;
   src = "${src}/frontend";
-  npmDepsHash = "sha256-OPDDA4ckhx99Dq8vrrIlQbSvdVyy+UEA3eY13SXaFus=";
+  npmDepsHash = "sha256-szY4688dcxuTbwnk9vOScTxQyil/4PmQC8pWCP0fQuQ=";
 
   buildPhase = ''
     npm run build

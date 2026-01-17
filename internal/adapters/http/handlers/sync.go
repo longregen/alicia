@@ -13,20 +13,20 @@ import (
 )
 
 type SyncHandler struct {
-	conversationRepo ports.ConversationRepository
-	messageRepo      ports.MessageRepository
-	idGen            ports.IDGenerator
+	conversationRepo    ports.ConversationRepository
+	messageRepo         ports.MessageRepository
+	syncMessagesUseCase ports.SyncMessagesUseCase
 }
 
 func NewSyncHandler(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
-	idGen ports.IDGenerator,
+	syncMessagesUseCase ports.SyncMessagesUseCase,
 ) *SyncHandler {
 	return &SyncHandler{
-		conversationRepo: conversationRepo,
-		messageRepo:      messageRepo,
-		idGen:            idGen,
+		conversationRepo:    conversationRepo,
+		messageRepo:         messageRepo,
+		syncMessagesUseCase: syncMessagesUseCase,
 	}
 }
 
@@ -76,28 +76,34 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Process each message
-	syncedMessages := make([]dto.SyncedMessage, 0, len(req.Messages))
+	// Call the use case
+	output, err := h.syncMessagesUseCase.Execute(r.Context(), &ports.SyncMessagesInput{
+		ConversationID: conversationID,
+		Messages:       convertToSyncItems(req.Messages),
+	})
+	if err != nil {
+		respondError(w, "internal_error", "Failed to sync messages", http.StatusInternalServerError)
+		return
+	}
 
-	for _, msgReq := range req.Messages {
-		syncedMsg, err := h.processMessage(r, conversationID, msgReq)
-		if err != nil {
-			// Log error but continue processing other messages
-			// In production, you might want more sophisticated error handling
+	// Convert output to response DTO
+	syncedMessages := make([]dto.SyncedMessage, 0, len(output.Results))
+	for _, result := range output.Results {
+		if result.Status == "conflict" {
 			syncedMessages = append(syncedMessages, dto.ToSyncedMessageWithConflict(
-				msgReq.LocalID,
-				"Internal error: "+err.Error(),
-				nil,
+				result.LocalID,
+				"Content mismatch with existing message",
+				result.Message,
 			))
-			continue
+		} else {
+			syncedMessages = append(syncedMessages, dto.ToSyncedMessage(result.Message))
 		}
-		syncedMessages = append(syncedMessages, syncedMsg)
 	}
 
 	// Return sync response
 	response := &dto.SyncResponse{
 		SyncedMessages: syncedMessages,
-		SyncedAt:       time.Now().UTC().Format(time.RFC3339),
+		SyncedAt:       output.SyncedAt.Format(time.RFC3339),
 	}
 
 	// Respond based on Accept header
@@ -109,96 +115,34 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// processMessage processes a single message sync request
-func (h *SyncHandler) processMessage(r *http.Request, conversationID string, msgReq dto.SyncMessageRequest) (dto.SyncedMessage, error) {
-	ctx := r.Context()
-
-	// Validation
-	if msgReq.LocalID == "" {
-		return dto.ToSyncedMessageWithConflict(
-			msgReq.LocalID,
-			"Local ID is required",
-			nil,
-		), nil
-	}
-
-	if msgReq.Role == "" {
-		return dto.ToSyncedMessageWithConflict(
-			msgReq.LocalID,
-			"Message role is required",
-			nil,
-		), nil
-	}
-
-	// Check if message with this local ID already exists
-	existingMsg, err := h.messageRepo.GetByLocalID(ctx, msgReq.LocalID)
-	if err != nil && err != pgx.ErrNoRows {
-		return dto.SyncedMessage{}, err
-	}
-
-	// If message already exists, check for conflicts
-	if existingMsg != nil {
-		// Message was already synced
-		if existingMsg.Contents == msgReq.Contents {
-			// No conflict - same content
-			return dto.ToSyncedMessage(existingMsg), nil
+// convertToSyncItems converts request DTOs to ports.SyncMessageItem
+func convertToSyncItems(messages []dto.SyncMessageRequest) []ports.SyncMessageItem {
+	items := make([]ports.SyncMessageItem, len(messages))
+	for i, msg := range messages {
+		// Parse timestamps
+		createdAt, err := time.Parse(time.RFC3339, msg.CreatedAt)
+		if err != nil {
+			createdAt = time.Now().UTC()
 		}
 
-		// Content differs - conflict detected
-		existingMsg.MarkAsConflict()
-		if err := h.messageRepo.Update(ctx, existingMsg); err != nil {
-			return dto.SyncedMessage{}, err
+		updatedAt := createdAt
+		if msg.UpdatedAt != "" {
+			if parsed, err := time.Parse(time.RFC3339, msg.UpdatedAt); err == nil {
+				updatedAt = parsed
+			}
 		}
 
-		return dto.ToSyncedMessageWithConflict(
-			msgReq.LocalID,
-			"Content mismatch with existing message",
-			existingMsg,
-		), nil
-	}
-
-	// Create new message
-	serverID := h.idGen.GenerateMessageID()
-
-	// Parse timestamps
-	createdAt, err := time.Parse(time.RFC3339, msgReq.CreatedAt)
-	if err != nil {
-		createdAt = time.Now().UTC()
-	}
-
-	updatedAt := createdAt
-	if msgReq.UpdatedAt != "" {
-		if parsed, err := time.Parse(time.RFC3339, msgReq.UpdatedAt); err == nil {
-			updatedAt = parsed
+		items[i] = ports.SyncMessageItem{
+			LocalID:        msg.LocalID,
+			SequenceNumber: msg.SequenceNumber,
+			PreviousID:     msg.PreviousID,
+			Role:           msg.Role,
+			Contents:       msg.Contents,
+			CreatedAt:      createdAt,
+			UpdatedAt:      updatedAt,
 		}
 	}
-
-	// Create message with sync tracking
-	message := &models.Message{
-		ID:               serverID,
-		ConversationID:   conversationID,
-		SequenceNumber:   msgReq.SequenceNumber,
-		PreviousID:       msgReq.PreviousID,
-		Role:             models.MessageRole(msgReq.Role),
-		Contents:         msgReq.Contents,
-		LocalID:          msgReq.LocalID,
-		ServerID:         serverID,
-		SyncStatus:       models.SyncStatusSynced,
-		CompletionStatus: models.CompletionStatusCompleted, // Synced messages are always completed
-		CreatedAt:        createdAt,
-		UpdatedAt:        updatedAt,
-	}
-
-	// Mark as synced
-	now := time.Now().UTC()
-	message.SyncedAt = &now
-
-	// Save to database
-	if err := h.messageRepo.Create(ctx, message); err != nil {
-		return dto.SyncedMessage{}, err
-	}
-
-	return dto.ToSyncedMessage(message), nil
+	return items
 }
 
 // GetSyncStatus handles GET /api/v1/conversations/{id}/sync/status

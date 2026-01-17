@@ -46,3 +46,7 @@ frontend/public/onnx/
 frontend/public/js/
 frontend/public/sql-wasm.wasm
 
+
+# MCP server binaries
+cmd/mcp-garden/mcp-garden
+cmd/mcp-web/mcp-web

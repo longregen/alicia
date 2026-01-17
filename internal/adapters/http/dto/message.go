@@ -156,3 +156,32 @@ func FromMessageModelList(msgs []*models.Message) []*MessageResponse {
 	}
 	return responses
 }
+
+// EditAssistantMessageRequest represents a request to edit an assistant message's content
+type EditAssistantMessageRequest struct {
+	Contents string `json:"contents" msgpack:"contents"`
+}
+
+// EditUserMessageRequest represents a request to edit a user message and regenerate the response
+type EditUserMessageRequest struct {
+	Contents string `json:"contents" msgpack:"contents"`
+}
+
+// EditMessageResponse represents the response from editing a message
+type EditMessageResponse struct {
+	UpdatedMessage   *MessageResponse `json:"updated_message" msgpack:"updatedMessage"`
+	AssistantMessage *MessageResponse `json:"assistant_message,omitempty" msgpack:"assistantMessage,omitempty"`
+	DeletedCount     int              `json:"deleted_count,omitempty" msgpack:"deletedCount,omitempty"`
+}
+
+// RegenerateResponse represents the response from regenerating an assistant message
+type RegenerateResponse struct {
+	DeletedMessageID string           `json:"deleted_message_id" msgpack:"deletedMessageId"`
+	NewMessage       *MessageResponse `json:"new_message,omitempty" msgpack:"newMessage,omitempty"`
+}
+
+// ContinueResponse represents the response from continuing an assistant message
+type ContinueResponse struct {
+	TargetMessage   *MessageResponse `json:"target_message" msgpack:"targetMessage"`
+	AppendedContent string           `json:"appended_content" msgpack:"appendedContent"`
+}

@@ -141,6 +141,10 @@ func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]
 	return siblings, nil
 }
 
+func (m *mockMessageRepo) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	return nil
+}
+
 type mockConversationRepo struct {
 	store map[string]*models.Conversation
 }
@@ -518,6 +522,10 @@ func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
 	return "spv_test1"
 }
 
+func (m *mockIDGenerator) GenerateRequestID() string {
+	return "areq_test1"
+}
+
 // Mock VoteRepository for testing feedback handlers
 type mockVoteRepository struct {
 	votes      map[string]*models.Vote
@@ -830,6 +838,10 @@ func (m *mockResponseGenerationManager) CancelTTS(targetID string) error {
 
 func (m *mockResponseGenerationManager) CleanupStaleGenerations(maxAge time.Duration) int {
 	return 0
+}
+
+func (m *mockResponseGenerationManager) CancelAll() {
+	// no-op for tests
 }
 
 // Helper to create a test dispatcher with mocks
@@ -1941,6 +1953,10 @@ func (m *mockMemoryService) Archive(ctx context.Context, id string) (*models.Mem
 	return nil, errors.New("memory not found")
 }
 
+func (m *mockMemoryService) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}
+
 // Mock OptimizationService for testing dimension preference handlers
 type mockOptimizationService struct {
 	dimensionWeights map[string]float64
@@ -1967,7 +1983,7 @@ func (m *mockOptimizationService) GetOptimizationRun(ctx context.Context, id str
 	return nil, nil
 }
 
-func (m *mockOptimizationService) ListOptimizationRuns(ctx context.Context, opts ports.ListOptimizationRunsOptions) ([]*models.OptimizationRun, error) {
+func (m *mockOptimizationService) ListOptimizationRuns(ctx context.Context, status string, limit, offset int) ([]*models.OptimizationRun, error) {
 	return nil, nil
 }
 
@@ -2009,6 +2025,18 @@ func (m *mockOptimizationService) GetOptimizedProgram(ctx context.Context, runID
 
 func (m *mockOptimizationService) GetDimensionWeights() map[string]float64 {
 	return m.dimensionWeights
+}
+
+func (m *mockOptimizationService) UpdateRunProgress(ctx context.Context, runID string, iteration int, bestScore float64, dimScores map[string]float64) error {
+	return nil
+}
+
+func (m *mockOptimizationService) SaveCandidate(ctx context.Context, runID string, candidate *models.PromptCandidate) error {
+	return nil
+}
+
+func (m *mockOptimizationService) SaveEvaluation(ctx context.Context, candidateID string, eval *models.PromptEvaluation) error {
+	return nil
 }
 
 // TestHandleMemoryAction tests the memory action handler

@@ -21,6 +21,13 @@ type Config struct {
 	Database     DatabaseConfig  `json:"database"`
 	Server       ServerConfig    `json:"server"`
 	MCP          MCPConfig       `json:"mcp"`
+	Agent        AgentConfig     `json:"agent"`
+}
+
+// AgentConfig holds configuration for the agent worker
+type AgentConfig struct {
+	// ServeURL is the WebSocket URL of the serve process (e.g., ws://localhost:8080/api/v1/ws)
+	ServeURL string `json:"serve_url"`
 }
 
 // LLMConfig holds LLM API configuration (vLLM/LiteLLM)
@@ -154,6 +161,9 @@ func DefaultConfig() *Config {
 		MCP: MCPConfig{
 			Servers: []MCPServerConfig{}, // No MCP servers by default
 		},
+		Agent: AgentConfig{
+			ServeURL: "", // Empty by default - must be set to enable agent WebSocket mode
+		},
 	}
 }
 
@@ -273,6 +283,9 @@ func Load() (*Config, error) {
 	envString("ALICIA_SERVER_HOST", &cfg.Server.Host)
 	envInt("ALICIA_SERVER_PORT", &cfg.Server.Port)
 	envStringSlice("ALICIA_CORS_ORIGINS", &cfg.Server.CORSOrigins)
+
+	// Load Agent configuration from environment
+	envString("ALICIA_AGENT_SERVE_URL", &cfg.Agent.ServeURL)
 
 	// Load MCP configuration from environment
 	// MCP servers are primarily configured via config file, but can be augmented via env

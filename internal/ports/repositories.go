@@ -98,6 +98,10 @@ type MemoryRepository interface {
 	Update(ctx context.Context, memory *models.Memory) error
 	Delete(ctx context.Context, id string) error
 
+	// DeleteByConversationID soft-deletes all memories that were extracted from messages
+	// belonging to the specified conversation (via source_message_id)
+	DeleteByConversationID(ctx context.Context, conversationID string) error
+
 	// SearchMemories performs a unified search with configurable options
 	SearchMemories(ctx context.Context, opts MemorySearchOptions) ([]*MemorySearchResult, error)
 
@@ -177,6 +181,9 @@ type MCPServerRepository interface {
 	Update(ctx context.Context, server *models.MCPServer) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context) ([]*models.MCPServer, error)
+	// WasDeleted checks if a server with the given name was soft-deleted
+	// Returns true if the server exists with a non-null deleted_at
+	WasDeleted(ctx context.Context, name string) (bool, error)
 }
 
 // VoteRepository handles vote persistence
@@ -386,6 +393,9 @@ type IDGenerator interface {
 
 	// GenerateSystemPromptVersionID generates a new system prompt version ID (spv_xxx)
 	GenerateSystemPromptVersionID() string
+
+	// GenerateRequestID generates a new request ID (areq_xxx)
+	GenerateRequestID() string
 }
 
 // ToolExecutor executes tools with given arguments
@@ -444,14 +454,16 @@ type GenerateResponseUseCase interface {
 
 // GenerateResponseInput contains parameters for generating a response
 type GenerateResponseInput struct {
-	ConversationID   string
-	UserMessageID    string
-	MessageID        string // Optional pre-generated message ID (if empty, one will be generated)
-	RelevantMemories []*models.Memory
-	EnableTools      bool
-	EnableReasoning  bool
-	EnableStreaming  bool
-	PreviousID       string
+	ConversationID      string
+	UserMessageID       string
+	MessageID           string // Optional pre-generated message ID (if empty, one will be generated)
+	RelevantMemories    []*models.Memory
+	EnableTools         bool
+	EnableReasoning     bool
+	EnableStreaming     bool
+	PreviousID          string
+	ContinueFromContent string // If set, this is the existing assistant content to continue from
+	Notifier            GenerationNotifier // Optional notifier for real-time generation progress
 }
 
 // GenerateResponseOutput contains the result of response generation
@@ -474,4 +486,142 @@ type ResponseStreamChunk struct {
 	IsToolExecutionResult bool   // True if this chunk represents the result of tool execution
 	Reasoning             string
 	Error                 error
+}
+
+// RegenerateResponseUseCase defines the interface for regenerating assistant responses
+type RegenerateResponseUseCase interface {
+	Execute(ctx context.Context, input *RegenerateResponseInput) (*RegenerateResponseOutput, error)
+}
+
+// RegenerateResponseInput contains parameters for regenerating a response
+type RegenerateResponseInput struct {
+	MessageID       string // The assistant message to regenerate
+	EnableTools     bool
+	EnableReasoning bool
+	EnableStreaming bool
+	Notifier        GenerationNotifier // Optional notifier for real-time updates
+}
+
+// RegenerateResponseOutput contains the result of response regeneration
+type RegenerateResponseOutput struct {
+	DeletedMessageID string                      // ID of the deleted assistant message
+	NewMessage       *models.Message             // The newly generated message
+	StreamChannel    <-chan *ResponseStreamChunk // Channel for streaming response (if EnableStreaming)
+}
+
+// ContinueResponseUseCase defines the interface for continuing an existing assistant response
+type ContinueResponseUseCase interface {
+	Execute(ctx context.Context, input *ContinueResponseInput) (*ContinueResponseOutput, error)
+}
+
+// ContinueResponseInput contains parameters for continuing an existing assistant response
+type ContinueResponseInput struct {
+	TargetMessageID string // The assistant message to continue from
+	EnableTools     bool
+	EnableReasoning bool
+	EnableStreaming bool
+	Notifier        GenerationNotifier // Optional notifier for real-time updates
+}
+
+// ContinueResponseOutput contains the result of continuing a response
+type ContinueResponseOutput struct {
+	TargetMessage   *models.Message             // The original message that was extended
+	AppendedContent string                      // The content that was appended
+	StreamChannel   <-chan *ResponseStreamChunk // For streaming mode
+	GeneratedOutput *GenerateResponseOutput     // The full output from GenerateResponse (for non-streaming)
+}
+
+// SendMessageUseCase orchestrates user message creation and response generation
+type SendMessageUseCase interface {
+	Execute(ctx context.Context, input *SendMessageInput) (*SendMessageOutput, error)
+}
+
+type SendMessageInput struct {
+	ConversationID  string
+	TextContent     string
+	AudioData       []byte
+	AudioFormat     string
+	PreviousID      string
+	LocalID         string
+	EnableTools     bool
+	EnableReasoning bool
+	EnableStreaming bool
+}
+
+type SendMessageOutput struct {
+	UserMessage      *models.Message
+	Audio            *models.Audio
+	RelevantMemories []*models.Memory
+	AssistantMessage *models.Message
+	StreamChannel    <-chan *ResponseStreamChunk
+}
+
+// SyncMessagesUseCase handles offline sync
+type SyncMessagesUseCase interface {
+	Execute(ctx context.Context, input *SyncMessagesInput) (*SyncMessagesOutput, error)
+}
+
+type SyncMessagesInput struct {
+	ConversationID string
+	Messages       []SyncMessageItem
+}
+
+type SyncMessageItem struct {
+	LocalID        string
+	SequenceNumber int
+	PreviousID     string
+	Role           string
+	Contents       string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type SyncMessagesOutput struct {
+	Results  []SyncedMessageResult
+	SyncedAt time.Time
+}
+
+type SyncedMessageResult struct {
+	LocalID  string
+	ServerID string
+	Status   string // "synced" | "conflict"
+	Message  *models.Message
+}
+
+// EditUserMessageUseCase updates user message and regenerates
+type EditUserMessageUseCase interface {
+	Execute(ctx context.Context, input *EditUserMessageInput) (*EditUserMessageOutput, error)
+}
+
+type EditUserMessageInput struct {
+	ConversationID  string
+	TargetMessageID string
+	NewContent      string
+	EnableTools     bool
+	EnableReasoning bool
+	EnableStreaming bool
+	SkipGeneration  bool // If true, skip response generation (for agent-based architecture)
+}
+
+type EditUserMessageOutput struct {
+	UpdatedMessage   *models.Message
+	DeletedCount     int
+	RelevantMemories []*models.Memory
+	AssistantMessage *models.Message
+	StreamChannel    <-chan *ResponseStreamChunk
+}
+
+// EditAssistantMessageUseCase updates assistant message in place
+type EditAssistantMessageUseCase interface {
+	Execute(ctx context.Context, input *EditAssistantMessageInput) (*EditAssistantMessageOutput, error)
+}
+
+type EditAssistantMessageInput struct {
+	ConversationID  string
+	TargetMessageID string
+	NewContent      string
+}
+
+type EditAssistantMessageOutput struct {
+	UpdatedMessage *models.Message
 }

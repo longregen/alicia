@@ -202,6 +202,17 @@ func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]
 	return siblings, nil
 }
 
+func (m *mockMessageRepo) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, msg := range m.store {
+		if msg.ConversationID == conversationID && msg.SequenceNumber > afterSequence {
+			delete(m.store, id)
+		}
+	}
+	return nil
+}
+
 type mockSentenceRepo struct {
 	mu    sync.RWMutex
 	store map[string]*models.Sentence
@@ -803,6 +814,10 @@ func (m *mockMemoryService) Archive(ctx context.Context, id string) (*models.Mem
 	return nil, nil
 }
 
+func (m *mockMemoryService) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}
+
 type mockIDGenerator struct {
 	messageCounter     int
 	sentenceCounter    int
@@ -900,6 +915,10 @@ func (m *mockIDGenerator) GenerateTrainingExampleID() string {
 
 func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
 	return "spv_test1"
+}
+
+func (m *mockIDGenerator) GenerateRequestID() string {
+	return "areq_test1"
 }
 
 type mockTransactionManager struct{}

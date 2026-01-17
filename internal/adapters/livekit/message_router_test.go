@@ -70,6 +70,11 @@ func TestNewMessageRouter(t *testing.T) {
 		idGenerator,
 		agent,
 		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	if router == nil {
@@ -155,6 +160,12 @@ func TestNewMessageRouter_WithoutVoiceServices(t *testing.T) {
 		nil, // No TTS
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	if router == nil {
@@ -224,6 +235,12 @@ func TestOnDataReceived(t *testing.T) {
 		nil, // No TTS for this test
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	// Create a valid configuration message
@@ -307,6 +324,12 @@ func TestOnDataReceived_InvalidData(t *testing.T) {
 		nil,
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	// Send invalid data
@@ -377,6 +400,12 @@ func TestOnDataReceived_WithStanzaID(t *testing.T) {
 		nil,
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	// Create message with stanza ID
@@ -472,6 +501,12 @@ func TestOnAudioReceived_WithoutVoicePipeline(t *testing.T) {
 		nil, // No TTS, so no voice pipeline
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	// Should not have voice pipeline
@@ -553,6 +588,12 @@ func TestOnParticipantConnected(t *testing.T) {
 		nil,
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	participant := &ports.LiveKitParticipant{
@@ -623,6 +664,12 @@ func TestOnParticipantDisconnected(t *testing.T) {
 		nil,
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	participant := &ports.LiveKitParticipant{
@@ -693,6 +740,12 @@ func TestCleanup(t *testing.T) {
 		&mockTTSService{},
 		idGenerator,
 		agent,
+		0.5, // minConfidence
+		nil, // sendMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		nil, // editUserMessageUseCase
+		nil, // editAssistantMessageUseCase
 	)
 
 	// Voice pipeline should exist

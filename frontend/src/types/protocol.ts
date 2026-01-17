@@ -42,6 +42,7 @@ export enum MessageType {
   DimensionPreference = 29,
   EliteSelect = 30,
   EliteOptions = 31,
+  OptimizationProgress = 32,
   // Subscription message types (multiplexed WebSocket)
   Subscribe = 40,
   Unsubscribe = 41,
@@ -382,6 +383,18 @@ export interface EliteOptions {
   conversationId: string;
   elites: EliteSummary[];
   currentEliteId: string;
+  timestamp: number;
+}
+
+export interface OptimizationProgress {
+  runId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  iteration: number;
+  maxIterations: number;
+  currentScore: number;
+  bestScore: number;
+  dimensionScores?: Record<string, number>;
+  message?: string;
   timestamp: number;
 }
 

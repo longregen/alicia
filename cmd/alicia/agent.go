@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,31 +21,52 @@ import (
 	"github.com/longregen/alicia/internal/application/usecases"
 	"github.com/longregen/alicia/internal/llm"
 	"github.com/longregen/alicia/internal/ports"
+	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/spf13/cobra"
 )
 
 // agentCmd starts the LiveKit agent worker
 func agentCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "agent",
-		Short: "Start the LiveKit agent worker",
-		Long: `Start the LiveKit agent worker to handle voice conversations.
+	var serveURL string
 
-The agent worker listens for LiveKit room events and dispatches agents
-to handle voice conversations when users join rooms with the "conv_" prefix.
+	cmd := &cobra.Command{
+		Use:   "agent",
+		Short: "Start the agent worker",
+		Long: `Start the agent worker to handle response generation.
+
+The agent worker can operate in two modes:
+
+1. LiveKit mode: Listens for LiveKit room events and dispatches agents
+   to handle voice conversations when users join rooms with the "conv_" prefix.
+
+2. WebSocket mode: Connects to alicia serve via WebSocket and receives
+   response generation requests for ALL conversations.
 
 Required configuration:
   - PostgreSQL database (ALICIA_POSTGRES_URL)
   - LLM endpoint (ALICIA_LLM_URL)
+
+For LiveKit mode (optional):
   - LiveKit (ALICIA_LIVEKIT_URL, ALICIA_LIVEKIT_API_KEY, ALICIA_LIVEKIT_API_SECRET)
-  - ASR/TTS via speaches (ALICIA_ASR_URL, ALICIA_TTS_URL)`,
+  - ASR/TTS via speaches (ALICIA_ASR_URL, ALICIA_TTS_URL)
+
+For WebSocket mode (optional):
+  - Serve URL (--serve-url or ALICIA_AGENT_SERVE_URL)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Override config with flag if provided
+			if serveURL != "" {
+				cfg.Agent.ServeURL = serveURL
+			}
 			return runAgentWorker(cmd.Context())
 		},
 	}
+
+	cmd.Flags().StringVar(&serveURL, "serve-url", "", "WebSocket URL for alicia serve (e.g., ws://localhost:8080/api/v1/ws)")
+
+	return cmd
 }
 
-// runAgentWorker initializes and starts the LiveKit agent worker
+// runAgentWorker initializes and starts the agent worker
 func runAgentWorker(ctx context.Context) error {
 	log.Println("Starting Alicia agent worker...")
 
@@ -53,19 +75,28 @@ func runAgentWorker(ctx context.Context) error {
 		return fmt.Errorf("agent worker requires PostgreSQL. Set ALICIA_POSTGRES_URL")
 	}
 
-	if !cfg.IsLiveKitConfigured() {
-		return fmt.Errorf("agent worker requires LiveKit. Set ALICIA_LIVEKIT_URL, ALICIA_LIVEKIT_API_KEY, ALICIA_LIVEKIT_API_SECRET")
+	// Check if at least one mode is configured
+	livekitEnabled := cfg.IsLiveKitConfigured()
+	websocketEnabled := cfg.Agent.ServeURL != ""
+
+	if !livekitEnabled && !websocketEnabled {
+		return fmt.Errorf("agent worker requires either LiveKit or WebSocket mode. Set ALICIA_LIVEKIT_* or --serve-url/ALICIA_AGENT_SERVE_URL")
 	}
 
-	if !cfg.IsASRConfigured() {
-		log.Println("Warning: ASR not configured - voice transcription will not work")
+	if livekitEnabled {
+		if !cfg.IsASRConfigured() {
+			log.Println("Warning: ASR not configured - voice transcription will not work")
+		}
+		if !cfg.IsTTSConfigured() {
+			log.Println("Warning: TTS not configured - voice synthesis will not work")
+		}
+		log.Printf("  LiveKit:  %s", cfg.LiveKit.URL)
 	}
 
-	if !cfg.IsTTSConfigured() {
-		log.Println("Warning: TTS not configured - voice synthesis will not work")
+	if websocketEnabled {
+		log.Printf("  Serve:    %s", cfg.Agent.ServeURL)
 	}
 
-	log.Printf("  LiveKit:  %s", cfg.LiveKit.URL)
 	log.Printf("  LLM:      %s", cfg.LLM.URL)
 	if cfg.IsASRConfigured() {
 		log.Printf("  ASR:      %s", cfg.ASR.URL)
@@ -250,6 +281,50 @@ func runAgentWorker(ctx context.Context) error {
 	)
 	log.Println("ProcessUserMessage use case initialized")
 
+	// Create SendMessage use case
+	sendMessageUseCase := usecases.NewSendMessage(
+		conversationRepo,
+		messageRepo,
+		processUserMessageUseCase,
+		generateResponseUseCase,
+		txManager,
+	)
+	log.Println("SendMessage use case initialized")
+
+	// Create RegenerateResponse use case
+	regenerateResponseUseCase := usecases.NewRegenerateResponse(
+		messageRepo,
+		conversationRepo,
+		generateResponseUseCase,
+		idGen,
+	)
+	log.Println("RegenerateResponse use case initialized")
+
+	// Create ContinueResponse use case
+	continueResponseUseCase := usecases.NewContinueResponse(
+		messageRepo,
+		conversationRepo,
+		generateResponseUseCase,
+		idGen,
+		txManager,
+	)
+	log.Println("ContinueResponse use case initialized")
+
+	// Create EditUserMessage use case
+	editUserMessageUseCase := usecases.NewEditUserMessage(
+		messageRepo,
+		conversationRepo,
+		memoryService,
+		generateResponseUseCase,
+		idGen,
+		txManager,
+	)
+	log.Println("EditUserMessage use case initialized")
+
+	// Create EditAssistantMessage use case
+	editAssistantMessageUseCase := usecases.NewEditAssistantMessage(messageRepo)
+	log.Println("EditAssistantMessage use case initialized")
+
 	// Create agent factory
 	agentFactory := livekit.NewAgentFactory(
 		conversationRepo,
@@ -270,41 +345,87 @@ func runAgentWorker(ctx context.Context) error {
 		ttsService,
 		idGen,
 		cfg.ASR.MinConfidence,
+		sendMessageUseCase,
+		regenerateResponseUseCase,
+		continueResponseUseCase,
+		editUserMessageUseCase,
+		editAssistantMessageUseCase,
 	)
 	log.Println("Agent factory initialized")
-
-	// Create worker configuration
-	workerConfig := &livekit.WorkerConfig{
-		URL:                   cfg.LiveKit.URL,
-		APIKey:                cfg.LiveKit.APIKey,
-		APISecret:             cfg.LiveKit.APISecret,
-		AgentName:             "alicia-worker",
-		TokenValidityDuration: 24 * time.Hour,
-		RoomPrefix:            "conv_",
-		WorkerCount:           cfg.LiveKit.WorkerCount,
-		WorkQueueSize:         cfg.LiveKit.WorkQueueSize,
-		TTSSampleRate:         cfg.TTS.SampleRate,
-		TTSChannels:           cfg.TTS.Channels,
-	}
-
-	// Create and start worker
-	worker, err := livekit.NewWorker(workerConfig, agentFactory, lkService)
-	if err != nil {
-		return fmt.Errorf("failed to create worker: %w", err)
-	}
 
 	// Set up graceful shutdown
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 
-	// Channel for worker errors
-	workerErrors := make(chan error, 1)
+	var wg sync.WaitGroup
+	errorChan := make(chan error, 2)
 
-	// Start worker in a goroutine
-	go func() {
-		log.Println("Agent worker started")
-		workerErrors <- worker.Start(workerCtx)
-	}()
+	// Initialize LiveKit worker if configured
+	var worker *livekit.Worker
+	if livekitEnabled {
+		workerConfig := &livekit.WorkerConfig{
+			URL:                   cfg.LiveKit.URL,
+			APIKey:                cfg.LiveKit.APIKey,
+			APISecret:             cfg.LiveKit.APISecret,
+			AgentName:             "alicia-worker",
+			TokenValidityDuration: 24 * time.Hour,
+			RoomPrefix:            "conv_",
+			WorkerCount:           cfg.LiveKit.WorkerCount,
+			WorkQueueSize:         cfg.LiveKit.WorkQueueSize,
+			TTSSampleRate:         cfg.TTS.SampleRate,
+			TTSChannels:           cfg.TTS.Channels,
+		}
+
+		var err error
+		worker, err = livekit.NewWorker(workerConfig, agentFactory, lkService)
+		if err != nil {
+			return fmt.Errorf("failed to create LiveKit worker: %w", err)
+		}
+
+		// Start LiveKit worker in a goroutine
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Println("LiveKit agent worker started")
+			if err := worker.Start(workerCtx); err != nil {
+				errorChan <- fmt.Errorf("LiveKit worker error: %w", err)
+			}
+		}()
+	}
+
+	// Initialize WebSocket client if configured
+	var wsClient *livekit.WSClient
+	if websocketEnabled {
+		wsClientConfig := &livekit.WSClientConfig{
+			URL:               cfg.Agent.ServeURL,
+			ReconnectInterval: 5 * time.Second,
+			PingInterval:      30 * time.Second,
+			ReadTimeout:       60 * time.Second,
+			WriteTimeout:      10 * time.Second,
+		}
+
+		// Create WebSocket callbacks handler
+		wsCallbacks := &wsAgentCallbacks{
+			generateResponseUseCase:     generateResponseUseCase,
+			regenerateResponseUseCase:   regenerateResponseUseCase,
+			continueResponseUseCase:     continueResponseUseCase,
+			editUserMessageUseCase:      editUserMessageUseCase,
+			conversationRepo:            conversationRepo,
+			messageRepo:                 messageRepo,
+			idGen:                       idGen,
+		}
+
+		wsClient = livekit.NewWSClient(wsClientConfig, wsCallbacks)
+		wsCallbacks.wsClient = wsClient // Set client reference for WSNotifier
+
+		// Connect to serve
+		if err := wsClient.Connect(workerCtx); err != nil {
+			log.Printf("Warning: Failed to connect to serve WebSocket: %v", err)
+			log.Println("WebSocket mode will retry connection...")
+		} else {
+			log.Println("WebSocket agent connected to serve")
+		}
+	}
 
 	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -312,24 +433,179 @@ func runAgentWorker(ctx context.Context) error {
 
 	// Wait for interrupt signal or worker error
 	select {
-	case err := <-workerErrors:
-		closeMCPAdapter(mcpAdapter)
-		if err != nil {
-			return fmt.Errorf("worker error: %w", err)
+	case err := <-errorChan:
+		log.Printf("Worker error: %v", err)
+		workerCancel()
+
+		if wsClient != nil {
+			wsClient.Disconnect()
 		}
-		return nil
+		if worker != nil {
+			worker.Stop()
+		}
+		closeMCPAdapter(mcpAdapter)
+
+		wg.Wait()
+		return err
+
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v", sig)
 		log.Println("Shutting down gracefully...")
 
-		if err := worker.Stop(); err != nil {
-			closeMCPAdapter(mcpAdapter)
-			return fmt.Errorf("worker shutdown error: %w", err)
+		workerCancel()
+
+		if wsClient != nil {
+			wsClient.Disconnect()
+			log.Println("WebSocket client disconnected")
+		}
+
+		if worker != nil {
+			if err := worker.Stop(); err != nil {
+				log.Printf("LiveKit worker shutdown error: %v", err)
+			}
+			log.Println("LiveKit worker stopped")
 		}
 
 		closeMCPAdapter(mcpAdapter)
-		time.Sleep(2 * time.Second)
-		log.Println("Worker stopped")
+		wg.Wait()
+		time.Sleep(1 * time.Second)
+		log.Println("Agent worker stopped")
 		return nil
+	}
+}
+
+// wsAgentCallbacks implements livekit.WSClientCallbacks for handling
+// ResponseGenerationRequest events from serve via WebSocket
+type wsAgentCallbacks struct {
+	generateResponseUseCase     ports.GenerateResponseUseCase
+	regenerateResponseUseCase   ports.RegenerateResponseUseCase
+	continueResponseUseCase     ports.ContinueResponseUseCase
+	editUserMessageUseCase      ports.EditUserMessageUseCase
+	conversationRepo            ports.ConversationRepository
+	messageRepo                 ports.MessageRepository
+	idGen                       ports.IDGenerator
+	wsClient                    *livekit.WSClient
+}
+
+// OnResponseGenerationRequest handles incoming response generation requests
+func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
+	log.Printf("wsAgentCallbacks: Handling %s request for message %s in conversation %s",
+		req.RequestType, req.MessageID, req.ConversationID)
+
+	// Create a WSNotifier to send generation events back to serve
+	notifier := livekit.NewWSNotifier(c.wsClient)
+
+	switch req.RequestType {
+	case "send":
+		// Generate response for a new user message
+		input := &ports.GenerateResponseInput{
+			ConversationID:  req.ConversationID,
+			UserMessageID:   req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+			Notifier:        notifier,
+		}
+
+		output, err := c.generateResponseUseCase.Execute(ctx, input)
+		if err != nil {
+			log.Printf("wsAgentCallbacks: GenerateResponse failed: %v", err)
+			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
+			return err
+		}
+
+		if output.Message != nil {
+			notifier.NotifyGenerationComplete(output.Message.ID, req.ConversationID, output.Message.Contents)
+			log.Printf("wsAgentCallbacks: Generated response for message %s", req.MessageID)
+		}
+
+	case "regenerate":
+		// Regenerate response for an existing assistant message
+		// Note: The regenerate use case calls GenerateResponse internally
+		input := &ports.RegenerateResponseInput{
+			MessageID:       req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+			Notifier:        notifier,
+		}
+
+		output, err := c.regenerateResponseUseCase.Execute(ctx, input)
+		if err != nil {
+			log.Printf("wsAgentCallbacks: RegenerateResponse failed: %v", err)
+			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
+			return err
+		}
+
+		if output.NewMessage != nil {
+			notifier.NotifyGenerationComplete(output.NewMessage.ID, req.ConversationID, output.NewMessage.Contents)
+			log.Printf("wsAgentCallbacks: Regenerated response, new message %s", output.NewMessage.ID)
+		}
+
+	case "continue":
+		// Continue from an existing assistant message
+		// Note: The continue use case calls GenerateResponse internally
+		input := &ports.ContinueResponseInput{
+			TargetMessageID: req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+			Notifier:        notifier,
+		}
+
+		output, err := c.continueResponseUseCase.Execute(ctx, input)
+		if err != nil {
+			log.Printf("wsAgentCallbacks: ContinueResponse failed: %v", err)
+			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
+			return err
+		}
+
+		// For continue, the content is appended to the target message
+		if output.TargetMessage != nil {
+			notifier.NotifyGenerationComplete(output.TargetMessage.ID, req.ConversationID, output.AppendedContent)
+			log.Printf("wsAgentCallbacks: Continued response, appended to message %s", output.TargetMessage.ID)
+		}
+
+	case "edit":
+		// Generate response after editing a user message
+		input := &ports.GenerateResponseInput{
+			ConversationID:  req.ConversationID,
+			UserMessageID:   req.MessageID,
+			EnableTools:     req.EnableTools,
+			EnableReasoning: req.EnableReasoning,
+			EnableStreaming: req.EnableStreaming,
+			Notifier:        notifier,
+		}
+
+		output, err := c.generateResponseUseCase.Execute(ctx, input)
+		if err != nil {
+			log.Printf("wsAgentCallbacks: GenerateResponse for edit failed: %v", err)
+			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
+			return err
+		}
+
+		if output.Message != nil {
+			notifier.NotifyGenerationComplete(output.Message.ID, req.ConversationID, output.Message.Contents)
+			log.Printf("wsAgentCallbacks: Generated response for edited message %s", req.MessageID)
+		}
+
+	default:
+		log.Printf("wsAgentCallbacks: Unknown request type: %s", req.RequestType)
+	}
+
+	return nil
+}
+
+// OnConnected is called when the WebSocket connection is established
+func (c *wsAgentCallbacks) OnConnected() {
+	log.Println("wsAgentCallbacks: Connected to serve")
+}
+
+// OnDisconnected is called when the WebSocket connection is lost
+func (c *wsAgentCallbacks) OnDisconnected(err error) {
+	if err != nil {
+		log.Printf("wsAgentCallbacks: Disconnected from serve: %v", err)
+	} else {
+		log.Println("wsAgentCallbacks: Disconnected from serve")
 	}
 }

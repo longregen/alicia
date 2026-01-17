@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { useLocation } from 'wouter';
 import { MCPSettings } from './MCPSettings';
-import UserNotesPanel from './organisms/NotesPanel/UserNotesPanel';
 import { PivotModeSelector } from './molecules/PivotModeSelector/PivotModeSelector';
 import { EliteSolutionSelector } from './molecules/EliteSolutionSelector/EliteSolutionSelector';
+import { GEPAControls } from './organisms/GEPAControls';
 import { PIVOT_PRESETS, type PresetId } from '../stores/dimensionStore';
 import { sendDimensionPreference, sendEliteSelect } from '../adapters/protocolAdapter';
 import type { DimensionWeights } from '../types/protocol';
@@ -16,25 +17,13 @@ import { Label } from './atoms/Label';
 import Tooltip from './atoms/Tooltip';
 import { cls } from '../utils/cls';
 import { useTheme } from '../hooks/useTheme';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from './atoms/AlertDialog';
-import Toast from './atoms/Toast';
 
 interface SettingsProps {
   conversationId?: string | null;
   defaultTab?: SettingsTab;
 }
 
-export type SettingsTab = 'mcp' | 'notes' | 'optimization' | 'preferences';
+export type SettingsTab = 'mcp' | 'optimization' | 'preferences';
 
 // Default preference values
 const DEFAULT_PREFERENCES = {
@@ -45,19 +34,18 @@ const DEFAULT_PREFERENCES = {
 };
 
 export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) {
-  // Note: defaultTab is synchronized via useEffect, making it act as a controlled prop
-  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
+  const [, navigate] = useLocation();
+  // Use defaultTab from URL (passed as prop from router)
+  const activeTab = defaultTab;
   const [audioOutputEnabled, setAudioOutputEnabled] = useState(DEFAULT_PREFERENCES.audioOutputEnabled);
 
-  // Sync active tab when defaultTab prop changes
-  useEffect(() => {
-    setActiveTab(defaultTab);
-  }, [defaultTab]);
+  const setActiveTab = (tab: SettingsTab) => {
+    navigate(`/settings/${tab}`);
+  };
+
   const [voiceSpeed, setVoiceSpeed] = useState(DEFAULT_PREFERENCES.voiceSpeed);
   const { theme, setTheme } = useTheme();
   const [responseLength, setResponseLength] = useState<'concise' | 'balanced' | 'detailed'>(DEFAULT_PREFERENCES.responseLength);
-  const [showResetDialog, setShowResetDialog] = useState(false);
-  const [showToast, setShowToast] = useState(false);
 
   // Handle dimension preference changes - send to server via WebSocket
   const handlePresetChange = useCallback((presetId: PresetId) => {
@@ -94,40 +82,11 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
     });
   }, [conversationId]);
 
-  // Handle reset all preferences
-  const handleResetAll = useCallback(() => {
-    setAudioOutputEnabled(DEFAULT_PREFERENCES.audioOutputEnabled);
-    setVoiceSpeed(DEFAULT_PREFERENCES.voiceSpeed);
-    setTheme(DEFAULT_PREFERENCES.theme);
-    setResponseLength(DEFAULT_PREFERENCES.responseLength);
-    setShowResetDialog(false);
-    setShowToast(true);
-  }, [setTheme]);
-
   return (
     <div className="layout-stack h-full bg-background">
       {/* Header */}
-      <div className="flex justify-between items-center p-6 md:px-8 border-b border-border bg-card">
+      <div className="p-6 md:px-8 border-b border-border bg-card">
         <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Settings</h1>
-        <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-          <AlertDialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              Reset All
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Reset all preferences?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will reset all preferences in the Preferences tab to their default values. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleResetAll}>Reset All</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
 
       {/* Tab navigation - vertical on mobile, horizontal on desktop */}
@@ -138,13 +97,6 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
             onClick={() => setActiveTab('mcp')}
           >
             MCP
-          </button>
-          <button
-            className={`tab whitespace-nowrap ${activeTab === 'notes' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('notes')}
-            disabled={!conversationId}
-          >
-            Notes
           </button>
           <button
             className={`tab whitespace-nowrap ${activeTab === 'optimization' ? 'tab-active' : ''}`}
@@ -165,35 +117,32 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mb-8 last:mb-0">
           {activeTab === 'mcp' && <MCPSettings />}
-          {activeTab === 'notes' && conversationId && (
-            <UserNotesPanel
-              targetType="message"
-              targetId={conversationId}
-            />
-          )}
-          {activeTab === 'notes' && !conversationId && (
-            <div className="text-center p-10 text-muted">
-              Please select a conversation to view notes
-            </div>
-          )}
           {activeTab === 'optimization' && (
-            <div>
-              <PivotModeSelector
-                onPresetChange={handlePresetChange}
-                onWeightsChange={handleWeightsChange}
-                disabled={!conversationId}
-              />
-              <div className="mt-6">
-                <EliteSolutionSelector
-                  onSelectElite={handleSelectElite}
+            <div className="space-y-8">
+              <section>
+                <h2 className="text-lg font-semibold mb-4">Response Preferences</h2>
+                <PivotModeSelector
+                  onPresetChange={handlePresetChange}
+                  onWeightsChange={handleWeightsChange}
                   disabled={!conversationId}
                 />
-              </div>
-              {!conversationId && (
-                <div className="text-center p-5 text-muted mt-4">
-                  Select a conversation to sync optimization preferences with the server
+                <div className="mt-6">
+                  <EliteSolutionSelector
+                    onSelectElite={handleSelectElite}
+                    disabled={!conversationId}
+                  />
                 </div>
-              )}
+                {!conversationId && (
+                  <div className="text-center p-5 text-muted mt-4">
+                    Select a conversation to sync optimization preferences with the server
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h2 className="text-lg font-semibold mb-4">Prompt Optimization (GEPA)</h2>
+                <GEPAControls conversationId={conversationId} />
+              </section>
             </div>
           )}
           {activeTab === 'preferences' && (
@@ -395,18 +344,6 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
           )}
         </div>
       </div>
-
-      {/* Toast notification */}
-      {showToast && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <Toast
-            message="All preferences have been reset to defaults"
-            variant="success"
-            duration={3000}
-            onDismiss={() => setShowToast(false)}
-          />
-        </div>
-      )}
     </div>
   );
 }

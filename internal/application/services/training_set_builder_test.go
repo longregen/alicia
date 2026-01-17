@@ -255,6 +255,10 @@ func (m *mockMemoryRepository) Archive(ctx context.Context, id string) error {
 	return nil
 }
 
+func (m *mockMemoryRepository) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	return nil
+}
+
 // Tests
 
 func TestToolUseVoteToExample_Upvote(t *testing.T) {

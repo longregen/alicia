@@ -17,7 +17,7 @@ interface OptimizationRun {
   dimension_weights?: Record<string, number>;
   best_dim_scores?: Record<string, number>;
   config?: Record<string, unknown>;
-  started_at: string;
+  created_at: string;
   completed_at?: string;
 }
 
@@ -141,7 +141,7 @@ export function OptimizationRunDetails({ runId, onBack }: OptimizationRunDetails
                   <dt className="font-semibold text-muted">Iterations:</dt>
                   <dd className="m-0">{run.iterations} / {run.max_iterations}</dd>
                   <dt className="font-semibold text-muted">Started:</dt>
-                  <dd className="m-0">{formatDate(run.started_at)}</dd>
+                  <dd className="m-0">{formatDate(run.created_at)}</dd>
                   {run.completed_at && (
                     <>
                       <dt className="font-semibold text-muted">Completed:</dt>

@@ -242,12 +242,16 @@ func (m *mockIDGenerator) GenerateSystemPromptVersionID() string {
 	return "spv_test123"
 }
 
+func (m *mockIDGenerator) GenerateRequestID() string {
+	return "areq_test123"
+}
+
 // Tests for ConversationsHandler.Create
 
 func TestConversationsHandler_Create_Success(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	body := `{"title": "Test Conversation"}`
 	req := httptest.NewRequest("POST", "/api/v1/conversations", bytes.NewBufferString(body))
@@ -278,7 +282,7 @@ func TestConversationsHandler_Create_Success(t *testing.T) {
 func TestConversationsHandler_Create_MissingTitle(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	body := `{}`
 	req := httptest.NewRequest("POST", "/api/v1/conversations", bytes.NewBufferString(body))
@@ -305,7 +309,7 @@ func TestConversationsHandler_Create_MissingTitle(t *testing.T) {
 func TestConversationsHandler_Create_InvalidJSON(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	body := `{invalid json}`
 	req := httptest.NewRequest("POST", "/api/v1/conversations", bytes.NewBufferString(body))
@@ -324,7 +328,7 @@ func TestConversationsHandler_Create_RepositoryError(t *testing.T) {
 	repo := newMockConversationRepo()
 	repo.createErr = errors.New("database error")
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	body := `{"title": "Test Conversation"}`
 	req := httptest.NewRequest("POST", "/api/v1/conversations", bytes.NewBufferString(body))
@@ -344,7 +348,7 @@ func TestConversationsHandler_Create_RepositoryError(t *testing.T) {
 func TestConversationsHandler_Get_Success(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -378,7 +382,7 @@ func TestConversationsHandler_Get_Success(t *testing.T) {
 func TestConversationsHandler_Get_NotFound(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	req := httptest.NewRequest("GET", "/api/v1/conversations/nonexistent", nil)
 	rr := httptest.NewRecorder()
@@ -410,7 +414,7 @@ func TestConversationsHandler_Get_NotFound(t *testing.T) {
 func TestConversationsHandler_List_Success(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	// Create test conversations
 	repo.conversations["ac_1"] = models.NewConversation("ac_1", "test-user", "Conversation 1")
@@ -448,7 +452,7 @@ func TestConversationsHandler_List_Success(t *testing.T) {
 func TestConversationsHandler_List_WithPagination(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	// Create test conversations
 	repo.conversations["ac_1"] = models.NewConversation("ac_1", "test-user", "Conversation 1")
@@ -480,7 +484,7 @@ func TestConversationsHandler_List_WithPagination(t *testing.T) {
 func TestConversationsHandler_List_ActiveOnly(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	// Create active and archived conversations
 	activeConv := models.NewConversation("ac_1", "test-user", "Active Conversation")
@@ -516,7 +520,7 @@ func TestConversationsHandler_List_ActiveOnly(t *testing.T) {
 func TestConversationsHandler_Delete_Success(t *testing.T) {
 	repo := newMockConversationRepo()
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -547,7 +551,7 @@ func TestConversationsHandler_Delete_RepositoryError(t *testing.T) {
 	repo := newMockConversationRepo()
 	repo.deleteErr = errors.New("database error")
 	idGen := newMockIDGenerator()
-	handler := NewConversationsHandler(repo, idGen)
+	handler := NewConversationsHandler(repo, &mockMemoryService{}, idGen)
 
 	req := httptest.NewRequest("DELETE", "/api/v1/conversations/ac_test123", nil)
 	rr := httptest.NewRecorder()

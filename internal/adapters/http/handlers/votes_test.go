@@ -101,7 +101,7 @@ func TestVoteHandler_VoteOnMessage_UpvoteSuccess(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 1, Downvotes: 0}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "up"}`
 	req := httptest.NewRequest("POST", "/api/v1/messages/am_test123/vote", bytes.NewBufferString(body))
@@ -137,7 +137,7 @@ func TestVoteHandler_VoteOnMessage_DownvoteSuccess(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 0, Downvotes: 1}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "down"}`
 	req := httptest.NewRequest("POST", "/api/v1/messages/am_test123/vote", bytes.NewBufferString(body))
@@ -168,7 +168,7 @@ func TestVoteHandler_VoteOnMessage_DownvoteSuccess(t *testing.T) {
 func TestVoteHandler_VoteOnMessage_InvalidVote(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "invalid"}`
 	req := httptest.NewRequest("POST", "/api/v1/messages/am_test123/vote", bytes.NewBufferString(body))
@@ -193,7 +193,7 @@ func TestVoteHandler_RemoveMessageVote_Success(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 0, Downvotes: 0}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	req := httptest.NewRequest("DELETE", "/api/v1/messages/am_test123/vote", nil)
 	req = addUserContext(req, "test-user")
@@ -225,7 +225,7 @@ func TestVoteHandler_GetMessageVotes_Success(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 5, Downvotes: 2}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/messages/am_test123/votes", nil)
 	req = addUserContext(req, "test-user")
@@ -261,7 +261,7 @@ func TestVoteHandler_VoteOnToolUse_Success(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 1, Downvotes: 0}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "up"}`
 	req := httptest.NewRequest("POST", "/api/v1/tool-uses/atu_test123/vote", bytes.NewBufferString(body))
@@ -295,7 +295,7 @@ func TestVoteHandler_ToolUseQuickFeedback_WrongTool(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 0, Downvotes: 1}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"feedback": "wrong_tool"}`
 	req := httptest.NewRequest("POST", "/api/v1/tool-uses/atu_test123/quick-feedback", bytes.NewBufferString(body))
@@ -327,7 +327,7 @@ func TestVoteHandler_ToolUseQuickFeedback_Perfect(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 1, Downvotes: 0}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"feedback": "perfect"}`
 	req := httptest.NewRequest("POST", "/api/v1/tool-uses/atu_test123/quick-feedback", bytes.NewBufferString(body))
@@ -358,7 +358,7 @@ func TestVoteHandler_ToolUseQuickFeedback_Perfect(t *testing.T) {
 func TestVoteHandler_ToolUseQuickFeedback_InvalidFeedback(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"feedback": "invalid_feedback"}`
 	req := httptest.NewRequest("POST", "/api/v1/tool-uses/atu_test123/quick-feedback", bytes.NewBufferString(body))
@@ -383,7 +383,7 @@ func TestVoteHandler_VoteOnMemory_Critical(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 1, Downvotes: 0}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "critical"}`
 	req := httptest.NewRequest("POST", "/api/v1/memories/amem_test123/vote", bytes.NewBufferString(body))
@@ -421,7 +421,7 @@ func TestVoteHandler_MemoryIrrelevanceReason_Success(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 0, Downvotes: 1}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"reason": "outdated"}`
 	req := httptest.NewRequest("POST", "/api/v1/memories/amem_test123/irrelevance-reason", bytes.NewBufferString(body))
@@ -452,7 +452,7 @@ func TestVoteHandler_MemoryIrrelevanceReason_Success(t *testing.T) {
 func TestVoteHandler_MemoryIrrelevanceReason_InvalidReason(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"reason": "invalid_reason"}`
 	req := httptest.NewRequest("POST", "/api/v1/memories/amem_test123/irrelevance-reason", bytes.NewBufferString(body))
@@ -477,7 +477,7 @@ func TestVoteHandler_VoteOnReasoning_Success(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 1, Downvotes: 0}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "up"}`
 	req := httptest.NewRequest("POST", "/api/v1/reasoning/ar_test123/vote", bytes.NewBufferString(body))
@@ -511,7 +511,7 @@ func TestVoteHandler_ReasoningIssue_Success(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.aggregates = &models.VoteAggregates{Upvotes: 0, Downvotes: 1}
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"issue": "incorrect_assumption"}`
 	req := httptest.NewRequest("POST", "/api/v1/reasoning/ar_test123/issue", bytes.NewBufferString(body))
@@ -542,7 +542,7 @@ func TestVoteHandler_ReasoningIssue_Success(t *testing.T) {
 func TestVoteHandler_ReasoningIssue_InvalidIssue(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"issue": "invalid_issue"}`
 	req := httptest.NewRequest("POST", "/api/v1/reasoning/ar_test123/issue", bytes.NewBufferString(body))
@@ -567,7 +567,7 @@ func TestVoteHandler_CreateVote_RepositoryError(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.createErr = errors.New("database error")
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	body := `{"vote": "up"}`
 	req := httptest.NewRequest("POST", "/api/v1/messages/am_test123/vote", bytes.NewBufferString(body))
@@ -590,7 +590,7 @@ func TestVoteHandler_GetAggregates_RepositoryError(t *testing.T) {
 	voteRepo := newMockVoteRepo()
 	voteRepo.getErr = errors.New("database error")
 	idGen := newMockIDGenerator()
-	handler := NewVoteHandler(voteRepo, idGen)
+	handler := NewVoteHandler(voteRepo, idGen, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/messages/am_test123/votes", nil)
 	req = addUserContext(req, "test-user")

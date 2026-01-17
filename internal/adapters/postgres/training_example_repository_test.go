@@ -455,3 +455,4 @@ func (g *testIDGenerator) GenerateSessionStatsID() string     { return "ass_test
 func (g *testIDGenerator) GenerateOptimizationRunID() string  { return "aor_test" }
 func (g *testIDGenerator) GeneratePromptCandidateID() string  { return "apc_test" }
 func (g *testIDGenerator) GeneratePromptEvaluationID() string { return "ape_test" }
+func (g *testIDGenerator) GenerateRequestID() string          { return "areq_test" }

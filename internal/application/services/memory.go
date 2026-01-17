@@ -199,6 +199,19 @@ func (s *MemoryService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteByConversationID deletes all memories extracted from messages in the given conversation
+func (s *MemoryService) DeleteByConversationID(ctx context.Context, conversationID string) error {
+	if conversationID == "" {
+		return domain.NewDomainError(domain.ErrEmptyContent, "conversation ID cannot be empty")
+	}
+
+	if err := s.memoryRepo.DeleteByConversationID(ctx, conversationID); err != nil {
+		return domain.NewDomainError(err, "failed to delete memories for conversation")
+	}
+
+	return nil
+}
+
 func (s *MemoryService) Search(ctx context.Context, query string, limit int) ([]*models.Memory, error) {
 	if query == "" {
 		return nil, domain.NewDomainError(domain.ErrEmptyContent, "search query cannot be empty")

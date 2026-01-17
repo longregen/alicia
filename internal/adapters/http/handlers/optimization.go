@@ -9,13 +9,15 @@ import (
 
 // OptimizationHandler handles prompt optimization API endpoints
 type OptimizationHandler struct {
-	optService ports.OptimizationService
+	optService             ports.OptimizationServiceFull
+	runOptimizationUseCase ports.RunOptimizationUseCase
 }
 
 // NewOptimizationHandler creates a new optimization handler
-func NewOptimizationHandler(optService ports.OptimizationService) *OptimizationHandler {
+func NewOptimizationHandler(optService ports.OptimizationServiceFull, runOptimizationUseCase ports.RunOptimizationUseCase) *OptimizationHandler {
 	return &OptimizationHandler{
-		optService: optService,
+		optService:             optService,
+		runOptimizationUseCase: runOptimizationUseCase,
 	}
 }
 
@@ -98,17 +100,22 @@ func (h *OptimizationHandler) CreateOptimization(w http.ResponseWriter, r *http.
 		return
 	}
 
-	run, err := h.optService.StartOptimizationRun(
+	// Use the RunOptimization usecase to start the optimization run
+	// This creates the run AND starts the background optimization process
+	output, err := h.runOptimizationUseCase.Execute(
 		r.Context(),
-		req.Name,
-		req.PromptType,
-		req.BaselinePrompt,
+		&ports.RunOptimizationInput{
+			Name:           req.Name,
+			PromptType:     req.PromptType,
+			BaselinePrompt: req.BaselinePrompt,
+		},
 	)
 	if err != nil {
 		respondError(w, "service_error", "Failed to start optimization run", http.StatusInternalServerError)
 		return
 	}
 
+	run := output.Run
 	response := &OptimizationRunResponse{
 		ID:            run.ID,
 		Name:          run.Name,
@@ -172,13 +179,11 @@ func (h *OptimizationHandler) ListOptimizations(w http.ResponseWriter, r *http.R
 	}
 
 	// Parse query parameters
-	opts := ports.ListOptimizationRunsOptions{
-		Status: r.URL.Query().Get("status"),
-		Limit:  parseIntQuery(r, "limit", 50),
-		Offset: parseIntQuery(r, "offset", 0),
-	}
+	status := r.URL.Query().Get("status")
+	limit := parseIntQuery(r, "limit", 50)
+	offset := parseIntQuery(r, "offset", 0)
 
-	runs, err := h.optService.ListOptimizationRuns(r.Context(), opts)
+	runs, err := h.optService.ListOptimizationRuns(r.Context(), status, limit, offset)
 	if err != nil {
 		respondError(w, "service_error", "Failed to list optimization runs", http.StatusInternalServerError)
 		return

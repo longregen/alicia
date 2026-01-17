@@ -204,6 +204,24 @@
           exec go run ./cmd/alicia "$@"
         '';
 
+        # MCP Garden server (database tools)
+        mcp-garden = pkgs.buildGoApplication {
+          pname = "mcp-garden";
+          version = "0.1.0";
+          src = ./.;
+          modules = ./gomod2nix.toml;
+          subPackages = ["cmd/mcp-garden"];
+        };
+
+        # MCP Web server (web browsing tools)
+        mcp-web = pkgs.buildGoApplication {
+          pname = "mcp-web";
+          version = "0.1.0";
+          src = ./.;
+          modules = ./gomod2nix.toml;
+          subPackages = ["cmd/mcp-web"];
+        };
+
         frontendDevInputs = with pkgs; [
           nodejs_22
         ];
@@ -493,6 +511,9 @@
 
           # Silero VAD model for backend (silero-vad-go)
           inherit silero-vad-model;
+
+          # MCP servers
+          inherit mcp-garden mcp-web;
         };
 
         # Test derivations
@@ -695,6 +716,9 @@
               db-migrate
               # Dev helper to run backend
               alicia-dev
+              # MCP servers
+              mcp-garden
+              mcp-web
             ];
 
           shellHook = ''

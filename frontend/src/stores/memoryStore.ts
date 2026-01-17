@@ -27,6 +27,7 @@ interface MemoryStoreActions {
     category: MemoryCategory,
     pinned?: boolean
   ) => void;
+  setMemory: (memory: Memory) => void;
   updateMemory: (id: string, updates: Partial<Omit<Memory, 'id' | 'createdAt'>>) => void;
   deleteMemory: (id: string) => void;
   pinMemory: (id: string, pinned: boolean) => void;
@@ -68,6 +69,11 @@ export const useMemoryStore = create<MemoryStore>()(
           updatedAt: timestamp,
           usageCount: 0,
         };
+      }),
+
+    setMemory: (memory) =>
+      set((state) => {
+        state.memories[memory.id] = memory;
       }),
 
     updateMemory: (id, updates) =>
