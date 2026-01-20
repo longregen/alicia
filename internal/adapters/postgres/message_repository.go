@@ -454,6 +454,67 @@ func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID st
 	return r.scanMessages(rows)
 }
 
+// GetChainFromTipWithSiblings returns the chain from tip PLUS all sibling messages at each branch point.
+// This allows the frontend to know about all alternative branches without making N separate API calls.
+// Messages are ordered by sequence_number ASC, then created_at ASC (siblings at same position sorted by creation time).
+func (r *MessageRepository) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	ctx, cancel := withTimeout(ctx)
+	defer cancel()
+
+	// This query:
+	// 1. Walks backwards from tip via previous_id (message_chain CTE)
+	// 2. Collects all unique previous_ids from the chain (chain_parents CTE)
+	// 3. Finds all siblings: messages sharing the same previous_id but not in the chain
+	// 4. Returns the union, ordered by sequence_number then created_at
+	query := `
+		WITH RECURSIVE message_chain AS (
+			-- Base case: start with the tip message
+			SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
+			       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+			FROM alicia_messages
+			WHERE id = $1 AND deleted_at IS NULL
+
+			UNION ALL
+
+			-- Recursive case: follow previous_id backwards
+			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
+			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.created_at, m.updated_at, m.deleted_at
+			FROM alicia_messages m
+			INNER JOIN message_chain mc ON m.id = mc.previous_id
+			WHERE m.deleted_at IS NULL
+		),
+		-- Get all unique previous_ids from the chain (these are the branch points)
+		chain_parents AS (
+			SELECT DISTINCT previous_id FROM message_chain WHERE previous_id IS NOT NULL
+		),
+		-- Get all siblings: messages that share the same previous_id as chain messages but aren't in the chain
+		siblings AS (
+			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
+			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.created_at, m.updated_at, m.deleted_at
+			FROM alicia_messages m
+			WHERE m.previous_id IN (SELECT previous_id FROM chain_parents)
+			  AND m.id NOT IN (SELECT id FROM message_chain)
+			  AND m.deleted_at IS NULL
+		)
+		-- Combine chain messages and siblings, ordered by position then creation time
+		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
+		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		FROM (
+			SELECT * FROM message_chain
+			UNION ALL
+			SELECT * FROM siblings
+		) combined
+		ORDER BY sequence_number ASC, created_at ASC`
+
+	rows, err := r.conn(ctx).Query(ctx, query, tipMessageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanMessages(rows)
+}
+
 // GetSiblings returns all messages that share the same previous_id (i.e., branches from the same parent)
 func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)

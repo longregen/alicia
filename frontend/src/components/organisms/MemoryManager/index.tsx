@@ -225,3 +225,4 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
 export { MemorySearch } from './MemorySearch';
 export { MemoryList } from './MemoryList';
 export { MemoryEditor } from './MemoryEditor';
+export { MemoryDetail } from './MemoryDetail';

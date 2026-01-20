@@ -33,6 +33,10 @@ type SolveOutput struct {
 	ParetoFront []*models.PathCandidate
 }
 
+// MaxToolLoopIterations is the maximum number of LLM-tool loop iterations.
+// This prevents infinite loops when tools keep being called.
+const MaxToolLoopIterations = 5
+
 // SolveWithParetoSearchStrategyEvolution is the use case for finding the best answer
 // for a single query using GEPA (Genetic-Pareto) path search:
 //   - Explores multiple execution paths (branching attempts)
@@ -56,6 +60,13 @@ type SolveWithParetoSearchStrategyEvolution struct {
 
 	// Default configuration (not mutated during execution)
 	config *SolveConfig
+
+	// Optional tool execution support
+	// When toolRunner is non-nil, executePathWithConfig runs a multi-turn agent loop
+	// that actually executes tools and feeds results back to the LLM.
+	// When nil, only single-turn execution capturing tool call intents is performed.
+	toolRunner ports.ToolRunner
+	tools        []*models.Tool // Available tools for LLM to call
 }
 
 // executionContext holds per-execution state to ensure thread-safety.
@@ -115,12 +126,28 @@ func DefaultSolveConfig() *SolveConfig {
 	}
 }
 
-// NewSolveWithParetoSearchStrategyEvolution creates a new SolveWithParetoSearchStrategyEvolution use case.
+// NewSolveWithParetoSearchStrategyEvolution creates a new SolveWithParetoSearchStrategyEvolution use case
+// with tool execution support.
+// Tool execution is the default behavior - the multi-turn agent loop will:
+//  1. Call the LLM with available tools
+//  2. Execute any requested tools via the ToolRunner
+//  3. Feed results back to the LLM
+//  4. Repeat until the LLM provides a final answer (no more tool calls)
+//
+// Parameters:
+//   - llmService: The main LLM service for agent execution
+//   - reflectionLLM: Optional stronger LLM for mutation/reflection (can be nil)
+//   - idGenerator: ID generator for creating unique candidate IDs
+//   - config: Configuration for the search (can be nil, defaults to DefaultSolveConfig)
+//   - toolRunner: Runner for executing tools (can be nil to disable tool execution and use single-turn mode)
+//   - tools: Available tools for the LLM to call (can be nil/empty)
 func NewSolveWithParetoSearchStrategyEvolution(
 	llmService ports.LLMService,
 	reflectionLLM ports.LLMService,
 	idGenerator ports.IDGenerator,
 	config *SolveConfig,
+	toolRunner ports.ToolRunner,
+	tools []*models.Tool,
 ) *SolveWithParetoSearchStrategyEvolution {
 	if config == nil {
 		config = DefaultSolveConfig()
@@ -139,7 +166,32 @@ func NewSolveWithParetoSearchStrategyEvolution(
 		mutator:       mutator,
 		evaluator:     evaluator,
 		config:        config,
+		toolRunner:    toolRunner,
+		tools:         tools,
 	}
+}
+
+// NewSolveWithParetoSearchStrategyEvolutionWithTools is deprecated: use NewSolveWithParetoSearchStrategyEvolution instead.
+// Tool execution is now the default behavior in NewSolveWithParetoSearchStrategyEvolution.
+// This function is kept for backward compatibility but simply delegates to NewSolveWithParetoSearchStrategyEvolution.
+//
+// Deprecated: Use NewSolveWithParetoSearchStrategyEvolution with toolRunner and tools parameters.
+func NewSolveWithParetoSearchStrategyEvolutionWithTools(
+	llmService ports.LLMService,
+	reflectionLLM ports.LLMService,
+	idGenerator ports.IDGenerator,
+	config *SolveConfig,
+	toolRunner ports.ToolRunner,
+	tools []*models.Tool,
+) *SolveWithParetoSearchStrategyEvolution {
+	return NewSolveWithParetoSearchStrategyEvolution(llmService, reflectionLLM, idGenerator, config, toolRunner, tools)
+}
+
+// SetToolRunner sets or updates the tool runner and available tools.
+// This allows enabling/disabling tool execution after construction.
+func (uc *SolveWithParetoSearchStrategyEvolution) SetToolRunner(runner ports.ToolRunner, tools []*models.Tool) {
+	uc.toolRunner = runner
+	uc.tools = tools
 }
 
 // newExecutionContext creates a per-execution context with local copies of mutable state.
@@ -391,8 +443,8 @@ type parallelBranchResult struct {
 	earlyExit     bool
 }
 
-// branchResult holds the result of processing a single branch.
-type branchResult struct {
+// solverBranchResult holds the result of processing a single branch in the solver.
+type solverBranchResult struct {
 	mutated   *models.PathCandidate
 	toolCalls int
 	llmCalls  int
@@ -433,7 +485,7 @@ func (uc *SolveWithParetoSearchStrategyEvolution) processBranchesParallel(
 	sem := make(chan struct{}, maxParallel)
 
 	// Channel to collect results from goroutines
-	resultsChan := make(chan branchResult, len(candidates))
+	resultsChan := make(chan solverBranchResult, len(candidates))
 
 	// Mutex for protecting shared state during budget checks
 	var mu sync.Mutex
@@ -490,7 +542,7 @@ func (uc *SolveWithParetoSearchStrategyEvolution) processBranchesParallel(
 				candidateFeedback = fallbackFeedback
 			}
 
-			brResult := branchResult{
+			brResult := solverBranchResult{
 				llmCalls: 0,
 				success:  false,
 			}
@@ -570,22 +622,19 @@ func (uc *SolveWithParetoSearchStrategyEvolution) processBranchesParallel(
 // executePathWithConfig runs the agent with the candidate's strategy and captures the execution trace.
 // It uses the provided config for timeout settings, ensuring thread-safety.
 //
-// IMPORTANT: This is a single-turn execution that captures the LLM's tool call intents
-// but does NOT actually execute any tools. The trace records what tools the LLM wanted
-// to call (name, arguments) but Result will be nil and Success is optimistically set to true.
+// When toolRunner is nil (default): Performs single-turn execution that captures the LLM's
+// tool call intents but does NOT actually execute any tools. The trace records what tools
+// the LLM wanted to call (name, arguments) but Result will be nil and Success is optimistically
+// set to true.
 //
-// This design means the path search evaluates the LLM's reasoning and tool selection
-// strategy without the overhead or side effects of actual tool execution. For use cases
-// requiring real tool execution, this method would need to be extended with a tool
-// execution loop that:
-//  1. Calls the LLM
-//  2. Executes any requested tools via a ToolExecutor
+// When toolRunner is set: Performs a multi-turn agent loop that:
+//  1. Calls the LLM (with tools if available)
+//  2. Executes any requested tools via the ToolExecutor
 //  3. Feeds results back to the LLM
-//  4. Repeats until the LLM provides a final answer
+//  4. Repeats until the LLM provides a final answer (no more tool calls) or max iterations
 //
-// TODO: To support actual tool execution, inject a ports.ToolExecutor interface and
-// implement a multi-turn agent loop. See internal/ports/services.go for the ToolService
-// interface pattern.
+// This allows the path search to evaluate either the LLM's reasoning strategy (single-turn)
+// or the full execution including tool results (multi-turn).
 func (uc *SolveWithParetoSearchStrategyEvolution) executePathWithConfig(ctx context.Context, query string, candidate *models.PathCandidate, cfg *SolveConfig) (*models.ExecutionTrace, error) {
 	if candidate == nil {
 		return nil, fmt.Errorf("candidate cannot be nil")
@@ -602,7 +651,7 @@ func (uc *SolveWithParetoSearchStrategyEvolution) executePathWithConfig(ctx cont
 	// Build the agent prompt with strategy and accumulated lessons
 	agentPrompt := uc.buildAgentPrompt(candidate, query)
 
-	// Create LLM messages
+	// Create initial LLM messages
 	messages := []ports.LLMMessage{
 		{
 			Role:    "system",
@@ -614,22 +663,41 @@ func (uc *SolveWithParetoSearchStrategyEvolution) executePathWithConfig(ctx cont
 		},
 	}
 
-	// Call LLM with timeout context
-	response, err := uc.llmService.Chat(timeoutCtx, messages)
+	// If no tool executor, fall back to single-turn execution
+	if uc.toolRunner == nil {
+		return uc.executePathSingleTurn(timeoutCtx, messages, agentPrompt, query, startTime, cfg)
+	}
+
+	// Multi-turn execution with tool loop
+	return uc.executePathWithToolLoop(timeoutCtx, messages, agentPrompt, query, startTime, cfg)
+}
+
+// executePathSingleTurn performs single-turn execution without actual tool execution.
+// This is the original behavior - captures tool call intents but doesn't execute them.
+func (uc *SolveWithParetoSearchStrategyEvolution) executePathSingleTurn(ctx context.Context, messages []ports.LLMMessage, agentPrompt, query string, startTime time.Time, cfg *SolveConfig) (*models.ExecutionTrace, error) {
+	var response *ports.LLMResponse
+	var err error
+
+	// Use ChatWithTools if tools are available, otherwise use Chat
+	if len(uc.tools) > 0 {
+		response, err = uc.llmService.ChatWithTools(ctx, messages, uc.tools)
+	} else {
+		response, err = uc.llmService.Chat(ctx, messages)
+	}
+
 	if err != nil {
-		if timeoutCtx.Err() == context.DeadlineExceeded {
+		if ctx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("path execution timed out after %dms: %w", cfg.ExecutionTimeoutMs, err)
 		}
-		if timeoutCtx.Err() == context.Canceled {
+		if ctx.Err() == context.Canceled {
 			return nil, fmt.Errorf("path execution was canceled: %w", err)
 		}
 		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	// Calculate execution duration
 	durationMs := time.Since(startTime).Milliseconds()
 
-	// Parse any tool calls from response
+	// Parse any tool calls from response (not executed, just captured)
 	toolCalls := uc.parseToolCalls(response)
 
 	// Build execution trace
@@ -639,6 +707,111 @@ func (uc *SolveWithParetoSearchStrategyEvolution) executePathWithConfig(ctx cont
 		ReasoningSteps: []string{},
 		FinalAnswer:    response.Content,
 		TotalTokens:    uc.estimateTokens(agentPrompt, response.Content),
+		DurationMs:     durationMs,
+	}
+
+	return trace, nil
+}
+
+// executePathWithToolLoop performs multi-turn execution with actual tool execution.
+// Runs an agent loop: LLM -> tools -> LLM -> tools -> ... -> final answer
+func (uc *SolveWithParetoSearchStrategyEvolution) executePathWithToolLoop(ctx context.Context, messages []ports.LLMMessage, agentPrompt, query string, startTime time.Time, cfg *SolveConfig) (*models.ExecutionTrace, error) {
+	currentMessages := make([]ports.LLMMessage, len(messages))
+	copy(currentMessages, messages)
+
+	var allToolCalls []models.ToolCallRecord
+	var finalAnswer string
+	var totalTokens int
+
+	for iteration := 0; iteration < MaxToolLoopIterations; iteration++ {
+		var response *ports.LLMResponse
+		var err error
+
+		// Use ChatWithTools if tools are available
+		if len(uc.tools) > 0 {
+			response, err = uc.llmService.ChatWithTools(ctx, currentMessages, uc.tools)
+		} else {
+			response, err = uc.llmService.Chat(ctx, currentMessages)
+		}
+
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("path execution timed out after %dms on iteration %d: %w", cfg.ExecutionTimeoutMs, iteration, err)
+			}
+			if ctx.Err() == context.Canceled {
+				return nil, fmt.Errorf("path execution was canceled on iteration %d: %w", iteration, err)
+			}
+			return nil, fmt.Errorf("LLM call failed on iteration %d: %w", iteration, err)
+		}
+
+		// Estimate tokens for this turn
+		totalTokens += uc.estimateTokens("", response.Content)
+
+		// Add assistant response to message history
+		currentMessages = append(currentMessages, ports.LLMMessage{
+			Role:    "assistant",
+			Content: response.Content,
+		})
+
+		// If no tool calls, we're done - this is the final answer
+		if len(response.ToolCalls) == 0 {
+			finalAnswer = response.Content
+			break
+		}
+
+		// Execute each tool call and collect results
+		for _, tc := range response.ToolCalls {
+			toolRecord := models.ToolCallRecord{
+				ToolName:  tc.Name,
+				Arguments: tc.Arguments,
+				Success:   false,
+				Result:    nil,
+				Error:     "",
+			}
+
+			// Execute the tool
+			result, execErr := uc.toolRunner.RunTool(ctx, tc.Name, tc.Arguments)
+
+			if execErr != nil {
+				toolRecord.Success = false
+				toolRecord.Error = execErr.Error()
+				// Add error message to conversation
+				currentMessages = append(currentMessages, ports.LLMMessage{
+					Role:    "tool",
+					Content: fmt.Sprintf("Error executing %s: %s", tc.Name, execErr.Error()),
+				})
+			} else {
+				toolRecord.Success = true
+				toolRecord.Result = result
+				// Add tool result to conversation
+				resultContent := fmt.Sprintf("%v", result)
+				currentMessages = append(currentMessages, ports.LLMMessage{
+					Role:    "tool",
+					Content: resultContent,
+				})
+			}
+
+			allToolCalls = append(allToolCalls, toolRecord)
+		}
+
+		// If this was the last iteration and we still have tool calls, use last response as answer
+		if iteration == MaxToolLoopIterations-1 {
+			finalAnswer = response.Content
+			if finalAnswer == "" {
+				finalAnswer = "Max tool execution iterations reached."
+			}
+		}
+	}
+
+	durationMs := time.Since(startTime).Milliseconds()
+
+	// Build execution trace with all tool calls and results
+	trace := &models.ExecutionTrace{
+		Query:          query,
+		ToolCalls:      allToolCalls,
+		ReasoningSteps: []string{},
+		FinalAnswer:    finalAnswer,
+		TotalTokens:    totalTokens + uc.estimateTokens(agentPrompt, ""),
 		DurationMs:     durationMs,
 	}
 

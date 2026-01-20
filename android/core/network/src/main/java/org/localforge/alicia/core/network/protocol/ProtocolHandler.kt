@@ -3,6 +3,7 @@ package org.localforge.alicia.core.network.protocol
 import org.localforge.alicia.core.network.protocol.bodies.*
 import timber.log.Timber
 import org.msgpack.core.MessagePack
+import org.msgpack.core.MessagePacker
 import org.msgpack.core.MessageUnpacker
 import java.io.ByteArrayOutputStream
 
@@ -106,7 +107,7 @@ class ProtocolHandler {
         }
     }
 
-    private fun packBody(packer: org.msgpack.core.MessagePacker, type: MessageType, body: Any) {
+    private fun packBody(packer: MessagePacker, type: MessageType, body: Any) {
         when (type) {
             MessageType.ERROR_MESSAGE -> packErrorMessage(packer, body as ErrorMessageBody)
             MessageType.USER_MESSAGE -> packUserMessage(packer, body as UserMessageBody)
@@ -124,6 +125,30 @@ class ProtocolHandler {
             MessageType.COMMENTARY -> packCommentary(packer, body as CommentaryBody)
             MessageType.AUDIO_CHUNK -> packAudioChunk(packer, body as AudioChunkBody)
             MessageType.CONTROL_VARIATION -> packControlVariation(packer, body as ControlVariationBody)
+            // Sync types (17-18)
+            MessageType.SYNC_REQUEST -> packSyncRequest(packer, body as SyncRequestBody)
+            MessageType.SYNC_RESPONSE -> packSyncResponse(packer, body as SyncResponseBody)
+            // Feedback types (20-25)
+            MessageType.FEEDBACK -> packFeedback(packer, body as FeedbackBody)
+            MessageType.FEEDBACK_CONFIRMATION -> packFeedbackConfirmation(packer, body as FeedbackConfirmationBody)
+            MessageType.USER_NOTE -> packUserNote(packer, body as UserNoteBody)
+            MessageType.NOTE_CONFIRMATION -> packNoteConfirmation(packer, body as NoteConfirmationBody)
+            MessageType.MEMORY_ACTION -> packMemoryAction(packer, body as MemoryActionBody)
+            MessageType.MEMORY_CONFIRMATION -> packMemoryConfirmation(packer, body as MemoryConfirmationBody)
+            // Server info types (26-28)
+            MessageType.SERVER_INFO -> packServerInfo(packer, body as ServerInfoBody)
+            MessageType.SESSION_STATS -> packSessionStats(packer, body as SessionStatsBody)
+            MessageType.CONVERSATION_UPDATE -> packConversationUpdate(packer, body as ConversationUpdateBody)
+            // Optimization types (30-33)
+            MessageType.DIMENSION_PREFERENCE -> packDimensionPreference(packer, body as DimensionPreferenceBody)
+            MessageType.ELITE_OPTIONS -> packEliteOptions(packer, body as EliteOptionsBody)
+            MessageType.OPTIMIZATION_PROGRESS -> packOptimizationProgress(packer, body as OptimizationProgressBody)
+            MessageType.ELITE_SELECT -> packEliteSelect(packer, body as EliteSelectBody)
+            // Subscription types (40-43)
+            MessageType.SUBSCRIBE -> packSubscribe(packer, body as SubscribeBody)
+            MessageType.UNSUBSCRIBE -> packUnsubscribe(packer, body as UnsubscribeBody)
+            MessageType.SUBSCRIBE_ACK -> packSubscribeAck(packer, body as SubscribeAckBody)
+            MessageType.UNSUBSCRIBE_ACK -> packUnsubscribeAck(packer, body as UnsubscribeAckBody)
         }
     }
 
@@ -145,6 +170,30 @@ class ProtocolHandler {
             MessageType.COMMENTARY -> unpackCommentary(unpacker)
             MessageType.AUDIO_CHUNK -> unpackAudioChunk(unpacker)
             MessageType.CONTROL_VARIATION -> unpackControlVariation(unpacker)
+            // Sync types (17-18)
+            MessageType.SYNC_REQUEST -> unpackSyncRequest(unpacker)
+            MessageType.SYNC_RESPONSE -> unpackSyncResponse(unpacker)
+            // Feedback types (20-25)
+            MessageType.FEEDBACK -> unpackFeedback(unpacker)
+            MessageType.FEEDBACK_CONFIRMATION -> unpackFeedbackConfirmation(unpacker)
+            MessageType.USER_NOTE -> unpackUserNote(unpacker)
+            MessageType.NOTE_CONFIRMATION -> unpackNoteConfirmation(unpacker)
+            MessageType.MEMORY_ACTION -> unpackMemoryAction(unpacker)
+            MessageType.MEMORY_CONFIRMATION -> unpackMemoryConfirmation(unpacker)
+            // Server info types (26-28)
+            MessageType.SERVER_INFO -> unpackServerInfo(unpacker)
+            MessageType.SESSION_STATS -> unpackSessionStats(unpacker)
+            MessageType.CONVERSATION_UPDATE -> unpackConversationUpdate(unpacker)
+            // Optimization types (30-33)
+            MessageType.DIMENSION_PREFERENCE -> unpackDimensionPreference(unpacker)
+            MessageType.ELITE_OPTIONS -> unpackEliteOptions(unpacker)
+            MessageType.OPTIMIZATION_PROGRESS -> unpackOptimizationProgress(unpacker)
+            MessageType.ELITE_SELECT -> unpackEliteSelect(unpacker)
+            // Subscription types (40-43)
+            MessageType.SUBSCRIBE -> unpackSubscribe(unpacker)
+            MessageType.UNSUBSCRIBE -> unpackUnsubscribe(unpacker)
+            MessageType.SUBSCRIBE_ACK -> unpackSubscribeAck(unpacker)
+            MessageType.UNSUBSCRIBE_ACK -> unpackUnsubscribeAck(unpacker)
         }
     }
 
@@ -746,6 +795,501 @@ class ProtocolHandler {
             mode = VariationType.fromString(map["mode"] as? String)
                 ?: throw IllegalArgumentException("Invalid mode"),
             newContent = map["newContent"] as? String
+        )
+    }
+
+    // ========== Sync types (17-18) ==========
+
+    private fun packSyncRequest(packer: MessagePacker, body: SyncRequestBody) {
+        packer.packMapHeader(2)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("fromSequence")
+        if (body.fromSequence != null) packer.packInt(body.fromSequence) else packer.packNil()
+    }
+
+    private fun unpackSyncRequest(unpacker: MessageUnpacker): SyncRequestBody {
+        val map = unpackMap(unpacker)
+        return SyncRequestBody(
+            conversationId = map["conversationId"] as String,
+            fromSequence = (map["fromSequence"] as? Number)?.toInt()
+        )
+    }
+
+    private fun packSyncResponse(packer: MessagePacker, body: SyncResponseBody) {
+        packer.packMapHeader(3)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("messages")
+        packer.packArrayHeader(body.messages.size)
+        body.messages.forEach { packMap(packer, it) }
+        packer.packString("lastSequence").packInt(body.lastSequence)
+    }
+
+    private fun unpackSyncResponse(unpacker: MessageUnpacker): SyncResponseBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        return SyncResponseBody(
+            conversationId = map["conversationId"] as String,
+            messages = (map["messages"] as? List<*>)?.mapNotNull { it as? Map<String, Any> } ?: emptyList(),
+            lastSequence = (map["lastSequence"] as Number).toInt()
+        )
+    }
+
+    // ========== Feedback types (20-25) ==========
+
+    private fun packFeedback(packer: MessagePacker, body: FeedbackBody) {
+        packer.packMapHeader(9)
+        packer.packString("id").packString(body.id)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("messageId").packString(body.messageId)
+        packer.packString("targetType").packString(body.targetType.value)
+        packer.packString("targetId").packString(body.targetId)
+        packer.packString("vote").packString(body.vote.value)
+        packer.packString("quickFeedback")
+        if (body.quickFeedback != null) packer.packString(body.quickFeedback) else packer.packNil()
+        packer.packString("note")
+        if (body.note != null) packer.packString(body.note) else packer.packNil()
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackFeedback(unpacker: MessageUnpacker): FeedbackBody {
+        val map = unpackMap(unpacker)
+        return FeedbackBody(
+            id = map["id"] as String,
+            conversationId = map["conversationId"] as String,
+            messageId = map["messageId"] as String,
+            targetType = FeedbackTargetType.fromString(map["targetType"] as? String) ?: FeedbackTargetType.MESSAGE,
+            targetId = map["targetId"] as String,
+            vote = VoteType.fromString(map["vote"] as? String) ?: VoteType.UP,
+            quickFeedback = map["quickFeedback"] as? String,
+            note = map["note"] as? String,
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    private fun packFeedbackConfirmation(packer: MessagePacker, body: FeedbackConfirmationBody) {
+        packer.packMapHeader(5)
+        packer.packString("feedbackId").packString(body.feedbackId)
+        packer.packString("targetType").packString(body.targetType.value)
+        packer.packString("targetId").packString(body.targetId)
+        packer.packString("aggregates")
+        packer.packMapHeader(if (body.aggregates.specialVotes != null) 3 else 2)
+        packer.packString("upvotes").packInt(body.aggregates.upvotes)
+        packer.packString("downvotes").packInt(body.aggregates.downvotes)
+        if (body.aggregates.specialVotes != null) {
+            packer.packString("specialVotes")
+            packer.packMapHeader(body.aggregates.specialVotes.size)
+            body.aggregates.specialVotes.forEach { (key, value) ->
+                packer.packString(key).packInt(value)
+            }
+        }
+        packer.packString("userVote")
+        if (body.userVote != null) packer.packString(body.userVote.value) else packer.packNil()
+    }
+
+    private fun unpackFeedbackConfirmation(unpacker: MessageUnpacker): FeedbackConfirmationBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        val aggregatesMap = map["aggregates"] as? Map<String, Any?> ?: emptyMap()
+        @Suppress("UNCHECKED_CAST")
+        val specialVotes = (aggregatesMap["specialVotes"] as? Map<String, Any?>)?.mapValues { (it.value as Number).toInt() }
+        return FeedbackConfirmationBody(
+            feedbackId = map["feedbackId"] as String,
+            targetType = FeedbackTargetType.fromString(map["targetType"] as? String) ?: FeedbackTargetType.MESSAGE,
+            targetId = map["targetId"] as String,
+            aggregates = FeedbackAggregates(
+                upvotes = (aggregatesMap["upvotes"] as? Number)?.toInt() ?: 0,
+                downvotes = (aggregatesMap["downvotes"] as? Number)?.toInt() ?: 0,
+                specialVotes = specialVotes
+            ),
+            userVote = VoteType.fromString(map["userVote"] as? String)
+        )
+    }
+
+    private fun packUserNote(packer: MessagePacker, body: UserNoteBody) {
+        packer.packMapHeader(6)
+        packer.packString("id").packString(body.id)
+        packer.packString("messageId").packString(body.messageId)
+        packer.packString("content").packString(body.content)
+        packer.packString("category").packString(body.category.value)
+        packer.packString("action").packString(body.action.value)
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackUserNote(unpacker: MessageUnpacker): UserNoteBody {
+        val map = unpackMap(unpacker)
+        return UserNoteBody(
+            id = map["id"] as String,
+            messageId = map["messageId"] as String,
+            content = map["content"] as String,
+            category = NoteCategory.fromString(map["category"] as? String) ?: NoteCategory.GENERAL,
+            action = NoteAction.fromString(map["action"] as? String) ?: NoteAction.CREATE,
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    private fun packNoteConfirmation(packer: MessagePacker, body: NoteConfirmationBody) {
+        packer.packMapHeader(3)
+        packer.packString("noteId").packString(body.noteId)
+        packer.packString("messageId").packString(body.messageId)
+        packer.packString("success").packBoolean(body.success)
+    }
+
+    private fun unpackNoteConfirmation(unpacker: MessageUnpacker): NoteConfirmationBody {
+        val map = unpackMap(unpacker)
+        return NoteConfirmationBody(
+            noteId = map["noteId"] as String,
+            messageId = map["messageId"] as String,
+            success = map["success"] as Boolean
+        )
+    }
+
+    private fun packMemoryAction(packer: MessagePacker, body: MemoryActionBody) {
+        packer.packMapHeader(4)
+        packer.packString("id").packString(body.id)
+        packer.packString("action").packString(body.action.value)
+        packer.packString("memory")
+        if (body.memory != null) {
+            packer.packMapHeader(if (body.memory.pinned != null) 3 else 2)
+            packer.packString("content").packString(body.memory.content)
+            packer.packString("category").packString(body.memory.category.value)
+            if (body.memory.pinned != null) {
+                packer.packString("pinned").packBoolean(body.memory.pinned)
+            }
+        } else {
+            packer.packNil()
+        }
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackMemoryAction(unpacker: MessageUnpacker): MemoryActionBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        val memoryMap = map["memory"] as? Map<String, Any?>
+        val memory = if (memoryMap != null) {
+            MemoryData(
+                content = memoryMap["content"] as String,
+                category = ProtocolMemoryCategory.fromString(memoryMap["category"] as? String) ?: ProtocolMemoryCategory.FACT,
+                pinned = memoryMap["pinned"] as? Boolean
+            )
+        } else null
+        return MemoryActionBody(
+            id = map["id"] as String,
+            action = MemoryActionType.fromString(map["action"] as? String) ?: MemoryActionType.CREATE,
+            memory = memory,
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    private fun packMemoryConfirmation(packer: MessagePacker, body: MemoryConfirmationBody) {
+        packer.packMapHeader(3)
+        packer.packString("memoryId").packString(body.memoryId)
+        packer.packString("action").packString(body.action.value)
+        packer.packString("success").packBoolean(body.success)
+    }
+
+    private fun unpackMemoryConfirmation(unpacker: MessageUnpacker): MemoryConfirmationBody {
+        val map = unpackMap(unpacker)
+        return MemoryConfirmationBody(
+            memoryId = map["memoryId"] as String,
+            action = MemoryActionType.fromString(map["action"] as? String) ?: MemoryActionType.CREATE,
+            success = map["success"] as Boolean
+        )
+    }
+
+    // ========== Server info types (26-28) ==========
+
+    private fun packServerInfo(packer: MessagePacker, body: ServerInfoBody) {
+        packer.packMapHeader(3)
+        packer.packString("connection")
+        packer.packMapHeader(2)
+        packer.packString("status").packString(body.connection.status.value)
+        packer.packString("latency").packLong(body.connection.latency)
+        packer.packString("model")
+        packer.packMapHeader(2)
+        packer.packString("name").packString(body.model.name)
+        packer.packString("provider").packString(body.model.provider)
+        packer.packString("mcpServers")
+        packer.packArrayHeader(body.mcpServers.size)
+        body.mcpServers.forEach { server ->
+            packer.packMapHeader(2)
+            packer.packString("name").packString(server.name)
+            packer.packString("status").packString(server.status.value)
+        }
+    }
+
+    private fun unpackServerInfo(unpacker: MessageUnpacker): ServerInfoBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        val connectionMap = map["connection"] as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val modelMap = map["model"] as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val mcpServersList = map["mcpServers"] as? List<Map<String, Any?>> ?: emptyList()
+        return ServerInfoBody(
+            connection = ConnectionInfoBody(
+                status = ProtocolConnectionStatus.fromString(connectionMap["status"] as? String) ?: ProtocolConnectionStatus.DISCONNECTED,
+                latency = (connectionMap["latency"] as Number).toLong()
+            ),
+            model = ModelInfoBody(
+                name = modelMap["name"] as String,
+                provider = modelMap["provider"] as String
+            ),
+            mcpServers = mcpServersList.map { serverMap ->
+                MCPServerInfoBody(
+                    name = serverMap["name"] as String,
+                    status = ProtocolMCPServerStatus.fromString(serverMap["status"] as? String) ?: ProtocolMCPServerStatus.DISCONNECTED
+                )
+            }
+        )
+    }
+
+    private fun packSessionStats(packer: MessagePacker, body: SessionStatsBody) {
+        packer.packMapHeader(4)
+        packer.packString("messageCount").packInt(body.messageCount)
+        packer.packString("toolCallCount").packInt(body.toolCallCount)
+        packer.packString("memoriesUsed").packInt(body.memoriesUsed)
+        packer.packString("sessionDuration").packLong(body.sessionDuration)
+    }
+
+    private fun unpackSessionStats(unpacker: MessageUnpacker): SessionStatsBody {
+        val map = unpackMap(unpacker)
+        return SessionStatsBody(
+            messageCount = (map["messageCount"] as Number).toInt(),
+            toolCallCount = (map["toolCallCount"] as Number).toInt(),
+            memoriesUsed = (map["memoriesUsed"] as Number).toInt(),
+            sessionDuration = (map["sessionDuration"] as Number).toLong()
+        )
+    }
+
+    private fun packConversationUpdate(packer: MessagePacker, body: ConversationUpdateBody) {
+        packer.packMapHeader(4)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("title")
+        if (body.title != null) packer.packString(body.title) else packer.packNil()
+        packer.packString("status")
+        if (body.status != null) packer.packString(body.status) else packer.packNil()
+        packer.packString("updatedAt").packString(body.updatedAt)
+    }
+
+    private fun unpackConversationUpdate(unpacker: MessageUnpacker): ConversationUpdateBody {
+        val map = unpackMap(unpacker)
+        return ConversationUpdateBody(
+            conversationId = map["conversationId"] as String,
+            title = map["title"] as? String,
+            status = map["status"] as? String,
+            updatedAt = map["updatedAt"] as String
+        )
+    }
+
+    // ========== Optimization types (30-33) ==========
+
+    private fun packDimensionPreference(packer: MessagePacker, body: DimensionPreferenceBody) {
+        packer.packMapHeader(4)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("weights")
+        packer.packMapHeader(7)
+        packer.packString("successRate").packFloat(body.weights.successRate)
+        packer.packString("quality").packFloat(body.weights.quality)
+        packer.packString("efficiency").packFloat(body.weights.efficiency)
+        packer.packString("robustness").packFloat(body.weights.robustness)
+        packer.packString("generalization").packFloat(body.weights.generalization)
+        packer.packString("diversity").packFloat(body.weights.diversity)
+        packer.packString("innovation").packFloat(body.weights.innovation)
+        packer.packString("preset")
+        if (body.preset != null) packer.packString(body.preset.value) else packer.packNil()
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackDimensionPreference(unpacker: MessageUnpacker): DimensionPreferenceBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        val weightsMap = map["weights"] as Map<String, Any?>
+        return DimensionPreferenceBody(
+            conversationId = map["conversationId"] as String,
+            weights = DimensionWeights(
+                successRate = (weightsMap["successRate"] as Number).toFloat(),
+                quality = (weightsMap["quality"] as Number).toFloat(),
+                efficiency = (weightsMap["efficiency"] as Number).toFloat(),
+                robustness = (weightsMap["robustness"] as Number).toFloat(),
+                generalization = (weightsMap["generalization"] as Number).toFloat(),
+                diversity = (weightsMap["diversity"] as Number).toFloat(),
+                innovation = (weightsMap["innovation"] as Number).toFloat()
+            ),
+            preset = DimensionPreset.fromString(map["preset"] as? String),
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    private fun packEliteOptions(packer: MessagePacker, body: EliteOptionsBody) {
+        packer.packMapHeader(4)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("elites")
+        packer.packArrayHeader(body.elites.size)
+        body.elites.forEach { elite ->
+            packer.packMapHeader(5)
+            packer.packString("id").packString(elite.id)
+            packer.packString("label").packString(elite.label)
+            packer.packString("scores")
+            packer.packMapHeader(7)
+            packer.packString("successRate").packFloat(elite.scores.successRate)
+            packer.packString("quality").packFloat(elite.scores.quality)
+            packer.packString("efficiency").packFloat(elite.scores.efficiency)
+            packer.packString("robustness").packFloat(elite.scores.robustness)
+            packer.packString("generalization").packFloat(elite.scores.generalization)
+            packer.packString("diversity").packFloat(elite.scores.diversity)
+            packer.packString("innovation").packFloat(elite.scores.innovation)
+            packer.packString("description").packString(elite.description)
+            packer.packString("bestFor").packString(elite.bestFor)
+        }
+        packer.packString("currentEliteId").packString(body.currentEliteId)
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackEliteOptions(unpacker: MessageUnpacker): EliteOptionsBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        val elitesList = (map["elites"] as? List<Map<String, Any?>>) ?: emptyList()
+        return EliteOptionsBody(
+            conversationId = map["conversationId"] as String,
+            elites = elitesList.map { eliteMap ->
+                @Suppress("UNCHECKED_CAST")
+                val scoresMap = eliteMap["scores"] as Map<String, Any?>
+                EliteSummary(
+                    id = eliteMap["id"] as String,
+                    label = eliteMap["label"] as String,
+                    scores = DimensionScores(
+                        successRate = (scoresMap["successRate"] as Number).toFloat(),
+                        quality = (scoresMap["quality"] as Number).toFloat(),
+                        efficiency = (scoresMap["efficiency"] as Number).toFloat(),
+                        robustness = (scoresMap["robustness"] as Number).toFloat(),
+                        generalization = (scoresMap["generalization"] as Number).toFloat(),
+                        diversity = (scoresMap["diversity"] as Number).toFloat(),
+                        innovation = (scoresMap["innovation"] as Number).toFloat()
+                    ),
+                    description = eliteMap["description"] as String,
+                    bestFor = eliteMap["bestFor"] as String
+                )
+            },
+            currentEliteId = map["currentEliteId"] as String,
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    private fun packOptimizationProgress(packer: MessagePacker, body: OptimizationProgressBody) {
+        packer.packMapHeader(9)
+        packer.packString("runId").packString(body.runId)
+        packer.packString("status").packString(body.status.value)
+        packer.packString("iteration").packInt(body.iteration)
+        packer.packString("maxIterations").packInt(body.maxIterations)
+        packer.packString("currentScore").packFloat(body.currentScore)
+        packer.packString("bestScore").packFloat(body.bestScore)
+        packer.packString("dimensionScores")
+        if (body.dimensionScores != null) {
+            packer.packMapHeader(body.dimensionScores.size)
+            body.dimensionScores.forEach { (key, value) ->
+                packer.packString(key).packFloat(value)
+            }
+        } else {
+            packer.packNil()
+        }
+        packer.packString("message")
+        if (body.message != null) packer.packString(body.message) else packer.packNil()
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackOptimizationProgress(unpacker: MessageUnpacker): OptimizationProgressBody {
+        val map = unpackMap(unpacker)
+        @Suppress("UNCHECKED_CAST")
+        val dimensionScores = (map["dimensionScores"] as? Map<String, Any?>)?.mapValues { (it.value as Number).toFloat() }
+        return OptimizationProgressBody(
+            runId = map["runId"] as String,
+            status = OptimizationStatus.fromString(map["status"] as? String) ?: OptimizationStatus.PENDING,
+            iteration = (map["iteration"] as Number).toInt(),
+            maxIterations = (map["maxIterations"] as Number).toInt(),
+            currentScore = (map["currentScore"] as Number).toFloat(),
+            bestScore = (map["bestScore"] as Number).toFloat(),
+            dimensionScores = dimensionScores,
+            message = map["message"] as? String,
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    private fun packEliteSelect(packer: MessagePacker, body: EliteSelectBody) {
+        packer.packMapHeader(3)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("eliteId").packString(body.eliteId)
+        packer.packString("timestamp").packLong(body.timestamp)
+    }
+
+    private fun unpackEliteSelect(unpacker: MessageUnpacker): EliteSelectBody {
+        val map = unpackMap(unpacker)
+        return EliteSelectBody(
+            conversationId = map["conversationId"] as String,
+            eliteId = map["eliteId"] as String,
+            timestamp = (map["timestamp"] as Number).toLong()
+        )
+    }
+
+    // ========== Subscription types (40-43) ==========
+
+    private fun packSubscribe(packer: MessagePacker, body: SubscribeBody) {
+        packer.packMapHeader(2)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("fromSequence")
+        if (body.fromSequence != null) packer.packInt(body.fromSequence) else packer.packNil()
+    }
+
+    private fun unpackSubscribe(unpacker: MessageUnpacker): SubscribeBody {
+        val map = unpackMap(unpacker)
+        return SubscribeBody(
+            conversationId = map["conversationId"] as String,
+            fromSequence = (map["fromSequence"] as? Number)?.toInt()
+        )
+    }
+
+    private fun packUnsubscribe(packer: MessagePacker, body: UnsubscribeBody) {
+        packer.packMapHeader(1)
+        packer.packString("conversationId").packString(body.conversationId)
+    }
+
+    private fun unpackUnsubscribe(unpacker: MessageUnpacker): UnsubscribeBody {
+        val map = unpackMap(unpacker)
+        return UnsubscribeBody(
+            conversationId = map["conversationId"] as String
+        )
+    }
+
+    private fun packSubscribeAck(packer: MessagePacker, body: SubscribeAckBody) {
+        packer.packMapHeader(4)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("success").packBoolean(body.success)
+        packer.packString("error")
+        if (body.error != null) packer.packString(body.error) else packer.packNil()
+        packer.packString("missedMessages")
+        if (body.missedMessages != null) packer.packInt(body.missedMessages) else packer.packNil()
+    }
+
+    private fun unpackSubscribeAck(unpacker: MessageUnpacker): SubscribeAckBody {
+        val map = unpackMap(unpacker)
+        return SubscribeAckBody(
+            conversationId = map["conversationId"] as String,
+            success = map["success"] as Boolean,
+            error = map["error"] as? String,
+            missedMessages = (map["missedMessages"] as? Number)?.toInt()
+        )
+    }
+
+    private fun packUnsubscribeAck(packer: MessagePacker, body: UnsubscribeAckBody) {
+        packer.packMapHeader(2)
+        packer.packString("conversationId").packString(body.conversationId)
+        packer.packString("success").packBoolean(body.success)
+    }
+
+    private fun unpackUnsubscribeAck(unpacker: MessageUnpacker): UnsubscribeAckBody {
+        val map = unpackMap(unpacker)
+        return UnsubscribeAckBody(
+            conversationId = map["conversationId"] as String,
+            success = map["success"] as Boolean
         )
     }
 }

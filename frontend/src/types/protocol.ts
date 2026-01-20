@@ -48,6 +48,8 @@ export enum MessageType {
   Unsubscribe = 41,
   SubscribeAck = 42,
   UnsubscribeAck = 43,
+  // Branch notification message type
+  BranchUpdate = 50,
 }
 
 export enum Severity {
@@ -419,6 +421,23 @@ export interface SubscribeAck {
 export interface UnsubscribeAck {
   conversationId: string;
   success: boolean;
+}
+
+// Sibling info for branch updates
+export interface SiblingInfo {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
+// BranchUpdate (Type 50) - notification when new sibling branches are created
+export interface BranchUpdate {
+  conversationId: string;
+  parentMessageId: string;
+  newSibling: SiblingInfo;
+  allSiblings: SiblingInfo[];
+  totalCount: number;
+  timestamp: number;
 }
 
 // Common features

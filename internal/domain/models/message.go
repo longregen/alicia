@@ -190,3 +190,15 @@ func (m *Message) IsStreaming() bool {
 func (m *Message) IsFailed() bool {
 	return m.CompletionStatus == CompletionStatusFailed
 }
+
+// SoftDelete marks the message as deleted by setting DeletedAt
+func (m *Message) SoftDelete() {
+	now := time.Now().UTC()
+	m.DeletedAt = &now
+	m.UpdatedAt = now
+}
+
+// IsDeleted returns true if the message has been soft deleted
+func (m *Message) IsDeleted() bool {
+	return m.DeletedAt != nil
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/longregen/alicia/internal/adapters/mcp"
+	"github.com/longregen/alicia/internal/adapters/tools"
 	"github.com/longregen/alicia/internal/config"
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/llm"
@@ -80,6 +81,12 @@ func boolStatus(b bool) string {
 		return "configured"
 	}
 	return "not configured"
+}
+
+// initNativeTools initializes and registers native tools (web, garden)
+func initNativeTools(ctx context.Context, toolService ports.ToolService, pool *pgxpool.Pool) error {
+	log.Println("Initializing native tools...")
+	return tools.BootstrapWithDefaults(ctx, toolService, pool)
 }
 
 // closeMCPAdapter closes the MCP adapter connections

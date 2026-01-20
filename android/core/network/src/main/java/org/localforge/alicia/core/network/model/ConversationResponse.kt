@@ -71,3 +71,18 @@ data class ConversationPreferences(
     @Json(name = "enable_memory")
     val enableMemory: Boolean? = null
 )
+
+/**
+ * Request to update a conversation
+ */
+@JsonClass(generateAdapter = true)
+data class UpdateConversationRequest(
+    @Json(name = "title")
+    val title: String? = null,
+
+    @Json(name = "status")
+    val status: String? = null,
+
+    @Json(name = "preferences")
+    val preferences: ConversationPreferences? = null
+)

@@ -39,6 +39,7 @@ type DefaultMessageDispatcher struct {
 	continueResponseUseCase     ports.ContinueResponseUseCase
 	editUserMessageUseCase      ports.EditUserMessageUseCase
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
+	synthesizeSpeechUseCase     ports.SynthesizeSpeechUseCase
 }
 
 // NewDefaultMessageDispatcher creates a new message dispatcher
@@ -65,6 +66,7 @@ func NewDefaultMessageDispatcher(
 	continueResponseUseCase ports.ContinueResponseUseCase,
 	editUserMessageUseCase ports.EditUserMessageUseCase,
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
+	synthesizeSpeechUseCase ports.SynthesizeSpeechUseCase,
 ) *DefaultMessageDispatcher {
 	return &DefaultMessageDispatcher{
 		protocolHandler:             protocolHandler,
@@ -89,6 +91,7 @@ func NewDefaultMessageDispatcher(
 		continueResponseUseCase:     continueResponseUseCase,
 		editUserMessageUseCase:      editUserMessageUseCase,
 		editAssistantMessageUseCase: editAssistantMessageUseCase,
+		synthesizeSpeechUseCase:     synthesizeSpeechUseCase,
 	}
 }
 

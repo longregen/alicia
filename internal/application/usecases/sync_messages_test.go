@@ -126,6 +126,10 @@ func (m *syncMockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID 
 	return []*models.Message{}, nil
 }
 
+func (m *syncMockMessageRepo) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	return m.GetChainFromTip(ctx, tipMessageID)
+}
+
 func (m *syncMockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	return []*models.Message{}, nil
 }

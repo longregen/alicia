@@ -103,7 +103,8 @@ func (d *DefaultMessageDispatcher) handleUserMessage(ctx context.Context, envelo
 					Message:       output.AssistantMessage,
 					StreamChannel: output.StreamChannel,
 				}
-				_, err = d.processStreamingResponse(genCtx, userMsg.ConversationID, streamOutput)
+				// skipStartAnswer=false because SendMessageUseCase doesn't use a Notifier
+				_, err = d.processStreamingResponse(genCtx, userMsg.ConversationID, streamOutput, false)
 				if err != nil {
 					log.Printf("Error processing streaming response: %v", err)
 				}
@@ -144,6 +145,7 @@ func (d *DefaultMessageDispatcher) processUserInput(
 	if d.processUserMessageUseCase != nil {
 		processInput := &ports.ProcessUserMessageInput{
 			ConversationID: conversationID,
+			MessageID:      messageID,
 			TextContent:    textContent,
 			PreviousID:     previousID,
 		}
@@ -274,7 +276,8 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 
 		// Handle streaming vs non-streaming responses
 		if input.EnableStreaming && output.StreamChannel != nil {
-			_, err = d.processStreamingResponse(genCtx, conversationID, output)
+			// skipStartAnswer=true because we use a Notifier which already sent StartAnswer
+			_, err = d.processStreamingResponse(genCtx, conversationID, output, true)
 			if err != nil {
 				return
 			}
@@ -287,11 +290,14 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 	}()
 }
 
-// processStreamingResponse handles streaming response chunks and sends protocol messages
+// processStreamingResponse handles streaming response chunks and sends protocol messages.
+// If skipStartAnswer is true, the StartAnswer message is not sent (useful when the caller
+// already sent it via a Notifier).
 func (d *DefaultMessageDispatcher) processStreamingResponse(
 	ctx context.Context,
 	conversationID string,
 	output *ports.GenerateResponseOutput,
+	skipStartAnswer bool,
 ) (string, error) {
 	// Validate output.Message is not nil before accessing it
 	if output.Message == nil {
@@ -302,20 +308,23 @@ func (d *DefaultMessageDispatcher) processStreamingResponse(
 	}
 
 	// Send StartAnswer message to indicate streaming response is starting
-	startAnswer := &protocol.StartAnswer{
-		ID:             output.Message.ID,
-		PreviousID:     output.Message.PreviousID,
-		ConversationID: conversationID,
-		AnswerType:     protocol.AnswerTypeText,
-	}
+	// (unless it was already sent by the Notifier)
+	if !skipStartAnswer {
+		startAnswer := &protocol.StartAnswer{
+			ID:             output.Message.ID,
+			PreviousID:     output.Message.PreviousID,
+			ConversationID: conversationID,
+			AnswerType:     protocol.AnswerTypeText,
+		}
 
-	if err := d.protocolHandler.SendEnvelope(ctx, &protocol.Envelope{
-		ConversationID: conversationID,
-		Type:           protocol.TypeStartAnswer,
-		Body:           startAnswer,
-	}); err != nil {
-		log.Printf("Failed to send StartAnswer: %v", err)
-		return "", err
+		if err := d.protocolHandler.SendEnvelope(ctx, &protocol.Envelope{
+			ConversationID: conversationID,
+			Type:           protocol.TypeStartAnswer,
+			Body:           startAnswer,
+		}); err != nil {
+			log.Printf("Failed to send StartAnswer: %v", err)
+			return "", err
+		}
 	}
 
 	// Process the streaming response chunks and send AssistantSentence messages
@@ -380,7 +389,7 @@ func (d *DefaultMessageDispatcher) processStreamingResponse(
 			}
 
 			// Synthesize and send audio for this sentence
-			d.synthesizeAndSendAudioChunk(ctx, conversationID, chunk.Text, int32(chunk.Sequence), chunk.IsFinal)
+			d.synthesizeAndSendAudioChunk(ctx, conversationID, output.Message.ID, chunk.SentenceID, chunk.Text, int32(chunk.Sequence), chunk.IsFinal)
 
 			previousID = chunk.SentenceID
 		}
@@ -478,39 +487,43 @@ func (d *DefaultMessageDispatcher) sendNonStreamingResponse(
 
 // synthesizeAndSendAudioChunk synthesizes speech for a sentence and sends it as an AudioChunk protocol message
 // isLast indicates whether this is the final sentence of the response
-func (d *DefaultMessageDispatcher) synthesizeAndSendAudioChunk(ctx context.Context, conversationID string, text string, sequence int32, isLast bool) {
-	if d.ttsService == nil || text == "" {
+func (d *DefaultMessageDispatcher) synthesizeAndSendAudioChunk(ctx context.Context, conversationID string, messageID string, sentenceID string, text string, sequence int32, isLast bool) {
+	if d.synthesizeSpeechUseCase == nil || text == "" {
 		return
 	}
 
 	log.Printf("Synthesizing speech for sentence %d: %d characters (isLast: %v)", sequence, len(text), isLast)
 
-	// Get TTS options
-	ttsOptions := &ports.TTSOptions{
-		OutputFormat: "opus", // Use opus for protocol messages (better compression)
+	// Use the SynthesizeSpeech use case to synthesize and store audio
+	input := &ports.SynthesizeSpeechInput{
+		Text:            text,
+		MessageID:       messageID,
+		SentenceID:      sentenceID,
+		OutputFormat:    "opus", // Use opus for protocol messages (better compression)
+		EnableStreaming: false,
 	}
 
-	result, err := d.ttsService.Synthesize(ctx, text, ttsOptions)
+	output, err := d.synthesizeSpeechUseCase.Execute(ctx, input)
 	if err != nil {
 		log.Printf("Failed to synthesize speech for sentence %d: %v", sequence, err)
 		// Don't fail the whole operation, just skip audio for this sentence
 		return
 	}
 
-	if result == nil || len(result.Audio) == 0 {
+	if output == nil || len(output.AudioData) == 0 {
 		log.Printf("No audio data received for sentence %d", sequence)
 		return
 	}
 
-	log.Printf("Synthesized %d bytes of audio for sentence %d (duration: %dms)", len(result.Audio), sequence, result.DurationMs)
+	log.Printf("Synthesized %d bytes of audio for sentence %d (duration: %dms)", len(output.AudioData), sequence, output.DurationMs)
 
 	// Send AudioChunk protocol message
 	audioChunk := &protocol.AudioChunk{
 		ConversationID: conversationID,
-		Format:         result.Format,
+		Format:         output.Format,
 		Sequence:       sequence,
-		DurationMs:     int32(result.DurationMs),
-		Data:           result.Audio,
+		DurationMs:     int32(output.DurationMs),
+		Data:           output.AudioData,
 		IsLast:         isLast,
 		Timestamp:      uint64(time.Now().UnixMilli()),
 	}
@@ -528,7 +541,7 @@ func (d *DefaultMessageDispatcher) synthesizeAndSendAudioChunk(ctx context.Conte
 	log.Printf("Sent AudioChunk for sentence %d", sequence)
 
 	// Also send to LiveKit audio track for voice conversations
-	if err := d.protocolHandler.SendAudio(ctx, result.Audio, result.Format); err != nil {
+	if err := d.protocolHandler.SendAudio(ctx, output.AudioData, output.Format); err != nil {
 		log.Printf("Failed to send audio to LiveKit track for sentence %d: %v", sequence, err)
 		// Non-fatal, audio chunk was already sent via protocol
 	}
@@ -883,7 +896,8 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 					Message:       output.NewMessage,
 					StreamChannel: output.StreamChannel,
 				}
-				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+				// skipStartAnswer=false because RegenerateResponseUseCase doesn't use a Notifier
+				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput, false)
 				if err != nil {
 					log.Printf("Error processing streaming response: %v", err)
 				}
@@ -966,7 +980,8 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 			log.Printf("Regenerated response for user message: %s", previousID)
 
 			if output.StreamChannel != nil {
-				_, _ = d.processStreamingResponse(genCtx, conversationID, output)
+				// skipStartAnswer=true because we use a Notifier which already sent StartAnswer
+				_, _ = d.processStreamingResponse(genCtx, conversationID, output, true)
 			} else if output.Message != nil {
 				d.sendNonStreamingResponse(genCtx, conversationID, output)
 			}
@@ -1135,6 +1150,9 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 				log.Printf("Failed to send updated user message: %v", err)
 			}
 
+			// Send BranchUpdate notification so frontend can update the branch navigator
+			d.sendBranchUpdate(genCtx, output.UpdatedMessage)
+
 			// Send memory traces for retrieved memories
 			if len(output.RelevantMemories) > 0 {
 				d.sendMemoryTraces(genCtx, output.UpdatedMessage.ID, output.RelevantMemories)
@@ -1146,7 +1164,8 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 					Message:       output.AssistantMessage,
 					StreamChannel: output.StreamChannel,
 				}
-				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+				// skipStartAnswer=false because EditUserMessageUseCase doesn't use a Notifier
+				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput, false)
 				if err != nil {
 					log.Printf("Error processing streaming response: %v", err)
 				}
@@ -1276,7 +1295,8 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 					Message:       output.TargetMessage,
 					StreamChannel: output.StreamChannel,
 				}
-				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput)
+				// skipStartAnswer=false because ContinueResponseUseCase doesn't use a Notifier
+				_, err = d.processStreamingResponse(genCtx, targetMessage.ConversationID, streamOutput, false)
 				if err != nil {
 					log.Printf("Error processing streaming response: %v", err)
 				}
@@ -1411,6 +1431,68 @@ func (d *DefaultMessageDispatcher) sendMemoryTraces(ctx context.Context, message
 		log.Printf("Sent memory trace: memory=%s, message=%s, relevance=%.2f",
 			memory.ID, messageID, memory.Importance)
 	}
+}
+
+// sendBranchUpdate sends a BranchUpdate notification when a new sibling message is created.
+// This allows the frontend to update the branch navigator UI without requiring a manual refresh.
+func (d *DefaultMessageDispatcher) sendBranchUpdate(ctx context.Context, newMessage *models.Message) {
+	if newMessage == nil || newMessage.PreviousID == "" {
+		// No parent message means no siblings to notify about
+		return
+	}
+
+	// Fetch all siblings (messages with the same PreviousID)
+	siblings, err := d.messageRepo.GetSiblings(ctx, newMessage.ID)
+	if err != nil {
+		log.Printf("Failed to get siblings for branch update: %v", err)
+		return
+	}
+
+	// If there's only one message (the new one), no need to send branch update
+	// (no other messages exist that need to know about siblings)
+	if len(siblings) <= 1 {
+		return
+	}
+
+	// Convert siblings to protocol format
+	allSiblings := make([]protocol.SiblingInfo, 0, len(siblings))
+	for _, sibling := range siblings {
+		allSiblings = append(allSiblings, protocol.SiblingInfo{
+			ID:        sibling.ID,
+			Content:   sibling.Contents,
+			CreatedAt: sibling.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	// Create the BranchUpdate message
+	branchUpdate := &protocol.BranchUpdate{
+		ConversationID:  newMessage.ConversationID,
+		ParentMessageID: newMessage.PreviousID,
+		NewSibling: protocol.SiblingInfo{
+			ID:        newMessage.ID,
+			Content:   newMessage.Contents,
+			CreatedAt: newMessage.CreatedAt.Format(time.RFC3339),
+		},
+		AllSiblings: allSiblings,
+		TotalCount:  len(siblings),
+		Timestamp:   time.Now().UnixMilli(),
+	}
+
+	// Send via protocol handler
+	envelope := &protocol.Envelope{
+		ConversationID: newMessage.ConversationID,
+		Type:           protocol.TypeBranchUpdate,
+		Body:           branchUpdate,
+	}
+
+	if err := d.protocolHandler.SendEnvelope(ctx, envelope); err != nil {
+		log.Printf("Failed to send branch update: %v", err)
+		// Non-fatal - continue even if branch update fails
+		return
+	}
+
+	log.Printf("Sent branch update: conversation=%s, parent=%s, newSibling=%s, totalSiblings=%d",
+		newMessage.ConversationID, newMessage.PreviousID, newMessage.ID, len(siblings))
 }
 
 // handleErrorMessage processes error messages from clients

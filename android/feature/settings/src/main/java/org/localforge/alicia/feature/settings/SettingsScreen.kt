@@ -15,7 +15,8 @@ import org.localforge.alicia.feature.settings.components.*
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
-    onNavigateToMCPSettings: () -> Unit = {}
+    onNavigateToMCPSettings: () -> Unit = {},
+    onNavigateToOptimizationSettings: () -> Unit = {}
 ) {
     val settings by viewModel.settings.collectAsState()
 
@@ -95,6 +96,99 @@ fun SettingsScreen(
                         valueRange = 0.5f..2.0f,
                         onValueChange = { viewModel.setSpeechRate(it) },
                         valueLabel = { String.format(java.util.Locale.US, "%.1fx", it) }
+                    )
+
+                    SwitchSetting(
+                        title = "Audio Output",
+                        subtitle = "Enable voice responses from Alicia",
+                        checked = settings.audioOutputEnabled,
+                        onCheckedChange = { viewModel.setAudioOutputEnabled(it) }
+                    )
+                }
+            }
+
+            // Response Settings
+            item {
+                SettingsSection(title = "Response") {
+                    ResponseLengthSelector(
+                        selectedLength = settings.responseLength,
+                        onLengthSelected = { viewModel.setResponseLength(it) }
+                    )
+
+                    ButtonSetting(
+                        title = "Response Optimization",
+                        subtitle = "Configure dimension weights and response style",
+                        buttonText = "Configure",
+                        onClick = onNavigateToOptimizationSettings
+                    )
+                }
+            }
+
+            // Memory Settings
+            item {
+                SettingsSection(title = "Memory") {
+                    SwitchSetting(
+                        title = "Auto-pin important memories",
+                        subtitle = "Automatically pin memories marked as important",
+                        checked = settings.autoPinMemories,
+                        onCheckedChange = { viewModel.setAutoPinMemories(it) }
+                    )
+
+                    SwitchSetting(
+                        title = "Confirm before deleting",
+                        subtitle = "Show confirmation dialog when deleting memories",
+                        checked = settings.confirmDeleteMemories,
+                        onCheckedChange = { viewModel.setConfirmDeleteMemories(it) }
+                    )
+
+                    SwitchSetting(
+                        title = "Show relevance scores",
+                        subtitle = "Display relevance scores on memory cards",
+                        checked = settings.showRelevanceScores,
+                        onCheckedChange = { viewModel.setShowRelevanceScores(it) }
+                    )
+                }
+            }
+
+            // Appearance Settings
+            item {
+                SettingsSection(title = "Appearance") {
+                    ThemeSelector(
+                        selectedTheme = settings.theme,
+                        onThemeSelected = { viewModel.setTheme(it) }
+                    )
+
+                    SwitchSetting(
+                        title = "Compact mode",
+                        subtitle = "Use smaller spacing and fonts",
+                        checked = settings.compactMode,
+                        onCheckedChange = { viewModel.setCompactMode(it) }
+                    )
+
+                    SwitchSetting(
+                        title = "Reduce motion",
+                        subtitle = "Minimize animations for accessibility",
+                        checked = settings.reduceMotion,
+                        onCheckedChange = { viewModel.setReduceMotion(it) }
+                    )
+                }
+            }
+
+            // Notifications Settings
+            item {
+                SettingsSection(title = "Notifications") {
+                    SwitchSetting(
+                        title = "Sound notifications",
+                        subtitle = "Play sounds for notifications",
+                        checked = settings.soundNotifications,
+                        onCheckedChange = { viewModel.setSoundNotifications(it) }
+                    )
+
+                    SwitchSetting(
+                        title = "Message previews",
+                        subtitle = "Show message content in notifications",
+                        checked = settings.messagePreviews,
+                        onCheckedChange = { viewModel.setMessagePreviews(it) }
                     )
                 }
             }

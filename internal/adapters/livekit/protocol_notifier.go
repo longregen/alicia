@@ -162,12 +162,28 @@ func (n *ProtocolNotifier) NotifySentence(id, previousID, conversationID string,
 	}
 }
 
-// NotifyGenerationComplete sends a final AssistantMessage when generation completes
+// NotifyGenerationComplete sends a final AssistantMessage when generation completes.
+// This signals to the frontend that streaming is done and provides the final content.
 func (n *ProtocolNotifier) NotifyGenerationComplete(messageID, conversationID string, content string) {
-	// The streaming already sends sentences, so completion is primarily for
-	// signaling that the message is done. We could send the full AssistantMessage
-	// here if needed for non-streaming clients, but the streaming flow handles this.
 	log.Printf("Generation completed for message %s", messageID)
+
+	// Send the complete AssistantMessage to signal completion
+	// The frontend uses this to finalize the message state
+	assistantMsg := &protocol.AssistantMessage{
+		ID:             messageID,
+		ConversationID: conversationID,
+		Content:        content,
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: conversationID,
+		Type:           protocol.TypeAssistantMessage,
+		Body:           assistantMsg,
+	}
+
+	if err := n.protocolHandler.SendEnvelope(n.ctx, envelope); err != nil {
+		log.Printf("Failed to send AssistantMessage on completion: %v", err)
+	}
 }
 
 // NotifyGenerationFailed logs the failure (error handling is done via the stream)

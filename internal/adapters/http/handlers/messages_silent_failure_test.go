@@ -13,15 +13,15 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-// TestMessagesHandler_Send_SendMessageFailure verifies that send message
-// failures are broadcast to WebSocket subscribers as error events.
-func TestMessagesHandler_Send_SendMessageFailure(t *testing.T) {
+// TestMessagesHandler_Send_ProcessUserMessageFailure verifies that process user message
+// failures are returned as HTTP errors (since agent-based processing requires this to succeed).
+func TestMessagesHandler_Send_ProcessUserMessageFailure(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
 
 	// Mock use case that returns an error
-	sendMessageUseCase := newMockSendMessageUseCase()
-	sendMessageUseCase.err = errors.New("LLM API rate limit exceeded")
+	processUseCase := newMockProcessUserMessageUseCase()
+	processUseCase.err = errors.New("database error")
 
 	// Create WebSocket broadcaster to capture events
 	wsBroadcaster := NewWebSocketBroadcaster()
@@ -31,8 +31,8 @@ func TestMessagesHandler_Send_SendMessageFailure(t *testing.T) {
 		messageRepo,
 		nil, // toolUseRepo
 		nil, // memoryUsageRepo
-		sendMessageUseCase,
-		nil, // processUserMessageUseCase
+		nil, // sendMessageUseCase (deprecated)
+		processUseCase,
 		nil, // editAssistantMessageUseCase
 		nil, // editUserMessageUseCase
 		nil, // regenerateResponseUseCase
@@ -59,80 +59,25 @@ func TestMessagesHandler_Send_SendMessageFailure(t *testing.T) {
 
 	handler.Send(rr, req)
 
-	// The request should be accepted (async processing)
-	if rr.Code != http.StatusAccepted {
-		t.Fatalf("expected status 202, got %d", rr.Code)
+	// The request should fail since processUserMessageUseCase failed
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
 	}
 
-	// Note: Testing actual WebSocket broadcasts requires a more complex setup
-	// with actual WebSocket connections. This test verifies the handler
-	// constructs correctly and processes the request.
-	t.Log("Handler processed request successfully")
+	t.Log("Handler correctly returned error for processUserMessage failure")
 }
 
-// TestMessagesHandler_Send_SendMessageNilOutput verifies that nil output
-// cases are handled correctly.
-func TestMessagesHandler_Send_SendMessageNilOutput(t *testing.T) {
-	conversationRepo := newMockConversationRepo()
-	messageRepo := newMockMessageRepo()
-
-	// Mock use case that returns nil output (unexpected behavior)
-	sendMessageUseCase := newMockSendMessageUseCase()
-	sendMessageUseCase.output = nil
-	sendMessageUseCase.err = nil
-
-	wsBroadcaster := NewWebSocketBroadcaster()
-
-	handler := NewMessagesHandler(
-		conversationRepo,
-		messageRepo,
-		nil, // toolUseRepo
-		nil, // memoryUsageRepo
-		sendMessageUseCase,
-		nil, // processUserMessageUseCase
-		nil, // editAssistantMessageUseCase
-		nil, // editUserMessageUseCase
-		nil, // regenerateResponseUseCase
-		nil, // continueResponseUseCase
-		wsBroadcaster,
-		nil, // idGen
-	)
-
-	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
-	conversationRepo.conversations["ac_test123"] = conv
-
-	body := `{"contents": "What's the weather?"}`
-	req := httptest.NewRequest("POST", "/api/v1/conversations/ac_test123/messages", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "ac_test123")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	req = addUserContext(req, "test-user")
-
-	handler.Send(rr, req)
-
-	if rr.Code != http.StatusAccepted {
-		t.Fatalf("expected status 202, got %d", rr.Code)
-	}
-
-	t.Log("Handler processed nil output case successfully")
-}
-
-// TestMessagesHandler_Send_WithWorkingBroadcasters verifies that when send message
-// SUCCEEDS, the response IS properly broadcast to subscribers.
-func TestMessagesHandler_Send_WithWorkingBroadcasters(t *testing.T) {
+// TestMessagesHandler_Send_WithProcessUserMessageSuccess verifies that when process user message
+// SUCCEEDS, the request is accepted and forwarded to the agent.
+func TestMessagesHandler_Send_WithProcessUserMessageSuccess(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
 
 	// Mock use case that succeeds
-	sendMessageUseCase := newMockSendMessageUseCase()
+	processUseCase := newMockProcessUserMessageUseCase()
 	userMsg := models.NewUserMessage("am_user", "ac_test123", 1, "Hi")
-	assistantMsg := models.NewAssistantMessage("am_response", "ac_test123", 2, "Hello! How can I help?")
-	sendMessageUseCase.output = &ports.SendMessageOutput{
-		UserMessage:      userMsg,
-		AssistantMessage: assistantMsg,
+	processUseCase.output = &ports.ProcessUserMessageOutput{
+		Message: userMsg,
 	}
 
 	wsBroadcaster := NewWebSocketBroadcaster()
@@ -142,8 +87,8 @@ func TestMessagesHandler_Send_WithWorkingBroadcasters(t *testing.T) {
 		messageRepo,
 		nil, // toolUseRepo
 		nil, // memoryUsageRepo
-		sendMessageUseCase,
-		nil, // processUserMessageUseCase
+		nil, // sendMessageUseCase (deprecated)
+		processUseCase,
 		nil, // editAssistantMessageUseCase
 		nil, // editUserMessageUseCase
 		nil, // regenerateResponseUseCase
@@ -167,9 +112,56 @@ func TestMessagesHandler_Send_WithWorkingBroadcasters(t *testing.T) {
 
 	handler.Send(rr, req)
 
+	// Request should be accepted - response generation will be handled by agent
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("expected status 202, got %d", rr.Code)
 	}
 
-	t.Log("Handler processed successful send message case")
+	t.Log("Handler processed successful send message case - forwarded to agent")
+}
+
+// TestMessagesHandler_Send_WithoutProcessUserMessageUseCase verifies that when
+// processUserMessageUseCase is nil, the handler returns service unavailable.
+func TestMessagesHandler_Send_WithoutProcessUserMessageUseCase(t *testing.T) {
+	conversationRepo := newMockConversationRepo()
+	messageRepo := newMockMessageRepo()
+
+	wsBroadcaster := NewWebSocketBroadcaster()
+
+	handler := NewMessagesHandler(
+		conversationRepo,
+		messageRepo,
+		nil, // toolUseRepo
+		nil, // memoryUsageRepo
+		nil, // sendMessageUseCase (deprecated)
+		nil, // processUserMessageUseCase - nil to test error handling
+		nil, // editAssistantMessageUseCase
+		nil, // editUserMessageUseCase
+		nil, // regenerateResponseUseCase
+		nil, // continueResponseUseCase
+		wsBroadcaster,
+		nil, // idGen
+	)
+
+	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
+	conversationRepo.conversations["ac_test123"] = conv
+
+	body := `{"contents": "Hi"}`
+	req := httptest.NewRequest("POST", "/api/v1/conversations/ac_test123/messages", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "ac_test123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addUserContext(req, "test-user")
+
+	handler.Send(rr, req)
+
+	// Request should fail with 503 Service Unavailable
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 503, got %d", rr.Code)
+	}
+
+	t.Log("Handler correctly returned 503 when processUserMessageUseCase is nil")
 }

@@ -242,6 +242,10 @@ func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID stri
 	return chain, nil
 }
 
+func (m *mockMessageRepo) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	return m.GetChainFromTip(ctx, tipMessageID)
+}
+
 func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	msg, ok := m.store[messageID]
 	if !ok {

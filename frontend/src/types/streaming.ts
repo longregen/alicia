@@ -133,4 +133,7 @@ export interface ConversationStoreState {
 
   // Conversation context
   currentConversationId: ConversationId | null;
+
+  // Refresh request counter - incremented when messages need to be reloaded (e.g., branch switch)
+  refreshRequestCounter: number;
 }

@@ -42,16 +42,24 @@ class LiveKitManager @Inject constructor(
 
     // Callbacks
     private var dataReceivedCallback: ((Envelope) -> Unit)? = null
+    private var audioOutputEnabledCallback: (() -> Boolean)? = null
 
     /**
-     * Connection states
+     * Connection states - matches web frontend's connection state model
      */
     sealed class ConnectionState {
         object Disconnected : ConnectionState()
         object Connecting : ConnectionState()
         object Connected : ConnectionState()
+        object Reconnecting : ConnectionState()
         data class Failed(val error: String) : ConnectionState()
     }
+
+    // Track last seen stanza ID for message replay on reconnection
+    private var lastSeenStanzaId: String? = null
+
+    // Callback for when reconnection occurs (to send Configuration message)
+    private var onReconnectedCallback: (() -> Unit)? = null
 
     /**
      * Connect to a LiveKit room
@@ -87,27 +95,38 @@ class LiveKitManager @Inject constructor(
                         }
 
                         is RoomEvent.FailedToConnect -> {
+                            val errorMessage = mapConnectionError(event.error)
                             Timber.e("LiveKit: Failed to connect: ${event.error.message}")
-                            _connectionState.value = ConnectionState.Failed(event.error.message ?: "Connection failed")
+                            _connectionState.value = ConnectionState.Failed(errorMessage)
                         }
 
                         is RoomEvent.Reconnected -> {
                             Timber.i("LiveKit: Reconnected to room")
                             _connectionState.value = ConnectionState.Connected
+                            // Re-publish audio tracks after reconnection (matching web behavior)
+                            setupAudioTracks()
+                            // Notify callback to send Configuration message with lastSeenStanzaId
+                            onReconnectedCallback?.invoke()
                         }
 
                         is RoomEvent.Reconnecting -> {
                             Timber.i("LiveKit: Reconnecting...")
-                            _connectionState.value = ConnectionState.Connecting
+                            _connectionState.value = ConnectionState.Reconnecting
                         }
 
                         is RoomEvent.TrackSubscribed -> {
                             Timber.d("LiveKit: Track subscribed: ${event.track.name}")
                             if (event.track is AudioTrack) {
-                                // Start audio playback for agent's voice
-                                val audioTrack = event.track as AudioTrack
-                                audioTrack.start()
-                                Timber.d("LiveKit: Started audio playback from ${event.participant.identity}")
+                                // Check if audio output is enabled before playing
+                                val shouldPlayAudio = audioOutputEnabledCallback?.invoke() ?: true
+                                if (shouldPlayAudio) {
+                                    // Start audio playback for agent's voice
+                                    val audioTrack = event.track as AudioTrack
+                                    audioTrack.start()
+                                    Timber.d("LiveKit: Started audio playback from ${event.participant.identity}")
+                                } else {
+                                    Timber.d("LiveKit: Audio output disabled, skipping playback from ${event.participant.identity}")
+                                }
                             }
                         }
 
@@ -116,6 +135,8 @@ class LiveKitManager @Inject constructor(
                             scope.launch {
                                 try {
                                     val envelope = protocolHandler.decode(event.data)
+                                    // Track last seen stanza ID for message replay on reconnection
+                                    envelope.stanzaId?.let { lastSeenStanzaId = it }
                                     dataReceivedCallback?.invoke(envelope)
                                 } catch (e: Exception) {
                                     Timber.e(e, "Failed to decode protocol message")
@@ -137,8 +158,9 @@ class LiveKitManager @Inject constructor(
             setupAudioTracks()
 
         } catch (e: Exception) {
-            Timber.e(e, "Failed to connect to LiveKit")
-            _connectionState.value = ConnectionState.Failed(e.message ?: "Connection failed")
+            val errorMessage = mapConnectionError(e)
+            Timber.e(e, "Failed to connect to LiveKit: $errorMessage")
+            _connectionState.value = ConnectionState.Failed(errorMessage)
             throw e
         }
     }
@@ -189,6 +211,7 @@ class LiveKitManager @Inject constructor(
 
     /**
      * Send a protocol message to the room
+     * Uses reliable data channel (matching web's reliable: true)
      *
      * @param envelope Protocol envelope to send
      */
@@ -196,7 +219,11 @@ class LiveKitManager @Inject constructor(
         scope.launch {
             try {
                 val data = protocolHandler.encode(envelope)
-                room?.localParticipant?.publishData(data)
+                // Use reliable data channel (matching web's { reliable: true })
+                room?.localParticipant?.publishData(
+                    data,
+                    io.livekit.android.room.participant.DataPublishReliability.RELIABLE
+                )
                 Timber.d("LiveKit: Sent data: ${envelope.type}")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to send data")
@@ -214,6 +241,36 @@ class LiveKitManager @Inject constructor(
     }
 
     /**
+     * Set callback for when reconnection occurs.
+     * Caller should send a Configuration message with lastSeenStanzaId to trigger message replay.
+     *
+     * @param callback Function to invoke after successful reconnection
+     */
+    fun onReconnected(callback: () -> Unit) {
+        onReconnectedCallback = callback
+    }
+
+    /**
+     * Set callback to check if audio output is enabled.
+     * Called before playing remote audio tracks. If not set, defaults to true (always play).
+     *
+     * @param callback Function that returns true if audio output should be played
+     */
+    fun setAudioOutputEnabledCallback(callback: () -> Boolean) {
+        audioOutputEnabledCallback = callback
+    }
+
+    /**
+     * Get the last seen stanza ID for message replay on reconnection.
+     * This should be sent in the Configuration message after reconnection.
+     *
+     * @return The last seen stanza ID, or null if no messages received yet
+     */
+    fun getLastSeenStanzaId(): String? {
+        return lastSeenStanzaId
+    }
+
+    /**
      * Mute or unmute the local microphone.
      *
      * When muted, audio data stops being transmitted to the server and remote
@@ -228,6 +285,32 @@ class LiveKitManager @Inject constructor(
             Timber.d("LiveKit: Microphone ${if (muted) "muted" else "unmuted"}")
         } ?: run {
             Timber.w("LiveKit: Cannot mute - not connected to room")
+        }
+    }
+
+    /**
+     * Map connection errors to user-friendly messages.
+     * Matches web frontend's error message patterns for consistency.
+     */
+    private fun mapConnectionError(error: Throwable): String {
+        val message = error.message ?: "Unknown error"
+        return when {
+            message.contains("Network", ignoreCase = true) ||
+            message.contains("UnknownHostException", ignoreCase = true) ||
+            message.contains("ConnectException", ignoreCase = true) ->
+                "Network error: Unable to reach the voice service. Please check your connection."
+
+            message.contains("token", ignoreCase = true) ||
+            message.contains("auth", ignoreCase = true) ||
+            message.contains("401") ||
+            message.contains("403") ->
+                "Authentication failed. Please try creating a new conversation."
+
+            message.contains("timeout", ignoreCase = true) ||
+            message.contains("SocketTimeoutException", ignoreCase = true) ->
+                "Connection timeout. The voice service may be unavailable."
+
+            else -> message
         }
     }
 

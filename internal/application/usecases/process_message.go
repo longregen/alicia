@@ -87,7 +87,11 @@ func (uc *ProcessUserMessage) Execute(ctx context.Context, input *ports.ProcessU
 		return nil, fmt.Errorf("failed to get next sequence number: %w", err)
 	}
 
-	messageID := uc.idGenerator.GenerateMessageID()
+	// Use provided message ID if available, otherwise generate a new one
+	messageID := input.MessageID
+	if messageID == "" {
+		messageID = uc.idGenerator.GenerateMessageID()
+	}
 	message := models.NewUserMessage(messageID, input.ConversationID, sequenceNumber, textContent)
 
 	// Set previous_id to the current conversation tip for message branching

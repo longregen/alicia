@@ -5,6 +5,7 @@ import { useAsync } from './useAsync';
 import { useSync } from './useSync';
 import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
+import { useBranchStore } from '../stores/branchStore';
 
 // Generate a temporary local ID for optimistic updates
 function generateLocalId(): string {
@@ -17,9 +18,16 @@ export function useMessages(conversationId: string | null) {
   // These are not stored in SQLite, so we keep them in memory
   // Using a ref to avoid circular dependency in refreshMessages
   const serverMessagesCacheRef = useRef<Map<string, Message>>(new Map());
+  // Ref to access current conversationId in callbacks without re-creating them
+  const conversationIdRef = useRef<string | null>(conversationId);
+  conversationIdRef.current = conversationId;
+
   const { clearMessages: clearProtocolMessages } = useMessageContext();
   const [sending, setSending] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
+
+  // Branch store for initializing sibling data from fetched messages
+  const { initializeFromMessages, clearBranches } = useBranchStore();
 
   // Callback to refresh UI when WebSocket sync occurs
   const handleSyncComplete = useCallback(() => {
@@ -74,9 +82,17 @@ export function useMessages(conversationId: string | null) {
       });
     });
 
+    // Initialize branch store from fetched messages.
+    // The backend now returns all siblings at each branch point,
+    // so initializeFromMessages will detect them by grouping on previous_id.
+    const convId = conversationIdRef.current;
+    if (convId) {
+      initializeFromMessages(convId, data);
+    }
+
     // Refresh from SQLite to get merged state
     setRefreshCounter(prev => prev + 1);
-  }, []);
+  }, [initializeFromMessages]);
 
   // Fetch messages with loading and error handling
   const {
@@ -97,18 +113,20 @@ export function useMessages(conversationId: string | null) {
       setMessages([]);
       serverMessagesCacheRef.current = new Map();
       clearProtocolMessages();
+      clearBranches();
       return;
     }
 
-    // Clear cache when switching conversations
+    // Clear cache and branch state when switching conversations
     serverMessagesCacheRef.current = new Map();
+    clearBranches();
 
     // Load from SQLite immediately
     refreshMessages();
 
     // Then fetch from server to sync
     fetchMessages(conversationId);
-  }, [conversationId, fetchMessages, clearProtocolMessages, refreshMessages]);
+  }, [conversationId, fetchMessages, clearProtocolMessages, clearBranches, refreshMessages]);
 
   // Refresh from SQLite when counter changes
   useEffect(() => {
@@ -168,6 +186,13 @@ export function useMessages(conversationId: string | null) {
     }
   }, [conversationId]);
 
+  // Refetch messages from server - used after branch switching
+  const refetch = useCallback(() => {
+    if (conversationId) {
+      fetchMessages(conversationId);
+    }
+  }, [conversationId, fetchMessages]);
+
   return {
     messages,
     loading,
@@ -179,7 +204,9 @@ export function useMessages(conversationId: string | null) {
     lastSyncTime,
     syncError,
     syncNow,
-    // Manual refresh
+    // Manual refresh (from SQLite only)
     refresh: () => setRefreshCounter(prev => prev + 1),
+    // Refetch from server - use after branch switching
+    refetch,
   };
 }

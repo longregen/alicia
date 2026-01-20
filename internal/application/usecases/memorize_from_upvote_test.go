@@ -82,6 +82,10 @@ func (m *mockMessageRepoForUpvote) GetChainFromTip(ctx context.Context, tipMessa
 	return nil, nil
 }
 
+func (m *mockMessageRepoForUpvote) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	return m.GetChainFromTip(ctx, tipMessageID)
+}
+
 func (m *mockMessageRepoForUpvote) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	return nil, nil
 }

@@ -1284,7 +1284,9 @@ func (s *OptimizationService) SearchPaths(ctx context.Context, query string, con
 	}
 
 	// Create PathSearchController with the service's LLM and optional reflection LLM
-	controller := NewPathSearchController(s.llmService, s.reflectionLM, s.idGenerator, serviceConfig)
+	// Note: Tool execution is disabled (nil toolRunner) as this service method doesn't have access to tools.
+	// For full tool execution support, use the SolveWithParetoSearchStrategyEvolution use case directly.
+	controller := NewPathSearchController(s.llmService, s.reflectionLM, s.idGenerator, serviceConfig, nil, nil)
 
 	// Execute the path search using the controller's Search method
 	result, err := controller.Search(ctx, query, config)

@@ -24,14 +24,14 @@ type StreamAudioResponseInput struct {
 // It bridges the gap between sentence streaming from the LLM and audio publishing
 type StreamAudioResponse struct {
 	ttsService       ports.TTSService
-	synthesizeSpeech *SynthesizeSpeech
+	synthesizeSpeech ports.SynthesizeSpeechUseCase
 	codec            *livekit.Codec
 }
 
 // NewStreamAudioResponse creates a new StreamAudioResponse use case
 func NewStreamAudioResponse(
 	ttsService ports.TTSService,
-	synthesizeSpeech *SynthesizeSpeech,
+	synthesizeSpeech ports.SynthesizeSpeechUseCase,
 ) *StreamAudioResponse {
 	return &StreamAudioResponse{
 		ttsService:       ttsService,
@@ -62,7 +62,7 @@ func (uc *StreamAudioResponse) StreamSentenceAudio(
 	}
 
 	// Synthesize speech for this sentence
-	synthesisInput := &SynthesizeSpeechInput{
+	synthesisInput := &ports.SynthesizeSpeechInput{
 		Text:            text,
 		MessageID:       messageID,
 		SentenceID:      sentenceID,

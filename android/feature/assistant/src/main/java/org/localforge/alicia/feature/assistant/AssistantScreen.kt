@@ -9,12 +9,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.localforge.alicia.feature.assistant.components.*
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
 import org.localforge.alicia.core.common.ui.AppIcons
 
 /**
@@ -38,7 +37,8 @@ fun AssistantScreen(
     conversationId: String? = null,
     viewModel: AssistantViewModel = hiltViewModel(),
     onNavigateToConversations: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onOpenDrawer: () -> Unit = {}
 ) {
     // Load specific conversation if provided
     LaunchedEffect(conversationId) {
@@ -61,12 +61,23 @@ fun AssistantScreen(
     val memoryTraces by viewModel.memoryTraces.collectAsState()
     val commentaries by viewModel.commentaries.collectAsState()
 
+    // Branch states for message versioning
+    val branchStates by viewModel.branchStates.collectAsState()
+
     val listState = rememberLazyListState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Alicia") },
+                navigationIcon = {
+                    IconButton(onClick = onOpenDrawer) {
+                        Icon(
+                            imageVector = AppIcons.Menu,
+                            contentDescription = "Open menu"
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.toggleInputMode() }) {
                         Icon(
@@ -94,6 +105,8 @@ fun AssistantScreen(
             )
         }
     ) { paddingValues ->
+        val clipboardManager = LocalClipboardManager.current
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -128,24 +141,43 @@ fun AssistantScreen(
 
                     items(messages.reversed()) { message ->
                         val isLatest = message == messages.lastOrNull()
+
+                        // Note: Siblings are now fetched from server automatically in ViewModel
+                        // when messages are loaded, so no initialization is needed here
+
                         MessageBubble(
                             message = message,
                             toolUsages = toolUsages,
                             isLatestMessage = isLatest,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            isStreaming = isLatest && isGenerating,
+                            branchState = branchStates[message.id],
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            onEdit = { messageId, newContent ->
+                                viewModel.editMessage(messageId, newContent)
+                            },
+                            onVote = { messageId, isUpvote ->
+                                viewModel.voteOnMessage(messageId, isUpvote)
+                            },
+                            onToolVote = { toolUseId, isUpvote ->
+                                viewModel.voteOnToolUse(toolUseId, isUpvote)
+                            },
+                            onCopy = { content ->
+                                clipboardManager.setText(AnnotatedString(content))
+                            },
+                            onBranchNavigate = { messageId, direction ->
+                                viewModel.navigateBranch(messageId, direction)
+                            }
                         )
                     }
                 }
 
-                // Response controls (stop/regenerate) - shown in voice mode only
-                if (inputMode == InputMode.Voice) {
-                    ResponseControls(
-                        isGenerating = isGenerating,
-                        hasMessages = messages.isNotEmpty(),
-                        onStop = { viewModel.stopGeneration() },
-                        onRegenerate = { viewModel.regenerateResponse() }
-                    )
-                }
+                // Response controls (stop/regenerate) - shown in both modes
+                ResponseControls(
+                    isGenerating = isGenerating,
+                    hasMessages = messages.isNotEmpty(),
+                    onStop = { viewModel.stopGeneration() },
+                    onRegenerate = { viewModel.regenerateResponse() }
+                )
 
                 // Input area - conditional based on mode
                 when (inputMode) {
@@ -174,50 +206,16 @@ fun AssistantScreen(
                         )
                     }
                     InputMode.Text -> {
-                        // Text input field
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = textInput,
-                                onValueChange = { viewModel.updateTextInput(it) },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("Type a message...") },
-                                enabled = !isSendingMessage,
-                                maxLines = 4,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
-                                ),
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                    onSend = {
-                                        if (textInput.isNotBlank()) {
-                                            viewModel.sendTextMessage()
-                                        }
-                                    }
-                                )
-                            )
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            IconButton(
-                                onClick = { viewModel.sendTextMessage() },
-                                enabled = !isSendingMessage && textInput.isNotBlank()
-                            ) {
-                                if (isSendingMessage) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = AppIcons.Send,
-                                        contentDescription = "Send"
-                                    )
-                                }
-                            }
-                        }
+                        // Text input area matching web's InputArea.tsx layout
+                        InputArea(
+                            textInput = textInput,
+                            onTextInputChange = { viewModel.updateTextInput(it) },
+                            onSend = { viewModel.sendTextMessage() },
+                            onVoiceClick = { viewModel.toggleInputMode() },
+                            disabled = isSendingMessage,
+                            placeholder = "Type a message...",
+                            conversationId = conversationId
+                        )
                     }
                 }
             }

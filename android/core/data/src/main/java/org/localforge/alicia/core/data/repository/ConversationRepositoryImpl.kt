@@ -14,8 +14,10 @@ import org.localforge.alicia.core.domain.model.MessageRole
 import org.localforge.alicia.core.domain.model.SyncStatus
 import org.localforge.alicia.core.domain.repository.ConversationRepository
 import org.localforge.alicia.core.network.api.AliciaApiService
+import org.localforge.alicia.core.network.model.SwitchBranchRequest
 import org.localforge.alicia.core.network.model.SyncMessageItem
 import org.localforge.alicia.core.network.model.SyncMessagesRequest
+import org.localforge.alicia.core.network.model.UpdateConversationRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -113,6 +115,18 @@ class ConversationRepositoryImpl @Inject constructor(
             val conversation = conversationDao.getConversationByIdSuspend(conversationId)
                 ?: return Result.failure(IllegalArgumentException("Conversation not found"))
 
+            // Sync to server first (matching web frontend behavior)
+            try {
+                apiService.updateConversation(
+                    conversationId,
+                    UpdateConversationRequest(title = title)
+                )
+            } catch (e: Exception) {
+                // Network errors are expected in offline-first mode; log and proceed with local update
+                logger.w("Failed to update conversation $conversationId on server, proceeding with local update", e)
+            }
+
+            // Update local database
             val updated = conversation.copy(
                 title = title,
                 updatedAt = System.currentTimeMillis()
@@ -286,6 +300,41 @@ class ConversationRepositoryImpl @Inject constructor(
                 Result.failure(Exception("Failed to send message: ${response.code()} ${response.message()}"))
             }
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ========== Branch/Sibling Operations ==========
+
+    override suspend fun getMessageSiblings(messageId: String): Result<List<Message>> {
+        return try {
+            val response = apiService.getMessageSiblings(messageId)
+
+            if (response.isSuccessful && response.body() != null) {
+                val siblings = response.body()!!.messages.map { it.toDomain() }
+                Result.success(siblings)
+            } else {
+                Result.failure(Exception("Failed to get siblings: ${response.code()} ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            logger.e("Failed to get siblings for message $messageId", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun switchBranch(conversationId: String, tipMessageId: String): Result<Unit> {
+        return try {
+            val request = SwitchBranchRequest(tipMessageId = tipMessageId)
+            val response = apiService.switchBranch(conversationId, request)
+
+            if (response.isSuccessful) {
+                logger.i("Successfully switched branch for conversation $conversationId to tip $tipMessageId")
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to switch branch: ${response.code()} ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            logger.e("Failed to switch branch for conversation $conversationId", e)
             Result.failure(e)
         }
     }

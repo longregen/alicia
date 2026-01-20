@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MessageBubble from '../atoms/MessageBubble';
 import ComplexAddons, { type ToolDetail } from '../atoms/ComplexAddons';
 import FeedbackControls from '../atoms/FeedbackControls';
@@ -135,8 +135,12 @@ export interface ChatBubbleProps extends BaseComponentProps {
   tools?: ToolData[];
   /** Message ID for branch tracking */
   messageId?: MessageId;
+  /** Conversation ID for branch API calls */
+  conversationId?: string;
   /** Callback when user edits a message - triggers new agent response */
   onEditMessage?: (messageId: MessageId, newContent: string) => void;
+  /** Callback when user navigates to a different branch - triggers reload of messages */
+  onBranchSwitch?: (targetMessageId: string) => void;
   /** Callback when user clicks "Continue from here" on an assistant message */
   onContinueFromHere?: (messageId: MessageId) => void;
   /** Sync status for offline sync support */
@@ -157,7 +161,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   addons = [],
   tools = [],
   messageId,
+  conversationId,
   onEditMessage,
+  onBranchSwitch,
   onContinueFromHere,
   syncStatus,
   serverContent,
@@ -170,30 +176,23 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [editedContent, setEditedContent] = useState<string>('');
   const [conflictDialogOpen, setConflictDialogOpen] = useState<boolean>(false);
 
-  // Branch store for managing message versions
+  // Branch store for managing message siblings.
+  // Siblings are now initialized from the main message fetch in useMessages,
+  // so we don't need to fetch per-message anymore.
   const {
-    initializeBranch,
-    createBranch,
-    navigateToBranch,
-    getCurrentBranch,
-    getBranchCount,
+    switchBranch,
+    getSiblingCount,
     getCurrentIndex,
+    isLoading: isBranchLoading,
   } = useBranchStore();
 
-  // Initialize branch for all messages on mount (enables branching for user and assistant)
-  useEffect(() => {
-    if (messageId && content) {
-      initializeBranch(messageId, content);
-    }
-  }, [messageId, content, initializeBranch]);
-
-  // Get current branch content if available
-  const currentBranch = messageId ? getCurrentBranch(messageId) : null;
-  const branchCount = messageId ? getBranchCount(messageId) : 0;
+  // Get current branch state
+  const siblingCount = messageId ? getSiblingCount(messageId) : 0;
   const currentIndex = messageId ? getCurrentIndex(messageId) : 0;
+  const branchLoading = messageId ? isBranchLoading(messageId) : false;
 
-  // Use branch content if available, otherwise use prop content
-  const effectiveContent = currentBranch ? currentBranch.content : content;
+  // Use prop content (backend is source of truth for displayed message)
+  const effectiveContent = content;
 
   // Handle streaming/typing animation
   useEffect(() => {
@@ -307,10 +306,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const handleSaveEdit = () => {
     if (messageId && editedContent !== effectiveContent) {
-      // Create local branch for UI navigation
-      createBranch(messageId, editedContent);
-
-      // Notify parent to trigger new agent response
+      // Notify parent to trigger new agent response with edited content
+      // The backend will create a new sibling message
       if (onEditMessage) {
         onEditMessage(messageId, editedContent);
       }
@@ -323,11 +320,17 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     setEditedContent('');
   };
 
-  const handleNavigateBranch = (direction: 'prev' | 'next') => {
-    if (messageId) {
-      navigateToBranch(messageId, direction);
+  // Navigate to prev/next sibling via backend API
+  const handleNavigateBranch = useCallback(async (direction: 'prev' | 'next') => {
+    if (!messageId || !conversationId) return;
+
+    const targetSibling = await switchBranch(conversationId, messageId, direction);
+
+    // If branch switched successfully, notify parent to reload messages
+    if (targetSibling && onBranchSwitch) {
+      onBranchSwitch(targetSibling.id);
     }
-  };
+  }, [messageId, conversationId, switchBranch, onBranchSwitch]);
 
   const handleConflictClick = () => {
     if (syncStatus === 'conflict') {
@@ -363,8 +366,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const roleClass = type === MESSAGE_TYPES.USER ? 'user' : type === MESSAGE_TYPES.ASSISTANT ? 'assistant' : 'system';
   const isUser = type === MESSAGE_TYPES.USER;
 
-  // Don't allow editing while streaming
-  const canEdit = state !== MESSAGE_STATES.STREAMING;
+  // Don't allow editing while streaming or during branch switch
+  const canEdit = state !== MESSAGE_STATES.STREAMING && !branchLoading;
 
   return (
     <div className={cls('flex flex-col gap-1', roleClass, className)}>
@@ -373,6 +376,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         <span className="badge badge-default w-fit text-xs">
           <span className="w-1.5 h-1.5 rounded-full bg-accent mr-1.5 animate-pulse" />
           Streaming
+        </span>
+      )}
+
+      {branchLoading && (
+        <span className="badge badge-default w-fit text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent mr-1.5 animate-pulse" />
+          Switching branch...
         </span>
       )}
 
@@ -470,9 +480,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           toolDetails={toolDetails}
           timestamp={timestamp}
           showFeedback={false}
-          branchData={messageId && branchCount > 1 ? {
+          branchData={messageId && siblingCount > 1 ? {
             currentIndex,
-            totalBranches: branchCount,
+            totalBranches: siblingCount,
             onNavigate: handleNavigateBranch,
           } : undefined}
         />

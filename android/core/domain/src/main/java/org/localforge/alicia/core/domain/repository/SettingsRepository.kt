@@ -126,6 +126,62 @@ interface SettingsRepository {
      */
     suspend fun setWakeWordAutoStart(value: Boolean)
 
+    // ========== Appearance Settings ==========
+
+    /**
+     * Theme preference: "light", "dark", or "system".
+     */
+    val theme: Flow<String>
+    /**
+     * Set the theme preference.
+     * @param value Theme string ("light", "dark", or "system")
+     */
+    suspend fun setTheme(value: String)
+
+    /**
+     * Compact mode for smaller UI elements.
+     */
+    val compactMode: Flow<Boolean>
+    /**
+     * Set whether compact mode is enabled.
+     * @param value True to enable, false to disable
+     */
+    suspend fun setCompactMode(value: Boolean)
+
+    /**
+     * Reduce motion for accessibility.
+     */
+    val reduceMotion: Flow<Boolean>
+    /**
+     * Set whether reduce motion is enabled.
+     * @param value True to enable, false to disable
+     */
+    suspend fun setReduceMotion(value: Boolean)
+
+    // ========== Audio Settings ==========
+
+    /**
+     * Audio output enabled.
+     */
+    val audioOutputEnabled: Flow<Boolean>
+    /**
+     * Set whether audio output is enabled.
+     * @param value True to enable, false to disable
+     */
+    suspend fun setAudioOutputEnabled(value: Boolean)
+
+    // ========== Response Settings ==========
+
+    /**
+     * Response length preference: "concise", "balanced", or "detailed".
+     */
+    val responseLength: Flow<String>
+    /**
+     * Set the response length preference.
+     * @param value Response length ("concise", "balanced", or "detailed")
+     */
+    suspend fun setResponseLength(value: String)
+
     /**
      * Clear all settings and restore defaults.
      */

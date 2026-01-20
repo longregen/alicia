@@ -58,3 +58,13 @@ data class SendMessageRequest(
     @Json(name = "contents")
     val contents: String
 )
+
+/**
+ * Request model for switching conversation branch.
+ * Used with POST /conversations/{id}/switch-branch
+ */
+@JsonClass(generateAdapter = true)
+data class SwitchBranchRequest(
+    @Json(name = "tip_message_id")
+    val tipMessageId: String
+)

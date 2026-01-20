@@ -9,34 +9,8 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-type SynthesizeSpeechInput struct {
-	Text            string
-	MessageID       string
-	SentenceID      string
-	Voice           string
-	Speed           float32
-	Pitch           float32
-	OutputFormat    string
-	EnableStreaming bool
-}
-
-type SynthesizeSpeechOutput struct {
-	Audio         *models.Audio
-	Sentence      *models.Sentence
-	AudioData     []byte
-	Format        string
-	DurationMs    int
-	StreamChannel <-chan *AudioStreamChunk
-}
-
-type AudioStreamChunk struct {
-	Data       []byte
-	Format     string
-	DurationMs int
-	Sequence   int
-	IsFinal    bool
-	Error      error
-}
+// Ensure SynthesizeSpeech implements the port interface
+var _ ports.SynthesizeSpeechUseCase = (*SynthesizeSpeech)(nil)
 
 type SynthesizeSpeech struct {
 	audioRepo    ports.AudioRepository
@@ -59,7 +33,7 @@ func NewSynthesizeSpeech(
 	}
 }
 
-func (uc *SynthesizeSpeech) Execute(ctx context.Context, input *SynthesizeSpeechInput) (*SynthesizeSpeechOutput, error) {
+func (uc *SynthesizeSpeech) Execute(ctx context.Context, input *ports.SynthesizeSpeechInput) (*ports.SynthesizeSpeechOutput, error) {
 	if input.Text == "" {
 		return nil, fmt.Errorf("text is required for speech synthesis")
 	}
@@ -94,9 +68,9 @@ func (uc *SynthesizeSpeech) Execute(ctx context.Context, input *SynthesizeSpeech
 
 func (uc *SynthesizeSpeech) synthesizeNonStreaming(
 	ctx context.Context,
-	input *SynthesizeSpeechInput,
+	input *ports.SynthesizeSpeechInput,
 	options *ports.TTSOptions,
-) (*SynthesizeSpeechOutput, error) {
+) (*ports.SynthesizeSpeechOutput, error) {
 	ttsResult, err := uc.ttsService.Synthesize(ctx, input.Text, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to synthesize speech: %w", err)
@@ -129,7 +103,7 @@ func (uc *SynthesizeSpeech) synthesizeNonStreaming(
 		}
 	}
 
-	return &SynthesizeSpeechOutput{
+	return &ports.SynthesizeSpeechOutput{
 		Audio:      audio,
 		Sentence:   sentence,
 		AudioData:  ttsResult.Audio,
@@ -140,9 +114,9 @@ func (uc *SynthesizeSpeech) synthesizeNonStreaming(
 
 func (uc *SynthesizeSpeech) synthesizeStreaming(
 	ctx context.Context,
-	input *SynthesizeSpeechInput,
+	input *ports.SynthesizeSpeechInput,
 	options *ports.TTSOptions,
-) (*SynthesizeSpeechOutput, error) {
+) (*ports.SynthesizeSpeechOutput, error) {
 	streamChan, err := uc.ttsService.SynthesizeStream(ctx, input.Text, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start streaming synthesis: %w", err)
@@ -159,11 +133,11 @@ func (uc *SynthesizeSpeech) synthesizeStreaming(
 		return nil, fmt.Errorf("failed to store audio: %w", err)
 	}
 
-	outputChan := make(chan *AudioStreamChunk, 10)
+	outputChan := make(chan *ports.AudioStreamChunk, 10)
 
 	go uc.processAudioStream(ctx, audio, streamChan, outputChan, input.SentenceID)
 
-	return &SynthesizeSpeechOutput{
+	return &ports.SynthesizeSpeechOutput{
 		Audio:         audio,
 		Format:        options.OutputFormat,
 		StreamChannel: outputChan,
@@ -174,7 +148,7 @@ func (uc *SynthesizeSpeech) processAudioStream(
 	ctx context.Context,
 	audio *models.Audio,
 	inputChan <-chan *ports.TTSResult,
-	outputChan chan<- *AudioStreamChunk,
+	outputChan chan<- *ports.AudioStreamChunk,
 	sentenceID string,
 ) {
 	defer close(outputChan)
@@ -187,7 +161,7 @@ func (uc *SynthesizeSpeech) processAudioStream(
 		allAudioData = append(allAudioData, chunk.Audio...)
 		totalDuration += chunk.DurationMs
 
-		outputChan <- &AudioStreamChunk{
+		outputChan <- &ports.AudioStreamChunk{
 			Data:       chunk.Audio,
 			Format:     chunk.Format,
 			DurationMs: chunk.DurationMs,
@@ -200,7 +174,7 @@ func (uc *SynthesizeSpeech) processAudioStream(
 
 	audio.SetData(allAudioData, totalDuration)
 	if err := uc.audioRepo.Update(ctx, audio); err != nil {
-		outputChan <- &AudioStreamChunk{
+		outputChan <- &ports.AudioStreamChunk{
 			Error: fmt.Errorf("failed to update audio: %w", err),
 		}
 		return
@@ -220,7 +194,7 @@ func (uc *SynthesizeSpeech) processAudioStream(
 		}
 	}
 
-	outputChan <- &AudioStreamChunk{
+	outputChan <- &ports.AudioStreamChunk{
 		Data:       nil,
 		Format:     audio.AudioFormat,
 		DurationMs: totalDuration,
@@ -246,7 +220,7 @@ func (uc *SynthesizeSpeech) SynthesizeForMessage(ctx context.Context, messageID,
 	audioRecords := make([]*models.Audio, 0, len(sentences))
 
 	for _, sentence := range sentences {
-		input := &SynthesizeSpeechInput{
+		input := &ports.SynthesizeSpeechInput{
 			Text:            sentence.Text,
 			MessageID:       messageID,
 			SentenceID:      sentence.ID,

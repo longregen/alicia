@@ -14,7 +14,7 @@ type EditUserMessage struct {
 	messageRepo        ports.MessageRepository
 	conversationRepo   ports.ConversationRepository
 	memoryService      ports.MemoryService
-	generateResponseUC *GenerateResponse
+	generateResponseUC ports.GenerateResponseUseCase
 	idGenerator        ports.IDGenerator
 	txManager          ports.TransactionManager
 }
@@ -23,7 +23,7 @@ func NewEditUserMessage(
 	messageRepo ports.MessageRepository,
 	conversationRepo ports.ConversationRepository,
 	memoryService ports.MemoryService,
-	generateResponseUC *GenerateResponse,
+	generateResponseUC ports.GenerateResponseUseCase,
 	idGenerator ports.IDGenerator,
 	txManager ports.TransactionManager,
 ) *EditUserMessage {
@@ -59,29 +59,44 @@ func (uc *EditUserMessage) Execute(ctx context.Context, input *ports.EditUserMes
 		return nil, fmt.Errorf("new content is required for user message edit")
 	}
 
-	// 3. Count messages that will be deleted (for output)
-	messagesAfter, err := uc.messageRepo.GetAfterSequence(ctx, targetMessage.ConversationID, targetMessage.SequenceNumber)
+	// 3. Count existing siblings for informational purposes
+	existingSiblings, err := uc.messageRepo.GetSiblings(ctx, targetMessage.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get messages after sequence: %w", err)
+		// Non-fatal - just log and continue
+		log.Printf("warning: failed to get siblings for message %s: %v", targetMessage.ID, err)
+		existingSiblings = []*models.Message{}
 	}
-	deletedCount := len(messagesAfter)
+	siblingCount := len(existingSiblings)
 
-	// 4. Update message content and delete downstream messages atomically
+	// 4. Create a NEW user message as a sibling of the original
+	// The new message shares the same PreviousID as the original message,
+	// making it a sibling branch rather than replacing the original
+	newMessageID := uc.idGenerator.GenerateMessageID()
+	now := time.Now().UTC()
+
+	newUserMessage := &models.Message{
+		ID:               newMessageID,
+		ConversationID:   targetMessage.ConversationID,
+		SequenceNumber:   targetMessage.SequenceNumber, // Same sequence as original (sibling)
+		PreviousID:       targetMessage.PreviousID,     // Same parent - this makes it a sibling
+		Role:             models.MessageRoleUser,
+		Contents:         input.NewContent,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+		SyncStatus:       models.SyncStatusSynced,
+		CompletionStatus: models.CompletionStatusCompleted,
+	}
+
+	// 5. Persist the new message and update conversation tip atomically
 	err = uc.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		// Update message content and timestamp
-		targetMessage.Contents = input.NewContent
-		targetMessage.UpdatedAt = time.Now().UTC()
-		if err := uc.messageRepo.Update(txCtx, targetMessage); err != nil {
-			return fmt.Errorf("failed to update message: %w", err)
+		// Create the new sibling message
+		if err := uc.messageRepo.Create(txCtx, newUserMessage); err != nil {
+			return fmt.Errorf("failed to create new user message: %w", err)
 		}
 
-		// Delete all messages after target sequence number
-		if err := uc.messageRepo.DeleteAfterSequence(txCtx, targetMessage.ConversationID, targetMessage.SequenceNumber); err != nil {
-			return fmt.Errorf("failed to delete downstream messages: %w", err)
-		}
-
-		// Update conversation tip to point to the edited message
-		if err := uc.conversationRepo.UpdateTip(txCtx, targetMessage.ConversationID, targetMessage.ID); err != nil {
+		// Update conversation tip to point to the new message
+		// This switches the "active branch" to the new edit
+		if err := uc.conversationRepo.UpdateTip(txCtx, targetMessage.ConversationID, newUserMessage.ID); err != nil {
 			return fmt.Errorf("failed to update conversation tip: %w", err)
 		}
 
@@ -92,9 +107,9 @@ func (uc *EditUserMessage) Execute(ctx context.Context, input *ports.EditUserMes
 		return nil, err
 	}
 
-	log.Printf("Edited user message %s, deleted %d downstream messages", targetMessage.ID, deletedCount)
+	log.Printf("Created sibling message %s for edited user message %s (now %d siblings)", newUserMessage.ID, targetMessage.ID, siblingCount+1)
 
-	// 5. Retrieve relevant memories for the new content
+	// 6. Retrieve relevant memories for the new content
 	var relevantMemories []*models.Memory
 	if uc.memoryService != nil {
 		searchResults, err := uc.memoryService.SearchWithScores(ctx, input.NewContent, 0.7, 5)
@@ -114,20 +129,22 @@ func (uc *EditUserMessage) Execute(ctx context.Context, input *ports.EditUserMes
 	// This is used when the agent handles response generation via WebSocket
 	if input.SkipGeneration {
 		return &ports.EditUserMessageOutput{
-			UpdatedMessage:   targetMessage,
-			DeletedCount:     deletedCount,
+			UpdatedMessage:   newUserMessage,
+			DeletedCount:     0, // No messages deleted - we preserve history now
 			RelevantMemories: relevantMemories,
 		}, nil
 	}
 
-	// 6. Generate new message ID for response
+	// 7. Generate new message ID for response
 	responseMessageID := uc.idGenerator.GenerateMessageID()
 
-	// 7. Call GenerateResponse to create new assistant response
+	// 8. Call GenerateResponse to create new assistant response
+	// The response will be linked to the new user message, creating a new branch
 	generateInput := &ports.GenerateResponseInput{
-		ConversationID:   targetMessage.ConversationID,
-		UserMessageID:    targetMessage.ID,
+		ConversationID:   newUserMessage.ConversationID,
+		UserMessageID:    newUserMessage.ID,
 		MessageID:        responseMessageID,
+		PreviousID:       newUserMessage.ID, // Response follows the new user message
 		RelevantMemories: relevantMemories,
 		EnableTools:      input.EnableTools,
 		EnableReasoning:  input.EnableReasoning,
@@ -139,10 +156,10 @@ func (uc *EditUserMessage) Execute(ctx context.Context, input *ports.EditUserMes
 		return nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
-	// 8. Build and return output
+	// 9. Build and return output
 	output := &ports.EditUserMessageOutput{
-		UpdatedMessage:   targetMessage,
-		DeletedCount:     deletedCount,
+		UpdatedMessage:   newUserMessage,
+		DeletedCount:     0, // No messages deleted - branching preserves history
 		RelevantMemories: relevantMemories,
 	}
 

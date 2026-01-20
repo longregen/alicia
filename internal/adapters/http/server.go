@@ -53,10 +53,11 @@ type Server struct {
 	regenerateResponseUseCase  ports.RegenerateResponseUseCase
 	continueResponseUseCase    ports.ContinueResponseUseCase
 	editUserMessageUseCase      ports.EditUserMessageUseCase
-	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
-	runOptimizationUseCase      ports.RunOptimizationUseCase
-	memorizeFromUpvoteUseCase   *usecases.MemorizeFromUpvote
-	wsBroadcaster               *handlers.WebSocketBroadcaster
+	editAssistantMessageUseCase  ports.EditAssistantMessageUseCase
+	runOptimizationUseCase       ports.RunOptimizationUseCase
+	memorizeFromUpvoteUseCase    *usecases.MemorizeFromUpvote
+	processUserMessageUseCase    ports.ProcessUserMessageUseCase
+	wsBroadcaster                *handlers.WebSocketBroadcaster
 }
 
 func NewServer(
@@ -90,6 +91,7 @@ func NewServer(
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
 	runOptimizationUseCase ports.RunOptimizationUseCase,
 	memorizeFromUpvoteUseCase *usecases.MemorizeFromUpvote,
+	processUserMessageUseCase ports.ProcessUserMessageUseCase,
 	wsBroadcaster *handlers.WebSocketBroadcaster,
 ) *Server {
 	s := &Server{
@@ -121,9 +123,10 @@ func NewServer(
 		continueResponseUseCase:     continueResponseUseCase,
 		editUserMessageUseCase:      editUserMessageUseCase,
 		editAssistantMessageUseCase: editAssistantMessageUseCase,
-		runOptimizationUseCase:      runOptimizationUseCase,
-		memorizeFromUpvoteUseCase:   memorizeFromUpvoteUseCase,
-		wsBroadcaster:               wsBroadcaster,
+		runOptimizationUseCase:       runOptimizationUseCase,
+		memorizeFromUpvoteUseCase:    memorizeFromUpvoteUseCase,
+		processUserMessageUseCase:    processUserMessageUseCase,
+		wsBroadcaster:                wsBroadcaster,
 	}
 
 	s.setupRouter()
@@ -181,7 +184,7 @@ func (s *Server) setupRouter() {
 			s.toolUseRepo,
 			s.memoryUsageRepo,
 			s.sendMessageUseCase,
-			nil, // processUserMessageUseCase - TODO: inject when agent-based generation is enabled
+			s.processUserMessageUseCase,
 			s.editAssistantMessageUseCase,
 			s.editUserMessageUseCase,
 			s.regenerateResponseUseCase,

@@ -56,6 +56,10 @@ func (m *mockToolService) ListAll(ctx context.Context) ([]*models.Tool, error) {
 	return nil, nil
 }
 
+func (m *mockToolService) ListAvailable(ctx context.Context) ([]*models.Tool, error) {
+	return nil, nil
+}
+
 func (m *mockToolService) Delete(ctx context.Context, id string) error {
 	return nil
 }

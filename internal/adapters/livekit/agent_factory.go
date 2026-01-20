@@ -33,6 +33,7 @@ type AgentFactory struct {
 	continueResponseUseCase     ports.ContinueResponseUseCase
 	editUserMessageUseCase      ports.EditUserMessageUseCase
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
+	synthesizeSpeechUseCase     ports.SynthesizeSpeechUseCase
 }
 
 // NewAgentFactory creates a new agent factory
@@ -60,6 +61,7 @@ func NewAgentFactory(
 	continueResponseUseCase ports.ContinueResponseUseCase,
 	editUserMessageUseCase ports.EditUserMessageUseCase,
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
+	synthesizeSpeechUseCase ports.SynthesizeSpeechUseCase,
 ) *AgentFactory {
 	return &AgentFactory{
 		conversationRepo:            conversationRepo,
@@ -85,6 +87,7 @@ func NewAgentFactory(
 		continueResponseUseCase:     continueResponseUseCase,
 		editUserMessageUseCase:      editUserMessageUseCase,
 		editAssistantMessageUseCase: editAssistantMessageUseCase,
+		synthesizeSpeechUseCase:     synthesizeSpeechUseCase,
 	}
 }
 
@@ -142,6 +145,7 @@ func (f *AgentFactory) CreateAgent(
 		f.continueResponseUseCase,
 		f.editUserMessageUseCase,
 		f.editAssistantMessageUseCase,
+		f.synthesizeSpeechUseCase,
 	)
 
 	// Wire up the agent with the message router as callbacks

@@ -50,6 +50,7 @@ func NewMessageRouter(
 	continueResponseUseCase ports.ContinueResponseUseCase,
 	editUserMessageUseCase ports.EditUserMessageUseCase,
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
+	synthesizeSpeechUseCase ports.SynthesizeSpeechUseCase,
 ) *MessageRouter {
 	// Create the generation manager
 	generationManager := NewDefaultResponseGenerationManager()
@@ -78,6 +79,7 @@ func NewMessageRouter(
 		continueResponseUseCase,
 		editUserMessageUseCase,
 		editAssistantMessageUseCase,
+		synthesizeSpeechUseCase,
 	)
 
 	router := &MessageRouter{

@@ -452,6 +452,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.SessionStats:
       case MessageType.EliteOptions:
       case MessageType.OptimizationProgress:
+      case MessageType.BranchUpdate:
         handleProtocolMessage(envelope);
         break;
 

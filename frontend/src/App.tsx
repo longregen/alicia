@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Switch, Route, useRoute, useLocation, Redirect } from 'wouter';
 import { Sidebar } from './components/Sidebar';
 import ChatWindowBridge from './components/organisms/ChatWindowBridge';
 import WelcomeScreen from './components/organisms/WelcomeScreen';
 import { Settings, type SettingsTab } from './components/Settings';
-import { MemoryManager } from './components/organisms/MemoryManager';
+import { MemoryManager, MemoryDetail } from './components/organisms/MemoryManager';
 import ServerInfoPanel from './components/organisms/ServerPanel/ServerInfoPanel';
 import { useConversations } from './hooks/useConversations';
 import { useMessages } from './hooks/useMessages';
@@ -12,6 +12,7 @@ import { useDatabase } from './hooks/useDatabase';
 import { MessageProvider } from './contexts/MessageContext';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
+import { useConversationStore } from './stores/conversationStore';
 import Toast from './components/atoms/Toast';
 import { Z_INDEX } from './constants/zIndex';
 
@@ -96,6 +97,7 @@ function AppContent() {
   const {
     conversations,
     loading: conversationsLoading,
+    hasFetched: conversationsHasFetched,
     error: conversationsError,
     createConversation,
     deleteConversation,
@@ -110,7 +112,20 @@ function AppContent() {
     sending,
     sendMessage,
     syncError,
+    refetch: refetchMessages,
   } = useMessages(selectedConversationId);
+
+  // Listen for refresh requests from branch switching
+  const refreshRequestCounter = useConversationStore((state) => state.refreshRequestCounter);
+  const prevRefreshCounter = useRef(refreshRequestCounter);
+
+  useEffect(() => {
+    // Only refetch if counter changed (skip initial mount)
+    if (prevRefreshCounter.current !== refreshRequestCounter && prevRefreshCounter.current !== 0) {
+      refetchMessages();
+    }
+    prevRefreshCounter.current = refreshRequestCounter;
+  }, [refreshRequestCounter, refetchMessages]);
 
   const handleNewConversation = useCallback(async () => {
     // Generate a default title - backend requires a non-empty title
@@ -123,8 +138,9 @@ function AppContent() {
   }, [createConversation, navigate]);
 
   // Handle missing conversations - redirect to home if conversation doesn't exist
+  // Only check after the initial fetch has completed to avoid race conditions on page refresh
   useEffect(() => {
-    if (selectedConversationId && !conversationsLoading) {
+    if (selectedConversationId && conversationsHasFetched && !conversationsLoading) {
       if (conversations.length === 0) {
         // No conversations exist - redirect to home
         navigate('/');
@@ -136,7 +152,7 @@ function AppContent() {
         }
       }
     }
-  }, [selectedConversationId, conversations, conversationsLoading, navigate]);
+  }, [selectedConversationId, conversations, conversationsHasFetched, conversationsLoading, navigate]);
 
   const handleDeleteConversation = async (id: string) => {
     if (id === selectedConversationId) {
@@ -282,6 +298,13 @@ function AppContent() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Switch>
+          <Route path="/memory/:memoryId">
+            {(params) => (
+              <div className="h-full bg-background">
+                <MemoryDetail memoryId={params.memoryId} />
+              </div>
+            )}
+          </Route>
           <Route path="/memory">
             <div className="h-full bg-background">
               <div className="p-6 md:px-8 border-b border-border bg-card">

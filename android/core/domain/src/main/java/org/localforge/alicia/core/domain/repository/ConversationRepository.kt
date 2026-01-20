@@ -143,6 +143,28 @@ interface ConversationRepository {
      */
     suspend fun sendTextMessage(conversationId: String, content: String): Result<Message>
 
+    // ========== Branch/Sibling Operations ==========
+
+    /**
+     * Get sibling messages for a specific message.
+     * Siblings are messages that share the same parent (previous_id).
+     * Used for branch navigation in the UI.
+     *
+     * @param messageId The message ID to get siblings for
+     * @return Result containing list of sibling messages or error
+     */
+    suspend fun getMessageSiblings(messageId: String): Result<List<Message>>
+
+    /**
+     * Switch the conversation to a different branch by updating the tip message.
+     * This changes which branch of the conversation is active.
+     *
+     * @param conversationId The conversation ID
+     * @param tipMessageId The message ID to set as the new tip (last message in the branch)
+     * @return Result indicating success or failure
+     */
+    suspend fun switchBranch(conversationId: String, tipMessageId: String): Result<Unit>
+
     // ========== Search Operations ==========
 
     /**

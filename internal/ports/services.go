@@ -182,6 +182,7 @@ type ToolService interface {
 	Delete(ctx context.Context, id string) error
 	ListEnabled(ctx context.Context) ([]*models.Tool, error)
 	ListAll(ctx context.Context) ([]*models.Tool, error)
+	ListAvailable(ctx context.Context) ([]*models.Tool, error) // Returns enabled tools with registered executors
 
 	// Tool execution
 	ExecuteTool(ctx context.Context, toolName string, arguments map[string]any) (any, error)
@@ -287,4 +288,28 @@ type GenerationNotifier interface {
 
 	// NotifyGenerationFailed is called when response generation fails.
 	NotifyGenerationFailed(messageID, conversationID string, err error)
+}
+
+// ToolRunner defines a minimal interface for executing tools by name.
+// This is a simpler alternative to ToolService for use cases that only need
+// to execute tools (like path search) without tool registration/management.
+//
+// Unlike ToolExecutor (in repositories.go) which requires the Tool model,
+// ToolRunner takes just the tool name, making it suitable for cases where
+// the tool lookup is handled internally.
+//
+// Implementations can wrap ToolService.ExecuteTool or provide custom execution logic.
+type ToolRunner interface {
+	// RunTool executes a tool by name with the given arguments.
+	// Returns the result of the tool execution, or an error if execution fails.
+	RunTool(ctx context.Context, toolName string, arguments map[string]any) (any, error)
+}
+
+// ToolRunnerFunc is a function adapter for ToolRunner.
+// Allows using a simple function as a ToolRunner.
+type ToolRunnerFunc func(ctx context.Context, toolName string, arguments map[string]any) (any, error)
+
+// RunTool implements ToolRunner.
+func (f ToolRunnerFunc) RunTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
+	return f(ctx, toolName, arguments)
 }

@@ -190,6 +190,9 @@ dependencies {
     implementation(project(":feature:assistant"))
     implementation(project(":feature:conversations"))
     implementation(project(":feature:settings"))
+    implementation(project(":feature:welcome"))
+    implementation(project(":feature:memory"))
+    implementation(project(":feature:server"))
     implementation(project(":service:voice"))
     implementation(project(":service:hotkey"))
 

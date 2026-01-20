@@ -11,6 +11,8 @@ import org.localforge.alicia.core.domain.repository.SettingsRepository
 import org.localforge.alicia.core.network.LiveKitManager
 import org.localforge.alicia.core.network.protocol.Envelope
 import org.localforge.alicia.core.network.protocol.MessageType
+import org.localforge.alicia.core.network.protocol.bodies.ConfigurationBody
+import org.localforge.alicia.core.network.protocol.bodies.Features
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -228,6 +230,106 @@ class VoiceController @Inject constructor(
     }
 
     /**
+     * Send an edit control message to update a user message and trigger new assistant response.
+     * @param targetId ID of the user message to edit
+     * @param newContent The new content for the message
+     */
+    fun sendEdit(targetId: String, newContent: String) {
+        val conversationId = currentConversationId.get() ?: run {
+            Timber.w("Cannot send edit: no active conversation")
+            return
+        }
+
+        try {
+            val envelope = Envelope(
+                stanzaId = generateClientStanzaId(),
+                conversationId = conversationId,
+                type = MessageType.CONTROL_VARIATION,
+                body = org.localforge.alicia.core.network.protocol.bodies.ControlVariationBody(
+                    conversationId = conversationId,
+                    targetId = targetId,
+                    mode = org.localforge.alicia.core.network.protocol.bodies.VariationType.EDIT,
+                    newContent = newContent
+                )
+            )
+            liveKitManager.sendData(envelope)
+            Timber.i("Sent edit control message for target: $targetId")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to send edit message")
+        }
+    }
+
+    /**
+     * Send initial Configuration message after connecting.
+     * Matches web frontend's initial connection behavior.
+     */
+    private fun sendInitialConfiguration(conversationId: String) {
+        try {
+            val envelope = Envelope(
+                stanzaId = generateClientStanzaId(),
+                conversationId = conversationId,
+                type = MessageType.CONFIGURATION,
+                body = ConfigurationBody(
+                    conversationId = conversationId,
+                    lastSequenceSeen = 0, // First connection, no messages seen yet
+                    clientVersion = "android-1.0.0",
+                    device = "android",
+                    features = listOf(
+                        Features.STREAMING,
+                        Features.AUDIO_OUTPUT,
+                        Features.PARTIAL_RESPONSES,
+                        Features.REASONING_STEPS,
+                        Features.TOOL_USE
+                    )
+                )
+            )
+            liveKitManager.sendData(envelope)
+            Timber.i("Sent initial Configuration message")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to send initial configuration")
+        }
+    }
+
+    /**
+     * Send Configuration message after reconnection to trigger message replay.
+     * Matches web frontend's Reconnected handler behavior.
+     */
+    private fun sendConfigurationOnReconnect() {
+        val conversationId = currentConversationId.get() ?: run {
+            Timber.w("Cannot send configuration on reconnect: no active conversation")
+            return
+        }
+
+        try {
+            val lastSeenStanzaId = liveKitManager.getLastSeenStanzaId()
+            val lastSequence = lastSeenStanzaId?.toIntOrNull()
+
+            val envelope = Envelope(
+                stanzaId = generateClientStanzaId(),
+                conversationId = conversationId,
+                type = MessageType.CONFIGURATION,
+                body = ConfigurationBody(
+                    conversationId = conversationId,
+                    lastSequenceSeen = lastSequence,
+                    clientVersion = "android-1.0.0",
+                    device = "android",
+                    features = listOf(
+                        Features.STREAMING,
+                        Features.AUDIO_OUTPUT,
+                        Features.PARTIAL_RESPONSES,
+                        Features.REASONING_STEPS,
+                        Features.TOOL_USE
+                    )
+                )
+            )
+            liveKitManager.sendData(envelope)
+            Timber.i("Sent Configuration on reconnect with lastSequenceSeen=$lastSequence")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to send configuration on reconnect")
+        }
+    }
+
+    /**
      * Shutdown the voice controller and release all resources.
      */
     suspend fun shutdown() {
@@ -307,6 +409,21 @@ class VoiceController @Inject constructor(
             }
         }
 
+        // Handle reconnection - send Configuration with lastSeenStanzaId for message replay
+        liveKitManager.onReconnected {
+            controllerScope.launch {
+                sendConfigurationOnReconnect()
+            }
+        }
+
+        // Set audio output enabled callback to respect user settings
+        liveKitManager.setAudioOutputEnabledCallback {
+            // Check the current audioOutputEnabled setting
+            kotlinx.coroutines.runBlocking {
+                settingsRepository.audioOutputEnabled.first()
+            }
+        }
+
         try {
             // Get or create a conversation for this voice session
             val conversationId = currentConversationId.get() ?: run {
@@ -335,6 +452,9 @@ class VoiceController @Inject constructor(
 
             // Connect to LiveKit with real token (room name is encoded in the token)
             liveKitManager.connect(liveKitUrl, tokenResponse.token)
+
+            // Send initial Configuration message (matching web frontend behavior)
+            sendInitialConfiguration(conversationId)
 
             // LiveKit automatically handles audio capture and publishing
             // Start silence detection
@@ -390,7 +510,30 @@ class VoiceController @Inject constructor(
                 MessageType.CONTROL_VARIATION -> handleControlVariation(envelope)
                 MessageType.CONFIGURATION -> handleConfiguration(envelope)
                 MessageType.AUDIO_CHUNK -> handleAudioChunk(envelope)
-                else -> Timber.d("Unknown message type: ${envelope.type}")
+                // Sync types (17-18)
+                MessageType.SYNC_REQUEST -> handleSyncRequest(envelope)
+                MessageType.SYNC_RESPONSE -> handleSyncResponse(envelope)
+                // Feedback types (20-25)
+                MessageType.FEEDBACK -> handleFeedback(envelope)
+                MessageType.FEEDBACK_CONFIRMATION -> handleFeedbackConfirmation(envelope)
+                MessageType.USER_NOTE -> handleUserNote(envelope)
+                MessageType.NOTE_CONFIRMATION -> handleNoteConfirmation(envelope)
+                MessageType.MEMORY_ACTION -> handleMemoryAction(envelope)
+                MessageType.MEMORY_CONFIRMATION -> handleMemoryConfirmation(envelope)
+                // Server info types (26-28)
+                MessageType.SERVER_INFO -> handleServerInfo(envelope)
+                MessageType.SESSION_STATS -> handleSessionStats(envelope)
+                MessageType.CONVERSATION_UPDATE -> handleConversationUpdate(envelope)
+                // Optimization types (29-32)
+                MessageType.DIMENSION_PREFERENCE -> handleDimensionPreference(envelope)
+                MessageType.ELITE_SELECT -> handleEliteSelect(envelope)
+                MessageType.ELITE_OPTIONS -> handleEliteOptions(envelope)
+                MessageType.OPTIMIZATION_PROGRESS -> handleOptimizationProgress(envelope)
+                // Subscription types (40-43)
+                MessageType.SUBSCRIBE -> handleSubscribe(envelope)
+                MessageType.UNSUBSCRIBE -> handleUnsubscribe(envelope)
+                MessageType.SUBSCRIBE_ACK -> handleSubscribeAck(envelope)
+                MessageType.UNSUBSCRIBE_ACK -> handleUnsubscribeAck(envelope)
             }
         } catch (e: Exception) {
             Timber.e(e, "Error handling protocol message")
@@ -596,6 +739,133 @@ class VoiceController @Inject constructor(
     private fun handleAudioChunk(_envelope: Envelope) {
         // Audio chunks are typically handled via LiveKit audio tracks
         Timber.d("Audio chunk received (handled by LiveKit)")
+    }
+
+    // ========== Sync types (17-18) ==========
+
+    private fun handleSyncRequest(_envelope: Envelope) {
+        Timber.d("Sync request received")
+    }
+
+    private fun handleSyncResponse(_envelope: Envelope) {
+        Timber.d("Sync response received")
+        // Handle sync data - could be used to update local state
+    }
+
+    // ========== Feedback types (20-25) ==========
+
+    private fun handleFeedback(_envelope: Envelope) {
+        Timber.d("Feedback received")
+        // Feedback messages are typically sent from client, not received
+    }
+
+    private fun handleFeedbackConfirmation(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val feedbackId = body["feedbackId"] as? String
+        Timber.d("Feedback confirmation received for: $feedbackId")
+        // Could update UI to show feedback was recorded
+    }
+
+    private fun handleUserNote(_envelope: Envelope) {
+        Timber.d("User note received")
+        // User notes are typically sent from client, not received
+    }
+
+    private fun handleNoteConfirmation(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val noteId = body["noteId"] as? String
+        val success = body["success"] as? Boolean ?: false
+        Timber.d("Note confirmation received: noteId=$noteId, success=$success")
+    }
+
+    private fun handleMemoryAction(_envelope: Envelope) {
+        Timber.d("Memory action received")
+        // Memory actions are typically sent from client
+    }
+
+    private fun handleMemoryConfirmation(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val memoryId = body["memoryId"] as? String
+        val success = body["success"] as? Boolean ?: false
+        Timber.d("Memory confirmation received: memoryId=$memoryId, success=$success")
+    }
+
+    // ========== Server info types (26-28) ==========
+
+    private fun handleServerInfo(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        Timber.d("Server info received")
+        // Could update server connection status display
+    }
+
+    private fun handleSessionStats(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val messageCount = (body["messageCount"] as? Number)?.toInt() ?: 0
+        val toolCallCount = (body["toolCallCount"] as? Number)?.toInt() ?: 0
+        val memoriesUsed = (body["memoriesUsed"] as? Number)?.toInt() ?: 0
+        Timber.d("Session stats: messages=$messageCount, tools=$toolCallCount, memories=$memoriesUsed")
+    }
+
+    private fun handleConversationUpdate(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val title = body["title"] as? String
+        val status = body["status"] as? String
+        Timber.d("Conversation update: title=$title, status=$status")
+        // Could update conversation title in UI
+    }
+
+    // ========== Optimization types (29-32) ==========
+
+    private fun handleDimensionPreference(_envelope: Envelope) {
+        Timber.d("Dimension preference received")
+        // Handle optimization dimension preferences
+    }
+
+    private fun handleEliteSelect(_envelope: Envelope) {
+        Timber.d("Elite select received")
+        // Handle elite solution selection
+    }
+
+    private fun handleEliteOptions(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        @Suppress("UNCHECKED_CAST")
+        val elites = body["elites"] as? List<*> ?: emptyList<Any>()
+        Timber.d("Elite options received: ${elites.size} options")
+        // Could display optimization options to user
+    }
+
+    private fun handleOptimizationProgress(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val iteration = (body["iteration"] as? Number)?.toInt() ?: 0
+        val maxIterations = (body["maxIterations"] as? Number)?.toInt() ?: 0
+        val status = body["status"] as? String
+        Timber.d("Optimization progress: $iteration/$maxIterations, status=$status")
+        // Could update optimization progress UI
+    }
+
+    // ========== Subscription types (40-43) ==========
+
+    private fun handleSubscribe(_envelope: Envelope) {
+        Timber.d("Subscribe request received")
+        // Subscription requests are typically sent from client
+    }
+
+    private fun handleUnsubscribe(_envelope: Envelope) {
+        Timber.d("Unsubscribe request received")
+        // Unsubscribe requests are typically sent from client
+    }
+
+    private fun handleSubscribeAck(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val success = body["success"] as? Boolean ?: false
+        val missedMessages = (body["missedMessages"] as? Number)?.toInt()
+        Timber.d("Subscribe ack: success=$success, missedMessages=$missedMessages")
+    }
+
+    private fun handleUnsubscribeAck(envelope: Envelope) {
+        val body = envelope.body as? Map<*, *> ?: return
+        val success = body["success"] as? Boolean ?: false
+        Timber.d("Unsubscribe ack: success=$success")
     }
 
     /**

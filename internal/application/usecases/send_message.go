@@ -16,7 +16,7 @@ type SendMessage struct {
 	conversationRepo   ports.ConversationRepository
 	messageRepo        ports.MessageRepository
 	processUserMessage *ProcessUserMessage
-	generateResponse   *GenerateResponse
+	generateResponse   ports.GenerateResponseUseCase
 	txManager          ports.TransactionManager
 }
 
@@ -25,7 +25,7 @@ func NewSendMessage(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
 	processUserMessage *ProcessUserMessage,
-	generateResponse *GenerateResponse,
+	generateResponse ports.GenerateResponseUseCase,
 	txManager ports.TransactionManager,
 ) *SendMessage {
 	return &SendMessage{

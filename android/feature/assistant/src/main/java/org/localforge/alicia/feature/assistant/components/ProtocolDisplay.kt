@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.localforge.alicia.core.domain.model.*
+import org.localforge.alicia.feature.assistant.components.toolvisualizations.ToolVisualizationRouter
+import org.localforge.alicia.feature.assistant.components.toolvisualizations.ToolIcons
 import com.google.gson.GsonBuilder
 
 @Composable
@@ -256,6 +258,9 @@ fun ToolUsageItem(usage: ToolUsage) {
     val gson = remember { GsonBuilder().setPrettyPrinting().create() }
 
     val result = usage.result
+    val toolName = usage.request.toolName
+    val isNativeTool = toolName.startsWith("web_") || toolName.startsWith("garden_")
+
     val statusColor = when {
         result == null -> Color(0xFFFF9800) // Orange for pending
         result.success -> Color(0xFF4CAF50) // Green for success
@@ -268,70 +273,133 @@ fun ToolUsageItem(usage: ToolUsage) {
         else -> "Failed"
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(6.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = usage.request.toolName,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary
+    // Use beautiful visualization for native tools with results
+    if (isNativeTool && result?.success == true && result.result != null) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Compact header with expand toggle
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                 )
-                Surface(
-                    color = statusColor,
-                    shape = RoundedCornerShape(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = statusText,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = ToolIcons.getIcon(toolName),
+                            fontSize = 18.sp
+                        )
+                        Text(
+                            text = ToolIcons.getDisplayName(toolName),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = statusColor,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = statusText,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                        Icon(
+                            imageVector = if (expanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
-            AnimatedVisibility(visible = expanded) {
+            // Expanded visualization
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
-                    Text(
-                        text = "Parameters",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
+                    ToolVisualizationRouter(
+                        toolName = toolName,
+                        result = result.result
                     )
+                }
+            }
+        }
+    } else {
+        // Fallback to original display for non-native tools or pending/failed results
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(6.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = ToolIcons.getIcon(toolName),
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = toolName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = statusColor,
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            text = gson.toJson(usage.request.parameters),
-                            modifier = Modifier.padding(8.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace
+                            text = statusText,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
                     }
+                }
 
-                    usage.result?.let { result ->
-                        Spacer(modifier = Modifier.height(8.dp))
+                AnimatedVisibility(visible = expanded) {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
                         Text(
-                            text = "Result",
+                            text = "Parameters",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -342,26 +410,49 @@ fun ToolUsageItem(usage: ToolUsage) {
                             color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(4.dp)
                         ) {
-                            if (result.success) {
-                                Text(
-                                    text = gson.toJson(result.result),
-                                    modifier = Modifier.padding(8.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            } else {
-                                Column(modifier = Modifier.padding(8.dp)) {
+                            Text(
+                                text = gson.toJson(usage.request.parameters),
+                                modifier = Modifier.padding(8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        usage.result?.let { result ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Result",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                if (result.success) {
                                     Text(
-                                        text = "Error: ${result.errorMessage}",
+                                        text = gson.toJson(result.result),
+                                        modifier = Modifier.padding(8.dp),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error
+                                        fontFamily = FontFamily.Monospace
                                     )
-                                    result.errorCode?.let { code ->
+                                } else {
+                                    Column(modifier = Modifier.padding(8.dp)) {
                                         Text(
-                                            text = "Code: $code",
+                                            text = "Error: ${result.errorMessage}",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.error
                                         )
+                                        result.errorCode?.let { code ->
+                                            Text(
+                                                text = "Code: $code",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }

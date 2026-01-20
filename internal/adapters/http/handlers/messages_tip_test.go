@@ -18,7 +18,7 @@ func TestMessagesHandler_Send_Success_AcceptsRequest(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
 	sendMessageUseCase := newMockSendMessageUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, newMockProcessUserMessageUseCase(), nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")
@@ -64,7 +64,7 @@ func TestMessagesHandler_Send_WithExistingTip(t *testing.T) {
 	conversationRepo := newMockConversationRepo()
 	messageRepo := newMockMessageRepo()
 	sendMessageUseCase := newMockSendMessageUseCase()
-	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewMessagesHandler(conversationRepo, messageRepo, nil, nil, sendMessageUseCase, newMockProcessUserMessageUseCase(), nil, nil, nil, nil, nil, nil)
 
 	// Create a test conversation with an existing tip
 	conv := models.NewConversation("ac_test123", "test-user", "Test Conversation")

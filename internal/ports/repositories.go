@@ -36,6 +36,7 @@ type MessageRepository interface {
 	GetNextSequenceNumber(ctx context.Context, conversationID string) (int, error)
 	GetAfterSequence(ctx context.Context, conversationID string, afterSequence int) ([]*models.Message, error)
 	GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error)
+	GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error)
 	GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error)
 	// Offline sync support
 	GetPendingSync(ctx context.Context, conversationID string) ([]*models.Message, error)
@@ -434,6 +435,7 @@ type ProcessUserMessageUseCase interface {
 // ProcessUserMessageInput contains parameters for processing user messages
 type ProcessUserMessageInput struct {
 	ConversationID string
+	MessageID      string // Optional: if provided, use this ID instead of generating a new one
 	TextContent    string
 	AudioData      []byte
 	AudioFormat    string
@@ -448,8 +450,119 @@ type ProcessUserMessageOutput struct {
 }
 
 // GenerateResponseUseCase defines the interface for response generation use case
+// DEPRECATED: Use ParetoResponseGenerator instead for all new code.
+// This interface is kept for backwards compatibility during migration.
 type GenerateResponseUseCase interface {
 	Execute(ctx context.Context, input *GenerateResponseInput) (*GenerateResponseOutput, error)
+}
+
+// ParetoResponseGenerator is the SINGLE unified way to generate responses in Alicia.
+// It uses GEPA (Genetic-Pareto) path search to find optimal responses:
+//   - Explores multiple execution paths (branching attempts)
+//   - Uses Pareto selection across 5 dimensions (quality, efficiency, cost, robustness, latency)
+//   - Genetically mutates strategy/reflection TEXT via LLM
+//   - Accumulates lessons to guide future attempts
+//   - Actually executes tools and persists results
+//
+// This replaces the old GenerateResponse use case and AgentService.
+type ParetoResponseGenerator interface {
+	Execute(ctx context.Context, input *ParetoResponseInput) (*ParetoResponseOutput, error)
+}
+
+// ParetoResponseInput contains the input parameters for Pareto-based response generation.
+type ParetoResponseInput struct {
+	// ConversationID is the ID of the conversation
+	ConversationID string
+
+	// UserMessageID is the ID of the user message to respond to
+	UserMessageID string
+
+	// MessageID is an optional pre-generated message ID for the response
+	MessageID string
+
+	// PreviousID is the ID of the previous message for branching
+	PreviousID string
+
+	// EnableTools enables tool execution during generation
+	EnableTools bool
+
+	// EnableReasoning enables reasoning/thinking steps
+	EnableReasoning bool
+
+	// EnableStreaming enables streaming of results (via notifier)
+	EnableStreaming bool
+
+	// Notifier receives real-time updates during generation
+	Notifier GenerationNotifier
+
+	// Config contains optional Pareto search configuration overrides
+	Config *ParetoResponseConfig
+
+	// SeedStrategy is an optional custom seed strategy (if empty, uses default)
+	SeedStrategy string
+}
+
+// ParetoResponseConfig configures the Pareto-based response generation.
+type ParetoResponseConfig struct {
+	// MaxGenerations is the maximum number of evolutionary generations
+	MaxGenerations int
+
+	// BranchesPerGen is the number of parallel paths to explore per generation
+	BranchesPerGen int
+
+	// TargetScore is the early exit threshold (0-1) for answer quality
+	TargetScore float64
+
+	// MaxToolCalls limits the total number of tool calls across all paths (budget)
+	MaxToolCalls int
+
+	// MaxLLMCalls limits the total number of LLM calls across all paths (budget)
+	MaxLLMCalls int
+
+	// ParetoArchiveSize is the maximum number of candidates in the Pareto archive
+	ParetoArchiveSize int
+
+	// EnableCrossover enables crossover between Pareto-optimal paths
+	EnableCrossover bool
+
+	// ExecutionTimeoutMs is the timeout for each path execution in milliseconds
+	ExecutionTimeoutMs int64
+
+	// EnableParallelBranches enables parallel processing of branches within a generation
+	EnableParallelBranches bool
+
+	// MaxParallelBranches limits the number of concurrent branch executions
+	MaxParallelBranches int
+
+	// MaxToolLoopIterations limits the number of LLM-tool loop iterations per path
+	MaxToolLoopIterations int
+}
+
+// ParetoResponseOutput contains the result of Pareto-based response generation.
+type ParetoResponseOutput struct {
+	// Message is the created assistant message
+	Message *models.Message
+
+	// Sentences contains the individual sentences (for streaming mode)
+	Sentences []*models.Sentence
+
+	// ToolUses contains the tool executions performed
+	ToolUses []*models.ToolUse
+
+	// ReasoningSteps contains any reasoning/thinking steps
+	ReasoningSteps []*models.ReasoningStep
+
+	// StreamChannel is the channel for streaming response chunks
+	StreamChannel <-chan *ResponseStreamChunk
+
+	// ParetoFront contains all Pareto-optimal candidates (for analysis)
+	ParetoFront []*models.PathCandidate
+
+	// Score is the quality score of the best response
+	Score float64
+
+	// Iterations is the number of evolutionary generations completed
+	Iterations int
 }
 
 // GenerateResponseInput contains parameters for generating a response
@@ -462,7 +575,7 @@ type GenerateResponseInput struct {
 	EnableReasoning     bool
 	EnableStreaming     bool
 	PreviousID          string
-	ContinueFromContent string // If set, this is the existing assistant content to continue from
+	ContinueFromContent string             // If set, this is the existing assistant content to continue from
 	Notifier            GenerationNotifier // Optional notifier for real-time generation progress
 }
 
@@ -624,4 +737,41 @@ type EditAssistantMessageInput struct {
 
 type EditAssistantMessageOutput struct {
 	UpdatedMessage *models.Message
+}
+
+// SynthesizeSpeechUseCase handles text-to-speech synthesis with proper audio storage
+type SynthesizeSpeechUseCase interface {
+	Execute(ctx context.Context, input *SynthesizeSpeechInput) (*SynthesizeSpeechOutput, error)
+}
+
+// SynthesizeSpeechInput contains parameters for speech synthesis
+type SynthesizeSpeechInput struct {
+	Text            string
+	MessageID       string
+	SentenceID      string
+	Voice           string
+	Speed           float32
+	Pitch           float32
+	OutputFormat    string
+	EnableStreaming bool
+}
+
+// SynthesizeSpeechOutput contains the result of speech synthesis
+type SynthesizeSpeechOutput struct {
+	Audio         *models.Audio
+	Sentence      *models.Sentence
+	AudioData     []byte
+	Format        string
+	DurationMs    int
+	StreamChannel <-chan *AudioStreamChunk
+}
+
+// AudioStreamChunk represents a chunk of streaming audio
+type AudioStreamChunk struct {
+	Data       []byte
+	Format     string
+	DurationMs int
+	Sequence   int
+	IsFinal    bool
+	Error      error
 }

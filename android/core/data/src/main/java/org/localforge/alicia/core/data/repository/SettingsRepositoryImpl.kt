@@ -98,6 +98,47 @@ class SettingsRepositoryImpl @Inject constructor(
         settingsDataStore.setWakeWordAutoStart(value)
     }
 
+    // ========== Appearance Settings ==========
+
+    override val theme: Flow<String>
+        get() = settingsDataStore.theme
+
+    override suspend fun setTheme(value: String) {
+        settingsDataStore.setTheme(value)
+    }
+
+    override val compactMode: Flow<Boolean>
+        get() = settingsDataStore.compactMode
+
+    override suspend fun setCompactMode(value: Boolean) {
+        settingsDataStore.setCompactMode(value)
+    }
+
+    override val reduceMotion: Flow<Boolean>
+        get() = settingsDataStore.reduceMotion
+
+    override suspend fun setReduceMotion(value: Boolean) {
+        settingsDataStore.setReduceMotion(value)
+    }
+
+    // ========== Audio Settings ==========
+
+    override val audioOutputEnabled: Flow<Boolean>
+        get() = settingsDataStore.audioOutputEnabled
+
+    override suspend fun setAudioOutputEnabled(value: Boolean) {
+        settingsDataStore.setAudioOutputEnabled(value)
+    }
+
+    // ========== Response Settings ==========
+
+    override val responseLength: Flow<String>
+        get() = settingsDataStore.responseLength
+
+    override suspend fun setResponseLength(value: String) {
+        settingsDataStore.setResponseLength(value)
+    }
+
     override suspend fun clearAllSettings() {
         settingsDataStore.clearAllSettings()
     }

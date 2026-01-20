@@ -30,6 +30,9 @@ include(":core:database")
 include(":feature:assistant")
 include(":feature:conversations")
 include(":feature:settings")
+include(":feature:welcome")
+include(":feature:memory")
+include(":feature:server")
 
 // Service modules
 include(":service:voice")

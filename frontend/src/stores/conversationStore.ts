@@ -43,6 +43,9 @@ interface ConversationStoreActions {
   loadConversation: (conversationId: ConversationId, messages: NormalizedMessage[]) => void;
   mergeMessages: (conversationId: ConversationId, messages: NormalizedMessage[]) => void;
 
+  // Refresh request - used by branch switching to trigger message reload
+  requestMessagesRefresh: () => void;
+
   // Selectors (computed helpers)
   getMessageSentences: (messageId: MessageId) => MessageSentence[];
   getMessageToolCalls: (messageId: MessageId) => ToolCall[];
@@ -59,6 +62,7 @@ const initialState: ConversationStoreState = {
   memoryTraces: {},
   currentStreamingMessageId: null,
   currentConversationId: null,
+  refreshRequestCounter: 0,
 };
 
 export const useConversationStore = create<ConversationStore>()(
@@ -264,6 +268,12 @@ export const useConversationStore = create<ConversationStore>()(
             state.messages[msg.id] = msg;
           }
         }
+      }),
+
+    // Refresh request - increments counter to trigger message reload in App.tsx
+    requestMessagesRefresh: () =>
+      set((state) => {
+        state.refreshRequestCounter += 1;
       }),
 
     // Selectors

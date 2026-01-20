@@ -78,6 +78,17 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
     }
   }, [currentConversationId]);
 
+  // Get the refresh action from conversation store
+  const requestMessagesRefresh = useConversationStore((state) => state.requestMessagesRefresh);
+
+  // Handle branch switch - reloads messages after backend updates the conversation tip
+  const handleBranchSwitch = useCallback(() => {
+    // The branchStore already called switch-branch API to update the tip
+    // Now we need to reload messages to reflect the new branch
+    // Request a refresh which will be handled by App.tsx
+    requestMessagesRefresh();
+  }, [requestMessagesRefresh]);
+
   // Early return after all hooks
   if (!message) {
     return null;
@@ -130,7 +141,9 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
         timestamp={message.createdAt}
         addons={addons}
         messageId={messageId}
+        conversationId={currentConversationId || undefined}
         onEditMessage={handleEditMessage}
+        onBranchSwitch={handleBranchSwitch}
         syncStatus={message.sync_status}
       />
     </div>

@@ -78,6 +78,8 @@ const (
 	TypeSubscribeAck MessageType = 42
 	// TypeUnsubscribeAck (43) - Server acknowledges unsubscription
 	TypeUnsubscribeAck MessageType = 43
+	// TypeBranchUpdate (50) - Notifies frontend of new sibling branches
+	TypeBranchUpdate MessageType = 50
 )
 
 // String returns the string representation of the message type
@@ -155,6 +157,8 @@ func (t MessageType) String() string {
 		return "SubscribeAck"
 	case TypeUnsubscribeAck:
 		return "UnsubscribeAck"
+	case TypeBranchUpdate:
+		return "BranchUpdate"
 	default:
 		return "Unknown"
 	}

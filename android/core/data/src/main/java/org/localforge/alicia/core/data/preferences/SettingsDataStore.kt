@@ -310,6 +310,123 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    // ========== Appearance Settings ==========
+
+    /**
+     * Theme preference: "light", "dark", or "system".
+     */
+    val theme: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.THEME] ?: PreferencesKeys.Defaults.THEME
+        }
+
+    suspend fun setTheme(value: String) {
+        require(value in listOf("light", "dark", "system")) {
+            "Theme must be one of: light, dark, system"
+        }
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.THEME] = value
+        }
+    }
+
+    /**
+     * Compact mode for smaller UI elements.
+     */
+    val compactMode: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.COMPACT_MODE] ?: PreferencesKeys.Defaults.COMPACT_MODE
+        }
+
+    suspend fun setCompactMode(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.COMPACT_MODE] = value
+        }
+    }
+
+    /**
+     * Reduce motion for accessibility.
+     */
+    val reduceMotion: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.REDUCE_MOTION] ?: PreferencesKeys.Defaults.REDUCE_MOTION
+        }
+
+    suspend fun setReduceMotion(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REDUCE_MOTION] = value
+        }
+    }
+
+    // ========== Audio Settings ==========
+
+    /**
+     * Audio output enabled.
+     */
+    val audioOutputEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUDIO_OUTPUT_ENABLED] ?: PreferencesKeys.Defaults.AUDIO_OUTPUT_ENABLED
+        }
+
+    suspend fun setAudioOutputEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUDIO_OUTPUT_ENABLED] = value
+        }
+    }
+
+    // ========== Response Settings ==========
+
+    /**
+     * Response length preference: "concise", "balanced", or "detailed".
+     */
+    val responseLength: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.RESPONSE_LENGTH] ?: PreferencesKeys.Defaults.RESPONSE_LENGTH
+        }
+
+    suspend fun setResponseLength(value: String) {
+        require(value in listOf("concise", "balanced", "detailed")) {
+            "Response length must be one of: concise, balanced, detailed"
+        }
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RESPONSE_LENGTH] = value
+        }
+    }
+
     /**
      * Clear all settings and restore defaults.
      */

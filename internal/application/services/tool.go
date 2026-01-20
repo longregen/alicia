@@ -230,6 +230,25 @@ func (s *ToolService) ListAll(ctx context.Context) ([]*models.Tool, error) {
 	return tools, nil
 }
 
+// ListAvailable returns enabled tools that have registered executors.
+// This ensures tools passed to the LLM can actually be executed.
+func (s *ToolService) ListAvailable(ctx context.Context) ([]*models.Tool, error) {
+	tools, err := s.toolRepo.ListEnabled(ctx)
+	if err != nil {
+		return nil, domain.NewDomainError(err, "failed to list enabled tools")
+	}
+
+	// Filter to only include tools with registered executors
+	available := make([]*models.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if _, hasExecutor := s.executors[tool.Name]; hasExecutor {
+			available = append(available, tool)
+		}
+	}
+
+	return available, nil
+}
+
 func (s *ToolService) CreateToolUse(ctx context.Context, messageID, toolName string, arguments map[string]any) (*models.ToolUse, error) {
 	if messageID == "" {
 		return nil, domain.NewDomainError(domain.ErrInvalidID, "message ID cannot be empty")

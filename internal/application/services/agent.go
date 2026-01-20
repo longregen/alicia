@@ -11,7 +11,10 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-// AgentServiceConfig holds configuration for the agent service
+// AgentServiceConfig holds configuration for the agent service.
+//
+// DEPRECATED: Use usecases.ParetoResponseConfig instead.
+// The AgentService is being replaced by usecases.ParetoResponseGenerator.
 type AgentServiceConfig struct {
 	// RAG configuration - no threshold, get more candidates for filtering
 	RAGCandidateLimit int // Default: 15 - get more candidates, filter later
@@ -26,7 +29,19 @@ func DefaultAgentServiceConfig() AgentServiceConfig {
 	}
 }
 
-// AgentService orchestrates the GEPA-optimized agent flow
+// AgentService orchestrates the GEPA-optimized agent flow.
+//
+// DEPRECATED: Use usecases.ParetoResponseGenerator instead.
+// The ParetoResponseGenerator provides:
+// - Pareto-optimal multi-path search for better responses
+// - Automatic strategy evolution via LLM reflection
+// - Unified tool execution and memory integration
+// - Better configurability via ParetoResponseConfig
+//
+// Migration guide:
+// - Use usecases.NewParetoResponseGenerator() instead of NewAgentService()
+// - The ParetoResponseGenerator handles memory filtering, tool selection,
+//   and response generation in a unified evolutionary loop
 type AgentService struct {
 	// Core services
 	llmService      ports.LLMService

@@ -375,3 +375,21 @@ type ResponseGenerationRequest struct {
 	PreviousID      string `msgpack:"previousId,omitempty" json:"previousId,omitempty"`
 	Timestamp       int64  `msgpack:"timestamp" json:"timestamp"`
 }
+
+// SiblingInfo contains information about a sibling message in a branch
+type SiblingInfo struct {
+	ID        string `msgpack:"id" json:"id"`
+	Content   string `msgpack:"content" json:"content"`
+	CreatedAt string `msgpack:"createdAt" json:"createdAt"`
+}
+
+// BranchUpdate (Type 50) notifies the frontend when new sibling branches are created
+// This is sent after operations like edit that create new branches in the conversation tree
+type BranchUpdate struct {
+	ConversationID  string        `msgpack:"conversationId" json:"conversationId"`
+	ParentMessageID string        `msgpack:"parentMessageId" json:"parentMessageId"` // The shared previousId of siblings
+	NewSibling      SiblingInfo   `msgpack:"newSibling" json:"newSibling"`           // The newly created sibling
+	AllSiblings     []SiblingInfo `msgpack:"allSiblings" json:"allSiblings"`         // All siblings including the new one
+	TotalCount      int           `msgpack:"totalCount" json:"totalCount"`           // Total number of siblings
+	Timestamp       int64         `msgpack:"timestamp" json:"timestamp"`
+}

@@ -96,6 +96,8 @@ const createMockStore = () => {
     mergeMessages: vi.fn(),
     getMessageToolCalls: vi.fn(() => []),
     getMessageMemoryTraces: vi.fn(() => []),
+    refreshRequestCounter: 0,
+    requestMessagesRefresh: vi.fn(),
   };
 
   return store;

@@ -224,7 +224,8 @@ func runAgentWorker(ctx context.Context) error {
 	log.Println("Optimization service initialized")
 
 	// Initialize prompt version service
-	promptVersionService := services.NewPromptVersionService(
+	// TODO: Wire up promptVersionService to use cases that need it
+	_ = services.NewPromptVersionService(
 		promptVersionRepo,
 		idGen,
 	)
@@ -253,22 +254,29 @@ func runAgentWorker(ctx context.Context) error {
 	)
 	log.Println("HandleToolCall use case initialized")
 
-	generateResponseUseCase := usecases.NewGenerateResponse(
+	// Initialize ParetoResponseGenerator - the unified way to generate responses
+	paretoResponseGenerator := usecases.NewParetoResponseGenerator(
+		llmService,
+		llmService, // Use same LLM for reflection (could use a stronger model here)
 		messageRepo,
+		conversationRepo,
+		toolRepo,
 		sentenceRepo,
 		toolUseRepo,
-		toolRepo,
 		reasoningStepRepo,
-		conversationRepo,
-		llmService,
+		memoryUsageRepo,
 		toolService,
 		memoryService,
-		promptVersionService,
 		idGen,
 		txManager,
 		nil, // No broadcaster needed for CLI agent
+		nil, // Use default config
 	)
-	log.Println("GenerateResponse use case initialized")
+	log.Println("ParetoResponseGenerator initialized")
+
+	// Create adapter for backwards compatibility with GenerateResponseUseCase interface
+	generateResponseUseCase := usecases.NewParetoGenerateResponseAdapter(paretoResponseGenerator)
+	log.Println("GenerateResponse adapter initialized (using Pareto search)")
 
 	processUserMessageUseCase := usecases.NewProcessUserMessage(
 		messageRepo,
@@ -291,24 +299,24 @@ func runAgentWorker(ctx context.Context) error {
 	)
 	log.Println("SendMessage use case initialized")
 
-	// Create RegenerateResponse use case
-	regenerateResponseUseCase := usecases.NewRegenerateResponse(
+	// Create RegenerateResponse use case (using Pareto search)
+	regenerateResponseUseCase := usecases.NewParetoRegenerateResponse(
 		messageRepo,
 		conversationRepo,
-		generateResponseUseCase,
+		paretoResponseGenerator,
 		idGen,
 	)
-	log.Println("RegenerateResponse use case initialized")
+	log.Println("RegenerateResponse use case initialized (using Pareto search)")
 
-	// Create ContinueResponse use case
-	continueResponseUseCase := usecases.NewContinueResponse(
+	// Create ContinueResponse use case (using Pareto search)
+	continueResponseUseCase := usecases.NewParetoContinueResponse(
 		messageRepo,
 		conversationRepo,
-		generateResponseUseCase,
+		paretoResponseGenerator,
 		idGen,
 		txManager,
 	)
-	log.Println("ContinueResponse use case initialized")
+	log.Println("ContinueResponse use case initialized (using Pareto search)")
 
 	// Create EditUserMessage use case
 	editUserMessageUseCase := usecases.NewEditUserMessage(
@@ -324,6 +332,15 @@ func runAgentWorker(ctx context.Context) error {
 	// Create EditAssistantMessage use case
 	editAssistantMessageUseCase := usecases.NewEditAssistantMessage(messageRepo)
 	log.Println("EditAssistantMessage use case initialized")
+
+	// Create SynthesizeSpeech use case
+	synthesizeSpeechUseCase := usecases.NewSynthesizeSpeech(
+		audioRepo,
+		sentenceRepo,
+		ttsService,
+		idGen,
+	)
+	log.Println("SynthesizeSpeech use case initialized")
 
 	// Create agent factory
 	agentFactory := livekit.NewAgentFactory(
@@ -350,6 +367,7 @@ func runAgentWorker(ctx context.Context) error {
 		continueResponseUseCase,
 		editUserMessageUseCase,
 		editAssistantMessageUseCase,
+		synthesizeSpeechUseCase,
 	)
 	log.Println("Agent factory initialized")
 
@@ -406,13 +424,13 @@ func runAgentWorker(ctx context.Context) error {
 
 		// Create WebSocket callbacks handler
 		wsCallbacks := &wsAgentCallbacks{
-			generateResponseUseCase:     generateResponseUseCase,
-			regenerateResponseUseCase:   regenerateResponseUseCase,
-			continueResponseUseCase:     continueResponseUseCase,
-			editUserMessageUseCase:      editUserMessageUseCase,
-			conversationRepo:            conversationRepo,
-			messageRepo:                 messageRepo,
-			idGen:                       idGen,
+			generateResponseUseCase:   generateResponseUseCase,
+			regenerateResponseUseCase: regenerateResponseUseCase,
+			continueResponseUseCase:   continueResponseUseCase,
+			editUserMessageUseCase:    editUserMessageUseCase,
+			conversationRepo:          conversationRepo,
+			messageRepo:               messageRepo,
+			idGen:                     idGen,
 		}
 
 		wsClient = livekit.NewWSClient(wsClientConfig, wsCallbacks)
@@ -477,20 +495,28 @@ func runAgentWorker(ctx context.Context) error {
 // wsAgentCallbacks implements livekit.WSClientCallbacks for handling
 // ResponseGenerationRequest events from serve via WebSocket
 type wsAgentCallbacks struct {
-	generateResponseUseCase     ports.GenerateResponseUseCase
-	regenerateResponseUseCase   ports.RegenerateResponseUseCase
-	continueResponseUseCase     ports.ContinueResponseUseCase
-	editUserMessageUseCase      ports.EditUserMessageUseCase
-	conversationRepo            ports.ConversationRepository
-	messageRepo                 ports.MessageRepository
-	idGen                       ports.IDGenerator
-	wsClient                    *livekit.WSClient
+	generateResponseUseCase   ports.GenerateResponseUseCase
+	regenerateResponseUseCase ports.RegenerateResponseUseCase
+	continueResponseUseCase   ports.ContinueResponseUseCase
+	editUserMessageUseCase    ports.EditUserMessageUseCase
+	conversationRepo          ports.ConversationRepository
+	messageRepo               ports.MessageRepository
+	idGen                     ports.IDGenerator
+	wsClient                  *livekit.WSClient
 }
 
 // OnResponseGenerationRequest handles incoming response generation requests
 func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
-	log.Printf("wsAgentCallbacks: Handling %s request for message %s in conversation %s",
-		req.RequestType, req.MessageID, req.ConversationID)
+	log.Printf("========================================")
+	log.Printf("[Agent] RECEIVED ResponseGenerationRequest")
+	log.Printf("[Agent]   RequestID:      %s", req.ID)
+	log.Printf("[Agent]   RequestType:    %s", req.RequestType)
+	log.Printf("[Agent]   ConversationID: %s", req.ConversationID)
+	log.Printf("[Agent]   MessageID:      %s", req.MessageID)
+	log.Printf("[Agent]   EnableTools:    %v", req.EnableTools)
+	log.Printf("[Agent]   EnableReasoning:%v", req.EnableReasoning)
+	log.Printf("[Agent]   EnableStreaming:%v", req.EnableStreaming)
+	log.Printf("========================================")
 
 	// Create a WSNotifier to send generation events back to serve
 	notifier := livekit.NewWSNotifier(c.wsClient)
@@ -498,6 +524,7 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 	switch req.RequestType {
 	case "send":
 		// Generate response for a new user message
+		log.Printf("[Agent] Executing GenerateResponse use case...")
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
@@ -509,19 +536,20 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 
 		output, err := c.generateResponseUseCase.Execute(ctx, input)
 		if err != nil {
-			log.Printf("wsAgentCallbacks: GenerateResponse failed: %v", err)
+			log.Printf("[Agent] GenerateResponse FAILED: %v", err)
 			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
 			return err
 		}
 
+		// Note: NotifyGenerationComplete is called internally by ParetoResponseGenerator
 		if output.Message != nil {
-			notifier.NotifyGenerationComplete(output.Message.ID, req.ConversationID, output.Message.Contents)
-			log.Printf("wsAgentCallbacks: Generated response for message %s", req.MessageID)
+			log.Printf("[Agent] GenerateResponse COMPLETE: messageID=%s, contentLen=%d", output.Message.ID, len(output.Message.Contents))
 		}
 
 	case "regenerate":
 		// Regenerate response for an existing assistant message
 		// Note: The regenerate use case calls GenerateResponse internally
+		log.Printf("[Agent] Executing RegenerateResponse use case...")
 		input := &ports.RegenerateResponseInput{
 			MessageID:       req.MessageID,
 			EnableTools:     req.EnableTools,
@@ -532,19 +560,20 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 
 		output, err := c.regenerateResponseUseCase.Execute(ctx, input)
 		if err != nil {
-			log.Printf("wsAgentCallbacks: RegenerateResponse failed: %v", err)
+			log.Printf("[Agent] RegenerateResponse FAILED: %v", err)
 			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
 			return err
 		}
 
+		// Note: NotifyGenerationComplete is called internally by ParetoResponseGenerator
 		if output.NewMessage != nil {
-			notifier.NotifyGenerationComplete(output.NewMessage.ID, req.ConversationID, output.NewMessage.Contents)
-			log.Printf("wsAgentCallbacks: Regenerated response, new message %s", output.NewMessage.ID)
+			log.Printf("[Agent] RegenerateResponse COMPLETE: newMessageID=%s, contentLen=%d", output.NewMessage.ID, len(output.NewMessage.Contents))
 		}
 
 	case "continue":
 		// Continue from an existing assistant message
 		// Note: The continue use case calls GenerateResponse internally
+		log.Printf("[Agent] Executing ContinueResponse use case...")
 		input := &ports.ContinueResponseInput{
 			TargetMessageID: req.MessageID,
 			EnableTools:     req.EnableTools,
@@ -555,19 +584,19 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 
 		output, err := c.continueResponseUseCase.Execute(ctx, input)
 		if err != nil {
-			log.Printf("wsAgentCallbacks: ContinueResponse failed: %v", err)
+			log.Printf("[Agent] ContinueResponse FAILED: %v", err)
 			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
 			return err
 		}
 
-		// For continue, the content is appended to the target message
+		// Note: NotifyGenerationComplete is called internally by ParetoResponseGenerator
 		if output.TargetMessage != nil {
-			notifier.NotifyGenerationComplete(output.TargetMessage.ID, req.ConversationID, output.AppendedContent)
-			log.Printf("wsAgentCallbacks: Continued response, appended to message %s", output.TargetMessage.ID)
+			log.Printf("[Agent] ContinueResponse COMPLETE: targetMessageID=%s, appendedLen=%d", output.TargetMessage.ID, len(output.AppendedContent))
 		}
 
 	case "edit":
 		// Generate response after editing a user message
+		log.Printf("[Agent] Executing GenerateResponse (for edit) use case...")
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
@@ -579,20 +608,21 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 
 		output, err := c.generateResponseUseCase.Execute(ctx, input)
 		if err != nil {
-			log.Printf("wsAgentCallbacks: GenerateResponse for edit failed: %v", err)
+			log.Printf("[Agent] GenerateResponse (for edit) FAILED: %v", err)
 			notifier.NotifyGenerationFailed(req.MessageID, req.ConversationID, err)
 			return err
 		}
 
+		// Note: NotifyGenerationComplete is called internally by ParetoResponseGenerator
 		if output.Message != nil {
-			notifier.NotifyGenerationComplete(output.Message.ID, req.ConversationID, output.Message.Contents)
-			log.Printf("wsAgentCallbacks: Generated response for edited message %s", req.MessageID)
+			log.Printf("[Agent] GenerateResponse (for edit) COMPLETE: messageID=%s, contentLen=%d", output.Message.ID, len(output.Message.Contents))
 		}
 
 	default:
-		log.Printf("wsAgentCallbacks: Unknown request type: %s", req.RequestType)
+		log.Printf("[Agent] Unknown request type: %s", req.RequestType)
 	}
 
+	log.Printf("[Agent] Request processing finished for %s", req.RequestType)
 	return nil
 }
 

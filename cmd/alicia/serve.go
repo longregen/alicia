@@ -226,7 +226,12 @@ func runServer(ctx context.Context) error {
 		log.Println("Built-in tools registered")
 	}
 
-	// Initialize MCP adapter (optional)
+	// Initialize native tools (web_*, garden_*)
+	if err := initNativeTools(ctx, toolService, pool); err != nil {
+		log.Printf("Warning: Failed to initialize native tools: %v", err)
+	}
+
+	// Initialize MCP adapter (optional - for custom MCP servers)
 	mcpAdapter := initMCPAdapter(ctx, toolService, mcpRepo, idGen)
 
 	// Initialize ASR adapter (optional)
@@ -263,23 +268,29 @@ func runServer(ctx context.Context) error {
 		log.Println("LiveKit not configured - voice features unavailable")
 	}
 
-	// Initialize use cases
-	generateResponseUseCase := usecases.NewGenerateResponse(
+	// Initialize ParetoResponseGenerator - the unified way to generate responses
+	paretoResponseGenerator := usecases.NewParetoResponseGenerator(
+		llmService,
+		llmService, // Use same LLM for reflection (could use a stronger model here)
 		messageRepo,
+		conversationRepo,
+		toolRepo,
 		sentenceRepo,
 		toolUseRepo,
-		toolRepo,
 		reasoningStepRepo,
-		conversationRepo,
-		llmService,
+		memoryUsageRepo,
 		toolService,
 		memoryService,
-		promptVersionService,
 		idGen,
 		txManager,
 		wsBroadcaster,
+		nil, // Use default config
 	)
-	log.Println("GenerateResponse use case initialized")
+	log.Println("ParetoResponseGenerator initialized")
+
+	// Create adapter for backwards compatibility with GenerateResponseUseCase interface
+	generateResponseUseCase := usecases.NewParetoGenerateResponseAdapter(paretoResponseGenerator)
+	log.Println("GenerateResponse adapter initialized (using Pareto search)")
 
 	// Create ProcessUserMessage use case (needed by SendMessage)
 	processUserMessageUC := usecases.NewProcessUserMessage(
@@ -312,24 +323,24 @@ func runServer(ctx context.Context) error {
 	)
 	log.Println("SyncMessages use case initialized")
 
-	// Create RegenerateResponse use case
-	regenerateResponseUC := usecases.NewRegenerateResponse(
+	// Create RegenerateResponse use case (using Pareto search)
+	regenerateResponseUC := usecases.NewParetoRegenerateResponse(
 		messageRepo,
 		conversationRepo,
-		generateResponseUseCase,
+		paretoResponseGenerator,
 		idGen,
 	)
-	log.Println("RegenerateResponse use case initialized")
+	log.Println("RegenerateResponse use case initialized (using Pareto search)")
 
-	// Create ContinueResponse use case
-	continueResponseUC := usecases.NewContinueResponse(
+	// Create ContinueResponse use case (using Pareto search)
+	continueResponseUC := usecases.NewParetoContinueResponse(
 		messageRepo,
 		conversationRepo,
-		generateResponseUseCase,
+		paretoResponseGenerator,
 		idGen,
 		txManager,
 	)
-	log.Println("ContinueResponse use case initialized")
+	log.Println("ContinueResponse use case initialized (using Pareto search)")
 
 	// Create EditUserMessage use case
 	editUserMessageUC := usecases.NewEditUserMessage(
@@ -408,6 +419,7 @@ func runServer(ctx context.Context) error {
 		editAssistantMessageUC,
 		runOptimizationUC,
 		memorizeFromUpvoteUC,
+		processUserMessageUC,
 		wsBroadcaster,
 	)
 

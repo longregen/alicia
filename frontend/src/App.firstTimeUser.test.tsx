@@ -152,6 +152,7 @@ describe('App - First Time User UX with Welcome Screen', () => {
     vi.spyOn(useConversationsModule, 'useConversations').mockReturnValue({
       conversations: [],
       loading: false,
+      hasFetched: true,
       error: null,
       createConversation: mockCreateConversation,
       deleteConversation: mockDeleteConversation,
@@ -171,6 +172,7 @@ describe('App - First Time User UX with Welcome Screen', () => {
       syncError: null,
       syncNow: vi.fn(),
       refresh: mockRefresh,
+      refetch: vi.fn(),
     });
   });
 
@@ -243,6 +245,7 @@ describe('App - First Time User UX with Welcome Screen', () => {
       vi.spyOn(useConversationsModule, 'useConversations').mockReturnValue({
         conversations: [existingConversation],
         loading: false,
+        hasFetched: true,
         error: null,
         createConversation: mockCreateConversation,
         deleteConversation: mockDeleteConversation,
@@ -277,6 +280,7 @@ describe('App - First Time User UX with Welcome Screen', () => {
       vi.spyOn(useConversationsModule, 'useConversations').mockReturnValue({
         conversations: [],
         loading: false,
+        hasFetched: true,
         error: null,
         createConversation: mockCreateConversation,
         deleteConversation: mockDeleteConversation,

@@ -8,17 +8,27 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import org.localforge.alicia.feature.assistant.AssistantScreen
 import org.localforge.alicia.feature.conversations.ConversationsScreen
+import org.localforge.alicia.feature.memory.MemoryScreen
+import org.localforge.alicia.feature.memory.MemoryDetailScreen
+import org.localforge.alicia.feature.server.ServerScreen
 import org.localforge.alicia.feature.settings.SettingsScreen
 import org.localforge.alicia.feature.settings.mcp.MCPSettingsScreen
+import org.localforge.alicia.feature.welcome.WelcomeScreen
 
 /**
  * Navigation routes for the Alicia app
  */
 sealed class Screen(val route: String) {
+    object Welcome : Screen("welcome")
     object Assistant : Screen("assistant")
     object Conversations : Screen("conversations")
     object Settings : Screen("settings")
     object MCPSettings : Screen("settings/mcp")
+    object Memory : Screen("memory")
+    object MemoryDetail : Screen("memory/{memoryId}") {
+        fun createRoute(memoryId: String) = "memory/$memoryId"
+    }
+    object Server : Screen("server")
     object ConversationDetail : Screen("conversation/{conversationId}") {
         fun createRoute(conversationId: String) = "conversation/$conversationId"
     }
@@ -31,13 +41,27 @@ sealed class Screen(val route: String) {
 fun AliciaNavigation(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.Assistant.route
+    startDestination: String = Screen.Welcome.route,
+    onOpenDrawer: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier
     ) {
+        // Welcome Screen - Home/Landing page
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onNewConversation = {
+                    navController.navigate(Screen.Assistant.route)
+                },
+                onSelectConversation = { conversationId ->
+                    navController.navigate(Screen.ConversationDetail.createRoute(conversationId))
+                },
+                onOpenDrawer = onOpenDrawer
+            )
+        }
+
         // Main Assistant Screen
         composable(Screen.Assistant.route) {
             AssistantScreen(
@@ -46,7 +70,8 @@ fun AliciaNavigation(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
-                }
+                },
+                onOpenDrawer = onOpenDrawer
             )
         }
 
@@ -94,6 +119,39 @@ fun AliciaNavigation(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onOpenDrawer = onOpenDrawer
+            )
+        }
+
+        // Memory Screen
+        composable(Screen.Memory.route) {
+            MemoryScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onMemoryClick = { memoryId ->
+                    navController.navigate(Screen.MemoryDetail.createRoute(memoryId))
+                }
+            )
+        }
+
+        // Memory Detail Screen
+        composable(Screen.MemoryDetail.route) { backStackEntry ->
+            val memoryId = backStackEntry.arguments?.getString("memoryId") ?: ""
+            MemoryDetailScreen(
+                memoryId = memoryId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Server Info Screen
+        composable(Screen.Server.route) {
+            ServerScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }

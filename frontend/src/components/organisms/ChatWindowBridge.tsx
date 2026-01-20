@@ -104,6 +104,7 @@ function convertToStreamingMessage(legacyMessage: Message): NormalizedMessage {
     content: legacyMessage.contents,
     status: MessageStatus.Complete, // Legacy messages are always complete
     createdAt: new Date(legacyMessage.created_at),
+    previousId: legacyMessage.previous_id ? createMessageId(legacyMessage.previous_id) : undefined,
     sentenceIds: [],
     toolCallIds,
     memoryTraceIds,

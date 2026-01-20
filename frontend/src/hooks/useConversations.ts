@@ -7,10 +7,12 @@ import { ConversationUpdate } from '../types/protocol';
 
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [hasFetched, setHasFetched] = useState(false);
 
   // Stable callbacks to prevent infinite re-renders
   const handleFetchSuccess = useCallback((data: Conversation[]) => {
     setConversations(data);
+    setHasFetched(true);
   }, []);
 
   const handleCreateSuccess = useCallback((newConversation: Conversation) => {
@@ -107,6 +109,7 @@ export function useConversations() {
   return {
     conversations,
     loading,
+    hasFetched,
     error,
     createConversation,
     deleteConversation,

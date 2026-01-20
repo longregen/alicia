@@ -27,6 +27,17 @@ object PreferencesKeys {
     // Privacy settings
     val SAVE_HISTORY = booleanPreferencesKey("save_history")
 
+    // Appearance settings
+    val THEME = stringPreferencesKey("theme") // "light", "dark", "system"
+    val COMPACT_MODE = booleanPreferencesKey("compact_mode")
+    val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
+
+    // Audio settings
+    val AUDIO_OUTPUT_ENABLED = booleanPreferencesKey("audio_output_enabled")
+
+    // Response settings
+    val RESPONSE_LENGTH = stringPreferencesKey("response_length") // "concise", "balanced", "detailed"
+
     // Auto-start settings
     val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
     val FLOATING_BUTTON_AUTO_START = booleanPreferencesKey("floating_button_auto_start")
@@ -57,5 +68,16 @@ object PreferencesKeys {
         const val AUTO_START_ENABLED = true
         const val FLOATING_BUTTON_AUTO_START = false
         const val WAKE_WORD_AUTO_START = true
+
+        // Appearance defaults
+        const val THEME = "system" // "light", "dark", "system"
+        const val COMPACT_MODE = false
+        const val REDUCE_MOTION = false
+
+        // Audio defaults
+        const val AUDIO_OUTPUT_ENABLED = true
+
+        // Response defaults
+        const val RESPONSE_LENGTH = "balanced" // "concise", "balanced", "detailed"
     }
 }

@@ -1,26 +1,57 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import ChatBubble from './ChatBubble';
 import { MESSAGE_TYPES, MESSAGE_STATES } from '../../mockData';
 import { useBranchStore } from '../../stores/branchStore';
 import { createMessageId } from '../../types/streaming';
 
+// Mock fetch for API calls
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
 /**
  * Integration tests for message branching functionality in ChatBubble.
- * Tests the full workflow: branch creation, navigation, and display.
+ * Tests the full workflow: branch display, navigation via API, and content switching.
+ *
+ * Note: The new branch system syncs with backend - branches are fetched from server
+ * and branch switching updates the conversation tip on the server.
  */
-describe('ChatBubble - Message Branching', () => {
+describe('ChatBubble - Message Branching (Server-Synced)', () => {
   const messageId = createMessageId('msg-test-123');
   const mockTimestamp = new Date('2025-01-15T10:30:00Z');
 
   beforeEach(() => {
     // Reset branch store before each test
     useBranchStore.setState({
-      branches: new Map(),
-      currentVersionIndex: new Map(),
+      branchStates: new Map(),
     });
+    mockFetch.mockReset();
   });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Helper to set up branch state with siblings
+   */
+  const setupBranchState = (siblings: Array<{ id: string; content: string }>, currentIndex = 0) => {
+    useBranchStore.setState({
+      branchStates: new Map([
+        [messageId, {
+          siblings: siblings.map((s, i) => ({
+            id: s.id,
+            content: s.content,
+            createdAt: `2025-01-15T10:0${i}:00Z`,
+          })),
+          currentIndex,
+          loading: false,
+          error: null,
+        }],
+      ]),
+    });
+  };
 
   describe('Branch Navigator Visibility', () => {
     it('does not show branch navigator when message has no branches', () => {
@@ -34,18 +65,16 @@ describe('ChatBubble - Message Branching', () => {
         />
       );
 
-      // BranchNavigator should not render when totalBranches <= 1
+      // BranchNavigator should not render when no siblings
       expect(screen.queryByLabelText('Previous branch')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Next branch')).not.toBeInTheDocument();
     });
 
-    it('shows branch navigator when user message has multiple branches', async () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-
-      // Initialize with original content
-      initializeBranch(messageId, 'Original message');
-      // Create a second branch
-      createBranch(messageId, 'Edited message v2');
+    it('shows branch navigator when message has multiple siblings', async () => {
+      setupBranchState([
+        { id: 'msg-1', content: 'Original message' },
+        { id: 'msg-2', content: 'Edited message v2' },
+      ], 1);
 
       render(
         <ChatBubble
@@ -54,43 +83,47 @@ describe('ChatBubble - Message Branching', () => {
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
-      // Wait for the component to render with branch state
       await waitFor(() => {
         expect(screen.getByLabelText('Previous branch')).toBeInTheDocument();
         expect(screen.getByLabelText('Next branch')).toBeInTheDocument();
       });
     });
 
-    it('does not show branch navigator for assistant messages', () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-      initializeBranch(messageId, 'Original');
-      createBranch(messageId, 'Edited');
+    it('shows branch navigator for assistant messages with siblings', async () => {
+      setupBranchState([
+        { id: 'msg-1', content: 'Response A' },
+        { id: 'msg-2', content: 'Response B' },
+      ], 0);
 
       render(
         <ChatBubble
           type={MESSAGE_TYPES.ASSISTANT}
-          content="Assistant response"
+          content="Response A"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
-      // Assistant messages don't support branching
-      expect(screen.queryByLabelText('Previous branch')).not.toBeInTheDocument();
+      // Assistant messages can also have branches (regenerated responses)
+      await waitFor(() => {
+        expect(screen.getByLabelText('Previous branch')).toBeInTheDocument();
+      });
     });
   });
 
   describe('Branch Display and Counter', () => {
     it('displays correct branch counter "1/3" format', async () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'Version 1');
-      createBranch(messageId, 'Version 2');
-      createBranch(messageId, 'Version 3');
+      setupBranchState([
+        { id: 'msg-1', content: 'Version 1' },
+        { id: 'msg-2', content: 'Version 2' },
+        { id: 'msg-3', content: 'Version 3' },
+      ], 0);
 
       render(
         <ChatBubble
@@ -99,181 +132,138 @@ describe('ChatBubble - Message Branching', () => {
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
       await waitFor(() => {
-        // Should show "3/3" since we created 2 branches (total 3)
-        // and current index should be at the last one
-        expect(screen.getByText('3/3')).toBeInTheDocument();
+        // Should show "1/3" - at first branch of 3
+        expect(screen.getByText('1/3')).toBeInTheDocument();
       });
     });
 
     it('updates counter when navigating between branches', async () => {
       const user = userEvent.setup();
-      const { initializeBranch, createBranch } = useBranchStore.getState();
 
-      initializeBranch(messageId, 'Version 1');
-      createBranch(messageId, 'Version 2');
-      createBranch(messageId, 'Version 3');
+      setupBranchState([
+        { id: 'msg-1', content: 'Version 1' },
+        { id: 'msg-2', content: 'Version 2' },
+        { id: 'msg-3', content: 'Version 3' },
+      ], 0);
 
-      const { rerender } = render(
+      // Mock successful branch switch
+      mockFetch.mockResolvedValue({ ok: true });
+
+      render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
           content="Version 1"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
+          onBranchSwitch={vi.fn()}
         />
       );
 
-      // Currently at "3/3"
+      // Currently at "1/3"
       await waitFor(() => {
-        expect(screen.getByText('3/3')).toBeInTheDocument();
+        expect(screen.getByText('1/3')).toBeInTheDocument();
       });
 
-      // Navigate to previous
-      const prevButton = screen.getByLabelText('Previous branch');
-      await user.click(prevButton);
+      // Navigate to next
+      const nextButton = screen.getByLabelText('Next branch');
+      await user.click(nextButton);
 
-      // Force re-render to pick up store changes
-      rerender(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="Version 1"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Should now show "2/3"
+      // Should now show "2/3" after API call succeeds
       await waitFor(() => {
         expect(screen.getByText('2/3')).toBeInTheDocument();
       });
     });
   });
 
-  describe('Branch Content Display', () => {
-    it('displays current branch content', async () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
+  describe('Branch Navigation API Calls', () => {
+    it('calls switch-branch API when navigating', async () => {
+      const user = userEvent.setup();
+      const onBranchSwitch = vi.fn();
 
-      initializeBranch(messageId, 'First version of the message');
-      createBranch(messageId, 'Second version of the message');
+      setupBranchState([
+        { id: 'msg-1', content: 'Version 1' },
+        { id: 'msg-2', content: 'Version 2' },
+      ], 0);
+
+      mockFetch.mockResolvedValue({ ok: true });
 
       render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="First version of the message"
+          content="Version 1"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
+          onBranchSwitch={onBranchSwitch}
         />
       );
 
-      // Should display the latest branch (second version)
-      await waitFor(() => {
-        expect(screen.getByText('Second version of the message')).toBeInTheDocument();
-      });
-    });
-
-    it('switches content when navigating to previous branch', async () => {
-      const user = userEvent.setup();
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'First version');
-      createBranch(messageId, 'Second version');
-
-      const { rerender } = render(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="First version"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Currently showing second version
-      await waitFor(() => {
-        expect(screen.getByText('Second version')).toBeInTheDocument();
-      });
-
-      // Navigate to previous branch
-      const prevButton = screen.getByLabelText('Previous branch');
-      await user.click(prevButton);
-
-      // Re-render to pick up changes
-      rerender(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="First version"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Should now show first version
-      await waitFor(() => {
-        expect(screen.getByText('First version')).toBeInTheDocument();
-      });
-    });
-
-    it('switches content when navigating to next branch', async () => {
-      const user = userEvent.setup();
-      const { initializeBranch, createBranch, navigateToBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'First version');
-      createBranch(messageId, 'Second version');
-      // Navigate back to first to test "next" navigation
-      navigateToBranch(messageId, 'prev');
-
-      const { rerender } = render(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="First version"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Currently showing first version
-      await waitFor(() => {
-        expect(screen.getByText('First version')).toBeInTheDocument();
-      });
-
-      // Navigate to next branch
       const nextButton = screen.getByLabelText('Next branch');
       await user.click(nextButton);
 
-      // Re-render to pick up changes
-      rerender(
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/switch-branch'),
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify({ tipMessageId: 'msg-2' }),
+          })
+        );
+      });
+
+      // Should call onBranchSwitch callback with new message ID
+      expect(onBranchSwitch).toHaveBeenCalledWith('msg-2');
+    });
+
+    it('handles API errors gracefully', async () => {
+      const user = userEvent.setup();
+
+      setupBranchState([
+        { id: 'msg-1', content: 'Version 1' },
+        { id: 'msg-2', content: 'Version 2' },
+      ], 0);
+
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('Server Error'),
+      });
+
+      render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="First version"
+          content="Version 1"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
-      // Should now show second version
+      const nextButton = screen.getByLabelText('Next branch');
+      await user.click(nextButton);
+
+      // Should still be at index 0 after error
       await waitFor(() => {
-        expect(screen.getByText('Second version')).toBeInTheDocument();
+        expect(screen.getByText('1/2')).toBeInTheDocument();
       });
     });
   });
 
   describe('Branch Navigation Constraints', () => {
     it('disables previous button on first branch', async () => {
-      const { initializeBranch, createBranch, navigateToBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'First');
-      createBranch(messageId, 'Second');
-      // Navigate to first
-      navigateToBranch(messageId, 'prev');
+      setupBranchState([
+        { id: 'msg-1', content: 'First' },
+        { id: 'msg-2', content: 'Second' },
+      ], 0); // At first branch
 
       render(
         <ChatBubble
@@ -282,6 +272,7 @@ describe('ChatBubble - Message Branching', () => {
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
@@ -292,19 +283,19 @@ describe('ChatBubble - Message Branching', () => {
     });
 
     it('disables next button on last branch', async () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'First');
-      createBranch(messageId, 'Second');
-      // Currently at last branch by default
+      setupBranchState([
+        { id: 'msg-1', content: 'First' },
+        { id: 'msg-2', content: 'Second' },
+      ], 1); // At last branch
 
       render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="First"
+          content="Second"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
@@ -315,21 +306,20 @@ describe('ChatBubble - Message Branching', () => {
     });
 
     it('enables both buttons when in middle of branch list', async () => {
-      const { initializeBranch, createBranch, navigateToBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'First');
-      createBranch(messageId, 'Second');
-      createBranch(messageId, 'Third');
-      // Navigate to middle (index 1)
-      navigateToBranch(messageId, 'prev');
+      setupBranchState([
+        { id: 'msg-1', content: 'First' },
+        { id: 'msg-2', content: 'Second' },
+        { id: 'msg-3', content: 'Third' },
+      ], 1); // At middle branch
 
       render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="First"
+          content="Second"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
@@ -342,204 +332,139 @@ describe('ChatBubble - Message Branching', () => {
     });
   });
 
-  describe('Branch Creation via Store', () => {
-    it('creates new branch when createBranch is called directly', () => {
-      const { initializeBranch, createBranch, getBranchCount, getCurrentBranch } = useBranchStore.getState();
+  describe('Loading State', () => {
+    it('shows loading indicator when switching branches', async () => {
+      const user = userEvent.setup();
 
-      // Initialize first branch
-      initializeBranch(messageId, 'Original message');
-      expect(getBranchCount(messageId)).toBe(1);
+      setupBranchState([
+        { id: 'msg-1', content: 'Version 1' },
+        { id: 'msg-2', content: 'Version 2' },
+      ], 0);
 
-      // Create new branch via store
-      createBranch(messageId, 'Edited message');
-
-      // Should have 2 branches now
-      expect(getBranchCount(messageId)).toBe(2);
-
-      // Current branch should be the newly created one
-      const current = getCurrentBranch(messageId);
-      expect(current?.content).toBe('Edited message');
-    });
-
-    it('displays newly created branch content in ChatBubble', async () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-
-      // Initialize first branch
-      initializeBranch(messageId, 'Original message');
-
-      const { rerender } = render(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="Original message"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Initially shows original
-      expect(screen.getByText('Original message')).toBeInTheDocument();
-
-      // Create new branch
-      createBranch(messageId, 'Edited message v2');
-
-      // Re-render to pick up store changes
-      rerender(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="Original message"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Should now show the new branch content
-      await waitFor(() => {
-        expect(screen.getByText('Edited message v2')).toBeInTheDocument();
+      // Create a promise we can control
+      let resolveSwitch: () => void;
+      const switchPromise = new Promise<void>((resolve) => {
+        resolveSwitch = resolve;
       });
-    });
 
-    it('can create multiple branches and navigate between them', async () => {
-      const { initializeBranch, createBranch, navigateToBranch } = useBranchStore.getState();
+      mockFetch.mockReturnValue(
+        switchPromise.then(() => ({ ok: true }))
+      );
 
-      // Create a branch tree
-      initializeBranch(messageId, 'Version 1');
-      createBranch(messageId, 'Version 2');
-      createBranch(messageId, 'Version 3');
-
-      const { rerender } = render(
+      render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
           content="Version 1"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
+          onBranchSwitch={vi.fn()}
         />
       );
 
-      // Should show latest (Version 3)
+      // Click next
+      const nextButton = screen.getByLabelText('Next branch');
+      await user.click(nextButton);
+
+      // Should show loading state
       await waitFor(() => {
-        expect(screen.getByText('Version 3')).toBeInTheDocument();
+        const branchState = useBranchStore.getState().branchStates.get(messageId);
+        expect(branchState?.loading).toBe(true);
       });
 
-      // Navigate to previous
-      navigateToBranch(messageId, 'prev');
-      rerender(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="Version 1"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
+      // Resolve the switch
+      resolveSwitch!();
 
-      // Should show Version 2
+      // Should no longer be loading
       await waitFor(() => {
-        expect(screen.getByText('Version 2')).toBeInTheDocument();
-      });
-
-      // Navigate to previous again
-      navigateToBranch(messageId, 'prev');
-      rerender(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="Version 1"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Should show Version 1
-      await waitFor(() => {
-        expect(screen.getByText('Version 1')).toBeInTheDocument();
+        const branchState = useBranchStore.getState().branchStates.get(messageId);
+        expect(branchState?.loading).toBe(false);
       });
     });
   });
 
   describe('Branch State Persistence', () => {
     it('maintains branch state across re-renders', async () => {
-      const { initializeBranch, createBranch } = useBranchStore.getState();
-
-      initializeBranch(messageId, 'Version 1');
-      createBranch(messageId, 'Version 2');
-      createBranch(messageId, 'Version 3');
+      setupBranchState([
+        { id: 'msg-1', content: 'Version 1' },
+        { id: 'msg-2', content: 'Version 2' },
+        { id: 'msg-3', content: 'Version 3' },
+      ], 2);
 
       const { rerender } = render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="Version 1"
+          content="Version 3"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
       // Verify initial state (at version 3)
       await waitFor(() => {
         expect(screen.getByText('3/3')).toBeInTheDocument();
-        expect(screen.getByText('Version 3')).toBeInTheDocument();
       });
 
       // Re-render with same props
       rerender(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="Version 1"
+          content="Version 3"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
       // State should be preserved
       await waitFor(() => {
         expect(screen.getByText('3/3')).toBeInTheDocument();
-        expect(screen.getByText('Version 3')).toBeInTheDocument();
       });
     });
+  });
 
-    it('initializes branch only once on mount', () => {
-      const { getBranchCount } = useBranchStore.getState();
+  describe('Content Display from Siblings', () => {
+    it('uses message content prop when no sibling state', () => {
+      // No branch state set up
 
-      const { rerender } = render(
+      render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="Initial content"
+          content="Original content from props"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
         />
       );
 
-      // Should have 1 branch after first render
-      expect(getBranchCount(messageId)).toBe(1);
+      expect(screen.getByText('Original content from props')).toBeInTheDocument();
+    });
 
-      // Re-render multiple times
-      rerender(
+    it('uses sibling content when branch state exists', async () => {
+      setupBranchState([
+        { id: 'msg-1', content: 'Sibling version A' },
+        { id: 'msg-2', content: 'Sibling version B' },
+      ], 1); // Currently showing version B
+
+      render(
         <ChatBubble
           type={MESSAGE_TYPES.USER}
-          content="Initial content"
+          content="Original content from props"
           messageId={messageId}
           state={MESSAGE_STATES.COMPLETED}
           timestamp={mockTimestamp}
+          conversationId="conv-1"
         />
       );
 
-      rerender(
-        <ChatBubble
-          type={MESSAGE_TYPES.USER}
-          content="Initial content"
-          messageId={messageId}
-          state={MESSAGE_STATES.COMPLETED}
-          timestamp={mockTimestamp}
-        />
-      );
-
-      // Should still have only 1 branch (not re-initialized)
-      expect(getBranchCount(messageId)).toBe(1);
+      // Should show sibling content, not props content
+      await waitFor(() => {
+        expect(screen.getByText('Sibling version B')).toBeInTheDocument();
+      });
     });
   });
 });

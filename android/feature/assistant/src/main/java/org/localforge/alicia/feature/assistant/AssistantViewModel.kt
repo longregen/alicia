@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import org.localforge.alicia.core.domain.model.MessageRole
 import org.localforge.alicia.core.domain.repository.ConversationRepository
+import org.localforge.alicia.core.domain.repository.VotingRepository
 import org.localforge.alicia.core.domain.model.*
 import org.localforge.alicia.service.voice.VoiceController
 import org.localforge.alicia.service.voice.VoiceState as ServiceVoiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,11 +31,16 @@ enum class InputMode {
 @HiltViewModel
 class AssistantViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
-    private val voiceController: VoiceController
+    private val voiceController: VoiceController,
+    private val branchStore: BranchStore,
+    private val votingRepository: VotingRepository
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<org.localforge.alicia.core.domain.model.Message>>(emptyList())
     val messages: StateFlow<List<org.localforge.alicia.core.domain.model.Message>> = _messages.asStateFlow()
+
+    // Expose branch states for UI
+    val branchStates: StateFlow<Map<String, MessageBranchState>> = branchStore.branchStates
 
     // Map VoiceController's service VoiceState to domain VoiceState
     val voiceState: StateFlow<VoiceState> = voiceController.currentState.map { serviceState ->
@@ -74,6 +81,9 @@ class AssistantViewModel @Inject constructor(
 
     private var currentConversationId: String? = null
 
+    // Track which messages we've already fetched siblings for
+    private val fetchedSiblingsFor = mutableSetOf<String>()
+
     init {
         // Load initial conversation
         loadCurrentConversation()
@@ -100,19 +110,138 @@ class AssistantViewModel @Inject constructor(
                 }
                 .collect { domainMessages ->
                     _messages.value = domainMessages
+                    // Fetch siblings for messages that might have branches
+                    fetchSiblingsForMessages(domainMessages)
                 }
         }
     }
 
     fun loadSpecificConversation(conversationId: String) {
         currentConversationId = conversationId
+        // Clear previous siblings data when switching conversations
+        branchStore.clearAll()
+        fetchedSiblingsFor.clear()
 
         viewModelScope.launch {
             // Load messages for this specific conversation
             conversationRepository.getMessagesForConversation(conversationId)
                 .collect { domainMessages ->
                     _messages.value = domainMessages
+                    // Fetch siblings for messages that might have branches
+                    fetchSiblingsForMessages(domainMessages)
                 }
+        }
+    }
+
+    /**
+     * Fetch siblings for messages that might have branches.
+     * This is called when messages are loaded to populate branch navigation.
+     * Only fetches for messages we haven't already fetched siblings for.
+     */
+    private fun fetchSiblingsForMessages(messages: List<org.localforge.alicia.core.domain.model.Message>) {
+        viewModelScope.launch {
+            for (message in messages) {
+                // Skip if we've already fetched siblings for this message
+                if (fetchedSiblingsFor.contains(message.id)) continue
+
+                // Mark as fetched to avoid duplicate requests
+                fetchedSiblingsFor.add(message.id)
+
+                // Fetch siblings from backend
+                fetchSiblings(message.id)
+            }
+        }
+    }
+
+    /**
+     * Fetch siblings for a specific message from the backend.
+     * Updates the BranchStore with the results.
+     */
+    fun fetchSiblings(messageId: String) {
+        viewModelScope.launch {
+            branchStore.setLoading(messageId, true)
+
+            val result = conversationRepository.getMessageSiblings(messageId)
+
+            result.onSuccess { siblings ->
+                // Convert domain messages to SiblingMessage
+                val siblingMessages = siblings.map { msg ->
+                    SiblingMessage(
+                        id = msg.id,
+                        content = msg.content,
+                        createdAt = msg.createdAt,
+                        role = msg.role.value,
+                        sequenceNumber = msg.sequenceNumber ?: 0
+                    )
+                }
+
+                // Only update store if there are siblings (including the message itself)
+                if (siblingMessages.isNotEmpty()) {
+                    branchStore.updateSiblingsFromServer(
+                        messageId = messageId,
+                        siblings = siblingMessages,
+                        activeMessageId = messageId // The current message is active
+                    )
+                }
+            }.onFailure { error ->
+                android.util.Log.w("AssistantViewModel", "Failed to fetch siblings for $messageId: ${error.message}")
+                branchStore.setError(messageId, error.message)
+            }
+        }
+    }
+
+    /**
+     * Navigate to a different branch (sibling message).
+     * This calls the backend to switch the conversation's active branch,
+     * then reloads the messages.
+     *
+     * @param messageId The current message ID
+     * @param direction Navigation direction (PREV or NEXT)
+     */
+    fun navigateBranch(messageId: String, direction: BranchDirection) {
+        val conversationId = currentConversationId ?: return
+
+        // Get the target sibling without changing local state yet
+        val targetSibling = branchStore.peekNavigationTarget(messageId, direction) ?: return
+
+        viewModelScope.launch {
+            android.util.Log.i("AssistantViewModel", "Switching branch from $messageId to ${targetSibling.id}")
+
+            // Call backend to switch branch
+            val result = conversationRepository.switchBranch(conversationId, targetSibling.id)
+
+            result.onSuccess {
+                // Update local state to reflect the change
+                branchStore.setActiveSibling(messageId, targetSibling.id)
+
+                // Reload messages to get the new chain
+                // The Flow collection in loadCurrentConversation/loadSpecificConversation
+                // will automatically update when the backend returns new data
+                reloadMessages(conversationId)
+
+                android.util.Log.i("AssistantViewModel", "Branch switch successful, reloading messages")
+            }.onFailure { error ->
+                android.util.Log.e("AssistantViewModel", "Failed to switch branch: ${error.message}")
+                _textMessageError.value = "Failed to switch branch: ${error.message}"
+            }
+        }
+    }
+
+    /**
+     * Reload messages for the current conversation.
+     * Called after branch switching to get the updated message chain.
+     * Uses first() to get a single snapshot rather than continuous subscription.
+     */
+    private suspend fun reloadMessages(conversationId: String) {
+        try {
+            // Get the latest messages snapshot (one-shot, not continuous subscription)
+            val domainMessages = conversationRepository.getMessagesForConversation(conversationId)
+                .first()
+            _messages.value = domainMessages
+            // Note: We don't re-fetch siblings here as the existing data is still valid
+            // The sibling list doesn't change, only which one is active
+        } catch (e: Exception) {
+            android.util.Log.e("AssistantViewModel", "Failed to reload messages: ${e.message}")
         }
     }
 
@@ -148,6 +277,9 @@ class AssistantViewModel @Inject constructor(
             result.onSuccess { conversation ->
                 currentConversationId = conversation.id
                 _messages.value = emptyList()
+                // Clear branch state for new conversation
+                branchStore.clearAll()
+                fetchedSiblingsFor.clear()
             }
         }
     }
@@ -256,6 +388,65 @@ class AssistantViewModel @Inject constructor(
 
         lastAssistantMessage?.let { message ->
             voiceController.sendRegenerate(message.id)
+        }
+    }
+
+    /**
+     * Edits a user message and triggers a new assistant response.
+     * The server will create a new branch with the edited message.
+     * @param messageId The ID of the message to edit
+     * @param newContent The new content for the message
+     */
+    fun editMessage(messageId: String, newContent: String) {
+        // Send edit to server - server will create the branch
+        voiceController.sendEdit(messageId, newContent)
+
+        // After edit, we'll need to re-fetch siblings to include the new branch
+        // Remove from fetched set so it gets re-fetched
+        fetchedSiblingsFor.remove(messageId)
+    }
+
+    /**
+     * @deprecated No longer used - siblings are fetched from server automatically.
+     * Initialize branches for a message.
+     */
+    @Deprecated("Siblings are fetched from server automatically")
+    fun initializeBranch(messageId: String, content: String) {
+        // No-op - siblings are fetched from server, not initialized locally
+    }
+
+    /**
+     * Submits feedback (vote) for an assistant message.
+     * Uses the VotingRepository to send the vote to the backend.
+     * @param messageId The ID of the message to vote on
+     * @param isUpvote True for thumbs up, false for thumbs down
+     */
+    fun voteOnMessage(messageId: String, isUpvote: Boolean) {
+        viewModelScope.launch {
+            try {
+                val vote = if (isUpvote) Vote.UP else Vote.DOWN
+                votingRepository.voteOnMessage(messageId, vote)
+                android.util.Log.i("AssistantViewModel", "Vote submitted for message $messageId: ${vote.value}")
+            } catch (e: Exception) {
+                android.util.Log.e("AssistantViewModel", "Failed to vote on message: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Submits feedback (vote) for a tool use.
+     * @param toolUseId The ID of the tool use to vote on
+     * @param isUpvote True for thumbs up, false for thumbs down
+     */
+    fun voteOnToolUse(toolUseId: String, isUpvote: Boolean) {
+        viewModelScope.launch {
+            try {
+                val vote = if (isUpvote) Vote.UP else Vote.DOWN
+                votingRepository.voteOnToolUse(toolUseId, vote)
+                android.util.Log.i("AssistantViewModel", "Vote submitted for tool use $toolUseId: ${vote.value}")
+            } catch (e: Exception) {
+                android.util.Log.e("AssistantViewModel", "Failed to vote on tool use: ${e.message}")
+            }
         }
     }
 

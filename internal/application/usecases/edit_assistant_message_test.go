@@ -111,6 +111,10 @@ func (m *mockEditMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID 
 	return nil, nil
 }
 
+func (m *mockEditMessageRepo) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	return m.GetChainFromTip(ctx, tipMessageID)
+}
+
 func (m *mockEditMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	return nil, nil
 }

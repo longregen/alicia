@@ -151,6 +151,18 @@ func (m *mockToolService) ListAll(ctx context.Context) ([]*models.Tool, error) {
 	return tools, nil
 }
 
+func (m *mockToolService) ListAvailable(ctx context.Context) ([]*models.Tool, error) {
+	tools := make([]*models.Tool, 0)
+	for _, tool := range m.tools {
+		if tool.Enabled {
+			if _, hasExecutor := m.executors[tool.Name]; hasExecutor {
+				tools = append(tools, tool)
+			}
+		}
+	}
+	return tools, nil
+}
+
 func (m *mockToolService) RegisterExecutor(name string, executor func(context.Context, map[string]any) (any, error)) error {
 	if _, exists := m.executors[name]; exists {
 		return errors.New("executor already registered")

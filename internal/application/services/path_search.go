@@ -55,6 +55,10 @@ func DefaultPathSearchConfig() *PathSearchConfig {
 	}
 }
 
+// MaxToolLoopIterations is the maximum number of LLM-tool loop iterations.
+// This prevents infinite loops when tools keep being called.
+const MaxToolLoopIterations = 5
+
 // PathSearchController orchestrates GEPA path search for single-query solution discovery.
 // Unlike prompt optimization which optimizes across many queries, path search explores
 // multiple execution paths to find the best answer for ONE specific query.
@@ -77,19 +81,36 @@ type PathSearchController struct {
 	// Budget tracking
 	toolCallsUsed int
 	llmCallsUsed  int
+
+	// Optional tool execution support
+	// When toolRunner is non-nil, executePath runs a multi-turn agent loop
+	// that actually executes tools and feeds results back to the LLM.
+	// When nil, only single-turn execution capturing tool call intents is performed.
+	toolRunner ports.ToolRunner
+	tools        []*models.Tool // Available tools for LLM to call
 }
 
-// NewPathSearchController creates a new PathSearchController.
+// NewPathSearchController creates a new PathSearchController with tool execution support.
+// Tool execution is the default behavior - the multi-turn agent loop will:
+//  1. Call the LLM with available tools
+//  2. Execute any requested tools via the ToolRunner
+//  3. Feed results back to the LLM
+//  4. Repeat until the LLM provides a final answer (no more tool calls)
+//
 // Parameters:
 //   - llmService: The main LLM service for agent execution
 //   - reflectionLLM: Optional stronger LLM for mutation/reflection (can be nil, defaults to llmService)
 //   - idGenerator: ID generator for creating unique candidate IDs
 //   - config: Configuration for the search (can be nil, defaults to DefaultPathSearchConfig)
+//   - toolRunner: Runner for executing tools (can be nil to disable tool execution and use single-turn mode)
+//   - tools: Available tools for the LLM to call (can be nil/empty)
 func NewPathSearchController(
 	llmService ports.LLMService,
 	reflectionLLM ports.LLMService,
 	idGenerator ports.IDGenerator,
 	config *PathSearchConfig,
+	toolRunner ports.ToolRunner,
+	tools []*models.Tool,
 ) *PathSearchController {
 	if config == nil {
 		config = DefaultPathSearchConfig()
@@ -114,7 +135,32 @@ func NewPathSearchController(
 		config:        config,
 		toolCallsUsed: 0,
 		llmCallsUsed:  0,
+		toolRunner:    toolRunner,
+		tools:         tools,
 	}
+}
+
+// NewPathSearchControllerWithTools is deprecated: use NewPathSearchController instead.
+// Tool execution is now the default behavior in NewPathSearchController.
+// This function is kept for backward compatibility but simply delegates to NewPathSearchController.
+//
+// Deprecated: Use NewPathSearchController with toolRunner and tools parameters.
+func NewPathSearchControllerWithTools(
+	llmService ports.LLMService,
+	reflectionLLM ports.LLMService,
+	idGenerator ports.IDGenerator,
+	config *PathSearchConfig,
+	toolRunner ports.ToolRunner,
+	tools []*models.Tool,
+) *PathSearchController {
+	return NewPathSearchController(llmService, reflectionLLM, idGenerator, config, toolRunner, tools)
+}
+
+// SetToolRunner sets or updates the tool runner and available tools.
+// This allows enabling/disabling tool execution after construction.
+func (c *PathSearchController) SetToolRunner(runner ports.ToolRunner, tools []*models.Tool) {
+	c.toolRunner = runner
+	c.tools = tools
 }
 
 // Search implements ports.PathSearchService.Search.
@@ -287,8 +333,20 @@ func (c *PathSearchController) Search(ctx context.Context, query string, config 
 }
 
 // executePath runs the agent with the candidate's strategy and captures the execution trace.
-// For now, this simulates agent execution by calling llmService.Chat directly.
-// The actual agent integration will come later.
+//
+// When toolRunner is nil (default): Performs single-turn execution that captures the LLM's
+// tool call intents but does NOT actually execute any tools. The trace records what tools
+// the LLM wanted to call (name, arguments) but Result will be nil and Success is optimistically
+// set to true.
+//
+// When toolRunner is set: Performs a multi-turn agent loop that:
+//  1. Calls the LLM (with tools if available)
+//  2. Executes any requested tools via the ToolExecutor
+//  3. Feeds results back to the LLM
+//  4. Repeats until the LLM provides a final answer (no more tool calls) or max iterations
+//
+// This allows the path search to evaluate either the LLM's reasoning strategy (single-turn)
+// or the full execution including tool results (multi-turn).
 func (c *PathSearchController) executePath(ctx context.Context, query string, candidate *models.PathCandidate) (*models.ExecutionTrace, error) {
 	if candidate == nil {
 		return nil, fmt.Errorf("candidate cannot be nil")
@@ -299,7 +357,7 @@ func (c *PathSearchController) executePath(ctx context.Context, query string, ca
 	// Build the agent prompt with strategy and accumulated lessons
 	agentPrompt := c.buildAgentPrompt(candidate, query)
 
-	// Create LLM messages
+	// Create initial LLM messages
 	messages := []ports.LLMMessage{
 		{
 			Role:    "system",
@@ -311,23 +369,44 @@ func (c *PathSearchController) executePath(ctx context.Context, query string, ca
 		},
 	}
 
-	// Call LLM (simulated agent execution)
+	// If no tool executor, fall back to single-turn execution
+	if c.toolRunner == nil {
+		return c.executePathSingleTurn(ctx, messages, agentPrompt, query, startTime)
+	}
+
+	// Multi-turn execution with tool loop
+	return c.executePathWithToolLoop(ctx, messages, agentPrompt, query, startTime)
+}
+
+// executePathSingleTurn performs single-turn execution without actual tool execution.
+// This is the original behavior - captures tool call intents but doesn't execute them.
+func (c *PathSearchController) executePathSingleTurn(ctx context.Context, messages []ports.LLMMessage, agentPrompt, query string, startTime time.Time) (*models.ExecutionTrace, error) {
 	c.llmCallsUsed++
-	response, err := c.llmService.Chat(ctx, messages)
+
+	var response *ports.LLMResponse
+	var err error
+
+	// Use ChatWithTools if tools are available, otherwise use Chat
+	if len(c.tools) > 0 {
+		response, err = c.llmService.ChatWithTools(ctx, messages, c.tools)
+	} else {
+		response, err = c.llmService.Chat(ctx, messages)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 
 	duration := time.Since(startTime)
 
-	// Parse any tool calls from response (for now, we assume no actual tool execution)
+	// Parse any tool calls from response (not executed, just captured)
 	toolCalls := c.parseToolCalls(response)
 
 	// Build execution trace
 	trace := &models.ExecutionTrace{
 		Query:          query,
 		ToolCalls:      toolCalls,
-		ReasoningSteps: []string{}, // Could be extracted from reasoning if available
+		ReasoningSteps: []string{},
 		FinalAnswer:    response.Content,
 		TotalTokens:    c.estimateTokens(agentPrompt, response.Content),
 		DurationMs:     duration.Milliseconds(),
@@ -335,6 +414,108 @@ func (c *PathSearchController) executePath(ctx context.Context, query string, ca
 
 	// Track tool calls in budget
 	c.toolCallsUsed += len(toolCalls)
+
+	return trace, nil
+}
+
+// executePathWithToolLoop performs multi-turn execution with actual tool execution.
+// Runs an agent loop: LLM -> tools -> LLM -> tools -> ... -> final answer
+func (c *PathSearchController) executePathWithToolLoop(ctx context.Context, messages []ports.LLMMessage, agentPrompt, query string, startTime time.Time) (*models.ExecutionTrace, error) {
+	currentMessages := make([]ports.LLMMessage, len(messages))
+	copy(currentMessages, messages)
+
+	var allToolCalls []models.ToolCallRecord
+	var finalAnswer string
+	var totalTokens int
+
+	for iteration := 0; iteration < MaxToolLoopIterations; iteration++ {
+		c.llmCallsUsed++
+
+		var response *ports.LLMResponse
+		var err error
+
+		// Use ChatWithTools if tools are available
+		if len(c.tools) > 0 {
+			response, err = c.llmService.ChatWithTools(ctx, currentMessages, c.tools)
+		} else {
+			response, err = c.llmService.Chat(ctx, currentMessages)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("LLM call failed on iteration %d: %w", iteration, err)
+		}
+
+		// Estimate tokens for this turn
+		totalTokens += c.estimateTokens("", response.Content)
+
+		// Add assistant response to message history
+		currentMessages = append(currentMessages, ports.LLMMessage{
+			Role:    "assistant",
+			Content: response.Content,
+		})
+
+		// If no tool calls, we're done - this is the final answer
+		if len(response.ToolCalls) == 0 {
+			finalAnswer = response.Content
+			break
+		}
+
+		// Execute each tool call and collect results
+		for _, tc := range response.ToolCalls {
+			toolRecord := models.ToolCallRecord{
+				ToolName:  tc.Name,
+				Arguments: tc.Arguments,
+				Success:   false,
+				Result:    nil,
+				Error:     "",
+			}
+
+			// Execute the tool
+			result, execErr := c.toolRunner.RunTool(ctx, tc.Name, tc.Arguments)
+
+			if execErr != nil {
+				toolRecord.Success = false
+				toolRecord.Error = execErr.Error()
+				// Add error message to conversation
+				currentMessages = append(currentMessages, ports.LLMMessage{
+					Role:    "tool",
+					Content: fmt.Sprintf("Error executing %s: %s", tc.Name, execErr.Error()),
+				})
+			} else {
+				toolRecord.Success = true
+				toolRecord.Result = result
+				// Add tool result to conversation
+				resultContent := fmt.Sprintf("%v", result)
+				currentMessages = append(currentMessages, ports.LLMMessage{
+					Role:    "tool",
+					Content: resultContent,
+				})
+			}
+
+			allToolCalls = append(allToolCalls, toolRecord)
+			c.toolCallsUsed++
+		}
+
+		// If this was the last iteration and we still have tool calls, use last response as answer
+		if iteration == MaxToolLoopIterations-1 {
+			finalAnswer = response.Content
+			if finalAnswer == "" {
+				finalAnswer = "Max tool execution iterations reached."
+			}
+		}
+	}
+
+	duration := time.Since(startTime)
+
+	// Build execution trace with all tool calls and results
+	trace := &models.ExecutionTrace{
+		Query:          query,
+		ToolCalls:      allToolCalls,
+		ReasoningSteps: []string{},
+		FinalAnswer:    finalAnswer,
+		TotalTokens:    totalTokens + c.estimateTokens(agentPrompt, ""),
+		DurationMs:     duration.Milliseconds(),
+	}
 
 	return trace, nil
 }

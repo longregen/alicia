@@ -12,14 +12,22 @@ import org.localforge.alicia.core.data.preferences.SettingsDataStore
 import org.localforge.alicia.core.data.preferences.settingsDataStore
 import org.localforge.alicia.core.data.repository.ConversationRepositoryImpl
 import org.localforge.alicia.core.data.repository.MCPRepositoryImpl
+import org.localforge.alicia.core.data.repository.MemoryRepositoryImpl
+import org.localforge.alicia.core.data.repository.NotesRepositoryImpl
+import org.localforge.alicia.core.data.repository.ServerRepositoryImpl
 import org.localforge.alicia.core.data.repository.SettingsRepositoryImpl
 import org.localforge.alicia.core.data.repository.VoiceRepositoryImpl
+import org.localforge.alicia.core.data.repository.VotingRepositoryImpl
 import org.localforge.alicia.core.database.dao.ConversationDao
 import org.localforge.alicia.core.database.dao.MessageDao
 import org.localforge.alicia.core.domain.repository.ConversationRepository
 import org.localforge.alicia.core.domain.repository.MCPRepository
+import org.localforge.alicia.core.domain.repository.MemoryRepository
+import org.localforge.alicia.core.domain.repository.NotesRepository
+import org.localforge.alicia.core.domain.repository.ServerRepository
 import org.localforge.alicia.core.domain.repository.SettingsRepository
 import org.localforge.alicia.core.domain.repository.VoiceRepository
+import org.localforge.alicia.core.domain.repository.VotingRepository
 import org.localforge.alicia.core.network.api.AliciaApiService
 import javax.inject.Singleton
 
@@ -92,5 +100,37 @@ object DataModule {
         apiService: AliciaApiService
     ): MCPRepository {
         return MCPRepositoryImpl(apiService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMemoryRepository(
+        apiService: AliciaApiService
+    ): MemoryRepository {
+        return MemoryRepositoryImpl(apiService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideServerRepository(
+        apiService: AliciaApiService
+    ): ServerRepository {
+        return ServerRepositoryImpl(apiService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideVotingRepository(
+        apiService: AliciaApiService
+    ): VotingRepository {
+        return VotingRepositoryImpl(apiService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideNotesRepository(
+        apiService: AliciaApiService
+    ): NotesRepository {
+        return NotesRepositoryImpl(apiService)
     }
 }

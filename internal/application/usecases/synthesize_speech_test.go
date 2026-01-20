@@ -58,7 +58,7 @@ func TestSynthesizeSpeech_NonStreaming(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Hello world",
 		MessageID:       "msg_123",
 		Voice:           "test_voice",
@@ -103,7 +103,7 @@ func TestSynthesizeSpeech_WithDefaults(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Test text",
 		EnableStreaming: false,
 	}
@@ -129,7 +129,7 @@ func TestSynthesizeSpeech_WithSentence(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Test sentence",
 		MessageID:       "msg_123",
 		SentenceID:      "sent_1",
@@ -160,7 +160,7 @@ func TestSynthesizeSpeech_Streaming(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Streaming test",
 		MessageID:       "msg_123",
 		OutputFormat:    "audio/opus",
@@ -177,7 +177,7 @@ func TestSynthesizeSpeech_Streaming(t *testing.T) {
 	}
 
 	chunks := 0
-	var finalChunk *AudioStreamChunk
+	var finalChunk *ports.AudioStreamChunk
 	for chunk := range output.StreamChannel {
 		if chunk.Error != nil {
 			t.Fatalf("unexpected stream error: %v", chunk.Error)
@@ -205,7 +205,7 @@ func TestSynthesizeSpeech_EmptyText(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "",
 		EnableStreaming: false,
 	}
@@ -223,7 +223,7 @@ func TestSynthesizeSpeech_TTSServiceUnavailable(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, nil, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Test text",
 		EnableStreaming: false,
 	}
@@ -246,7 +246,7 @@ func TestSynthesizeSpeech_TTSServiceFailure(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Test text",
 		EnableStreaming: false,
 	}
@@ -269,7 +269,7 @@ func TestSynthesizeSpeech_StreamingFailure(t *testing.T) {
 
 	uc := NewSynthesizeSpeech(audioRepo, sentenceRepo, ttsService, idGen)
 
-	input := &SynthesizeSpeechInput{
+	input := &ports.SynthesizeSpeechInput{
 		Text:            "Test text",
 		EnableStreaming: true,
 	}

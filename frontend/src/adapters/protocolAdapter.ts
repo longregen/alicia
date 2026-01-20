@@ -3,6 +3,8 @@ import {
   MessageType,
   StartAnswer,
   AssistantSentence,
+  AssistantMessage as ProtocolAssistantMessage,
+  ErrorMessage as ProtocolErrorMessage,
   ToolUseRequest,
   ToolUseResult,
   ReasoningStep,
@@ -26,6 +28,9 @@ import {
   ControlVariation,
   StopType,
   VariationType,
+  BranchUpdate,
+  ConversationUpdate,
+  Commentary,
 } from '../types/protocol';
 import {
   NormalizedMessage,
@@ -50,6 +55,7 @@ import { useFeedbackStore, type VotableType } from '../stores/feedbackStore';
 import { useServerInfoStore, type ConnectionStatus, type MCPServerStatus } from '../stores/serverInfoStore';
 import { useDimensionStore } from '../stores/dimensionStore';
 import { useOptimizationProgressStore } from '../stores/optimizationProgressStore';
+import { useBranchStore } from '../stores/branchStore';
 import { messageRepository } from '../db/repository';
 
 /**
@@ -189,6 +195,26 @@ export function handleProtocolMessage(envelope: Envelope): void {
       handleOptimizationProgress(envelope.body as OptimizationProgress);
       break;
 
+    case MessageType.BranchUpdate:
+      handleBranchUpdate(envelope.body as BranchUpdate);
+      break;
+
+    case MessageType.ErrorMessage:
+      handleErrorMessage(envelope.body as ProtocolErrorMessage, store);
+      break;
+
+    case MessageType.AssistantMessage:
+      handleAssistantMessage(envelope.body as ProtocolAssistantMessage, store);
+      break;
+
+    case MessageType.ConversationUpdate:
+      handleConversationUpdate(envelope.body as ConversationUpdate);
+      break;
+
+    case MessageType.Commentary:
+      handleCommentary(envelope.body as Commentary, store);
+      break;
+
     default:
       // Ignore other message types
       break;
@@ -212,6 +238,7 @@ export function handleStartAnswer(
     content: '',
     status: MessageStatus.Streaming,
     createdAt: new Date(),
+    previousId: msg.previousId ? createMessageId(msg.previousId) : undefined,
     sentenceIds: [],
     toolCallIds: [],
     memoryTraceIds: [],
@@ -290,6 +317,7 @@ export function handleAssistantSentence(
     store.setCurrentStreamingMessageId(null);
 
     // Persist complete message to SQLite
+    // The currentMessageId comes from the server (via StartAnswer), so use it as server_id
     messageRepository.upsert({
       id: currentMessageId,
       conversation_id: message.conversationId,
@@ -297,7 +325,7 @@ export function handleAssistantSentence(
       role: 'assistant',
       contents: content,
       local_id: currentMessageId,
-      server_id: undefined,
+      server_id: currentMessageId,
       sync_status: 'synced',
       retry_count: 0,
       created_at: message.createdAt.toISOString(),
@@ -544,12 +572,48 @@ export function handleTranscription(
     content: msg.text,
     status: msg.final ? MessageStatus.Complete : MessageStatus.Streaming,
     createdAt: new Date(),
+    previousId: msg.previousId ? createMessageId(msg.previousId) : undefined,
     sentenceIds: [],
     toolCallIds: [],
     memoryTraceIds: [],
   };
 
   store.addMessage(message);
+
+  // Check if this message is a sibling of existing messages (same previousId).
+  // If so, trigger a branch store update so the BranchNavigator UI updates.
+  if (msg.final && msg.previousId) {
+    const previousId = createMessageId(msg.previousId);
+    const allMessages = Object.values(store.messages);
+
+    // Find ALL messages with the same previousId (siblings including the new one)
+    const allSiblings = allMessages.filter(
+      (m) =>
+        m.conversationId === conversationId &&
+        m.previousId === previousId
+    );
+
+    if (allSiblings.length > 1) {
+      // This is a new sibling - update the branch store with all siblings
+      const branchStore = useBranchStore.getState();
+      const newSibling = {
+        id: messageId,
+        content: msg.text,
+        createdAt: message.createdAt.toISOString(),
+      };
+      branchStore.handleBranchUpdate({
+        conversationId,
+        parentMessageId: previousId,
+        newSibling,
+        allSiblings: allSiblings.map((s) => ({
+          id: s.id,
+          content: s.content,
+          createdAt: s.createdAt.toISOString(),
+        })),
+        totalCount: allSiblings.length,
+      });
+    }
+  }
 }
 
 /**
@@ -704,6 +768,177 @@ export function handleOptimizationProgress(msg: OptimizationProgress): void {
     dimensionScores: msg.dimensionScores as DimensionScores | undefined,
     errorMessage: msg.message,
   });
+}
+
+/**
+ * Handle BranchUpdate: Update branch store when a new sibling branch is created.
+ * This is sent by the backend when an edit operation creates a new sibling message.
+ */
+export function handleBranchUpdate(msg: BranchUpdate): void {
+  const branchStore = useBranchStore.getState();
+
+  // Transform protocol SiblingInfo to store SiblingMessage format
+  branchStore.handleBranchUpdate({
+    conversationId: msg.conversationId,
+    parentMessageId: msg.parentMessageId,
+    newSibling: {
+      id: msg.newSibling.id,
+      content: msg.newSibling.content,
+      createdAt: msg.newSibling.createdAt,
+    },
+    allSiblings: msg.allSiblings.map((s) => ({
+      id: s.id,
+      content: s.content,
+      createdAt: s.createdAt,
+    })),
+    totalCount: msg.totalCount,
+  });
+}
+
+/**
+ * Handle ErrorMessage: Display error notifications to the user.
+ * Sent by backend when generation fails or other errors occur.
+ */
+export function handleErrorMessage(
+  msg: ProtocolErrorMessage,
+  store: ReturnType<typeof useConversationStore.getState>
+): void {
+  console.error(`[Protocol Error] Code ${msg.code}: ${msg.message}`, {
+    severity: msg.severity,
+    recoverable: msg.recoverable,
+    originatingId: msg.originatingId,
+  });
+
+  // If there's a current streaming message and this error relates to it,
+  // mark the message as errored
+  const currentStreamingId = store.currentStreamingMessageId;
+  if (currentStreamingId) {
+    const message = store.messages[currentStreamingId];
+    // Check if this error relates to the current streaming message
+    if (message && (!msg.originatingId || msg.originatingId === currentStreamingId)) {
+      store.updateMessageStatus(currentStreamingId, MessageStatus.Error);
+      store.setCurrentStreamingMessageId(null);
+
+      // Optionally append error info to message content for visibility
+      const errorSuffix = `\n\n[Error: ${msg.message}]`;
+      store.updateMessageContent(currentStreamingId, message.content + errorSuffix);
+    }
+  }
+
+  // TODO: Consider adding a toast/notification system for user-visible errors
+  // For now, errors are logged and streaming messages are marked as failed
+}
+
+/**
+ * Handle AssistantMessage: Process complete non-streaming assistant response.
+ * This is sent by backend for non-streaming mode responses.
+ */
+export function handleAssistantMessage(
+  msg: ProtocolAssistantMessage,
+  store: ReturnType<typeof useConversationStore.getState>
+): void {
+  const messageId = createMessageId(msg.id);
+  const conversationId = createConversationId(msg.conversationId);
+
+  // Check if this message already exists (could be from streaming that completed)
+  const existingMessage = store.messages[messageId];
+  if (existingMessage) {
+    // Message exists - just update content and mark complete
+    store.updateMessageContent(messageId, msg.content);
+    store.updateMessageStatus(messageId, MessageStatus.Complete);
+
+    // Clear streaming state if this was the streaming message
+    if (store.currentStreamingMessageId === messageId) {
+      store.setCurrentStreamingMessageId(null);
+    }
+    return;
+  }
+
+  // Create new complete message (non-streaming path)
+  const message: NormalizedMessage = {
+    id: messageId,
+    conversationId,
+    role: 'assistant',
+    content: msg.content,
+    status: MessageStatus.Complete,
+    createdAt: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+    previousId: msg.previousId ? createMessageId(msg.previousId) : undefined,
+    sentenceIds: [],
+    toolCallIds: [],
+    memoryTraceIds: [],
+  };
+
+  store.addMessage(message);
+  store.setCurrentConversationId(conversationId);
+
+  // Clear any streaming state since we received a complete message
+  if (store.currentStreamingMessageId) {
+    store.setCurrentStreamingMessageId(null);
+  }
+
+  // Persist to SQLite
+  // The messageId comes from the server, so use it as server_id
+  messageRepository.upsert({
+    id: messageId,
+    conversation_id: conversationId,
+    sequence_number: 0, // Will be determined by server
+    role: 'assistant',
+    contents: msg.content,
+    local_id: messageId,
+    server_id: messageId,
+    sync_status: 'synced',
+    retry_count: 0,
+    created_at: message.createdAt.toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * Handle ConversationUpdate: Update conversation metadata (title, status).
+ * Sent by backend when conversation properties change.
+ */
+export function handleConversationUpdate(msg: ConversationUpdate): void {
+  // Update the conversations list/cache if we have one
+  // For now, emit an event that the conversation list hook can listen to
+  console.log(`[ConversationUpdate] ${msg.conversationId}: title="${msg.title}", status="${msg.status}"`);
+
+  // Dispatch a custom event for conversation metadata changes
+  // This allows the useConversations hook or other listeners to react
+  window.dispatchEvent(
+    new CustomEvent('conversation-update', {
+      detail: {
+        conversationId: msg.conversationId,
+        title: msg.title,
+        status: msg.status,
+        updatedAt: msg.updatedAt,
+      },
+    })
+  );
+}
+
+/**
+ * Handle Commentary: Process assistant's internal commentary.
+ * Similar to reasoning steps but for different types of internal notes.
+ */
+export function handleCommentary(
+  msg: Commentary,
+  store: ReturnType<typeof useConversationStore.getState>
+): void {
+  const messageId = createMessageId(msg.messageId);
+  const message = store.messages[messageId];
+
+  if (!message) {
+    console.warn('Commentary received for unknown message:', msg.messageId);
+    return;
+  }
+
+  // Wrap commentary in <commentary> tags for UI parsing (similar to reasoning)
+  const commentaryBlock = `<commentary data-id="${msg.id}" data-type="${msg.commentaryType || 'general'}">${msg.content}</commentary>`;
+
+  // Append to message content
+  message.content = message.content
+    ? `${message.content} ${commentaryBlock}`
+    : commentaryBlock;
 }
 
 /**

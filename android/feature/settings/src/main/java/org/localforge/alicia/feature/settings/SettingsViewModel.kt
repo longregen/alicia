@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.localforge.alicia.feature.settings.components.ResponseLength
+import org.localforge.alicia.feature.settings.components.ThemeOption
 import javax.inject.Inject
 
 /**
@@ -55,6 +57,24 @@ data class AppSettings(
     val availableVoices: List<VoiceOption> = emptyList(),
     val selectedVoice: String = "default",
     val speechRate: Float = 1.0f,
+    val audioOutputEnabled: Boolean = true,
+
+    // Response settings
+    val responseLength: ResponseLength = ResponseLength.BALANCED,
+
+    // Memory settings
+    val autoPinMemories: Boolean = true,
+    val confirmDeleteMemories: Boolean = true,
+    val showRelevanceScores: Boolean = true,
+
+    // Appearance settings
+    val theme: ThemeOption = ThemeOption.SYSTEM,
+    val compactMode: Boolean = false,
+    val reduceMotion: Boolean = false,
+
+    // Notifications settings
+    val soundNotifications: Boolean = true,
+    val messagePreviews: Boolean = true,
 
     // Server settings
     val serverUrl: String = "",
@@ -290,5 +310,105 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             conversationRepository.deleteAllConversations()
         }
+    }
+
+    /**
+     * Enables or disables audio output for voice responses.
+     *
+     * @param enabled Whether audio output should be enabled
+     */
+    fun setAudioOutputEnabled(enabled: Boolean) {
+        _settings.update { it.copy(audioOutputEnabled = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Sets the response length preference.
+     *
+     * @param length The response length preference
+     */
+    fun setResponseLength(length: ResponseLength) {
+        _settings.update { it.copy(responseLength = length) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Enables or disables auto-pinning of important memories.
+     *
+     * @param enabled Whether auto-pin should be enabled
+     */
+    fun setAutoPinMemories(enabled: Boolean) {
+        _settings.update { it.copy(autoPinMemories = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Enables or disables delete confirmation for memories.
+     *
+     * @param enabled Whether confirmation should be required
+     */
+    fun setConfirmDeleteMemories(enabled: Boolean) {
+        _settings.update { it.copy(confirmDeleteMemories = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Enables or disables relevance score display on memories.
+     *
+     * @param enabled Whether relevance scores should be shown
+     */
+    fun setShowRelevanceScores(enabled: Boolean) {
+        _settings.update { it.copy(showRelevanceScores = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Sets the app theme.
+     *
+     * @param theme The theme option to use
+     */
+    fun setTheme(theme: ThemeOption) {
+        _settings.update { it.copy(theme = theme) }
+        // TODO: Persist to settings repository and apply theme change
+    }
+
+    /**
+     * Enables or disables compact mode.
+     *
+     * @param enabled Whether compact mode should be enabled
+     */
+    fun setCompactMode(enabled: Boolean) {
+        _settings.update { it.copy(compactMode = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Enables or disables reduced motion for accessibility.
+     *
+     * @param enabled Whether motion should be reduced
+     */
+    fun setReduceMotion(enabled: Boolean) {
+        _settings.update { it.copy(reduceMotion = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Enables or disables sound notifications.
+     *
+     * @param enabled Whether sound notifications should be enabled
+     */
+    fun setSoundNotifications(enabled: Boolean) {
+        _settings.update { it.copy(soundNotifications = enabled) }
+        // TODO: Persist to settings repository when added
+    }
+
+    /**
+     * Enables or disables message previews in notifications.
+     *
+     * @param enabled Whether message previews should be shown
+     */
+    fun setMessagePreviews(enabled: Boolean) {
+        _settings.update { it.copy(messagePreviews = enabled) }
+        // TODO: Persist to settings repository when added
     }
 }

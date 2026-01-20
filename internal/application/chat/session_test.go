@@ -198,6 +198,39 @@ func (m *mockMessageRepo) GetChainFromTip(ctx context.Context, tipMessageID stri
 	return chain, nil
 }
 
+func (m *mockMessageRepo) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	// Get the chain first
+	chain, err := m.GetChainFromTip(ctx, tipMessageID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect all previous_ids from the chain
+	parentIDs := make(map[string]bool)
+	for _, msg := range chain {
+		if msg.PreviousID != "" {
+			parentIDs[msg.PreviousID] = true
+		}
+	}
+
+	// Find siblings: messages with the same previous_id that aren't in the chain
+	chainIDs := make(map[string]bool)
+	for _, msg := range chain {
+		chainIDs[msg.ID] = true
+	}
+
+	var result []*models.Message
+	result = append(result, chain...)
+
+	for _, msg := range m.messages {
+		if msg.PreviousID != "" && parentIDs[msg.PreviousID] && !chainIDs[msg.ID] {
+			result = append(result, msg)
+		}
+	}
+
+	return result, nil
+}
+
 func (m *mockMessageRepo) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	msg, ok := m.messages[messageID]
 	if !ok {

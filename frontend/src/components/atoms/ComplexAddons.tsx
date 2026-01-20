@@ -18,22 +18,6 @@ export interface ToolDetail {
   status?: 'pending' | 'running' | 'completed' | 'error';
 }
 
-// Helper to get status badge styling
-const getStatusBadge = (status: string): { label: string; className: string; icon: string } => {
-  switch (status) {
-    case 'completed':
-      return { label: 'success', className: 'bg-success/20 text-success', icon: '+' };
-    case 'error':
-      return { label: 'error', className: 'bg-error/20 text-error', icon: '!' };
-    case 'running':
-      return { label: 'running', className: 'bg-accent/20 text-accent', icon: '~' };
-    case 'pending':
-      return { label: 'pending', className: 'bg-warning/20 text-warning', icon: '?' };
-    default:
-      return { label: status || 'unknown', className: 'bg-muted/20 text-muted', icon: '?' };
-  }
-};
-
 // Helper to format web search - compact inline format
 const formatWebSearchCompact = (toolName: string, args: string, result: string): React.ReactNode => {
   let query = '';
@@ -72,9 +56,17 @@ const formatWebSearchCompact = (toolName: string, args: string, result: string):
                 • {item.title || 'Untitled'}
               </div>
               {item.url && (
-                <div className="text-[10px] text-accent/70 truncate pl-2.5">
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-[10px] text-accent/70 truncate pl-2.5 hover:text-accent hover:underline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
                   {item.url}
-                </div>
+                </a>
               )}
             </div>
           ))}
@@ -153,9 +145,21 @@ const formatMemoryCompact = (toolName: string, args: string, result: string): Re
         <div className="space-y-1.5 pl-1">
           {memories.slice(0, 6).map((item, index) => (
             <div key={item.id || index}>
-              <div className="text-xs text-default">
-                • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
-              </div>
+              {item.id ? (
+                <a
+                  href={`/memory/${item.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs text-default hover:text-accent hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                </a>
+              ) : (
+                <div className="text-xs text-default">
+                  • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                </div>
+              )}
               {(item.similarity !== undefined || item.relevance !== undefined) && (
                 <div className="text-[10px] text-muted-foreground/60 pl-2.5">
                   {Math.round((item.similarity ?? item.relevance ?? 0) * 100)}% match
@@ -184,9 +188,21 @@ const formatMemoryQueryResult = (parsed: Record<string, unknown>): React.ReactNo
           <div className="space-y-1.5 pl-1">
             {memories.slice(0, 6).map((item, index) => (
               <div key={item.id || index}>
-                <div className="text-xs text-default">
-                  • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
-                </div>
+                {item.id ? (
+                  <a
+                    href={`/memory/${item.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-default hover:text-accent hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                  </a>
+                ) : (
+                  <div className="text-xs text-default">
+                    • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                  </div>
+                )}
                 {item.similarity !== undefined && (
                   <div className="text-[10px] text-muted-foreground/60 pl-2.5">
                     {Math.round(item.similarity * 100)}% match
@@ -260,9 +276,21 @@ const formatToolResult = (result: string, toolName: string): React.ReactNode => 
           <div className="space-y-1.5 pl-1">
             {parsed.slice(0, 6).map((item: { id?: string; content?: string; relevance?: number; similarity?: number }, index: number) => (
               <div key={item.id || index}>
-                <div className="text-xs text-default">
-                  • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
-                </div>
+                {item.id ? (
+                  <a
+                    href={`/memory/${item.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-default hover:text-accent hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                  </a>
+                ) : (
+                  <div className="text-xs text-default">
+                    • {item.content ? (item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content) : 'No content'}
+                  </div>
+                )}
                 {(item.relevance !== undefined || item.similarity !== undefined) && (
                   <div className="text-[10px] text-muted-foreground/60 pl-2.5">
                     {Math.round((item.relevance ?? item.similarity ?? 0) * 100)}% match

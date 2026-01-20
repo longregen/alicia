@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"context"
 	"log"
 	"net/http"
-	"runtime/debug"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -90,10 +88,11 @@ func (h *MessagesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	var messages []*models.Message
 
-	// If conversation has a tip, get the chain from the tip
+	// If conversation has a tip, get the chain from the tip WITH all siblings at branch points.
+	// This allows the frontend to know about all alternative branches without N separate API calls.
 	// Otherwise fall back to getting all messages (for backwards compatibility)
 	if conversation.TipMessageID != nil && *conversation.TipMessageID != "" {
-		messages, err = h.messageRepo.GetChainFromTip(r.Context(), *conversation.TipMessageID)
+		messages, err = h.messageRepo.GetChainFromTipWithSiblings(r.Context(), *conversation.TipMessageID)
 	} else {
 		messages, err = h.messageRepo.GetByConversation(r.Context(), conversationID)
 	}
@@ -298,111 +297,51 @@ func (h *MessagesHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user message using ProcessUserMessageUseCase
-	if h.processUserMessageUseCase != nil {
-		processOutput, err := h.processUserMessageUseCase.Execute(r.Context(), &ports.ProcessUserMessageInput{
-			ConversationID: conversationID,
-			TextContent:    req.Contents,
-		})
-		if err != nil {
-			log.Printf("Failed to process user message for conversation %s: %v", conversationID, err)
-			respondError(w, "internal_error", "Failed to process message", http.StatusInternalServerError)
-			return
-		}
-
-		// Broadcast user message to WebSocket subscribers
-		if processOutput.Message != nil && h.wsBroadcaster != nil {
-			userMsgResponse := (&dto.MessageResponse{}).FromModel(processOutput.Message)
-			h.wsBroadcaster.BroadcastMessage(conversationID, userMsgResponse)
-		}
-
-		// Broadcast ResponseGenerationRequest for agent to pick up
-		if h.wsBroadcaster != nil && processOutput.Message != nil {
-			h.wsBroadcaster.BroadcastResponseGenerationRequest(conversationID, &protocol.ResponseGenerationRequest{
-				ID:              h.idGen.GenerateRequestID(),
-				MessageID:       processOutput.Message.ID,
-				ConversationID:  conversationID,
-				RequestType:     "send",
-				EnableTools:     true,
-				EnableReasoning: true,
-				EnableStreaming: false,
-				Timestamp:       time.Now().UnixMilli(),
-			})
-		}
-
-		// Return accepted status with message ID
-		respondJSON(w, map[string]string{
-			"status":          "accepted",
-			"conversation_id": conversationID,
-			"message_id":      processOutput.Message.ID,
-		}, http.StatusAccepted)
+	// Require processUserMessageUseCase - all response generation must go through the agent
+	if h.processUserMessageUseCase == nil {
+		log.Printf("ERROR: processUserMessageUseCase is nil - cannot process messages without agent")
+		respondError(w, "internal_error", "Message processing not available - agent not configured", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Fallback: use sendMessageUseCase if processUserMessageUseCase is not available
-	// This maintains backwards compatibility during migration
-	if h.sendMessageUseCase != nil {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("PANIC in send message for conversation %s: %v\n%s", conversationID, r, debug.Stack())
-					if h.wsBroadcaster != nil {
-						h.wsBroadcaster.BroadcastError(conversationID, "internal_error", "Message processing failed unexpectedly")
-					}
-				}
-			}()
-
-			// 5 minute timeout for LLM generation to prevent indefinite hangs
-			genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-
-			output, err := h.sendMessageUseCase.Execute(genCtx, &ports.SendMessageInput{
-				ConversationID:  conversationID,
-				TextContent:     req.Contents,
-				LocalID:         req.LocalID,
-				EnableTools:     true,
-				EnableReasoning: true,
-				EnableStreaming: false, // REST doesn't support streaming
-			})
-			if err != nil {
-				log.Printf("Failed to send message for REST API conversation %s: %v", conversationID, err)
-				if h.wsBroadcaster != nil {
-					h.wsBroadcaster.BroadcastError(conversationID, "send_failed", err.Error())
-				}
-				return
-			}
-
-			if output == nil {
-				log.Printf("Send message returned nil output for REST API conversation %s", conversationID)
-				if h.wsBroadcaster != nil {
-					h.wsBroadcaster.BroadcastError(conversationID, "send_failed", "Message processing returned no output")
-				}
-				return
-			}
-
-			// Broadcast user message to WebSocket subscribers
-			if output.UserMessage != nil {
-				userMsgResponse := (&dto.MessageResponse{}).FromModel(output.UserMessage)
-				if h.wsBroadcaster != nil {
-					h.wsBroadcaster.BroadcastMessage(conversationID, userMsgResponse)
-				}
-			}
-
-			// Broadcast assistant response to WebSocket subscribers
-			if output.AssistantMessage != nil {
-				log.Printf("Generated response for REST API conversation %s: %s", conversationID, output.AssistantMessage.ID)
-				assistantMsgResponse := (&dto.MessageResponse{}).FromModel(output.AssistantMessage)
-				if h.wsBroadcaster != nil {
-					h.wsBroadcaster.BroadcastMessage(conversationID, assistantMsgResponse)
-				}
-			}
-		}()
+	// Create user message using ProcessUserMessageUseCase
+	processOutput, err := h.processUserMessageUseCase.Execute(r.Context(), &ports.ProcessUserMessageInput{
+		ConversationID: conversationID,
+		TextContent:    req.Contents,
+	})
+	if err != nil {
+		log.Printf("Failed to process user message for conversation %s: %v", conversationID, err)
+		respondError(w, "internal_error", "Failed to process message", http.StatusInternalServerError)
+		return
 	}
 
-	// Return accepted status since processing happens asynchronously
+	// Broadcast user message to WebSocket subscribers
+	if processOutput.Message != nil && h.wsBroadcaster != nil {
+		userMsgResponse := (&dto.MessageResponse{}).FromModel(processOutput.Message)
+		h.wsBroadcaster.BroadcastMessage(conversationID, userMsgResponse)
+	}
+
+	// Broadcast ResponseGenerationRequest for agent to pick up
+	if h.wsBroadcaster != nil && h.idGen != nil && processOutput.Message != nil {
+		log.Printf("[Serve] Forwarding ResponseGenerationRequest to agent: conversation=%s message=%s type=send",
+			conversationID, processOutput.Message.ID)
+		h.wsBroadcaster.BroadcastResponseGenerationRequest(conversationID, &protocol.ResponseGenerationRequest{
+			ID:              h.idGen.GenerateRequestID(),
+			MessageID:       processOutput.Message.ID,
+			ConversationID:  conversationID,
+			RequestType:     "send",
+			EnableTools:     true,
+			EnableReasoning: true,
+			EnableStreaming: false,
+			Timestamp:       time.Now().UnixMilli(),
+		})
+	}
+
+	// Return accepted status with message ID
 	respondJSON(w, map[string]string{
 		"status":          "accepted",
 		"conversation_id": conversationID,
+		"message_id":      processOutput.Message.ID,
 	}, http.StatusAccepted)
 }
 
@@ -574,6 +513,8 @@ func (h *MessagesHandler) EditUserMessage(w http.ResponseWriter, r *http.Request
 
 	// Broadcast ResponseGenerationRequest for agent to pick up
 	if h.wsBroadcaster != nil && h.idGen != nil && output.UpdatedMessage != nil {
+		log.Printf("[Serve] Forwarding ResponseGenerationRequest to agent: conversation=%s message=%s type=edit",
+			message.ConversationID, output.UpdatedMessage.ID)
 		h.wsBroadcaster.BroadcastResponseGenerationRequest(message.ConversationID, &protocol.ResponseGenerationRequest{
 			ID:              h.idGen.GenerateRequestID(),
 			MessageID:       output.UpdatedMessage.ID,
@@ -640,6 +581,8 @@ func (h *MessagesHandler) Regenerate(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast ResponseGenerationRequest for agent to pick up
 	if h.wsBroadcaster != nil && h.idGen != nil {
+		log.Printf("[Serve] Forwarding ResponseGenerationRequest to agent: conversation=%s message=%s type=regenerate",
+			message.ConversationID, messageID)
 		h.wsBroadcaster.BroadcastResponseGenerationRequest(message.ConversationID, &protocol.ResponseGenerationRequest{
 			ID:              h.idGen.GenerateRequestID(),
 			MessageID:       messageID,
@@ -706,6 +649,8 @@ func (h *MessagesHandler) Continue(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast ResponseGenerationRequest for agent to pick up
 	if h.wsBroadcaster != nil && h.idGen != nil {
+		log.Printf("[Serve] Forwarding ResponseGenerationRequest to agent: conversation=%s message=%s type=continue",
+			message.ConversationID, messageID)
 		h.wsBroadcaster.BroadcastResponseGenerationRequest(message.ConversationID, &protocol.ResponseGenerationRequest{
 			ID:              h.idGen.GenerateRequestID(),
 			MessageID:       messageID,

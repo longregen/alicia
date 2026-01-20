@@ -179,6 +179,10 @@ func (m *mockMessageRepoForSend) GetChainFromTip(ctx context.Context, tipMessage
 	return []*models.Message{}, nil
 }
 
+func (m *mockMessageRepoForSend) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
+	return m.GetChainFromTip(ctx, tipMessageID)
+}
+
 func (m *mockMessageRepoForSend) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	return []*models.Message{}, nil
 }

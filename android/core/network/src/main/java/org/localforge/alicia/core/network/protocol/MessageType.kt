@@ -1,7 +1,8 @@
 package org.localforge.alicia.core.network.protocol
 
 /**
- * Protocol message types matching the server-side implementation
+ * Protocol message types matching the server-side implementation.
+ * Keep in sync with frontend/src/types/protocol.ts and backend pkg/protocol/
  */
 enum class MessageType(val value: Int) {
     /** Error notification */
@@ -50,10 +51,71 @@ enum class MessageType(val value: Int) {
     COMMENTARY(15),
 
     /** Streaming response chunk */
-    ASSISTANT_SENTENCE(16);
+    ASSISTANT_SENTENCE(16),
+
+    // WebSocket sync message types
+    /** Sync request */
+    SYNC_REQUEST(17),
+
+    /** Sync response */
+    SYNC_RESPONSE(18),
+
+    // Feedback protocol message types (20-27)
+    /** User feedback on message/tool/memory */
+    FEEDBACK(20),
+
+    /** Confirmation of feedback received */
+    FEEDBACK_CONFIRMATION(21),
+
+    /** User note on message/tool */
+    USER_NOTE(22),
+
+    /** Confirmation of note saved */
+    NOTE_CONFIRMATION(23),
+
+    /** Memory action (create/update/delete) */
+    MEMORY_ACTION(24),
+
+    /** Confirmation of memory action */
+    MEMORY_CONFIRMATION(25),
+
+    /** Server info response */
+    SERVER_INFO(26),
+
+    /** Session statistics */
+    SESSION_STATS(27),
+
+    /** Conversation metadata update */
+    CONVERSATION_UPDATE(28),
+
+    // Dimension optimization message types (29-32) - match web protocol.ts
+    /** Dimension preference selection */
+    DIMENSION_PREFERENCE(29),
+
+    /** Elite selection for optimization */
+    ELITE_SELECT(30),
+
+    /** Elite options for optimization */
+    ELITE_OPTIONS(31),
+
+    /** Optimization progress update */
+    OPTIMIZATION_PROGRESS(32),
+
+    // Subscription message types (40-43)
+    /** Subscribe to conversation updates */
+    SUBSCRIBE(40),
+
+    /** Unsubscribe from conversation updates */
+    UNSUBSCRIBE(41),
+
+    /** Subscribe acknowledgement with missed messages */
+    SUBSCRIBE_ACK(42),
+
+    /** Unsubscribe acknowledgement */
+    UNSUBSCRIBE_ACK(43);
 
     companion object {
-        private val map = values().associateBy(MessageType::value)
+        private val map = entries.associateBy(MessageType::value)
         fun fromInt(value: Int) = map[value] ?: ERROR_MESSAGE
     }
 }
