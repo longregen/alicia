@@ -12,7 +12,6 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// handleConfiguration processes Configuration messages
 func (d *DefaultMessageDispatcher) handleConfiguration(ctx context.Context, envelope *protocol.Envelope) error {
 	config, ok := envelope.Body.(*protocol.Configuration)
 	if !ok {
@@ -36,16 +35,9 @@ func (d *DefaultMessageDispatcher) handleConfiguration(ctx context.Context, enve
 		// Non-fatal - continue even if this fails
 	}
 
-	// Send available elite solutions (if any exist from optimization runs)
-	if err := d.SendEliteOptions(ctx); err != nil {
-		log.Printf("Failed to send EliteOptions after configuration: %v", err)
-		// Non-fatal - continue even if this fails
-	}
-
 	return nil
 }
 
-// handleUserMessage processes user text messages
 func (d *DefaultMessageDispatcher) handleUserMessage(ctx context.Context, envelope *protocol.Envelope) error {
 	userMsg, ok := envelope.Body.(*protocol.UserMessage)
 	if !ok {
@@ -134,7 +126,6 @@ func (d *DefaultMessageDispatcher) handleUserMessage(ctx context.Context, envelo
 	return nil
 }
 
-// processUserInput processes user message text, creates message, retrieves memories
 func (d *DefaultMessageDispatcher) processUserInput(
 	ctx context.Context,
 	conversationID string,
@@ -220,7 +211,6 @@ func (d *DefaultMessageDispatcher) processUserInput(
 	return processOutput, nil
 }
 
-// generateResponseAsync triggers async response generation
 func (d *DefaultMessageDispatcher) generateResponseAsync(
 	_ context.Context, // unused - we create our own context for async operation
 	conversationID string,
@@ -291,9 +281,6 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 	}()
 }
 
-// processStreamingResponse handles streaming response chunks and sends protocol messages.
-// If skipStartAnswer is true, the StartAnswer message is not sent (useful when the caller
-// already sent it via a Notifier).
 func (d *DefaultMessageDispatcher) processStreamingResponse(
 	ctx context.Context,
 	conversationID string,
@@ -435,7 +422,6 @@ func (d *DefaultMessageDispatcher) processStreamingResponse(
 	return fullResponseText, nil
 }
 
-// sendNonStreamingResponse sends complete non-streaming response
 func (d *DefaultMessageDispatcher) sendNonStreamingResponse(
 	ctx context.Context,
 	conversationID string,
@@ -486,8 +472,6 @@ func (d *DefaultMessageDispatcher) sendNonStreamingResponse(
 	return output.Message.Contents
 }
 
-// synthesizeAndSendAudioChunk synthesizes speech for a sentence and sends it as an AudioChunk protocol message
-// isLast indicates whether this is the final sentence of the response
 func (d *DefaultMessageDispatcher) synthesizeAndSendAudioChunk(ctx context.Context, conversationID string, messageID string, sentenceID string, text string, sequence int32, isLast bool) {
 	if d.synthesizeSpeechUseCase == nil || text == "" {
 		return
@@ -548,7 +532,6 @@ func (d *DefaultMessageDispatcher) synthesizeAndSendAudioChunk(ctx context.Conte
 	}
 }
 
-// handleToolUseRequest processes tool execution requests
 func (d *DefaultMessageDispatcher) handleToolUseRequest(ctx context.Context, envelope *protocol.Envelope) error {
 	req, ok := envelope.Body.(*protocol.ToolUseRequest)
 	if !ok {
@@ -650,7 +633,6 @@ func (d *DefaultMessageDispatcher) handleToolUseRequest(ctx context.Context, env
 	return nil
 }
 
-// handleControlStop processes stop control messages
 func (d *DefaultMessageDispatcher) handleControlStop(ctx context.Context, envelope *protocol.Envelope) error {
 	stopMsg, ok := envelope.Body.(*protocol.ControlStop)
 	if !ok {
@@ -707,7 +689,6 @@ func (d *DefaultMessageDispatcher) handleControlStop(ctx context.Context, envelo
 	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
-// handleControlVariation processes variation control messages
 func (d *DefaultMessageDispatcher) handleControlVariation(ctx context.Context, envelope *protocol.Envelope) error {
 	varMsg, ok := envelope.Body.(*protocol.ControlVariation)
 	if !ok {
@@ -773,7 +754,6 @@ func (d *DefaultMessageDispatcher) handleControlVariation(ctx context.Context, e
 	}
 }
 
-// handleAudioChunk processes incoming audio data
 func (d *DefaultMessageDispatcher) handleAudioChunk(ctx context.Context, envelope *protocol.Envelope) error {
 	audioChunk, ok := envelope.Body.(*protocol.AudioChunk)
 	if !ok {
@@ -821,7 +801,6 @@ func (d *DefaultMessageDispatcher) handleAudioChunk(ctx context.Context, envelop
 	return nil
 }
 
-// handleTranscription processes transcription messages
 func (d *DefaultMessageDispatcher) handleTranscription(ctx context.Context, envelope *protocol.Envelope) error {
 	transcription, ok := envelope.Body.(*protocol.Transcription)
 	if !ok {
@@ -856,7 +835,6 @@ func (d *DefaultMessageDispatcher) handleTranscription(ctx context.Context, enve
 	return nil
 }
 
-// handleRegenerate regenerates a response for the same user message
 func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message) error {
 	log.Printf("Regenerating response for message: %s", targetMessage.ID)
 
@@ -993,7 +971,6 @@ func (d *DefaultMessageDispatcher) handleRegenerate(ctx context.Context, envelop
 	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
-// handleAssistantEdit updates an existing assistant message with new content (no regeneration)
 func (d *DefaultMessageDispatcher) handleAssistantEdit(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message, newContent string) error {
 	log.Printf("Editing assistant message: %s", targetMessage.ID)
 
@@ -1086,7 +1063,6 @@ func (d *DefaultMessageDispatcher) handleAssistantEdit(ctx context.Context, enve
 	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
-// handleUserEdit updates a user message and triggers a new assistant response
 func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message, newContent string) error {
 	log.Printf("Editing user message: %s", targetMessage.ID)
 
@@ -1252,7 +1228,6 @@ func (d *DefaultMessageDispatcher) handleUserEdit(ctx context.Context, envelope 
 	return nil
 }
 
-// handleContinue extends an existing message
 func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope *protocol.Envelope, targetMessage *models.Message) error {
 	log.Printf("Continuing message: %s", targetMessage.ID)
 
@@ -1399,7 +1374,6 @@ func (d *DefaultMessageDispatcher) handleContinue(ctx context.Context, envelope 
 	return d.protocolHandler.SendAcknowledgement(ctx, envelope.StanzaID, true)
 }
 
-// sendMemoryTraces sends MemoryTrace protocol messages for each retrieved memory
 func (d *DefaultMessageDispatcher) sendMemoryTraces(ctx context.Context, messageID string, memories []*models.Memory) {
 	if len(memories) == 0 {
 		return
@@ -1434,8 +1408,6 @@ func (d *DefaultMessageDispatcher) sendMemoryTraces(ctx context.Context, message
 	}
 }
 
-// sendBranchUpdate sends a BranchUpdate notification when a new sibling message is created.
-// This allows the frontend to update the branch navigator UI without requiring a manual refresh.
 func (d *DefaultMessageDispatcher) sendBranchUpdate(ctx context.Context, newMessage *models.Message) {
 	if newMessage == nil || newMessage.PreviousID == "" {
 		// No parent message means no siblings to notify about
@@ -1496,7 +1468,6 @@ func (d *DefaultMessageDispatcher) sendBranchUpdate(ctx context.Context, newMess
 		newMessage.ConversationID, newMessage.PreviousID, newMessage.ID, len(siblings))
 }
 
-// handleErrorMessage processes error messages from clients
 func (d *DefaultMessageDispatcher) handleErrorMessage(ctx context.Context, envelope *protocol.Envelope) error {
 	errorMsg, ok := envelope.Body.(*protocol.ErrorMessage)
 	if !ok {
@@ -1513,7 +1484,6 @@ func (d *DefaultMessageDispatcher) handleErrorMessage(ctx context.Context, envel
 	return nil
 }
 
-// handleToolUseResult processes tool execution results from clients
 func (d *DefaultMessageDispatcher) handleToolUseResult(ctx context.Context, envelope *protocol.Envelope) error {
 	result, ok := envelope.Body.(*protocol.ToolUseResult)
 	if !ok {
@@ -1565,7 +1535,6 @@ func (d *DefaultMessageDispatcher) handleToolUseResult(ctx context.Context, enve
 	return nil
 }
 
-// handleAcknowledgement processes acknowledgement messages from clients
 func (d *DefaultMessageDispatcher) handleAcknowledgement(ctx context.Context, envelope *protocol.Envelope) error {
 	ack, ok := envelope.Body.(*protocol.Acknowledgement)
 	if !ok {
@@ -1587,7 +1556,6 @@ func (d *DefaultMessageDispatcher) handleAcknowledgement(ctx context.Context, en
 	return nil
 }
 
-// handleCommentary processes commentary messages
 func (d *DefaultMessageDispatcher) handleCommentary(ctx context.Context, envelope *protocol.Envelope) error {
 	commentary, ok := envelope.Body.(*protocol.Commentary)
 	if !ok {
@@ -1604,7 +1572,6 @@ func (d *DefaultMessageDispatcher) handleCommentary(ctx context.Context, envelop
 	return nil
 }
 
-// handleFeedback processes Feedback messages (votes on messages, tools, memories, reasoning)
 func (d *DefaultMessageDispatcher) handleFeedback(ctx context.Context, envelope *protocol.Envelope) error {
 	feedback, ok := envelope.Body.(*protocol.Feedback)
 	if !ok {
@@ -1664,7 +1631,6 @@ func (d *DefaultMessageDispatcher) handleFeedback(ctx context.Context, envelope 
 	return d.sendFeedbackConfirmation(ctx, feedback, aggregates)
 }
 
-// sendFeedbackConfirmation sends a FeedbackConfirmation message back to the client
 func (d *DefaultMessageDispatcher) sendFeedbackConfirmation(ctx context.Context, feedback *protocol.Feedback, aggregates *models.VoteAggregates) error {
 	confirmation := &protocol.FeedbackConfirmation{
 		FeedbackID: feedback.ID,
@@ -1691,7 +1657,6 @@ func (d *DefaultMessageDispatcher) sendFeedbackConfirmation(ctx context.Context,
 	return d.protocolHandler.SendEnvelope(ctx, envelope)
 }
 
-// handleUserNote processes UserNote messages (create, update, delete notes)
 func (d *DefaultMessageDispatcher) handleUserNote(ctx context.Context, envelope *protocol.Envelope) error {
 	note, ok := envelope.Body.(*protocol.UserNote)
 	if !ok {
@@ -1745,7 +1710,6 @@ func (d *DefaultMessageDispatcher) handleUserNote(ctx context.Context, envelope 
 	return d.sendNoteConfirmation(ctx, &protocol.UserNote{ID: noteID, MessageID: note.MessageID}, success)
 }
 
-// sendNoteConfirmation sends a NoteConfirmation message back to the client
 func (d *DefaultMessageDispatcher) sendNoteConfirmation(ctx context.Context, note *protocol.UserNote, success bool) error {
 	confirmation := &protocol.NoteConfirmation{
 		NoteID:    note.ID,
@@ -1762,7 +1726,6 @@ func (d *DefaultMessageDispatcher) sendNoteConfirmation(ctx context.Context, not
 	return d.protocolHandler.SendEnvelope(ctx, envelope)
 }
 
-// handleMemoryAction processes MemoryAction messages (create, update, delete, pin, archive memories)
 func (d *DefaultMessageDispatcher) handleMemoryAction(ctx context.Context, envelope *protocol.Envelope) error {
 	memAction, ok := envelope.Body.(*protocol.MemoryAction)
 	if !ok {
@@ -1831,7 +1794,6 @@ func (d *DefaultMessageDispatcher) handleMemoryAction(ctx context.Context, envel
 	return d.sendMemoryConfirmation(ctx, memoryID, memAction.Action, success)
 }
 
-// sendMemoryConfirmation sends a MemoryConfirmation message back to the client
 func (d *DefaultMessageDispatcher) sendMemoryConfirmation(ctx context.Context, memoryID, action string, success bool) error {
 	confirmation := &protocol.MemoryConfirmation{
 		MemoryID: memoryID,
@@ -1848,8 +1810,6 @@ func (d *DefaultMessageDispatcher) sendMemoryConfirmation(ctx context.Context, m
 	return d.protocolHandler.SendEnvelope(ctx, envelope)
 }
 
-// SendServerInfo sends server information to the client
-// This should be called on initial connection and periodically for status updates
 func (d *DefaultMessageDispatcher) SendServerInfo(ctx context.Context) error {
 	serverInfo := &protocol.ServerInfo{
 		Connection: protocol.ConnectionInfo{
@@ -1872,7 +1832,6 @@ func (d *DefaultMessageDispatcher) SendServerInfo(ctx context.Context) error {
 	return d.protocolHandler.SendEnvelope(ctx, envelope)
 }
 
-// SendSessionStats sends session statistics to the client
 func (d *DefaultMessageDispatcher) SendSessionStats(ctx context.Context) error {
 	// Get message count for this conversation
 	var messageCount int
@@ -1931,30 +1890,6 @@ func (d *DefaultMessageDispatcher) SendSessionStats(ctx context.Context) error {
 	return d.protocolHandler.SendEnvelope(ctx, envelope)
 }
 
-// SendEliteOptions sends available elite solutions to the client
-func (d *DefaultMessageDispatcher) SendEliteOptions(ctx context.Context) error {
-	// Elite solutions are populated when optimization runs complete
-	// For now, send an empty list - UI will show "no elites available" state
-	// When optimization service has completed runs, this can be enhanced
-	// to query the most recent optimization run and extract its elites
-	eliteOptions := &protocol.EliteOptions{
-		ConversationID: d.conversationID,
-		Elites:         []protocol.EliteSummary{},
-		CurrentEliteID: "", // Will be set when user selects one
-		Timestamp:      time.Now().UnixMilli(),
-	}
-
-	envelope := &protocol.Envelope{
-		ConversationID: d.conversationID,
-		Type:           protocol.TypeEliteOptions,
-		Body:           eliteOptions,
-	}
-
-	return d.protocolHandler.SendEnvelope(ctx, envelope)
-}
-
-// handleResponseGenerationRequest handles ResponseGenerationRequest messages from the serve process
-// This is called when the agent receives a request to generate a response for a user message
 func (d *DefaultMessageDispatcher) handleResponseGenerationRequest(ctx context.Context, envelope *protocol.Envelope) error {
 	req, ok := envelope.Body.(*protocol.ResponseGenerationRequest)
 	if !ok {
@@ -1990,247 +1925,85 @@ func (d *DefaultMessageDispatcher) handleResponseGenerationRequest(ctx context.C
 		if previousID, ok := bodyMap["previousId"].(string); ok {
 			req.PreviousID = previousID
 		}
+		if newContent, ok := bodyMap["newContent"].(string); ok {
+			req.NewContent = newContent
+		}
 	}
 
 	log.Printf("Received ResponseGenerationRequest (type: %s, messageID: %s, conversationID: %s)",
 		req.RequestType, req.MessageID, req.ConversationID)
 
-	// Execute based on request type
+	// For send, we generate a response for an existing user message (created by HTTP API)
+	if req.RequestType == "send" {
+		return d.generateResponseForMessage(ctx, req)
+	}
+
+	// For other types, fetch the target message and delegate to existing handlers
+	targetMessage, err := d.messageRepo.GetByID(ctx, req.MessageID)
+	if err != nil {
+		return d.sendError(ctx, protocol.ErrCodeConversationNotFound,
+			fmt.Sprintf("Target message not found: %s", req.MessageID), true)
+	}
+
+	// Create envelope for handlers that need StanzaID (use 0 for HTTP-initiated requests)
+	handlerEnvelope := &protocol.Envelope{
+		ConversationID: req.ConversationID,
+		StanzaID:       envelope.StanzaID,
+	}
+
 	switch req.RequestType {
-	case "send":
-		return d.handleGenerateForUserMessage(ctx, req)
 	case "regenerate":
-		return d.handleRegenerateFromRequest(ctx, req)
+		if !targetMessage.IsFromAssistant() {
+			return d.sendError(ctx, protocol.ErrCodeInvalidState,
+				"Can only regenerate assistant messages", true)
+		}
+		return d.handleRegenerate(ctx, handlerEnvelope, targetMessage)
 	case "continue":
-		return d.handleContinueFromRequest(ctx, req)
+		if !targetMessage.IsFromAssistant() {
+			return d.sendError(ctx, protocol.ErrCodeInvalidState,
+				"Can only continue assistant messages", true)
+		}
+		return d.handleContinue(ctx, handlerEnvelope, targetMessage)
 	case "edit":
-		return d.handleGenerateForEditedMessage(ctx, req)
+		if targetMessage.IsFromAssistant() {
+			return d.handleAssistantEdit(ctx, handlerEnvelope, targetMessage, req.NewContent)
+		} else if targetMessage.IsFromUser() {
+			return d.handleUserEdit(ctx, handlerEnvelope, targetMessage, req.NewContent)
+		}
+		return d.sendError(ctx, protocol.ErrCodeInvalidState,
+			"Can only edit user or assistant messages", true)
 	default:
 		log.Printf("Unknown request type: %s", req.RequestType)
 		return fmt.Errorf("unknown request type: %s", req.RequestType)
 	}
 }
 
-// handleGenerateForUserMessage generates a response for a user message
-func (d *DefaultMessageDispatcher) handleGenerateForUserMessage(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
+func (d *DefaultMessageDispatcher) generateResponseForMessage(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
 	if d.generateResponseUseCase == nil {
 		return fmt.Errorf("generateResponseUseCase not available")
 	}
 
-	// Execute response generation asynchronously
 	go func() {
-		// 5 minute timeout for LLM generation
 		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
-			PreviousID:      req.MessageID, // Link assistant response to the user message
+			PreviousID:      req.MessageID,
 			EnableTools:     req.EnableTools,
 			EnableReasoning: req.EnableReasoning,
 			EnableStreaming: req.EnableStreaming,
 			Notifier:        d.protocolHandler.(ports.GenerationNotifier),
 		}
-		log.Printf("[handleGenerateForUserMessage] Calling generateResponseUseCase with PreviousID=%s", input.PreviousID)
 
 		output, err := d.generateResponseUseCase.Execute(genCtx, input)
 		if err != nil {
 			log.Printf("Failed to generate response for message %s: %v", req.MessageID, err)
-			// Notify failure via protocol handler
-			errMsg := &protocol.ErrorMessage{
-				ConversationID: req.ConversationID,
-				Code:           protocol.ErrCodeInternalError,
-				Message:        err.Error(),
-				Severity:       protocol.SeverityError,
-				Recoverable:    true,
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeErrorMessage,
-				Body:           errMsg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
+			_ = d.sendError(genCtx, protocol.ErrCodeInternalError, err.Error(), true)
 			return
 		}
 
-		// If not streaming, send the complete response via AssistantMessage
-		if output.Message != nil && output.Message.Contents != "" && !req.EnableStreaming {
-			msg := &protocol.AssistantMessage{
-				ID:             output.Message.ID,
-				PreviousID:     req.MessageID,
-				ConversationID: req.ConversationID,
-				Content:        output.Message.Contents,
-				Timestamp:      time.Now().UnixMilli(),
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeAssistantMessage,
-				Body:           msg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
-		}
-	}()
-
-	return nil
-}
-
-// handleRegenerateFromRequest regenerates a response for a message
-func (d *DefaultMessageDispatcher) handleRegenerateFromRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
-	if d.regenerateResponseUseCase == nil {
-		return fmt.Errorf("regenerateResponseUseCase not available")
-	}
-
-	// Execute regeneration asynchronously
-	go func() {
-		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		input := &ports.RegenerateResponseInput{
-			MessageID:       req.MessageID,
-			EnableTools:     req.EnableTools,
-			EnableReasoning: req.EnableReasoning,
-			EnableStreaming: req.EnableStreaming,
-		}
-
-		output, err := d.regenerateResponseUseCase.Execute(genCtx, input)
-		if err != nil {
-			log.Printf("Failed to regenerate response for message %s: %v", req.MessageID, err)
-			errMsg := &protocol.ErrorMessage{
-				ConversationID: req.ConversationID,
-				Code:           protocol.ErrCodeInternalError,
-				Message:        err.Error(),
-				Severity:       protocol.SeverityError,
-				Recoverable:    true,
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeErrorMessage,
-				Body:           errMsg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
-			return
-		}
-
-		// Send complete response if not streaming
-		if output.NewMessage != nil && output.NewMessage.Contents != "" && !req.EnableStreaming {
-			msg := &protocol.AssistantMessage{
-				ID:             output.NewMessage.ID,
-				ConversationID: req.ConversationID,
-				Content:        output.NewMessage.Contents,
-				Timestamp:      time.Now().UnixMilli(),
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeAssistantMessage,
-				Body:           msg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
-		}
-	}()
-
-	return nil
-}
-
-// handleContinueFromRequest continues a response for a message
-func (d *DefaultMessageDispatcher) handleContinueFromRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
-	if d.continueResponseUseCase == nil {
-		return fmt.Errorf("continueResponseUseCase not available")
-	}
-
-	// Execute continuation asynchronously
-	go func() {
-		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		input := &ports.ContinueResponseInput{
-			TargetMessageID: req.MessageID,
-			EnableTools:     req.EnableTools,
-			EnableReasoning: req.EnableReasoning,
-			EnableStreaming: req.EnableStreaming,
-		}
-
-		output, err := d.continueResponseUseCase.Execute(genCtx, input)
-		if err != nil {
-			log.Printf("Failed to continue response for message %s: %v", req.MessageID, err)
-			errMsg := &protocol.ErrorMessage{
-				ConversationID: req.ConversationID,
-				Code:           protocol.ErrCodeInternalError,
-				Message:        err.Error(),
-				Severity:       protocol.SeverityError,
-				Recoverable:    true,
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeErrorMessage,
-				Body:           errMsg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
-			return
-		}
-
-		// Send complete response if not streaming
-		if output.TargetMessage != nil && output.AppendedContent != "" && !req.EnableStreaming {
-			msg := &protocol.AssistantMessage{
-				ID:             output.TargetMessage.ID,
-				ConversationID: req.ConversationID,
-				Content:        output.TargetMessage.Contents, // Updated message content
-				Timestamp:      time.Now().UnixMilli(),
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeAssistantMessage,
-				Body:           msg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
-		}
-	}()
-
-	return nil
-}
-
-// handleGenerateForEditedMessage generates a response for an edited user message
-func (d *DefaultMessageDispatcher) handleGenerateForEditedMessage(ctx context.Context, req *protocol.ResponseGenerationRequest) error {
-	if d.generateResponseUseCase == nil {
-		return fmt.Errorf("generateResponseUseCase not available")
-	}
-
-	// Execute response generation asynchronously (same as handleGenerateForUserMessage)
-	// The message has already been updated by the HTTP handler
-	go func() {
-		genCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		input := &ports.GenerateResponseInput{
-			ConversationID:  req.ConversationID,
-			UserMessageID:   req.MessageID,
-			PreviousID:      req.MessageID, // Link assistant response to the edited user message
-			EnableTools:     req.EnableTools,
-			EnableReasoning: req.EnableReasoning,
-			EnableStreaming: req.EnableStreaming,
-			Notifier:        d.protocolHandler.(ports.GenerationNotifier),
-		}
-
-		output, err := d.generateResponseUseCase.Execute(genCtx, input)
-		if err != nil {
-			log.Printf("Failed to generate response for edited message %s: %v", req.MessageID, err)
-			errMsg := &protocol.ErrorMessage{
-				ConversationID: req.ConversationID,
-				Code:           protocol.ErrCodeInternalError,
-				Message:        err.Error(),
-				Severity:       protocol.SeverityError,
-				Recoverable:    true,
-			}
-			envelope := &protocol.Envelope{
-				ConversationID: req.ConversationID,
-				Type:           protocol.TypeErrorMessage,
-				Body:           errMsg,
-			}
-			_ = d.protocolHandler.SendEnvelope(genCtx, envelope)
-			return
-		}
-
-		// If not streaming, send the complete response
 		if output.Message != nil && output.Message.Contents != "" && !req.EnableStreaming {
 			msg := &protocol.AssistantMessage{
 				ID:             output.Message.ID,

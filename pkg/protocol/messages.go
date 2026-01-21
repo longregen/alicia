@@ -296,79 +296,13 @@ type ConversationUpdate struct {
 	UpdatedAt      string `msgpack:"updatedAt" json:"updatedAt"`
 }
 
-// DimensionWeights defines weights for GEPA optimization dimensions
-type DimensionWeights struct {
-	SuccessRate    float64 `msgpack:"successRate" json:"successRate"`
-	Quality        float64 `msgpack:"quality" json:"quality"`
-	Efficiency     float64 `msgpack:"efficiency" json:"efficiency"`
-	Robustness     float64 `msgpack:"robustness" json:"robustness"`
-	Generalization float64 `msgpack:"generalization" json:"generalization"`
-	Diversity      float64 `msgpack:"diversity" json:"diversity"`
-	Innovation     float64 `msgpack:"innovation" json:"innovation"`
-}
-
-// DimensionScores holds per-dimension performance metrics
-type DimensionScores struct {
-	SuccessRate    float64 `msgpack:"successRate" json:"successRate"`
-	Quality        float64 `msgpack:"quality" json:"quality"`
-	Efficiency     float64 `msgpack:"efficiency" json:"efficiency"`
-	Robustness     float64 `msgpack:"robustness" json:"robustness"`
-	Generalization float64 `msgpack:"generalization" json:"generalization"`
-	Diversity      float64 `msgpack:"diversity" json:"diversity"`
-	Innovation     float64 `msgpack:"innovation" json:"innovation"`
-}
-
-// DimensionPreference (Type 29) represents user dimension weight preferences
-type DimensionPreference struct {
-	ConversationID string           `msgpack:"conversationId" json:"conversationId"`
-	Weights        DimensionWeights `msgpack:"weights" json:"weights"`
-	Preset         string           `msgpack:"preset,omitempty" json:"preset,omitempty"` // accuracy, speed, reliable, creative, balanced
-	Timestamp      int64            `msgpack:"timestamp" json:"timestamp"`
-}
-
-// EliteSelect (Type 30) represents user selection of an elite solution
-type EliteSelect struct {
-	ConversationID string `msgpack:"conversationId" json:"conversationId"`
-	EliteID        string `msgpack:"eliteId" json:"eliteId"`
-	Timestamp      int64  `msgpack:"timestamp" json:"timestamp"`
-}
-
-// EliteSummary contains summary information about an elite solution
-type EliteSummary struct {
-	ID          string          `msgpack:"id" json:"id"`
-	Label       string          `msgpack:"label" json:"label"`             // "High Accuracy", "Fast", "Balanced"
-	Scores      DimensionScores `msgpack:"scores" json:"scores"`           // Per-dimension performance
-	Description string          `msgpack:"description" json:"description"` // Auto-generated summary
-	BestFor     string          `msgpack:"bestFor" json:"bestFor"`         // "Complex questions", "Active coding"
-}
-
-// EliteOptions (Type 31) represents available elite solutions from server
-type EliteOptions struct {
-	ConversationID string         `msgpack:"conversationId" json:"conversationId"`
-	Elites         []EliteSummary `msgpack:"elites" json:"elites"`
-	CurrentEliteID string         `msgpack:"currentEliteId" json:"currentEliteId"`
-	Timestamp      int64          `msgpack:"timestamp" json:"timestamp"`
-}
-
-// OptimizationProgress (Type 32) represents real-time optimization progress updates
-type OptimizationProgress struct {
-	RunID           string             `msgpack:"runId" json:"runId"`
-	Status          string             `msgpack:"status" json:"status"` // running, completed, failed
-	Iteration       int32              `msgpack:"iteration" json:"iteration"`
-	MaxIterations   int32              `msgpack:"maxIterations" json:"maxIterations"`
-	CurrentScore    float64            `msgpack:"currentScore" json:"currentScore"`
-	BestScore       float64            `msgpack:"bestScore" json:"bestScore"`
-	DimensionScores map[string]float64 `msgpack:"dimensionScores,omitempty" json:"dimensionScores,omitempty"`
-	Message         string             `msgpack:"message,omitempty" json:"message,omitempty"`
-	Timestamp       int64              `msgpack:"timestamp" json:"timestamp"`
-}
-
 // ResponseGenerationRequest (Type 33) requests the agent to generate a response
 type ResponseGenerationRequest struct {
 	ID              string `msgpack:"id" json:"id"`
 	MessageID       string `msgpack:"messageId" json:"messageId"`
 	ConversationID  string `msgpack:"conversationId" json:"conversationId"`
 	RequestType     string `msgpack:"requestType" json:"requestType"` // send, regenerate, continue, edit
+	NewContent      string `msgpack:"newContent,omitempty" json:"newContent,omitempty"`
 	EnableTools     bool   `msgpack:"enableTools" json:"enableTools"`
 	EnableReasoning bool   `msgpack:"enableReasoning" json:"enableReasoning"`
 	EnableStreaming bool   `msgpack:"enableStreaming" json:"enableStreaming"`

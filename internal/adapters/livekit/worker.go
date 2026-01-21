@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// WorkerConfig configures the LiveKit agent worker
 type WorkerConfig struct {
 	URL                   string
 	APIKey                string
@@ -26,7 +25,6 @@ type WorkerConfig struct {
 	TTSChannels   int // TTS output channels: 1=mono, 2=stereo (default: 1)
 }
 
-// DefaultWorkerConfig returns a default worker configuration
 func DefaultWorkerConfig() *WorkerConfig {
 	return &WorkerConfig{
 		URL:                   "ws://localhost:7880",
@@ -42,7 +40,6 @@ func DefaultWorkerConfig() *WorkerConfig {
 	}
 }
 
-// Worker manages LiveKit agent instances and dispatches them to rooms
 type Worker struct {
 	config       *WorkerConfig
 	agentFactory *AgentFactory
@@ -58,7 +55,6 @@ type Worker struct {
 	wg     sync.WaitGroup
 }
 
-// AgentInstance represents an active agent handling a room
 type AgentInstance struct {
 	Agent          *Agent
 	MessageRouter  *MessageRouter
@@ -68,7 +64,6 @@ type AgentInstance struct {
 	CancelFunc     context.CancelFunc
 }
 
-// NewWorker creates a new agent worker
 func NewWorker(config *WorkerConfig, agentFactory *AgentFactory, service *Service) (*Worker, error) {
 	if config == nil {
 		config = DefaultWorkerConfig()
@@ -102,7 +97,6 @@ func NewWorker(config *WorkerConfig, agentFactory *AgentFactory, service *Servic
 	}, nil
 }
 
-// Start begins the worker loop, listening for room assignments
 func (w *Worker) Start(ctx context.Context) error {
 	w.ctx, w.cancel = context.WithCancel(ctx)
 
@@ -131,7 +125,6 @@ func (w *Worker) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop gracefully stops the worker
 func (w *Worker) Stop() error {
 	if w.cancel != nil {
 		w.cancel()
@@ -139,7 +132,6 @@ func (w *Worker) Stop() error {
 	return nil
 }
 
-// pollRooms periodically checks for rooms that need agent dispatch
 func (w *Worker) pollRooms() {
 	defer w.wg.Done()
 
@@ -158,7 +150,6 @@ func (w *Worker) pollRooms() {
 	}
 }
 
-// checkAndDispatchAgents checks active rooms and dispatches agents as needed
 func (w *Worker) checkAndDispatchAgents(ctx context.Context) error {
 	// List all active rooms
 	rooms, err := w.service.roomClient.ListRooms(ctx, nil)
@@ -199,7 +190,6 @@ func (w *Worker) checkAndDispatchAgents(ctx context.Context) error {
 	return nil
 }
 
-// dispatchAgent creates and starts an agent for a specific room
 func (w *Worker) dispatchAgent(ctx context.Context, roomName string) error {
 	// Extract conversation ID from room name
 	conversationID := strings.TrimPrefix(roomName, w.config.RoomPrefix)
@@ -260,7 +250,6 @@ func (w *Worker) dispatchAgent(ctx context.Context, roomName string) error {
 	return nil
 }
 
-// monitorAgent monitors an agent instance and cleans up when it disconnects
 func (w *Worker) monitorAgent(instance *AgentInstance) {
 	defer w.wg.Done()
 
@@ -311,7 +300,6 @@ func (w *Worker) monitorAgent(instance *AgentInstance) {
 	}
 }
 
-// stopAgent gracefully stops an agent instance
 func (w *Worker) stopAgent(instance *AgentInstance) {
 	log.Printf("Stopping agent for room: %s", instance.RoomName)
 
@@ -327,7 +315,6 @@ func (w *Worker) stopAgent(instance *AgentInstance) {
 	}
 }
 
-// removeAgent removes an agent from the active agents map
 func (w *Worker) removeAgent(roomName string) {
 	w.agentsMutex.Lock()
 	defer w.agentsMutex.Unlock()
@@ -336,7 +323,6 @@ func (w *Worker) removeAgent(roomName string) {
 	log.Printf("Agent removed from tracking: %s", roomName)
 }
 
-// stopAllAgents stops all active agents
 func (w *Worker) stopAllAgents() {
 	w.agentsMutex.Lock()
 	agents := make([]*AgentInstance, 0, len(w.activeAgents))
@@ -362,7 +348,6 @@ func (w *Worker) stopAllAgents() {
 	log.Println("All agents stopped")
 }
 
-// GetActiveAgents returns information about currently active agents
 func (w *Worker) GetActiveAgents() map[string]*AgentInstance {
 	w.agentsMutex.RLock()
 	defer w.agentsMutex.RUnlock()
@@ -376,8 +361,6 @@ func (w *Worker) GetActiveAgents() map[string]*AgentInstance {
 	return result
 }
 
-// DispatchToRoom manually dispatches an agent to a specific room
-// This is useful for testing or manual intervention
 func (w *Worker) DispatchToRoom(ctx context.Context, roomName string) error {
 	return w.dispatchAgent(ctx, roomName)
 }

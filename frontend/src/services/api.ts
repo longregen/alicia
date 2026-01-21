@@ -247,6 +247,20 @@ export const api = {
     return handleResponse<VoteResponse>(response);
   },
 
+  // Batch fetch votes for multiple messages in a single request
+  async getBatchMessageVotes(messageIds: string[]): Promise<Record<string, VoteResponse>> {
+    if (messageIds.length === 0) {
+      return {};
+    }
+    const response = await fetchWithErrorHandling(`${API_BASE}/votes/batch/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_ids: messageIds }),
+    });
+    const data = await handleResponse<{ votes: Record<string, VoteResponse> }>(response);
+    return data.votes;
+  },
+
   async getToolUseVotes(toolUseId: string): Promise<VoteResponse> {
     const response = await fetchWithErrorHandling(`${API_BASE}/tool-uses/${toolUseId}/votes`);
     return handleResponse<VoteResponse>(response);

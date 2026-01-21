@@ -125,7 +125,6 @@ func (s *Server) setupRouter() {
 	r.Use(middleware.CORS(s.config.Server.CORSOrigins))
 	r.Use(middleware.Metrics)
 
-	// Health check endpoints (no auth required)
 	healthHandler := handlers.NewHealthHandler()
 	detailedHealthHandler := handlers.NewHealthHandlerWithDeps(
 		s.config,
@@ -140,19 +139,15 @@ func (s *Server) setupRouter() {
 	r.Get("/health/detailed", detailedHealthHandler.HandleDetailed)
 	r.Handle("/metrics", promhttp.Handler())
 
-	// OpenAI-compatible TTS endpoint (no auth required for voice preview)
 	if s.ttsAdapter != nil {
 		ttsHandler := handlers.NewTTSHandler(s.ttsAdapter)
 		r.Post("/v1/audio/speech", ttsHandler.Speech)
 	}
 
-	// Public config endpoint (no auth required - frontend needs this before auth)
 	configHandler := handlers.NewConfigHandler(s.config, s.ttsAdapter)
 	r.Get("/api/v1/config", configHandler.GetPublicConfig)
 
-	// API routes with authentication
 	r.Route("/api/v1", func(r chi.Router) {
-		// Apply authentication middleware to all API routes
 		r.Use(middleware.Auth)
 
 		conversationsHandler := handlers.NewConversationsHandler(s.conversationRepo, s.memoryService, s.idGen)
@@ -181,7 +176,6 @@ func (s *Server) setupRouter() {
 		r.Get("/messages/{id}/siblings", messagesHandler.GetSiblings)
 		r.Post("/conversations/{id}/switch-branch", messagesHandler.SwitchBranch)
 
-		// Message edit/regenerate/continue endpoints
 		r.Put("/messages/{id}", messagesHandler.EditAssistantMessage)
 		r.Put("/messages/{id}/edit-user", messagesHandler.EditUserMessage)
 		r.Post("/messages/{id}/regenerate", messagesHandler.Regenerate)
@@ -191,18 +185,15 @@ func (s *Server) setupRouter() {
 		r.Post("/conversations/{id}/sync", syncHandler.SyncMessages)
 		r.Get("/conversations/{id}/sync/status", syncHandler.GetSyncStatus)
 
-		// WebSocket endpoint for MessagePack sync (per-conversation, legacy)
 		wsHandler := handlers.NewWebSocketSyncHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster, s.config.Server.CORSOrigins)
 		r.Get("/conversations/{id}/sync/ws", wsHandler.Handle)
 
-		// Multiplexed WebSocket endpoint (single connection, multiple conversations)
 		multiplexedWSHandler := handlers.NewMultiplexedWSHandler(s.conversationRepo, s.messageRepo, s.idGen, s.wsBroadcaster, s.config.Server.CORSOrigins)
 		r.Get("/ws", multiplexedWSHandler.Handle)
 
 		tokenHandler := handlers.NewTokenHandler(s.conversationRepo, s.liveKitService)
 		r.Post("/conversations/{id}/token", tokenHandler.Generate)
 
-		// MCP routes (only if MCP adapter is available)
 		if s.mcpAdapter != nil {
 			mcpHandler := handlers.NewMCPHandler(s.mcpAdapter)
 			r.Get("/mcp/servers", mcpHandler.ListServers)
@@ -211,43 +202,36 @@ func (s *Server) setupRouter() {
 			r.Get("/mcp/tools", mcpHandler.ListTools)
 		}
 
-		// Voting endpoints
 		voteHandler := handlers.NewVoteHandler(s.voteRepo, s.idGen, s.memorizeFromUpvoteUseCase)
-		// Message voting
+		r.Post("/votes/batch/messages", voteHandler.GetBatchMessageVotes)
 		r.Post("/messages/{id}/vote", voteHandler.VoteOnMessage)
 		r.Delete("/messages/{id}/vote", voteHandler.RemoveMessageVote)
 		r.Get("/messages/{id}/votes", voteHandler.GetMessageVotes)
-		// Tool use voting
 		r.Post("/tool-uses/{id}/vote", voteHandler.VoteOnToolUse)
 		r.Delete("/tool-uses/{id}/vote", voteHandler.RemoveToolUseVote)
 		r.Get("/tool-uses/{id}/votes", voteHandler.GetToolUseVotes)
 		r.Post("/tool-uses/{id}/quick-feedback", voteHandler.ToolUseQuickFeedback)
-		// Memory voting
 		r.Post("/memories/{id}/vote", voteHandler.VoteOnMemory)
 		r.Delete("/memories/{id}/vote", voteHandler.RemoveMemoryVote)
 		r.Get("/memories/{id}/votes", voteHandler.GetMemoryVotes)
 		r.Post("/memories/{id}/irrelevance-reason", voteHandler.MemoryIrrelevanceReason)
-		// Memory usage voting (replaces per-memory voting for selection)
 		r.Route("/memory-usages/{id}", func(r chi.Router) {
 			r.Post("/vote", voteHandler.VoteOnMemoryUsage)
 			r.Delete("/vote", voteHandler.RemoveMemoryUsageVote)
 			r.Get("/votes", voteHandler.GetMemoryUsageVotes)
 			r.Post("/irrelevance-reason", voteHandler.MemoryUsageIrrelevanceReason)
 		})
-		// Memory extraction voting (nested under messages)
 		r.Route("/messages/{messageId}/extracted-memories/{memoryId}", func(r chi.Router) {
 			r.Post("/vote", voteHandler.VoteOnMemoryExtraction)
 			r.Delete("/vote", voteHandler.RemoveMemoryExtractionVote)
 			r.Get("/votes", voteHandler.GetMemoryExtractionVotes)
 			r.Post("/quality-feedback", voteHandler.MemoryExtractionQualityFeedback)
 		})
-		// Reasoning voting
 		r.Post("/reasoning/{id}/vote", voteHandler.VoteOnReasoning)
 		r.Delete("/reasoning/{id}/vote", voteHandler.RemoveReasoningVote)
 		r.Get("/reasoning/{id}/votes", voteHandler.GetReasoningVotes)
 		r.Post("/reasoning/{id}/issue", voteHandler.ReasoningIssue)
 
-		// Note endpoints
 		noteHandler := handlers.NewNoteHandler(s.noteRepo, s.idGen)
 		r.Post("/messages/{id}/notes", noteHandler.CreateMessageNote)
 		r.Get("/messages/{id}/notes", noteHandler.GetMessageNotes)
@@ -256,7 +240,6 @@ func (s *Server) setupRouter() {
 		r.Put("/notes/{id}", noteHandler.UpdateNote)
 		r.Delete("/notes/{id}", noteHandler.DeleteNote)
 
-		// Memory management endpoints (only if memory service is available)
 		if s.memoryService != nil {
 			memoryHandler := handlers.NewMemoryHandler(s.memoryService)
 			r.Post("/memories", memoryHandler.CreateMemory)
@@ -273,20 +256,17 @@ func (s *Server) setupRouter() {
 			r.Post("/memories/{id}/archive", memoryHandler.ArchiveMemory)
 		}
 
-		// Server info and stats endpoints
 		serverInfoHandler := handlers.NewServerInfoHandler(s.config, s.conversationRepo, s.messageRepo, s.mcpAdapter)
 		r.Get("/server/info", serverInfoHandler.GetServerInfo)
 		r.Get("/server/stats", serverInfoHandler.GetGlobalStats)
 		r.Get("/conversations/{id}/stats", serverInfoHandler.GetSessionStats)
 	})
 
-	// Serve frontend static files if configured (no auth required)
 	if s.config.Server.StaticDir != "" {
 		fileServer := http.FileServer(http.Dir(s.config.Server.StaticDir))
 		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
 			path := req.URL.Path
 
-			// Add long-term caching for immutable VAD/ONNX assets
 			if strings.HasPrefix(path, "/js/lib/") ||
 				strings.HasPrefix(path, "/onnx/") ||
 				strings.HasPrefix(path, "/models/") {

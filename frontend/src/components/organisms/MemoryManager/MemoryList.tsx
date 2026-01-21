@@ -1,24 +1,44 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { cls } from '../../../utils/cls';
 import type { Memory, MemoryCategory } from '../../../stores/memoryStore';
+import StarRating, { importanceToStar } from '../../atoms/StarRating';
+import { Popover, PopoverTrigger, PopoverContent } from '../../atoms/Popover';
+import type { MemoryDeletionReason } from '../../../hooks/useMemories';
+
+type SortField = 'content' | 'category' | 'importance' | 'usageCount' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
 
 export interface MemoryListProps {
   /** List of memories to display */
   memories: Memory[];
   /** Callback when edit is clicked */
   onEdit: (memory: Memory) => void;
-  /** Callback when delete is clicked */
-  onDelete: (memory: Memory) => void;
-  /** Callback when pin is toggled */
-  onPin: (memory: Memory) => void;
-  /** Callback when archive is clicked */
-  onArchive: (memory: Memory) => void;
+  /** Callback when delete is clicked with optional reason */
+  onDelete: (memory: Memory, reason?: MemoryDeletionReason) => void;
+  /** Callback when rating changes */
+  onRatingChange?: (memory: Memory, stars: number) => void;
+  /** Callback when category changes */
+  onCategoryChange?: (memory: Memory, category: MemoryCategory) => void;
   /** Callback when a memory row is clicked */
   onSelect?: (memory: Memory) => void;
   /** Whether any operation is in progress */
   isLoading?: boolean;
+  /** Show restore/permanent delete for deleted view */
+  showDeletedActions?: boolean;
+  /** Callback when restore is clicked (for deleted view) */
+  onRestore?: (memory: Memory) => void;
+  /** Callback when permanent delete is clicked (for deleted view) */
+  onPermanentDelete?: (memory: Memory) => void;
   className?: string;
 }
+
+const deletionReasons: { value: MemoryDeletionReason; label: string }[] = [
+  { value: 'wrong', label: 'Wrong' },
+  { value: 'useless', label: 'Useless' },
+  { value: 'old', label: 'Outdated' },
+  { value: 'duplicate', label: 'Duplicate' },
+  { value: 'other', label: 'Other' },
+];
 
 const categoryColors: Record<MemoryCategory, { bg: string; text: string; border: string }> = {
   preference: {
@@ -85,16 +105,76 @@ const formatDate = (timestamp: number): string => {
  * - Empty state
  * - Responsive design
  */
+const categories: MemoryCategory[] = ['preference', 'fact', 'context', 'instruction'];
+
 export const MemoryList: React.FC<MemoryListProps> = ({
   memories,
   onEdit,
   onDelete,
-  onPin,
-  onArchive,
+  onRatingChange,
+  onCategoryChange,
   onSelect,
   isLoading = false,
+  showDeletedActions = false,
+  onRestore,
+  onPermanentDelete,
   className = '',
 }) => {
+  const [deletePopoverOpen, setDeletePopoverOpen] = useState<string | null>(null);
+  const [categoryPopoverOpen, setCategoryPopoverOpen] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedMemories = [...memories].sort((a, b) => {
+    let comparison = 0;
+    switch (sortField) {
+      case 'content':
+        comparison = a.content.localeCompare(b.content);
+        break;
+      case 'category':
+        comparison = a.category.localeCompare(b.category);
+        break;
+      case 'importance':
+        comparison = a.importance - b.importance;
+        break;
+      case 'usageCount':
+        comparison = a.usageCount - b.usageCount;
+        break;
+      case 'createdAt':
+        comparison = a.createdAt - b.createdAt;
+        break;
+    }
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return (
+        <svg className="w-3 h-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return sortDirection === 'asc' ? (
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+  };
+
   if (memories.length === 0) {
     return (
       <div className={cls('flex flex-col items-center justify-center p-6 md:p-8 lg:p-12 text-center', className)}>
@@ -124,17 +204,51 @@ export const MemoryList: React.FC<MemoryListProps> = ({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left">
-            <th className="pb-3 pr-4 font-medium text-muted w-8"></th>
-            <th className="pb-3 pr-4 font-medium text-muted">Content</th>
-            <th className="pb-3 pr-4 font-medium text-muted w-28">Category</th>
-            <th className="pb-3 pr-4 font-medium text-muted w-20 text-center">Importance</th>
-            <th className="pb-3 pr-4 font-medium text-muted w-16 text-center">Used</th>
-            <th className="pb-3 pr-4 font-medium text-muted w-24">Created</th>
+            <th className="pb-3 pr-4 font-medium text-muted">
+              <button
+                onClick={() => handleSort('content')}
+                className="flex items-center gap-1 hover:text-default transition-colors"
+              >
+                Content <SortIcon field="content" />
+              </button>
+            </th>
+            <th className="pb-3 pr-4 font-medium text-muted w-28">
+              <button
+                onClick={() => handleSort('category')}
+                className="flex items-center gap-1 hover:text-default transition-colors"
+              >
+                Category <SortIcon field="category" />
+              </button>
+            </th>
+            <th className="pb-3 pr-4 font-medium text-muted w-20 text-center">
+              <button
+                onClick={() => handleSort('importance')}
+                className="flex items-center gap-1 hover:text-default transition-colors mx-auto"
+              >
+                Importance <SortIcon field="importance" />
+              </button>
+            </th>
+            <th className="pb-3 pr-4 font-medium text-muted w-16 text-center">
+              <button
+                onClick={() => handleSort('usageCount')}
+                className="flex items-center gap-1 hover:text-default transition-colors mx-auto"
+              >
+                Used <SortIcon field="usageCount" />
+              </button>
+            </th>
+            <th className="pb-3 pr-4 font-medium text-muted w-24">
+              <button
+                onClick={() => handleSort('createdAt')}
+                className="flex items-center gap-1 hover:text-default transition-colors"
+              >
+                Created <SortIcon field="createdAt" />
+              </button>
+            </th>
             <th className="pb-3 font-medium text-muted w-36 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {memories.map((memory) => {
+          {sortedMemories.map((memory) => {
             const categoryStyle = categoryColors[memory.category];
 
             return (
@@ -142,25 +256,10 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                 key={memory.id}
                 className={cls(
                   'border-b border-border/50 hover:bg-surface-hover transition-colors',
-                  memory.pinned ? 'bg-accent/5' : '',
                   onSelect ? 'cursor-pointer' : ''
                 )}
                 onClick={() => onSelect?.(memory)}
               >
-                {/* Pinned indicator */}
-                <td className="py-3 pr-4">
-                  {memory.pinned && (
-                    <svg
-                      className="w-4 h-4 text-accent"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                      aria-label="Pinned"
-                    >
-                      <path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06zM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06zM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.061 1.06l1.06 1.06z" />
-                    </svg>
-                  )}
-                </td>
-
                 {/* Content */}
                 <td className="py-3 pr-4">
                   <div className="max-w-md">
@@ -185,28 +284,86 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                   </div>
                 </td>
 
-                {/* Category */}
-                <td className="py-3 pr-4">
-                  <span
-                    className={cls(
-                      'px-2 py-1 rounded text-xs font-medium border',
-                      categoryStyle.bg,
-                      categoryStyle.text,
-                      categoryStyle.border
-                    )}
-                  >
-                    {memory.category}
-                  </span>
+                {/* Category - with dropdown to change */}
+                <td className="py-3 pr-4" onClick={(e) => e.stopPropagation()}>
+                  {onCategoryChange ? (
+                    <Popover
+                      open={categoryPopoverOpen === memory.id}
+                      onOpenChange={(open) => setCategoryPopoverOpen(open ? memory.id : null)}
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cls(
+                            'px-2 py-1 rounded text-xs font-medium border cursor-pointer',
+                            'hover:opacity-80 transition-opacity flex items-center gap-1',
+                            categoryStyle.bg,
+                            categoryStyle.text,
+                            categoryStyle.border
+                          )}
+                          disabled={isLoading}
+                        >
+                          {memory.category}
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="start"
+                        side="bottom"
+                        className="w-36 p-1"
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          {categories.map((cat) => {
+                            const style = categoryColors[cat];
+                            return (
+                              <button
+                                key={cat}
+                                onClick={() => {
+                                  onCategoryChange(memory, cat);
+                                  setCategoryPopoverOpen(null);
+                                }}
+                                className={cls(
+                                  'px-2 py-1.5 rounded text-xs font-medium text-left',
+                                  'hover:bg-surface-hover transition-colors',
+                                  memory.category === cat ? style.bg : ''
+                                )}
+                              >
+                                <span className={style.text}>{cat}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <span
+                      className={cls(
+                        'px-2 py-1 rounded text-xs font-medium border',
+                        categoryStyle.bg,
+                        categoryStyle.text,
+                        categoryStyle.border
+                      )}
+                    >
+                      {memory.category}
+                    </span>
+                  )}
                 </td>
 
-                {/* Importance */}
-                <td className="py-3 pr-4 text-center">
-                  <span className="text-muted flex items-center justify-center gap-1">
-                    <svg className="w-3.5 h-3.5 text-warning" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    {Math.round(memory.importance * 100)}%
-                  </span>
+                {/* Importance - Star Rating */}
+                <td className="py-3 pr-4">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex justify-center"
+                  >
+                    <StarRating
+                      rating={importanceToStar(memory.importance)}
+                      onRate={(stars) => onRatingChange?.(memory, stars)}
+                      isLoading={isLoading}
+                      compact
+                      readOnly={!onRatingChange}
+                    />
+                  </div>
                 </td>
 
                 {/* Usage count */}
@@ -222,25 +379,6 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                 {/* Actions */}
                 <td className="py-3">
                   <div className="flex items-center justify-end gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPin(memory);
-                      }}
-                      disabled={isLoading}
-                      className={cls(
-                        'p-1.5 rounded text-muted hover:text-accent hover:bg-sunken',
-                        'transition-colors disabled:opacity-50',
-                        memory.pinned ? 'text-accent' : ''
-                      )}
-                      title={memory.pinned ? 'Unpin' : 'Pin'}
-                      aria-label={memory.pinned ? 'Unpin memory' : 'Pin memory'}
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06zM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06zM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.061 1.06l1.06 1.06z" />
-                      </svg>
-                    </button>
-
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -264,51 +402,99 @@ export const MemoryList: React.FC<MemoryListProps> = ({
                       </svg>
                     </button>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onArchive(memory);
-                      }}
-                      disabled={isLoading}
-                      className={cls(
-                        'p-1.5 rounded text-muted hover:text-warning hover:bg-sunken',
-                        'transition-colors disabled:opacity-50'
-                      )}
-                      title="Archive"
-                      aria-label="Archive memory"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                        />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(memory);
-                      }}
-                      disabled={isLoading}
-                      className={cls(
-                        'p-1.5 rounded text-muted hover:text-error hover:bg-sunken',
-                        'transition-colors disabled:opacity-50'
-                      )}
-                      title="Delete"
-                      aria-label="Delete memory"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
+                    {/* Delete with inline popover */}
+                    {showDeletedActions ? (
+                      // For deleted view: show restore and permanent delete
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRestore?.(memory);
+                          }}
+                          disabled={isLoading}
+                          className={cls(
+                            'p-1.5 rounded text-muted hover:text-success hover:bg-sunken',
+                            'transition-colors disabled:opacity-50'
+                          )}
+                          title="Restore"
+                          aria-label="Restore memory"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPermanentDelete?.(memory);
+                          }}
+                          disabled={isLoading}
+                          className={cls(
+                            'p-1.5 rounded text-muted hover:text-error hover:bg-sunken',
+                            'transition-colors disabled:opacity-50'
+                          )}
+                          title="Delete permanently"
+                          aria-label="Delete memory permanently"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </>
+                    ) : (
+                      // For active view: inline delete popover
+                      <Popover
+                        open={deletePopoverOpen === memory.id}
+                        onOpenChange={(open) => setDeletePopoverOpen(open ? memory.id : null)}
+                      >
+                        <PopoverTrigger asChild>
+                          <button
+                            disabled={isLoading}
+                            className={cls(
+                              'p-1.5 rounded text-muted hover:text-error hover:bg-sunken',
+                              'transition-colors disabled:opacity-50',
+                              deletePopoverOpen === memory.id ? 'text-error bg-sunken' : ''
+                            )}
+                            title="Delete"
+                            aria-label="Delete memory"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="end"
+                          side="bottom"
+                          className="w-44 p-2"
+                        >
+                          <p className="text-xs text-muted mb-2">Why delete?</p>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {deletionReasons.map((reason) => (
+                              <button
+                                key={reason.value}
+                                onClick={() => {
+                                  onDelete(memory, reason.value);
+                                  setDeletePopoverOpen(null);
+                                }}
+                                className="px-2 py-1 text-xs rounded border border-border hover:border-error hover:text-error hover:bg-error/5 transition-colors"
+                              >
+                                {reason.label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => {
+                              onDelete(memory);
+                              setDeletePopoverOpen(null);
+                            }}
+                            className="w-full px-2 py-1.5 text-xs rounded bg-error text-white hover:bg-error/90 transition-colors"
+                          >
+                            Delete without reason
+                          </button>
+                        </PopoverContent>
+                      </Popover>
+                    )}
                   </div>
                 </td>
               </tr>

@@ -17,11 +17,9 @@ import (
 )
 
 const (
-	// EmbeddingTimeout is the maximum time to wait for embedding generation
 	EmbeddingTimeout = 30 * time.Second
 )
 
-// Client is an OpenAI-compatible embedding client
 type Client struct {
 	baseURL     string
 	apiKey      string
@@ -32,7 +30,6 @@ type Client struct {
 	breaker     *circuitbreaker.CircuitBreaker
 }
 
-// NewClient creates a new embedding client
 func NewClient(baseURL, apiKey, model string, dimensions int) *Client {
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	baseURL = strings.TrimSuffix(baseURL, "/v1")
@@ -43,20 +40,18 @@ func NewClient(baseURL, apiKey, model string, dimensions int) *Client {
 		model:      model,
 		dimensions: dimensions,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second, // Default request timeout
+			Timeout: 10 * time.Second,
 		},
 		retryConfig: retry.HTTPConfig(),
-		breaker:     circuitbreaker.New(5, 30*time.Second), // 5 failures, 30s timeout
+		breaker:     circuitbreaker.New(5, 30*time.Second),
 	}
 }
 
-// EmbeddingRequest represents the request to the embeddings API
 type EmbeddingRequest struct {
-	Input interface{} `json:"input"` // Can be string or []string
+	Input interface{} `json:"input"`
 	Model string      `json:"model"`
 }
 
-// EmbeddingResponse represents the response from the embeddings API
 type EmbeddingResponse struct {
 	Object string `json:"object"`
 	Data   []struct {
@@ -71,7 +66,6 @@ type EmbeddingResponse struct {
 	} `json:"usage"`
 }
 
-// Embed generates an embedding for a single text
 func (c *Client) Embed(ctx context.Context, text string) (*ports.EmbeddingResult, error) {
 	var result *ports.EmbeddingResult
 	err := c.breaker.Execute(func() error {
@@ -98,7 +92,6 @@ func (c *Client) Embed(ctx context.Context, text string) (*ports.EmbeddingResult
 	return result, err
 }
 
-// EmbedBatch generates embeddings for multiple texts
 func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([]*ports.EmbeddingResult, error) {
 	if len(texts) == 0 {
 		return []*ports.EmbeddingResult{}, nil
@@ -117,12 +110,10 @@ func (c *Client) EmbedBatch(ctx context.Context, texts []string) ([]*ports.Embed
 	return results, err
 }
 
-// GetDimensions returns the dimensionality of the embeddings
 func (c *Client) GetDimensions() int {
 	return c.dimensions
 }
 
-// curlExample returns a curl command for debugging embedding requests
 func (c *Client) curlExample() string {
 	authHeader := ""
 	if c.apiKey != "" {
@@ -134,14 +125,11 @@ func (c *Client) curlExample() string {
 	)
 }
 
-// embedBatchInternal is the internal implementation for batch embedding
 func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*ports.EmbeddingResult, error) {
-	// Prepare request
 	req := EmbeddingRequest{
 		Model: c.model,
 	}
 
-	// Handle single vs multiple texts
 	if len(texts) == 1 {
 		req.Input = texts[0]
 	} else {
@@ -197,7 +185,6 @@ func (c *Client) embedBatchInternal(ctx context.Context, texts []string) ([]*por
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Convert to EmbeddingResult
 	results := make([]*ports.EmbeddingResult, len(embeddingResp.Data))
 	for _, data := range embeddingResp.Data {
 		dimensions := len(data.Embedding)

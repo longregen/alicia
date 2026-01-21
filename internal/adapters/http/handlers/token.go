@@ -26,7 +26,6 @@ func NewTokenHandler(
 }
 
 func (h *TokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
@@ -67,33 +66,23 @@ func (h *TokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if roomName == "" {
 		roomName = fmt.Sprintf("conv_%s", conversationID)
 
-		// Check if room already exists to avoid race condition
-		// This handles the case where multiple requests try to create the same room
 		existingRoom, err := h.liveKitService.GetRoom(r.Context(), roomName)
 		if err != nil {
-			// Room doesn't exist, try to create it
 			room, createErr := h.liveKitService.CreateRoom(r.Context(), roomName)
 			if createErr != nil {
-				// Room creation failed - it might have been created by another request
-				// Try to get it one more time before failing
 				existingRoom, getErr := h.liveKitService.GetRoom(r.Context(), roomName)
 				if getErr != nil {
-					// Both create and get failed - return error with details
 					respondError(w, "livekit_error", fmt.Sprintf("Failed to create or get LiveKit room: create=%v, get=%v", createErr, getErr), http.StatusInternalServerError)
 					return
 				}
-				// Successfully retrieved room that was created by another request
 				roomName = existingRoom.Name
 			} else {
-				// Room created successfully
 				roomName = room.Name
 			}
 		} else {
-			// Room already exists, use it
 			roomName = existingRoom.Name
 		}
 
-		// Update conversation with room name
 		conversation.SetLiveKitRoom(roomName)
 		if err := h.conversationRepo.Update(r.Context(), conversation); err != nil {
 			respondError(w, "internal_error", "Failed to update conversation", http.StatusInternalServerError)

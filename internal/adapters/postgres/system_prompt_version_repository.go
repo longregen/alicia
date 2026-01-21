@@ -11,13 +11,11 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-// SystemPromptVersionRepository implements ports.SystemPromptVersionRepository
 type SystemPromptVersionRepository struct {
 	BaseRepository
 	idGenerator ports.IDGenerator
 }
 
-// NewSystemPromptVersionRepository creates a new system prompt version repository
 func NewSystemPromptVersionRepository(pool *pgxpool.Pool, idGenerator ports.IDGenerator) *SystemPromptVersionRepository {
 	return &SystemPromptVersionRepository{
 		BaseRepository: NewBaseRepository(pool),
@@ -25,7 +23,6 @@ func NewSystemPromptVersionRepository(pool *pgxpool.Pool, idGenerator ports.IDGe
 	}
 }
 
-// Create creates a new system prompt version
 func (r *SystemPromptVersionRepository) Create(ctx context.Context, version *models.SystemPromptVersion) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -52,7 +49,6 @@ func (r *SystemPromptVersionRepository) Create(ctx context.Context, version *mod
 	return err
 }
 
-// GetByID retrieves a system prompt version by ID
 func (r *SystemPromptVersionRepository) GetByID(ctx context.Context, id string) (*models.SystemPromptVersion, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -65,7 +61,6 @@ func (r *SystemPromptVersionRepository) GetByID(ctx context.Context, id string) 
 	return r.scanVersion(r.conn(ctx).QueryRow(ctx, query, id))
 }
 
-// GetActiveByType retrieves the active system prompt version for a given type
 func (r *SystemPromptVersionRepository) GetActiveByType(ctx context.Context, promptType string) (*models.SystemPromptVersion, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -79,7 +74,6 @@ func (r *SystemPromptVersionRepository) GetActiveByType(ctx context.Context, pro
 	return r.scanVersion(r.conn(ctx).QueryRow(ctx, query, promptType))
 }
 
-// GetByHash retrieves a system prompt version by type and hash
 func (r *SystemPromptVersionRepository) GetByHash(ctx context.Context, promptType, hash string) (*models.SystemPromptVersion, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -93,12 +87,10 @@ func (r *SystemPromptVersionRepository) GetByHash(ctx context.Context, promptTyp
 	return r.scanVersion(r.conn(ctx).QueryRow(ctx, query, promptType, hash))
 }
 
-// SetActive sets a version as active and deactivates all other versions of the same type
 func (r *SystemPromptVersionRepository) SetActive(ctx context.Context, id string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// Get the prompt type for this version
 	var promptType string
 	getTypeQuery := `SELECT prompt_type FROM system_prompt_versions WHERE id = $1 AND deleted_at IS NULL`
 	err := r.conn(ctx).QueryRow(ctx, getTypeQuery, id).Scan(&promptType)
@@ -109,7 +101,6 @@ func (r *SystemPromptVersionRepository) SetActive(ctx context.Context, id string
 		return err
 	}
 
-	// Deactivate all versions of this prompt type
 	deactivateQuery := `
 		UPDATE system_prompt_versions
 		SET active = false, deactivated_at = NOW()
@@ -120,7 +111,6 @@ func (r *SystemPromptVersionRepository) SetActive(ctx context.Context, id string
 		return err
 	}
 
-	// Activate the specified version
 	activateQuery := `
 		UPDATE system_prompt_versions
 		SET active = true, activated_at = NOW()
@@ -138,7 +128,6 @@ func (r *SystemPromptVersionRepository) SetActive(ctx context.Context, id string
 	return nil
 }
 
-// List retrieves system prompt versions for a given type with pagination
 func (r *SystemPromptVersionRepository) List(ctx context.Context, promptType string, limit int) ([]*models.SystemPromptVersion, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -159,7 +148,6 @@ func (r *SystemPromptVersionRepository) List(ctx context.Context, promptType str
 	return r.scanVersions(rows)
 }
 
-// GetLatestByType retrieves the latest system prompt version for a given type
 func (r *SystemPromptVersionRepository) GetLatestByType(ctx context.Context, promptType string) (*models.SystemPromptVersion, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -174,7 +162,6 @@ func (r *SystemPromptVersionRepository) GetLatestByType(ctx context.Context, pro
 	return r.scanVersion(r.conn(ctx).QueryRow(ctx, query, promptType))
 }
 
-// scanVersion scans a single system prompt version from a row
 func (r *SystemPromptVersionRepository) scanVersion(row pgx.Row) (*models.SystemPromptVersion, error) {
 	var version models.SystemPromptVersion
 	var activatedAt, deactivatedAt, deletedAt sql.NullTime
@@ -207,7 +194,6 @@ func (r *SystemPromptVersionRepository) scanVersion(row pgx.Row) (*models.System
 	return &version, nil
 }
 
-// scanVersions scans multiple system prompt versions from rows
 func (r *SystemPromptVersionRepository) scanVersions(rows pgx.Rows) ([]*models.SystemPromptVersion, error) {
 	versions := make([]*models.SystemPromptVersion, 0)
 

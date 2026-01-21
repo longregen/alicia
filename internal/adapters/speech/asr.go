@@ -15,8 +15,7 @@ import (
 const (
 	defaultASREndpoint = "http://localhost:8000"
 	transcriptionsPath = "/v1/audio/transcriptions"
-	// ASRTimeout is the maximum time to wait for ASR transcription
-	ASRTimeout = 30 * time.Second
+	ASRTimeout         = 30 * time.Second
 )
 
 type ASRAdapter struct {
@@ -33,11 +32,10 @@ func NewASRAdapter(endpoint string) *ASRAdapter {
 	return &ASRAdapter{
 		client:  NewClient(endpoint),
 		model:   "whisper-1",
-		breaker: circuitbreaker.New(5, 30*time.Second), // 5 failures, 30s timeout
+		breaker: circuitbreaker.New(5, 30*time.Second),
 	}
 }
 
-// NewASRAdapterWithModel creates a new ASR adapter with a specific model
 func NewASRAdapterWithModel(endpoint, model string) *ASRAdapter {
 	adapter := NewASRAdapter(endpoint)
 	adapter.model = model

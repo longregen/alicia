@@ -60,14 +60,6 @@ const (
 	TypeSessionStats MessageType = 27
 	// TypeConversationUpdate (28) - Conversation metadata update (e.g., title change)
 	TypeConversationUpdate MessageType = 28
-	// TypeDimensionPreference (29) - User adjusts dimension weights
-	TypeDimensionPreference MessageType = 29
-	// TypeEliteSelect (30) - User selects a specific elite solution
-	TypeEliteSelect MessageType = 30
-	// TypeEliteOptions (31) - Server sends available elite solutions
-	TypeEliteOptions MessageType = 31
-	// TypeOptimizationProgress (32) - Real-time optimization progress updates
-	TypeOptimizationProgress MessageType = 32
 	// TypeResponseGenerationRequest (33) - Request for agent to generate response
 	TypeResponseGenerationRequest MessageType = 33
 	// TypeThinkingSummary (34) - Summary of what the agent is about to do
@@ -141,14 +133,6 @@ func (t MessageType) String() string {
 		return "SessionStats"
 	case TypeConversationUpdate:
 		return "ConversationUpdate"
-	case TypeDimensionPreference:
-		return "DimensionPreference"
-	case TypeEliteSelect:
-		return "EliteSelect"
-	case TypeEliteOptions:
-		return "EliteOptions"
-	case TypeOptimizationProgress:
-		return "OptimizationProgress"
 	case TypeResponseGenerationRequest:
 		return "ResponseGenerationRequest"
 	case TypeThinkingSummary:

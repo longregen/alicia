@@ -8,12 +8,10 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// MessageDispatcher routes protocol messages to appropriate handlers
 type MessageDispatcher interface {
 	DispatchMessage(ctx context.Context, envelope *protocol.Envelope) error
 }
 
-// DefaultMessageDispatcher implements MessageDispatcher
 type DefaultMessageDispatcher struct {
 	protocolHandler           ProtocolHandlerInterface
 	handleToolUseCase         ports.HandleToolUseCase
@@ -32,7 +30,6 @@ type DefaultMessageDispatcher struct {
 	idGenerator               ports.IDGenerator
 	generationManager         ResponseGenerationManager
 
-	// New use cases for message operations
 	sendMessageUseCase          ports.SendMessageUseCase
 	regenerateResponseUseCase   ports.RegenerateResponseUseCase
 	continueResponseUseCase     ports.ContinueResponseUseCase
@@ -41,7 +38,6 @@ type DefaultMessageDispatcher struct {
 	synthesizeSpeechUseCase     ports.SynthesizeSpeechUseCase
 }
 
-// NewDefaultMessageDispatcher creates a new message dispatcher
 func NewDefaultMessageDispatcher(
 	protocolHandler ProtocolHandlerInterface,
 	handleToolUseCase ports.HandleToolUseCase,
@@ -92,21 +88,13 @@ func NewDefaultMessageDispatcher(
 	}
 }
 
-// DispatchMessage routes a protocol message to the appropriate handler
 func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope *protocol.Envelope) error {
-	// Route based on message type
 	switch envelope.Type {
 	case protocol.TypeErrorMessage:
 		return d.handleErrorMessage(ctx, envelope)
 
 	case protocol.TypeUserMessage:
 		return d.handleUserMessage(ctx, envelope)
-
-	// TypeAssistantMessage (3) - Server→Client only, sent by server in non-streaming mode
-	// TypeReasoningStep (5) - Server→Client only, sent by server during response generation
-	// TypeStartAnswer (13) - Server→Client only, sent by server to initiate streaming response
-	// TypeMemoryTrace (14) - Server→Client only, sent by server when memories are retrieved
-	// TypeAssistantSentence (16) - Server→Client only, sent by server for streaming chunks
 
 	case protocol.TypeAudioChunk:
 		return d.handleAudioChunk(ctx, envelope)
@@ -135,7 +123,6 @@ func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope
 	case protocol.TypeCommentary:
 		return d.handleCommentary(ctx, envelope)
 
-	// Feedback protocol types (20-27) - Client→Server messages
 	case protocol.TypeFeedback:
 		return d.handleFeedback(ctx, envelope)
 
@@ -148,16 +135,12 @@ func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope
 	case protocol.TypeResponseGenerationRequest:
 		return d.handleResponseGenerationRequest(ctx, envelope)
 
-	// TypeFeedbackConfirmation (21), TypeNoteConfirmation (23), TypeMemoryConfirmation (25),
-	// TypeServerInfo (26), TypeSessionStats (27), TypeEliteOptions (31) are Server→Client only
-
 	default:
 		log.Printf("Unhandled message type: %v", envelope.Type)
-		return nil // Silently ignore unknown message types
+		return nil
 	}
 }
 
-// sendError sends an error message via the protocol handler
 func (d *DefaultMessageDispatcher) sendError(ctx context.Context, code int32, message string, recoverable bool) error {
 	return d.protocolHandler.SendError(ctx, code, message, recoverable)
 }

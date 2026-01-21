@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { cls } from '../../../utils/cls';
 import type { Memory, MemoryCategory } from '../../../stores/memoryStore';
-import { useMemories } from '../../../hooks/useMemories';
+import { useMemories, type MemoryDeletionReason } from '../../../hooks/useMemories';
 import { MemorySearch } from './MemorySearch';
 import { MemoryList } from './MemoryList';
 import { MemoryEditor } from './MemoryEditor';
@@ -10,37 +10,37 @@ export interface MemoryManagerProps {
   className?: string;
 }
 
+type ViewTab = 'active' | 'deleted';
+
 /**
  * MemoryManager organism component for managing global memories.
  *
  * Features:
- * - Display all memories with category, pinned status, creation date
+ * - Display all memories with category, importance, creation date
  * - Search/filter by content or category
  * - Create new memories (content + category)
- * - Edit, pin, archive, delete memories
+ * - Edit, delete memories with inline actions
+ * - Deleted tab for restore/permanent delete
  * - Uses memoryStore with API integration via useMemories hook
- *
- * @example
- * ```tsx
- * <MemoryManager />
- * ```
  */
 export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) => {
   const {
     memories,
+    deletedMemories,
     isLoading,
     isFetching,
     error,
     create,
     update,
     remove,
-    pin,
-    archive,
-    search,
-    filterByCategory,
+    setRating,
+    setCategory,
+    restore,
+    permanentDelete,
   } = useMemories();
 
   // Local state
+  const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<MemoryCategory | 'all'>('all');
   const [editorOpen, setEditorOpen] = useState(false);
@@ -48,29 +48,23 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
 
   // Filter memories based on search and category
   const filteredMemories = useMemo(() => {
-    let result = memories;
+    const sourceMemories = viewTab === 'active' ? memories : deletedMemories;
+    let result = sourceMemories;
 
     // Apply category filter
     if (selectedCategory !== 'all') {
-      result = filterByCategory(selectedCategory);
+      result = result.filter((m) => m.category === selectedCategory);
     }
 
     // Apply search filter
     if (searchQuery.trim()) {
-      result = search(searchQuery);
-      // Further filter by category if needed
-      if (selectedCategory !== 'all') {
-        result = result.filter((m) => m.category === selectedCategory);
-      }
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter((m) => m.content.toLowerCase().includes(lowerQuery));
     }
 
-    // Sort: pinned first, then by updated date
-    return result.sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      return b.updatedAt - a.updatedAt;
-    });
-  }, [memories, searchQuery, selectedCategory, search, filterByCategory]);
+    // Sort by updated date
+    return result.sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [memories, deletedMemories, viewTab, searchQuery, selectedCategory]);
 
   // Handlers
   const handleCreateNew = () => {
@@ -83,27 +77,44 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
     setEditorOpen(true);
   };
 
-  const handleDelete = async (memory: Memory) => {
-    if (confirm(`Are you sure you want to delete this memory?\n\n"${memory.content}"`)) {
-      try {
-        await remove(memory.id);
-      } catch (err) {
-        console.error('Failed to delete memory:', err);
-      }
+  const handleDelete = async (memory: Memory, reason?: MemoryDeletionReason) => {
+    try {
+      await remove(memory.id, reason);
+    } catch (err) {
+      console.error('Failed to delete memory:', err);
     }
   };
 
-  const handlePin = (memory: Memory) => {
-    pin(memory.id, !memory.pinned);
+  const handleRatingChange = async (memory: Memory, stars: number) => {
+    try {
+      await setRating(memory.id, stars);
+    } catch (err) {
+      console.error('Failed to update rating:', err);
+    }
   };
 
-  const handleArchive = async (memory: Memory) => {
-    // Confirmation dialog for archive - provides user feedback even though archive is reversible
-    if (confirm(`Archive this memory?\n\n"${memory.content}"`)) {
+  const handleCategoryChange = async (memory: Memory, category: MemoryCategory) => {
+    try {
+      await setCategory(memory.id, category);
+    } catch (err) {
+      console.error('Failed to update category:', err);
+    }
+  };
+
+  const handleRestore = async (memory: Memory) => {
+    try {
+      await restore(memory.id);
+    } catch (err) {
+      console.error('Failed to restore memory:', err);
+    }
+  };
+
+  const handlePermanentDelete = async (memory: Memory) => {
+    if (confirm(`Permanently delete this memory?\n\nThis cannot be undone.`)) {
       try {
-        archive(memory.id);
+        await permanentDelete(memory.id);
       } catch (err) {
-        console.error('Failed to archive memory:', err);
+        console.error('Failed to permanently delete memory:', err);
       }
     }
   };
@@ -127,6 +138,9 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
     setEditingMemory(null);
   };
 
+  const activeCount = memories.length;
+  const deletedCount = deletedMemories.length;
+
   return (
     <div className={cls('layout-stack h-full bg-background min-h-0', className)}>
       {/* Header */}
@@ -146,9 +160,6 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
             />
           </svg>
           <h2 className="font-medium text-default">Memory Management</h2>
-          <span className="px-2 py-0.5 rounded bg-accent-subtle text-accent text-xs font-medium">
-            {filteredMemories.length}
-          </span>
         </div>
         <button
           onClick={handleCreateNew}
@@ -164,8 +175,49 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
         </button>
       </header>
 
-      {/* Search and filters */}
-      <div className="p-4 border-b border-border shrink-0">
+      {/* Tabs and Search */}
+      <div className="p-4 border-b border-border shrink-0 space-y-3">
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 bg-sunken rounded-lg w-fit">
+          <button
+            onClick={() => setViewTab('active')}
+            className={cls(
+              'px-3 py-1.5 rounded text-sm font-medium transition-colors',
+              viewTab === 'active'
+                ? 'bg-surface text-default shadow-sm'
+                : 'text-muted hover:text-default'
+            )}
+          >
+            Active
+            <span className={cls(
+              'ml-1.5 px-1.5 py-0.5 rounded text-xs',
+              viewTab === 'active' ? 'bg-accent-subtle text-accent' : 'bg-surface text-muted'
+            )}>
+              {activeCount}
+            </span>
+          </button>
+          <button
+            onClick={() => setViewTab('deleted')}
+            className={cls(
+              'px-3 py-1.5 rounded text-sm font-medium transition-colors',
+              viewTab === 'deleted'
+                ? 'bg-surface text-default shadow-sm'
+                : 'text-muted hover:text-default'
+            )}
+          >
+            Deleted
+            {deletedCount > 0 && (
+              <span className={cls(
+                'ml-1.5 px-1.5 py-0.5 rounded text-xs',
+                viewTab === 'deleted' ? 'bg-error-subtle text-error' : 'bg-surface text-muted'
+              )}>
+                {deletedCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Search and filters */}
         <MemorySearch
           searchQuery={searchQuery}
           selectedCategory={selectedCategory}
@@ -202,9 +254,12 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
             memories={filteredMemories}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onPin={handlePin}
-            onArchive={handleArchive}
+            onRatingChange={handleRatingChange}
+            onCategoryChange={handleCategoryChange}
             isLoading={isLoading}
+            showDeletedActions={viewTab === 'deleted'}
+            onRestore={handleRestore}
+            onPermanentDelete={handlePermanentDelete}
           />
         )}
       </div>

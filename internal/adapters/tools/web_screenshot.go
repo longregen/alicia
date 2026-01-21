@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// WebScreenshotTool captures screenshots of web pages
 type WebScreenshotTool struct{}
 
 func NewWebScreenshotTool() *WebScreenshotTool {
@@ -84,18 +83,15 @@ func (t *WebScreenshotTool) Execute(ctx context.Context, args map[string]any) (a
 		delayMS = int(v)
 	}
 
-	// Find Chrome/Chromium
 	chromePath := findChrome()
 	if chromePath == "" {
 		return nil, fmt.Errorf("chromium or google-chrome not found. Please install chromium-browser or google-chrome")
 	}
 
-	// Create temp file for screenshot
 	tmpDir := os.TempDir()
 	outputPath := filepath.Join(tmpDir, fmt.Sprintf("screenshot_%d.png", time.Now().UnixNano()))
 	defer os.Remove(outputPath)
 
-	// Build Chrome arguments
 	chromeArgs := []string{
 		"--headless",
 		"--disable-gpu",
@@ -110,14 +106,12 @@ func (t *WebScreenshotTool) Execute(ctx context.Context, args map[string]any) (a
 		chromeArgs = append(chromeArgs, "--full-page-screenshot")
 	}
 
-	// Add virtual time budget for page load + delay
 	chromeArgs = append(chromeArgs,
 		fmt.Sprintf("--virtual-time-budget=%d", 5000+delayMS),
 	)
 
 	chromeArgs = append(chromeArgs, urlStr)
 
-	// Run Chrome
 	cmd := exec.CommandContext(ctx, chromePath, chromeArgs...)
 	cmd.Env = append(os.Environ(), "DISPLAY=:99") // Support headless X
 
@@ -126,7 +120,6 @@ func (t *WebScreenshotTool) Execute(ctx context.Context, args map[string]any) (a
 		return nil, fmt.Errorf("chrome failed: %w - output: %s", err, string(output))
 	}
 
-	// Read screenshot
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read screenshot: %w", err)
@@ -144,7 +137,6 @@ func (t *WebScreenshotTool) Execute(ctx context.Context, args map[string]any) (a
 	return result, nil
 }
 
-// WebScreenshotResult is the output of the screenshot tool
 type WebScreenshotResult struct {
 	URL    string `json:"url"`
 	Width  int    `json:"width"`
@@ -154,7 +146,6 @@ type WebScreenshotResult struct {
 	Size   int    `json:"size_bytes"`
 }
 
-// findChrome locates the Chrome/Chromium binary
 func findChrome() string {
 	candidates := []string{
 		"chromium",

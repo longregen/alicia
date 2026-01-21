@@ -11,7 +11,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// WebFetchRawTool returns the raw HTTP response
 type WebFetchRawTool struct {
 	client *http.Client
 }
@@ -88,10 +87,8 @@ func (t *WebFetchRawTool) Execute(ctx context.Context, args map[string]any) (any
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set default headers
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Alicia/1.0)")
 
-	// Apply custom headers
 	if headers, ok := args["headers"].(map[string]any); ok {
 		for k, v := range headers {
 			if s, ok := v.(string); ok {
@@ -100,7 +97,6 @@ func (t *WebFetchRawTool) Execute(ctx context.Context, args map[string]any) (any
 		}
 	}
 
-	// Configure redirect behavior
 	client := t.client
 	followRedirects := true
 	if v, ok := args["follow_redirects"].(bool); ok {
@@ -126,7 +122,6 @@ func (t *WebFetchRawTool) Execute(ctx context.Context, args map[string]any) (any
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Build headers map
 	headers := make(map[string]string)
 	for k, v := range resp.Header {
 		headers[k] = strings.Join(v, ", ")
@@ -144,7 +139,6 @@ func (t *WebFetchRawTool) Execute(ctx context.Context, args map[string]any) (any
 	return result, nil
 }
 
-// WebFetchRawResult is the output of the fetch raw tool
 type WebFetchRawResult struct {
 	URL        string            `json:"url"`
 	StatusCode int               `json:"status_code"`
@@ -154,7 +148,6 @@ type WebFetchRawResult struct {
 	BodyLength int               `json:"body_length"`
 }
 
-// WebFetchStructuredTool extracts structured data using CSS selectors
 type WebFetchStructuredTool struct{}
 
 func NewWebFetchStructuredTool() *WebFetchStructuredTool {
@@ -210,19 +203,16 @@ func (t *WebFetchStructuredTool) Execute(ctx context.Context, args map[string]an
 		extractType = v
 	}
 
-	// Fetch HTML
 	htmlContent, finalURL, err := fetchHTML(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse with goquery
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
 
-	// Extract data using selectors
 	data := make(map[string]any)
 	for name, sel := range selectors {
 		selector, ok := sel.(string)
@@ -247,7 +237,6 @@ func (t *WebFetchStructuredTool) Execute(ctx context.Context, args map[string]an
 			}
 		})
 
-		// Return single value if only one match, array otherwise
 		if len(extracted) == 1 {
 			data[name] = extracted[0]
 		} else if len(extracted) > 0 {
@@ -265,7 +254,6 @@ func (t *WebFetchStructuredTool) Execute(ctx context.Context, args map[string]an
 	return result, nil
 }
 
-// WebFetchStructuredResult is the output of the fetch structured tool
 type WebFetchStructuredResult struct {
 	URL  string         `json:"url"`
 	Data map[string]any `json:"data"`

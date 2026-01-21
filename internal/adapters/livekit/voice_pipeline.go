@@ -26,7 +26,6 @@ const (
 	MinTranscriptionConfidence = 0.5
 )
 
-// VoicePipeline manages the voice processing pipeline for a conversation
 type VoicePipeline struct {
 	asrService ports.ASRService
 	ttsService ports.TTSService
@@ -53,7 +52,6 @@ type VoicePipeline struct {
 	onAudioOutput   func(ctx context.Context, audio []byte, format string)
 }
 
-// AudioBuffer stores audio samples for processing
 type AudioBuffer struct {
 	samples      []byte
 	sampleRate   int
@@ -63,7 +61,6 @@ type AudioBuffer struct {
 	mu           sync.Mutex
 }
 
-// NewAudioBuffer creates a new audio buffer
 func NewAudioBuffer(sampleRate, channels int) *AudioBuffer {
 	return &AudioBuffer{
 		samples:      make([]byte, 0, DefaultSampleRate*DefaultChannels*2*int(MaxBufferDuration.Seconds())),
@@ -74,7 +71,6 @@ func NewAudioBuffer(sampleRate, channels int) *AudioBuffer {
 	}
 }
 
-// Append adds audio samples to the buffer
 func (ab *AudioBuffer) Append(samples []byte) {
 	ab.mu.Lock()
 	defer ab.mu.Unlock()
@@ -95,7 +91,6 @@ func (ab *AudioBuffer) Append(samples []byte) {
 	}
 }
 
-// GetSamples returns a copy of the buffered samples
 func (ab *AudioBuffer) GetSamples() []byte {
 	ab.mu.Lock()
 	defer ab.mu.Unlock()
@@ -105,7 +100,6 @@ func (ab *AudioBuffer) GetSamples() []byte {
 	return result
 }
 
-// Clear clears the buffer
 func (ab *AudioBuffer) Clear() {
 	ab.mu.Lock()
 	defer ab.mu.Unlock()
@@ -115,7 +109,6 @@ func (ab *AudioBuffer) Clear() {
 	ab.lastActivity = time.Now()
 }
 
-// Duration returns the duration of buffered audio
 func (ab *AudioBuffer) Duration() time.Duration {
 	ab.mu.Lock()
 	defer ab.mu.Unlock()
@@ -130,16 +123,12 @@ func (ab *AudioBuffer) Duration() time.Duration {
 	return time.Duration(float64(samples) / float64(ab.sampleRate) * float64(time.Second))
 }
 
-// IsEmpty returns true if buffer is empty
 func (ab *AudioBuffer) IsEmpty() bool {
 	ab.mu.Lock()
 	defer ab.mu.Unlock()
 	return len(ab.samples) == 0
 }
 
-// NewVoicePipeline creates a new voice processing pipeline
-// The provided context is used as the parent context for the pipeline's lifecycle
-// minConfidence sets the minimum ASR confidence threshold (0.0-1.0), use 0 to use default
 func NewVoicePipeline(
 	ctx context.Context,
 	asrService ports.ASRService,
@@ -176,22 +165,18 @@ func NewVoicePipeline(
 	}, nil
 }
 
-// SetTranscriptionCallback sets the callback for transcription events
 func (vp *VoicePipeline) SetTranscriptionCallback(cb func(ctx context.Context, text string, isFinal bool)) {
 	vp.mu.Lock()
 	defer vp.mu.Unlock()
 	vp.onTranscription = cb
 }
 
-// SetAudioOutputCallback sets the callback for audio output events
 func (vp *VoicePipeline) SetAudioOutputCallback(cb func(ctx context.Context, audio []byte, format string)) {
 	vp.mu.Lock()
 	defer vp.mu.Unlock()
 	vp.onAudioOutput = cb
 }
 
-// ProcessAudioFrame processes an incoming audio frame from the user
-// The frame contains Opus-encoded audio data from LiveKit which must be decoded to PCM
 func (vp *VoicePipeline) ProcessAudioFrame(ctx context.Context, frame *ports.AudioFrame) error {
 	vp.mu.Lock()
 	defer vp.mu.Unlock()
@@ -264,10 +249,6 @@ func (vp *VoicePipeline) ProcessAudioFrame(ctx context.Context, frame *ports.Aud
 	return nil
 }
 
-// handleSilenceTimeout is called by the silence timer callback
-// It atomically clears the timer reference and initiates audio processing
-// Synchronization strategy: All state checks and updates happen atomically under the lock
-// The generation parameter prevents race where old timer clears a new timer
 func (vp *VoicePipeline) handleSilenceTimeout(gen int64) {
 	vp.mu.Lock()
 	defer vp.mu.Unlock()
@@ -370,7 +351,6 @@ func (vp *VoicePipeline) handleSilenceTimeout(gen int64) {
 	}()
 }
 
-// SynthesizeSpeech converts text to speech and sends it to the agent's audio track
 func (vp *VoicePipeline) SynthesizeSpeech(ctx context.Context, text string) error {
 	if vp.ttsService == nil {
 		return fmt.Errorf("TTS service not configured")
@@ -409,8 +389,6 @@ func (vp *VoicePipeline) SynthesizeSpeech(ctx context.Context, text string) erro
 	return nil
 }
 
-// Stop stops the voice pipeline and ensures all resources are cleaned up
-// Synchronization strategy: Cancel context first to prevent new timers, then clean up existing timer
 func (vp *VoicePipeline) Stop() {
 	// Cancel the context first to prevent new operations from starting
 	// This ensures ProcessAudioFrame will return early if called after this point
@@ -432,7 +410,6 @@ func (vp *VoicePipeline) Stop() {
 	}
 }
 
-// calculateRMS calculates the root mean square of audio samples
 func calculateRMS(samples []byte) float64 {
 	if len(samples) == 0 {
 		return 0
@@ -454,7 +431,6 @@ func calculateRMS(samples []byte) float64 {
 	return mean // Return mean square (not taking square root for threshold comparison)
 }
 
-// pcmToWav converts raw PCM data to WAV format
 func pcmToWav(pcm []byte, sampleRate, channels int) ([]byte, error) {
 	buf := new(bytes.Buffer)
 

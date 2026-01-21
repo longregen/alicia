@@ -124,7 +124,6 @@ func (r *ConversationRepository) Update(ctx context.Context, conversation *model
 	return err
 }
 
-// UpdateStanzaIDs updates only the stanza ID fields for reconnection tracking
 func (r *ConversationRepository) UpdateStanzaIDs(ctx context.Context, id string, clientStanza, serverStanza int32) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -140,7 +139,6 @@ func (r *ConversationRepository) UpdateStanzaIDs(ctx context.Context, id string,
 	return err
 }
 
-// UpdateTip updates the conversation's tip_message_id pointer for message branching
 func (r *ConversationRepository) UpdateTip(ctx context.Context, conversationID, messageID string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -155,7 +153,6 @@ func (r *ConversationRepository) UpdateTip(ctx context.Context, conversationID, 
 	return err
 }
 
-// UpdatePromptVersion updates the conversation's system_prompt_version_id for prompt versioning
 func (r *ConversationRepository) UpdatePromptVersion(ctx context.Context, convID, versionID string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()

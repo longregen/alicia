@@ -9,24 +9,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// contextKey is a type for transaction context keys
 type contextKey string
 
 const txKey contextKey = "pgx_tx"
 
-// TransactionManager implements the ports.TransactionManager interface
 type TransactionManager struct {
 	pool *pgxpool.Pool
 }
 
-// NewTransactionManager creates a new transaction manager
 func NewTransactionManager(pool *pgxpool.Pool) *TransactionManager {
 	return &TransactionManager{pool: pool}
 }
 
-// WithTransaction executes a function within a database transaction
-// If the function returns an error, the transaction is rolled back
-// Otherwise, the transaction is committed
 func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(ctx context.Context) error) (err error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -67,7 +61,6 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(ctx c
 	return nil
 }
 
-// GetTx retrieves the transaction from the context, if any
 func GetTx(ctx context.Context) pgx.Tx {
 	if tx, ok := ctx.Value(txKey).(pgx.Tx); ok {
 		return tx
@@ -75,8 +68,6 @@ func GetTx(ctx context.Context) pgx.Tx {
 	return nil
 }
 
-// GetConn returns either the transaction or the pool based on context
-// This is a helper for repositories to use the correct connection
 func GetConn(ctx context.Context, pool *pgxpool.Pool) interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)

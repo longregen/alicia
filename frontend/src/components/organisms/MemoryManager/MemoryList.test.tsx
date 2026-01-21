@@ -46,8 +46,6 @@ describe('MemoryList', () => {
 
   const mockOnEdit = vi.fn();
   const mockOnDelete = vi.fn();
-  const mockOnPin = vi.fn();
-  const mockOnArchive = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,8 +58,6 @@ describe('MemoryList', () => {
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -76,8 +72,6 @@ describe('MemoryList', () => {
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
           className="custom-class"
         />
       );
@@ -94,8 +88,6 @@ describe('MemoryList', () => {
           memories={[]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -109,8 +101,6 @@ describe('MemoryList', () => {
           memories={[]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -126,8 +116,6 @@ describe('MemoryList', () => {
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -142,8 +130,6 @@ describe('MemoryList', () => {
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -158,56 +144,6 @@ describe('MemoryList', () => {
     });
   });
 
-  describe('Pinned Indicator', () => {
-    it('shows pin icon for pinned memories', () => {
-      const { container } = render(
-        <MemoryList
-          memories={mockMemories}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
-        />
-      );
-
-      const memoryCards = container.querySelectorAll('[class*="ring-2"]');
-      expect(memoryCards.length).toBeGreaterThan(0);
-    });
-
-    it('does not show pin icon for unpinned memories', () => {
-      const unpinnedMemories = mockMemories.filter(m => !m.pinned);
-
-      render(
-        <MemoryList
-          memories={unpinnedMemories}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
-        />
-      );
-
-      const pinIcons = screen.queryAllByTitle('Unpin');
-      expect(pinIcons.length).toBe(0);
-    });
-
-    it('applies ring styling to pinned memories', () => {
-      const pinnedOnly = mockMemories.filter(m => m.pinned);
-
-      const { container } = render(
-        <MemoryList
-          memories={pinnedOnly}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
-        />
-      );
-
-      const card = container.querySelector('[class*="ring-2"]');
-      expect(card).toHaveClass('ring-accent');
-    });
-  });
 
   describe('Action Buttons', () => {
     it('shows all action buttons for each memory', () => {
@@ -216,14 +152,10 @@ describe('MemoryList', () => {
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      expect(screen.getByLabelText('Pin memory')).toBeInTheDocument();
       expect(screen.getByLabelText('Edit memory')).toBeInTheDocument();
-      expect(screen.getByLabelText('Archive memory')).toBeInTheDocument();
       expect(screen.getByLabelText('Delete memory')).toBeInTheDocument();
     });
 
@@ -234,8 +166,6 @@ describe('MemoryList', () => {
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -245,75 +175,44 @@ describe('MemoryList', () => {
       expect(mockOnEdit).toHaveBeenCalledWith(mockMemories[0]);
     });
 
-    it('calls onDelete when delete button is clicked', async () => {
+    it('opens delete popover when delete button is clicked', async () => {
       const user = userEvent.setup();
       render(
         <MemoryList
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
       const deleteButton = screen.getByLabelText('Delete memory');
       await user.click(deleteButton);
 
-      expect(mockOnDelete).toHaveBeenCalledWith(mockMemories[0]);
+      // Popover should open with deletion options
+      expect(screen.getByText('Why delete?')).toBeInTheDocument();
     });
 
-    it('calls onPin when pin button is clicked', async () => {
+    it('calls onDelete with reason when reason is selected', async () => {
       const user = userEvent.setup();
       render(
         <MemoryList
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      const pinButton = screen.getByLabelText('Pin memory');
-      await user.click(pinButton);
+      // Open popover
+      const deleteButton = screen.getByLabelText('Delete memory');
+      await user.click(deleteButton);
 
-      expect(mockOnPin).toHaveBeenCalledWith(mockMemories[0]);
+      // Click a reason
+      const wrongButton = screen.getByText('Wrong');
+      await user.click(wrongButton);
+
+      expect(mockOnDelete).toHaveBeenCalledWith(mockMemories[0], 'wrong');
     });
 
-    it('calls onArchive when archive button is clicked', async () => {
-      const user = userEvent.setup();
-      render(
-        <MemoryList
-          memories={[mockMemories[0]]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
-        />
-      );
-
-      const archiveButton = screen.getByLabelText('Archive memory');
-      await user.click(archiveButton);
-
-      expect(mockOnArchive).toHaveBeenCalledWith(mockMemories[0]);
-    });
-
-    it('shows "Unpin" label for pinned memories', () => {
-      const pinnedMemory = mockMemories.filter(m => m.pinned);
-
-      render(
-        <MemoryList
-          memories={pinnedMemory}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
-        />
-      );
-
-      expect(screen.getByLabelText('Unpin memory')).toBeInTheDocument();
-    });
   });
 
   describe('Loading State', () => {
@@ -323,15 +222,11 @@ describe('MemoryList', () => {
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
           isLoading={true}
         />
       );
 
-      expect(screen.getByLabelText('Pin memory')).toBeDisabled();
       expect(screen.getByLabelText('Edit memory')).toBeDisabled();
-      expect(screen.getByLabelText('Archive memory')).toBeDisabled();
       expect(screen.getByLabelText('Delete memory')).toBeDisabled();
     });
 
@@ -341,49 +236,28 @@ describe('MemoryList', () => {
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
           isLoading={true}
         />
       );
 
-      const pinButton = screen.getByLabelText('Pin memory');
-      expect(pinButton).toHaveClass('disabled:opacity-50');
+      const editButton = screen.getByLabelText('Edit memory');
+      expect(editButton).toHaveClass('disabled:opacity-50');
     });
   });
 
   describe('Timestamp Display', () => {
-    it('shows creation time for new memories', () => {
+    it('shows relative timestamp for memories', () => {
       render(
         <MemoryList
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      expect(screen.getByText(/Created/)).toBeInTheDocument();
-    });
-
-    it('shows updated time when memory was updated', () => {
-      const updatedMemory: Memory = {
-        ...mockMemories[0],
-        updatedAt: Date.now() - 1000,
-      };
-
-      render(
-        <MemoryList
-          memories={[updatedMemory]}
-          onEdit={mockOnEdit}
-          onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
-        />
-      );
-
-      expect(screen.getByText(/Updated/)).toBeInTheDocument();
+      // Table shows relative time like "just now", "5m ago", etc.
+      // The header says "Created", test that a timestamp cell exists
+      expect(screen.getByText('Created')).toBeInTheDocument();
     });
 
     it('formats recent timestamps as relative time', () => {
@@ -398,8 +272,6 @@ describe('MemoryList', () => {
           memories={[recentMemory]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -414,8 +286,6 @@ describe('MemoryList', () => {
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -424,7 +294,7 @@ describe('MemoryList', () => {
       });
     });
 
-    it('truncates long content with line-clamp', () => {
+    it('truncates long content with CSS', () => {
       const longMemory: Memory = {
         ...mockMemories[0],
         content: 'A'.repeat(500),
@@ -435,47 +305,44 @@ describe('MemoryList', () => {
           memories={[longMemory]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      const contentElement = container.querySelector('.line-clamp-3');
+      // Table layout uses truncate class
+      const contentElement = container.querySelector('.truncate');
       expect(contentElement).toBeInTheDocument();
     });
   });
 
   describe('Hover Effects', () => {
-    it('applies hover shadow effect', () => {
+    it('applies hover background effect on rows', () => {
       const { container } = render(
         <MemoryList
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      const card = container.querySelector('[class*="hover:shadow-md"]');
-      expect(card).toBeInTheDocument();
+      // Table rows have hover:bg-surface-hover
+      const row = container.querySelector('[class*="hover:bg-surface-hover"]');
+      expect(row).toBeInTheDocument();
     });
   });
 
   describe('Multiple Memories', () => {
-    it('renders multiple memory cards', () => {
+    it('renders multiple memory rows', () => {
       const { container } = render(
         <MemoryList
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      const cards = container.querySelectorAll('[class*="bg-surface"]');
-      expect(cards.length).toBe(mockMemories.length);
+      // Table rows in tbody
+      const rows = container.querySelectorAll('tbody tr');
+      expect(rows.length).toBe(mockMemories.length);
     });
 
     it('each memory has its own action buttons', () => {
@@ -484,8 +351,6 @@ describe('MemoryList', () => {
           memories={mockMemories}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -506,8 +371,6 @@ describe('MemoryList', () => {
           memories={[instructionMemory]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
@@ -523,14 +386,10 @@ describe('MemoryList', () => {
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      expect(screen.getByLabelText('Pin memory')).toBeInTheDocument();
       expect(screen.getByLabelText('Edit memory')).toBeInTheDocument();
-      expect(screen.getByLabelText('Archive memory')).toBeInTheDocument();
       expect(screen.getByLabelText('Delete memory')).toBeInTheDocument();
     });
 
@@ -540,14 +399,10 @@ describe('MemoryList', () => {
           memories={[mockMemories[0]]}
           onEdit={mockOnEdit}
           onDelete={mockOnDelete}
-          onPin={mockOnPin}
-          onArchive={mockOnArchive}
         />
       );
 
-      expect(screen.getByTitle('Pin')).toBeInTheDocument();
       expect(screen.getByTitle('Edit')).toBeInTheDocument();
-      expect(screen.getByTitle('Archive')).toBeInTheDocument();
       expect(screen.getByTitle('Delete')).toBeInTheDocument();
     });
   });

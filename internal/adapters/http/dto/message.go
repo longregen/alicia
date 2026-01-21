@@ -6,18 +6,15 @@ import (
 	"github.com/longregen/alicia/internal/domain/models"
 )
 
-// SendMessageRequest represents a request to send a message
 type SendMessageRequest struct {
 	Contents string `json:"contents" msgpack:"contents"`
 	LocalID  string `json:"local_id,omitempty" msgpack:"localId,omitempty"`
 }
 
-// SwitchBranchRequest represents a request to switch the conversation tip to a different message
 type SwitchBranchRequest struct {
 	TipMessageID string `json:"tip_message_id" msgpack:"tipMessageId"`
 }
 
-// ToolUseResponse represents a tool use in API responses
 type ToolUseResponse struct {
 	ID             string         `json:"id" msgpack:"id"`
 	MessageID      string         `json:"message_id" msgpack:"messageId"`
@@ -32,7 +29,6 @@ type ToolUseResponse struct {
 	UpdatedAt      string         `json:"updated_at" msgpack:"updatedAt"`
 }
 
-// FromToolUseModel converts a domain model to a response DTO
 func FromToolUseModel(tu *models.ToolUse) *ToolUseResponse {
 	var completedAt *string
 	if tu.CompletedAt != nil {
@@ -54,7 +50,6 @@ func FromToolUseModel(tu *models.ToolUse) *ToolUseResponse {
 	}
 }
 
-// FromToolUseModelList converts a list of tool use domain models to response DTOs
 func FromToolUseModelList(toolUses []*models.ToolUse) []*ToolUseResponse {
 	if toolUses == nil {
 		return nil
@@ -66,7 +61,6 @@ func FromToolUseModelList(toolUses []*models.ToolUse) []*ToolUseResponse {
 	return responses
 }
 
-// MemoryUsageResponse represents a memory usage in API responses
 type MemoryUsageResponse struct {
 	ID                string  `json:"id" msgpack:"id"`
 	ConversationID    string  `json:"conversation_id" msgpack:"conversationId"`
@@ -78,7 +72,6 @@ type MemoryUsageResponse struct {
 	CreatedAt         string  `json:"created_at" msgpack:"createdAt"`
 }
 
-// FromMemoryUsageModel converts a domain model to a response DTO
 func FromMemoryUsageModel(mu *models.MemoryUsage) *MemoryUsageResponse {
 	resp := &MemoryUsageResponse{
 		ID:                mu.ID,
@@ -89,14 +82,12 @@ func FromMemoryUsageModel(mu *models.MemoryUsage) *MemoryUsageResponse {
 		PositionInResults: mu.PositionInResults,
 		CreatedAt:         mu.CreatedAt.Format(time.RFC3339),
 	}
-	// Include memory content if the related memory is loaded
 	if mu.Memory != nil {
 		resp.MemoryContent = mu.Memory.Content
 	}
 	return resp
 }
 
-// FromMemoryUsageModelList converts a list of memory usage domain models to response DTOs
 func FromMemoryUsageModelList(memoryUsages []*models.MemoryUsage) []*MemoryUsageResponse {
 	if memoryUsages == nil {
 		return nil
@@ -108,7 +99,6 @@ func FromMemoryUsageModelList(memoryUsages []*models.MemoryUsage) []*MemoryUsage
 	return responses
 }
 
-// MessageResponse represents a message in API responses
 type MessageResponse struct {
 	ID             string                 `json:"id" msgpack:"id"`
 	ConversationID string                 `json:"conversation_id" msgpack:"conversationId"`
@@ -124,13 +114,11 @@ type MessageResponse struct {
 	UpdatedAt      string                 `json:"updated_at" msgpack:"updatedAt"`
 }
 
-// MessageListResponse represents a list of messages
 type MessageListResponse struct {
 	Messages []*MessageResponse `json:"messages" msgpack:"messages"`
 	Total    int                `json:"total" msgpack:"total"`
 }
 
-// FromModel converts a domain model to a response DTO
 func (r *MessageResponse) FromModel(msg *models.Message) *MessageResponse {
 	return &MessageResponse{
 		ID:             msg.ID,
@@ -148,7 +136,6 @@ func (r *MessageResponse) FromModel(msg *models.Message) *MessageResponse {
 	}
 }
 
-// FromModelList converts a list of domain models to response DTOs
 func FromMessageModelList(msgs []*models.Message) []*MessageResponse {
 	responses := make([]*MessageResponse, len(msgs))
 	for i, msg := range msgs {
@@ -157,30 +144,25 @@ func FromMessageModelList(msgs []*models.Message) []*MessageResponse {
 	return responses
 }
 
-// EditAssistantMessageRequest represents a request to edit an assistant message's content
 type EditAssistantMessageRequest struct {
 	Contents string `json:"contents" msgpack:"contents"`
 }
 
-// EditUserMessageRequest represents a request to edit a user message and regenerate the response
 type EditUserMessageRequest struct {
 	Contents string `json:"contents" msgpack:"contents"`
 }
 
-// EditMessageResponse represents the response from editing a message
 type EditMessageResponse struct {
 	UpdatedMessage   *MessageResponse `json:"updated_message" msgpack:"updatedMessage"`
 	AssistantMessage *MessageResponse `json:"assistant_message,omitempty" msgpack:"assistantMessage,omitempty"`
 	DeletedCount     int              `json:"deleted_count,omitempty" msgpack:"deletedCount,omitempty"`
 }
 
-// RegenerateResponse represents the response from regenerating an assistant message
 type RegenerateResponse struct {
 	DeletedMessageID string           `json:"deleted_message_id" msgpack:"deletedMessageId"`
 	NewMessage       *MessageResponse `json:"new_message,omitempty" msgpack:"newMessage,omitempty"`
 }
 
-// ContinueResponse represents the response from continuing an assistant message
 type ContinueResponse struct {
 	TargetMessage   *MessageResponse `json:"target_message" msgpack:"targetMessage"`
 	AppendedContent string           `json:"appended_content" msgpack:"appendedContent"`

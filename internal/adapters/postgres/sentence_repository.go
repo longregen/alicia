@@ -260,7 +260,6 @@ func (r *SentenceRepository) GetNextSequenceNumber(ctx context.Context, messageI
 	return nextSeq, nil
 }
 
-// GetIncompleteOlderThan retrieves sentences with incomplete status older than the given time
 func (r *SentenceRepository) GetIncompleteOlderThan(ctx context.Context, olderThan time.Time) ([]*models.Sentence, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -284,7 +283,6 @@ func (r *SentenceRepository) GetIncompleteOlderThan(ctx context.Context, olderTh
 	return r.scanSentences(rows)
 }
 
-// GetIncompleteByConversation retrieves incomplete sentences for a specific conversation
 func (r *SentenceRepository) GetIncompleteByConversation(ctx context.Context, conversationID string, olderThan time.Time) ([]*models.Sentence, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()

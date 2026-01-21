@@ -15,21 +15,14 @@ import (
 	_ "github.com/longregen/alicia/internal/adapters/http/encoding"
 )
 
-// WSClientConfig contains configuration for the WebSocket client
 type WSClientConfig struct {
-	// URL is the WebSocket URL to connect to (e.g., ws://localhost:8000/api/v1/ws)
-	URL string
-	// ReconnectInterval is the time to wait before attempting to reconnect
+	URL               string
 	ReconnectInterval time.Duration
-	// PingInterval is the interval for sending ping messages
-	PingInterval time.Duration
-	// ReadTimeout is the read deadline for the WebSocket connection
-	ReadTimeout time.Duration
-	// WriteTimeout is the write deadline for the WebSocket connection
-	WriteTimeout time.Duration
+	PingInterval      time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
 }
 
-// DefaultWSClientConfig returns the default WebSocket client configuration
 func DefaultWSClientConfig() *WSClientConfig {
 	return &WSClientConfig{
 		URL:               "ws://localhost:8000/api/v1/ws",
@@ -40,17 +33,12 @@ func DefaultWSClientConfig() *WSClientConfig {
 	}
 }
 
-// WSClientCallbacks defines callbacks for WebSocket client events
 type WSClientCallbacks interface {
-	// OnResponseGenerationRequest is called when a ResponseGenerationRequest is received
 	OnResponseGenerationRequest(ctx context.Context, req *protocol.ResponseGenerationRequest) error
-	// OnConnected is called when the WebSocket connection is established
 	OnConnected()
-	// OnDisconnected is called when the WebSocket connection is lost
 	OnDisconnected(err error)
 }
 
-// WSClient manages a WebSocket connection to the serve process
 type WSClient struct {
 	config    *WSClientConfig
 	callbacks WSClientCallbacks
@@ -69,7 +57,6 @@ type WSClient struct {
 	reconnectChan chan struct{}
 }
 
-// NewWSClient creates a new WebSocket client
 func NewWSClient(config *WSClientConfig, callbacks WSClientCallbacks) *WSClient {
 	if config == nil {
 		config = DefaultWSClientConfig()
@@ -81,8 +68,6 @@ func NewWSClient(config *WSClientConfig, callbacks WSClientCallbacks) *WSClient 
 	}
 }
 
-// Connect establishes the WebSocket connection and starts the read/write pumps.
-// It also starts a reconnection loop that automatically reconnects on disconnection.
 func (c *WSClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	if c.connected || c.reconnecting {
@@ -141,7 +126,6 @@ func (c *WSClient) connect() error {
 	return nil
 }
 
-// subscribeAsAgent sends a subscription request with AgentMode=true
 func (c *WSClient) subscribeAsAgent() error {
 	c.mu.Lock()
 	c.stanzaID++
@@ -175,7 +159,6 @@ func (c *WSClient) subscribeAsAgent() error {
 	return nil
 }
 
-// reconnectLoop handles automatic reconnection with exponential backoff
 func (c *WSClient) reconnectLoop() {
 	defer c.wg.Done()
 
@@ -224,7 +207,6 @@ func (c *WSClient) reconnectLoop() {
 	}
 }
 
-// triggerReconnect signals that a reconnection attempt should be made
 func (c *WSClient) triggerReconnect() {
 	select {
 	case c.reconnectChan <- struct{}{}:
@@ -233,7 +215,6 @@ func (c *WSClient) triggerReconnect() {
 	}
 }
 
-// Disconnect closes the WebSocket connection
 func (c *WSClient) Disconnect() {
 	c.mu.Lock()
 	if !c.connected {
@@ -253,14 +234,12 @@ func (c *WSClient) Disconnect() {
 	log.Printf("WSClient: Disconnected")
 }
 
-// IsConnected returns true if the client is connected
 func (c *WSClient) IsConnected() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.connected
 }
 
-// readPump reads messages from the WebSocket connection
 func (c *WSClient) readPump() {
 	defer c.wg.Done()
 	defer func() {
@@ -323,7 +302,6 @@ func (c *WSClient) readPump() {
 	}
 }
 
-// handleMessage processes incoming messages
 func (c *WSClient) handleMessage(envelope *protocol.Envelope) {
 	switch envelope.Type {
 	case protocol.TypeSubscribeAck:
@@ -392,7 +370,6 @@ func (c *WSClient) handleMessage(envelope *protocol.Envelope) {
 	}
 }
 
-// writePump sends periodic ping messages
 func (c *WSClient) writePump() {
 	defer c.wg.Done()
 
@@ -428,7 +405,6 @@ func (c *WSClient) writePump() {
 	}
 }
 
-// SendEnvelope sends an envelope message to the serve process
 func (c *WSClient) SendEnvelope(envelope *protocol.Envelope) error {
 	c.mu.RLock()
 	conn := c.conn
@@ -462,37 +438,31 @@ func (c *WSClient) SendEnvelope(envelope *protocol.Envelope) error {
 	return conn.WriteMessage(websocket.BinaryMessage, data)
 }
 
-// SendAssistantMessage sends an assistant message response
 func (c *WSClient) SendAssistantMessage(conversationID string, msg *protocol.AssistantMessage) error {
 	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeAssistantMessage, msg)
 	return c.SendEnvelope(envelope)
 }
 
-// SendAssistantSentence sends a streaming sentence chunk
 func (c *WSClient) SendAssistantSentence(conversationID string, sentence *protocol.AssistantSentence) error {
 	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeAssistantSentence, sentence)
 	return c.SendEnvelope(envelope)
 }
 
-// SendToolUseRequest sends a tool use request
 func (c *WSClient) SendToolUseRequest(conversationID string, req *protocol.ToolUseRequest) error {
 	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeToolUseRequest, req)
 	return c.SendEnvelope(envelope)
 }
 
-// SendMemoryTrace sends a memory trace message
 func (c *WSClient) SendMemoryTrace(conversationID string, trace *protocol.MemoryTrace) error {
 	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeMemoryTrace, trace)
 	return c.SendEnvelope(envelope)
 }
 
-// SendReasoningStep sends a reasoning step
 func (c *WSClient) SendReasoningStep(conversationID string, step *protocol.ReasoningStep) error {
 	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeReasoningStep, step)
 	return c.SendEnvelope(envelope)
 }
 
-// SendStartAnswer sends a start answer message
 func (c *WSClient) SendStartAnswer(conversationID string, start *protocol.StartAnswer) error {
 	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeStartAnswer, start)
 	return c.SendEnvelope(envelope)

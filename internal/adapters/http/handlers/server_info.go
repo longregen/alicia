@@ -11,7 +11,6 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// ServerInfoHandler handles server info and session stats endpoints
 type ServerInfoHandler struct {
 	config           *config.Config
 	conversationRepo ports.ConversationRepository
@@ -20,7 +19,6 @@ type ServerInfoHandler struct {
 	sessionStartTime time.Time
 }
 
-// NewServerInfoHandler creates a new server info handler
 func NewServerInfoHandler(
 	cfg *config.Config,
 	conversationRepo ports.ConversationRepository,
@@ -36,8 +34,6 @@ func NewServerInfoHandler(
 	}
 }
 
-// GetServerInfo handles GET /api/v1/server/info
-// Returns current server status, model info, and MCP server status
 func (h *ServerInfoHandler) GetServerInfo(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -45,19 +41,16 @@ func (h *ServerInfoHandler) GetServerInfo(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Build connection info
 	connection := protocol.ConnectionInfo{
 		Status:  "connected",
-		Latency: 0, // Latency is measured client-side
+		Latency: 0,
 	}
 
-	// Build model info from config
 	model := protocol.ModelInfo{
 		Name:     h.config.LLM.Model,
-		Provider: "openai", // Default provider
+		Provider: "openai",
 	}
 
-	// Build MCP server list
 	var mcpServers []protocol.MCPServerInfo
 	if h.mcpAdapter != nil {
 		serverStatus := h.mcpAdapter.GetServerStatus()
@@ -86,14 +79,11 @@ func (h *ServerInfoHandler) GetServerInfo(w http.ResponseWriter, r *http.Request
 	respondJSON(w, response, http.StatusOK)
 }
 
-// SessionStatsResponse extends protocol.SessionStats with conversation context
 type SessionStatsResponse struct {
 	protocol.SessionStats
 	ConversationID string `json:"conversationId,omitempty"`
 }
 
-// GetSessionStats handles GET /api/v1/conversations/{id}/stats
-// Returns session statistics for a specific conversation
 func (h *ServerInfoHandler) GetSessionStats(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -106,35 +96,31 @@ func (h *ServerInfoHandler) GetSessionStats(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Verify conversation exists and user has access
 	conv, err := h.conversationRepo.GetByIDAndUserID(r.Context(), conversationID, userID)
 	if err != nil {
 		respondError(w, "not_found", "Conversation not found", http.StatusNotFound)
 		return
 	}
 
-	// Get messages to count them
 	messages, err := h.messageRepo.GetByConversation(r.Context(), conversationID)
 	if err != nil {
 		respondError(w, "internal_error", "Failed to get messages", http.StatusInternalServerError)
 		return
 	}
 
-	// Count messages and tool calls
 	messageCount := len(messages)
 	toolCallCount := 0
 	for _, msg := range messages {
 		toolCallCount += len(msg.ToolUses)
 	}
 
-	// Calculate session duration from conversation creation time
 	sessionDuration := int(time.Since(conv.CreatedAt).Seconds())
 
 	response := SessionStatsResponse{
 		SessionStats: protocol.SessionStats{
 			MessageCount:    messageCount,
 			ToolCallCount:   toolCallCount,
-			MemoriesUsed:    0, // Would need to track memory usage separately
+			MemoriesUsed:    0,
 			SessionDuration: sessionDuration,
 		},
 		ConversationID: conversationID,
@@ -143,8 +129,6 @@ func (h *ServerInfoHandler) GetSessionStats(w http.ResponseWriter, r *http.Reque
 	respondJSON(w, response, http.StatusOK)
 }
 
-// GetGlobalStats handles GET /api/v1/server/stats
-// Returns global server statistics (not conversation-specific)
 func (h *ServerInfoHandler) GetGlobalStats(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
@@ -152,10 +136,8 @@ func (h *ServerInfoHandler) GetGlobalStats(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Calculate server uptime
 	serverUptime := int(time.Since(h.sessionStartTime).Seconds())
 
-	// Get user's conversations to count total messages
 	conversations, err := h.conversationRepo.ListByUserID(r.Context(), userID, 1000, 0)
 	if err != nil {
 		respondError(w, "internal_error", "Failed to get conversations", http.StatusInternalServerError)

@@ -6,15 +6,11 @@ import (
 	"strings"
 )
 
-// GardenDB defines the interface for database operations required by garden tools
 type GardenDB interface {
-	// Query executes a query and returns rows
 	Query(ctx context.Context, sql string, args ...any) (GardenRows, error)
-	// QueryRow executes a query that returns a single row
 	QueryRow(ctx context.Context, sql string, args ...any) GardenRow
 }
 
-// GardenRows represents query results
 type GardenRows interface {
 	Next() bool
 	Scan(dest ...any) error
@@ -23,12 +19,10 @@ type GardenRows interface {
 	Values() ([]any, error)
 }
 
-// GardenRow represents a single row result
 type GardenRow interface {
 	Scan(dest ...any) error
 }
 
-// GardenDescribeTableTool describes a database table
 type GardenDescribeTableTool struct {
 	db GardenDB
 }
@@ -68,7 +62,6 @@ func (t *GardenDescribeTableTool) Execute(ctx context.Context, args map[string]a
 		return nil, fmt.Errorf("invalid table name")
 	}
 
-	// Get columns
 	colQuery := `
 		SELECT column_name, data_type, is_nullable = 'YES' as nullable, column_default
 		FROM information_schema.columns
@@ -98,7 +91,6 @@ func (t *GardenDescribeTableTool) Execute(ctx context.Context, args map[string]a
 		return nil, fmt.Errorf("table '%s' not found", table)
 	}
 
-	// Get primary key
 	pkQuery := `
 		SELECT a.attname
 		FROM pg_index i
@@ -116,7 +108,6 @@ func (t *GardenDescribeTableTool) Execute(ctx context.Context, args map[string]a
 		pkRows.Close()
 	}
 
-	// Get foreign keys
 	fkQuery := `
 		SELECT kcu.column_name, ccu.table_name, ccu.column_name
 		FROM information_schema.table_constraints tc
@@ -138,12 +129,10 @@ func (t *GardenDescribeTableTool) Execute(ctx context.Context, args map[string]a
 		fkRows.Close()
 	}
 
-	// Get row count
 	var rowCount int64
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
 	t.db.QueryRow(ctx, countQuery).Scan(&rowCount)
 
-	// Get indexes
 	idxQuery := `
 		SELECT indexname, indexdef
 		FROM pg_indexes
@@ -172,7 +161,6 @@ func (t *GardenDescribeTableTool) Execute(ctx context.Context, args map[string]a
 	return result, nil
 }
 
-// GardenColumnInfo describes a table column
 type GardenColumnInfo struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`
@@ -180,19 +168,16 @@ type GardenColumnInfo struct {
 	Default  string `json:"default,omitempty"`
 }
 
-// GardenForeignKey describes a foreign key relationship
 type GardenForeignKey struct {
 	Column     string `json:"column"`
 	References string `json:"references"`
 }
 
-// GardenIndex describes a table index
 type GardenIndex struct {
 	Name       string `json:"name"`
 	Definition string `json:"definition"`
 }
 
-// GardenTableDescription is the full table description result
 type GardenTableDescription struct {
 	Table       string             `json:"table"`
 	Columns     []GardenColumnInfo `json:"columns"`
@@ -202,7 +187,6 @@ type GardenTableDescription struct {
 	Indexes     []GardenIndex      `json:"indexes,omitempty"`
 }
 
-// GardenExecuteSQLTool executes SQL queries
 type GardenExecuteSQLTool struct {
 	db              GardenDB
 	maxResponseSize int
@@ -292,7 +276,6 @@ func (t *GardenExecuteSQLTool) Execute(ctx context.Context, args map[string]any)
 	return result, nil
 }
 
-// GardenSQLResult is the result of a SQL query
 type GardenSQLResult struct {
 	Success   bool             `json:"success"`
 	Columns   []string         `json:"columns,omitempty"`
@@ -302,7 +285,6 @@ type GardenSQLResult struct {
 	Error     string           `json:"error,omitempty"`
 }
 
-// GardenSchemaExploreTool answers questions about the database schema
 type GardenSchemaExploreTool struct {
 	db GardenDB
 }
@@ -335,7 +317,6 @@ func (t *GardenSchemaExploreTool) Schema() map[string]any {
 func (t *GardenSchemaExploreTool) Execute(ctx context.Context, args map[string]any) (any, error) {
 	question, _ := args["question"].(string)
 
-	// Get all tables with column counts
 	tableQuery := `
 		SELECT
 			t.table_name,
@@ -383,7 +364,6 @@ func (t *GardenSchemaExploreTool) Execute(ctx context.Context, args map[string]a
 		tables = append(tables, table)
 	}
 
-	// Get foreign key relationships
 	fkQuery := `
 		SELECT
 			tc.table_name as source_table,
@@ -420,7 +400,6 @@ func (t *GardenSchemaExploreTool) Execute(ctx context.Context, args map[string]a
 	return result, nil
 }
 
-// GardenSchemaTable describes a table in the schema
 type GardenSchemaTable struct {
 	Name        string               `json:"name"`
 	Description string               `json:"description,omitempty"`
@@ -428,14 +407,12 @@ type GardenSchemaTable struct {
 	Columns     []GardenSchemaColumn `json:"columns"`
 }
 
-// GardenSchemaColumn describes a column
 type GardenSchemaColumn struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`
 	Nullable bool   `json:"nullable"`
 }
 
-// GardenSchemaRelationship describes a foreign key relationship
 type GardenSchemaRelationship struct {
 	SourceTable  string `json:"source_table"`
 	SourceColumn string `json:"source_column"`
@@ -443,15 +420,12 @@ type GardenSchemaRelationship struct {
 	TargetColumn string `json:"target_column"`
 }
 
-// GardenSchemaOverview is the full schema exploration result
 type GardenSchemaOverview struct {
 	Question      string                     `json:"question,omitempty"`
 	Tables        []GardenSchemaTable        `json:"tables"`
 	Relationships []GardenSchemaRelationship `json:"relationships"`
 	TableCount    int                        `json:"table_count"`
 }
-
-// Helper functions
 
 func isValidIdentifier(s string) bool {
 	if s == "" || len(s) > 64 {

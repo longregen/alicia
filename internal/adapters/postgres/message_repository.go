@@ -160,7 +160,6 @@ func (r *MessageRepository) GetLatestByConversation(ctx context.Context, convers
 		return nil, err
 	}
 
-	// Reverse the slice to get ascending order
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
@@ -172,16 +171,10 @@ func (r *MessageRepository) GetNextSequenceNumber(ctx context.Context, conversat
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// If we're in a transaction, use the transaction connection
 	if tx := GetTx(ctx); tx != nil {
-		// log.Printf("GetNextSequenceNumber: using existing transaction")
 		return r.getNextSequenceWithConn(ctx, tx, conversationID)
 	}
 
-	// Otherwise, we need to start a transaction to use transaction-scoped advisory locks
-	// This ensures the lock is held for the duration of the sequence number generation
-	// and automatically released when the transaction ends
-	// log.Printf("GetNextSequenceNumber: starting new transaction")
 	tx, err := r.Pool().Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -193,7 +186,6 @@ func (r *MessageRepository) GetNextSequenceNumber(ctx context.Context, conversat
 		return 0, err
 	}
 
-	// Commit the transaction to release the advisory lock
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
@@ -205,12 +197,7 @@ func (r *MessageRepository) getNextSequenceWithConn(ctx context.Context, conn in
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }, conversationID string) (int, error) {
-	// Use PostgreSQL advisory lock with transaction-level scope
-	// Hash the conversation ID to a 64-bit integer for the advisory lock
 	lockID := hashConversationID(conversationID)
-
-	// Use pg_advisory_xact_lock for transaction-scoped lock
-	// This automatically releases when the connection is returned to the pool
 	_, err := conn.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", lockID)
 	if err != nil {
 		return 0, err
@@ -230,11 +217,9 @@ func (r *MessageRepository) getNextSequenceWithConn(ctx context.Context, conn in
 	return nextSeq, nil
 }
 
-// hashConversationID generates a 64-bit hash from a conversation ID for use with advisory locks
 func hashConversationID(conversationID string) int64 {
 	h := fnv.New64a()
 	h.Write([]byte(conversationID))
-	// Convert to int64, preserving all bits
 	return int64(h.Sum64())
 }
 
@@ -258,7 +243,6 @@ func (r *MessageRepository) GetAfterSequence(ctx context.Context, conversationID
 	return r.scanMessages(rows)
 }
 
-// GetPendingSync retrieves all messages pending synchronization for a conversation
 func (r *MessageRepository) GetPendingSync(ctx context.Context, conversationID string) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -281,7 +265,6 @@ func (r *MessageRepository) GetPendingSync(ctx context.Context, conversationID s
 	return r.scanMessages(rows)
 }
 
-// GetByLocalID retrieves a message by its local ID
 func (r *MessageRepository) GetByLocalID(ctx context.Context, localID string) (*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -328,7 +311,6 @@ func (r *MessageRepository) scanMessage(row pgx.Row) (*models.Message, error) {
 		return nil, err
 	}
 
-	// Use helpers to extract nullable fields
 	m.PreviousID = getString(previousID)
 	m.LocalID = getString(localID)
 	m.ServerID = getString(serverID)
@@ -368,7 +350,6 @@ func (r *MessageRepository) scanMessages(rows pgx.Rows) ([]*models.Message, erro
 			return nil, err
 		}
 
-		// Use helpers to reduce boilerplate
 		m.PreviousID = getString(previousID)
 		m.LocalID = getString(localID)
 		m.ServerID = getString(serverID)
@@ -381,7 +362,6 @@ func (r *MessageRepository) scanMessages(rows pgx.Rows) ([]*models.Message, erro
 	return messages, rows.Err()
 }
 
-// GetIncompleteOlderThan retrieves messages with incomplete status older than the given time
 func (r *MessageRepository) GetIncompleteOlderThan(ctx context.Context, olderThan time.Time) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -404,7 +384,6 @@ func (r *MessageRepository) GetIncompleteOlderThan(ctx context.Context, olderTha
 	return r.scanMessages(rows)
 }
 
-// GetIncompleteByConversation retrieves incomplete messages for a specific conversation
 func (r *MessageRepository) GetIncompleteByConversation(ctx context.Context, conversationID string, olderThan time.Time) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -428,15 +407,12 @@ func (r *MessageRepository) GetIncompleteByConversation(ctx context.Context, con
 	return r.scanMessages(rows)
 }
 
-// GetChainFromTip walks backwards from the tip message via previous_id and returns messages in chronological order
 func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// Use recursive CTE to walk the chain backwards, then reverse the order
 	query := `
 		WITH RECURSIVE message_chain AS (
-			-- Base case: start with the tip message
 			SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
 			       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at,
 			       1 as depth
@@ -445,7 +421,6 @@ func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID st
 
 			UNION ALL
 
-			-- Recursive case: follow previous_id backwards
 			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
 			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.user_edited, m.user_edited_at, m.created_at, m.updated_at, m.deleted_at,
 			       mc.depth + 1
@@ -467,21 +442,12 @@ func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID st
 	return r.scanMessages(rows)
 }
 
-// GetChainFromTipWithSiblings returns the chain from tip PLUS all sibling messages at each branch point.
-// This allows the frontend to know about all alternative branches without making N separate API calls.
-// Messages are ordered by sequence_number ASC, then created_at ASC (siblings at same position sorted by creation time).
 func (r *MessageRepository) GetChainFromTipWithSiblings(ctx context.Context, tipMessageID string) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// This query:
-	// 1. Walks backwards from tip via previous_id (message_chain CTE)
-	// 2. Collects all unique previous_ids from the chain, including NULL for root-level messages
-	// 3. Finds all siblings: messages sharing the same previous_id but not in the chain
-	// 4. Returns the union, ordered by sequence_number then created_at
 	query := `
 		WITH RECURSIVE message_chain AS (
-			-- Base case: start with the tip message
 			SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
 			       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 			FROM alicia_messages
@@ -489,38 +455,30 @@ func (r *MessageRepository) GetChainFromTipWithSiblings(ctx context.Context, tip
 
 			UNION ALL
 
-			-- Recursive case: follow previous_id backwards
 			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
 			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.user_edited, m.user_edited_at, m.created_at, m.updated_at, m.deleted_at
 			FROM alicia_messages m
 			INNER JOIN message_chain mc ON m.id = mc.previous_id
 			WHERE m.deleted_at IS NULL
 		),
-		-- Check if any message in the chain has NULL previous_id (root-level)
 		has_root_message AS (
 			SELECT EXISTS(SELECT 1 FROM message_chain WHERE previous_id IS NULL) AS has_null
 		),
-		-- Get all unique non-NULL previous_ids from the chain (these are the branch points)
 		chain_parents AS (
 			SELECT DISTINCT previous_id FROM message_chain WHERE previous_id IS NOT NULL
 		),
-		-- Get all siblings: messages that share the same previous_id as chain messages but aren't in the chain
-		-- This includes root-level siblings (previous_id IS NULL) if any chain message is root-level
 		siblings AS (
 			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
 			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.user_edited, m.user_edited_at, m.created_at, m.updated_at, m.deleted_at
 			FROM alicia_messages m
 			WHERE m.conversation_id = (SELECT conversation_id FROM message_chain LIMIT 1)
 			  AND (
-				-- Match siblings with non-NULL previous_id
 				m.previous_id IN (SELECT previous_id FROM chain_parents)
-				-- OR match root-level siblings if chain has a root message
 				OR (m.previous_id IS NULL AND (SELECT has_null FROM has_root_message))
 			)
 			  AND m.id NOT IN (SELECT id FROM message_chain)
 			  AND m.deleted_at IS NULL
 		)
-		-- Combine chain messages and siblings, ordered by position then creation time
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
 		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM (
@@ -539,12 +497,10 @@ func (r *MessageRepository) GetChainFromTipWithSiblings(ctx context.Context, tip
 	return r.scanMessages(rows)
 }
 
-// GetSiblings returns all messages that share the same previous_id (i.e., branches from the same parent)
 func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) ([]*models.Message, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// First get the previous_id of the given message
 	var previousID sql.NullString
 	queryPrevious := `SELECT previous_id FROM alicia_messages WHERE id = $1 AND deleted_at IS NULL`
 	err := r.conn(ctx).QueryRow(ctx, queryPrevious, messageID).Scan(&previousID)
@@ -552,12 +508,10 @@ func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) (
 		return nil, err
 	}
 
-	// If no previous_id, there are no siblings (this is a root message)
 	if !previousID.Valid {
 		return []*models.Message{}, nil
 	}
 
-	// Get all messages with the same previous_id
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
 		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
@@ -574,7 +528,6 @@ func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) (
 	return r.scanMessages(rows)
 }
 
-// DeleteAfterSequence soft-deletes all messages in a conversation after the given sequence number
 func (r *MessageRepository) DeleteAfterSequence(ctx context.Context, conversationID string, afterSequence int) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()

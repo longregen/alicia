@@ -9,8 +9,6 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// MessageRouter coordinates message decoding, dispatching, and generation management
-// It implements ports.LiveKitAgentCallbacks to handle LiveKit events
 type MessageRouter struct {
 	codec             *Codec
 	dispatcher        MessageDispatcher
@@ -24,7 +22,6 @@ type MessageRouter struct {
 	agent             *Agent
 }
 
-// NewMessageRouter creates a new message router
 func NewMessageRouter(
 	codec *Codec,
 	protocolHandler *ProtocolHandler,
@@ -51,10 +48,8 @@ func NewMessageRouter(
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
 	synthesizeSpeechUseCase ports.SynthesizeSpeechUseCase,
 ) *MessageRouter {
-	// Create the generation manager
 	generationManager := NewDefaultResponseGenerationManager()
 
-	// Create the dispatcher with all dependencies
 	dispatcher := NewDefaultMessageDispatcher(
 		protocolHandler,
 		handleToolUseCase,
@@ -92,8 +87,6 @@ func NewMessageRouter(
 		agent:             agent,
 	}
 
-	// Initialize voice pipeline if both ASR and TTS services are available
-	// Use agent's context so pipeline is properly cancelled when agent disconnects
 	if asrService != nil && ttsService != nil && agent != nil && agent.ctx != nil {
 		voicePipeline, err := NewVoicePipeline(
 			agent.ctx,
@@ -107,7 +100,6 @@ func NewMessageRouter(
 		} else {
 			router.voicePipeline = voicePipeline
 
-			// Set up transcription callback
 			voicePipeline.SetTranscriptionCallback(func(ctx context.Context, text string, isFinal bool) {
 				router.handleVoiceTranscription(ctx, text, isFinal)
 			})
@@ -119,9 +111,7 @@ func NewMessageRouter(
 	return router
 }
 
-// OnDataReceived implements ports.LiveKitAgentCallbacks
 func (r *MessageRouter) OnDataReceived(ctx context.Context, msg *ports.DataChannelMessage) error {
-	// Decode the protocol message
 	envelope, err := r.codec.Decode(msg.Data)
 	if err != nil {
 		log.Printf("Failed to decode message: %v", err)
@@ -129,19 +119,14 @@ func (r *MessageRouter) OnDataReceived(ctx context.Context, msg *ports.DataChann
 		return fmt.Errorf("failed to decode message: %w", err)
 	}
 
-	// Update client stanza ID for tracking reconnection
-	// Do this before routing to ensure we track even if routing fails
 	if envelope.StanzaID > 0 {
 		r.protocolHandler.UpdateClientStanzaID(ctx, envelope.StanzaID)
 	}
 
-	// Dispatch the message to the appropriate handler
 	return r.dispatcher.DispatchMessage(ctx, envelope)
 }
 
-// OnAudioReceived implements ports.LiveKitAgentCallbacks
 func (r *MessageRouter) OnAudioReceived(ctx context.Context, frame *ports.AudioFrame) error {
-	// Use voice pipeline if available (preferred method with buffering and silence detection)
 	if r.voicePipeline != nil {
 		if err := r.voicePipeline.ProcessAudioFrame(ctx, frame); err != nil {
 			log.Printf("Voice pipeline failed to process audio frame: %v", err)
@@ -150,11 +135,9 @@ func (r *MessageRouter) OnAudioReceived(ctx context.Context, frame *ports.AudioF
 		return nil
 	}
 
-	// Fallback: Direct ASR transcription (without buffering - not recommended for real-time audio)
 	if r.asrService != nil {
 		log.Printf("WARNING: Using direct ASR without voice pipeline. Audio may not be buffered properly.")
 
-		// Determine audio format based on sample rate and channels
 		format := fmt.Sprintf("pcm_%d_%d", frame.SampleRate, frame.Channels)
 
 		result, err := r.asrService.Transcribe(ctx, frame.Data, format)
@@ -164,7 +147,6 @@ func (r *MessageRouter) OnAudioReceived(ctx context.Context, frame *ports.AudioF
 		}
 
 		if result != nil && result.Text != "" {
-			// Send transcription result back to client
 			transcription := &protocol.Transcription{
 				ID:             r.idGenerator.GenerateMessageID(),
 				ConversationID: r.conversationID,
@@ -192,24 +174,19 @@ func (r *MessageRouter) OnAudioReceived(ctx context.Context, frame *ports.AudioF
 	return nil
 }
 
-// OnParticipantConnected implements ports.LiveKitAgentCallbacks
 func (r *MessageRouter) OnParticipantConnected(ctx context.Context, participant *ports.LiveKitParticipant) error {
 	log.Printf("Participant connected: %s (%s)", participant.Name, participant.Identity)
 	return nil
 }
 
-// OnParticipantDisconnected implements ports.LiveKitAgentCallbacks
 func (r *MessageRouter) OnParticipantDisconnected(ctx context.Context, participant *ports.LiveKitParticipant) error {
 	log.Printf("Participant disconnected: %s (%s)", participant.Name, participant.Identity)
 	return nil
 }
 
-// OnTurnStart implements ports.LiveKitAgentCallbacks
-// Called when VAD detects the user has started speaking
 func (r *MessageRouter) OnTurnStart(ctx context.Context) error {
 	log.Printf("VAD: Turn started for conversation: %s", r.conversationID)
 
-	// Cancel any ongoing response generation when user starts speaking
 	if r.generationManager != nil {
 		r.generationManager.CancelAll()
 		log.Printf("Cancelled ongoing response generation due to user speech")
@@ -218,25 +195,14 @@ func (r *MessageRouter) OnTurnStart(ctx context.Context) error {
 	return nil
 }
 
-// OnTurnEnd implements ports.LiveKitAgentCallbacks
-// Called when VAD detects the user has finished speaking (after silence threshold)
 func (r *MessageRouter) OnTurnEnd(ctx context.Context, durationMs int64) error {
 	log.Printf("VAD: Turn ended for conversation: %s (duration: %dms)", r.conversationID, durationMs)
-
-	// The actual response generation will be triggered by the transcription
-	// callback when the voice pipeline finalizes the transcript.
-	// This callback can be used for logging/metrics or to trigger
-	// any turn-based processing that should happen after user finishes speaking.
-
 	return nil
 }
 
-// handleVoiceTranscription processes transcription from the voice pipeline
-// This is called when the voice pipeline detects speech and completes transcription
 func (r *MessageRouter) handleVoiceTranscription(ctx context.Context, text string, isFinal bool) {
 	log.Printf("Voice transcription: %s (final: %v)", text, isFinal)
 
-	// Create transcription message
 	transcription := &protocol.Transcription{
 		ID:             r.idGenerator.GenerateMessageID(),
 		ConversationID: r.conversationID,
@@ -244,7 +210,6 @@ func (r *MessageRouter) handleVoiceTranscription(ctx context.Context, text strin
 		Final:          isFinal,
 	}
 
-	// Send transcription to client
 	envelope := &protocol.Envelope{
 		ConversationID: r.conversationID,
 		Type:           protocol.TypeTranscription,
@@ -256,8 +221,6 @@ func (r *MessageRouter) handleVoiceTranscription(ctx context.Context, text strin
 		return
 	}
 
-	// If this is a final transcription, trigger the dispatcher to handle it
-	// This will create a user message and generate a response
 	if isFinal {
 		transcriptionEnvelope := &protocol.Envelope{
 			ConversationID: r.conversationID,
@@ -271,7 +234,6 @@ func (r *MessageRouter) handleVoiceTranscription(ctx context.Context, text strin
 	}
 }
 
-// Cleanup stops the voice pipeline and cleans up resources
 func (r *MessageRouter) Cleanup() {
 	if r.voicePipeline != nil {
 		log.Printf("Stopping voice pipeline for conversation: %s", r.conversationID)
@@ -280,7 +242,6 @@ func (r *MessageRouter) Cleanup() {
 	}
 }
 
-// sendError sends an error message via the protocol handler
 func (r *MessageRouter) sendError(ctx context.Context, code int32, message string, recoverable bool) error {
 	return r.protocolHandler.sendError(ctx, code, message, recoverable)
 }

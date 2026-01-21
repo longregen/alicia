@@ -7,12 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PgxGardenDB implements GardenDB using pgx
 type PgxGardenDB struct {
 	pool *pgxpool.Pool
 }
 
-// NewPgxGardenDB creates a new PgxGardenDB
 func NewPgxGardenDB(pool *pgxpool.Pool) *PgxGardenDB {
 	return &PgxGardenDB{pool: pool}
 }
@@ -29,7 +27,6 @@ func (db *PgxGardenDB) QueryRow(ctx context.Context, sql string, args ...any) Ga
 	return db.pool.QueryRow(ctx, sql, args...)
 }
 
-// pgxRows wraps pgx.Rows to implement GardenRows
 type pgxRows struct {
 	rows pgx.Rows
 }

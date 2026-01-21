@@ -470,7 +470,7 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
         setError(null);
 
         // Wire up the message sender for the protocol adapter
-        // This allows components to send messages (DimensionPreference, EliteSelect, etc.)
+        // This allows components to send messages (Feedback, UserNote, etc.)
         setMessageSender((envelope: Envelope) => {
           const data = protocolRef.current.encode(envelope);
           newRoom.localParticipant.publishData(data, { reliable: true });

@@ -172,8 +172,6 @@ func (r *MemoryRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-// SearchMemories performs a unified search with configurable options.
-// This is the recommended method for memory searches, as it consolidates all search variants.
 func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.MemorySearchOptions) ([]*ports.MemorySearchResult, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -187,7 +185,6 @@ func (r *MemoryRepository) SearchMemories(ctx context.Context, opts ports.Memory
 
 	vector := pgvector.NewVector(opts.Embedding)
 
-	// Build query based on whether we need scores and/or threshold
 	var query string
 	var args []interface{}
 
@@ -498,7 +495,6 @@ func (r *MemoryRepository) scanMemories(rows pgx.Rows) ([]*models.Memory, error)
 	return memories, rows.Err()
 }
 
-// Pin sets the pinned status of a memory
 func (r *MemoryRepository) Pin(ctx context.Context, id string, pinned bool) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -513,7 +509,6 @@ func (r *MemoryRepository) Pin(ctx context.Context, id string, pinned bool) erro
 	return err
 }
 
-// Archive sets the archived status of a memory
 func (r *MemoryRepository) Archive(ctx context.Context, id string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -528,8 +523,6 @@ func (r *MemoryRepository) Archive(ctx context.Context, id string) error {
 	return err
 }
 
-// DeleteByConversationID soft-deletes all memories that were extracted from messages
-// belonging to the specified conversation (via source_message_id)
 func (r *MemoryRepository) DeleteByConversationID(ctx context.Context, conversationID string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()

@@ -13,12 +13,9 @@ func NewCodec() *Codec {
 	return &Codec{}
 }
 
-// messageFactory creates a new instance of a message type for unmarshaling
 type messageFactory func() interface{}
 
-// messageTypeRegistry maps message types to their factory functions
 var messageTypeRegistry = map[protocol.MessageType]messageFactory{
-	// Core protocol messages (1-16)
 	protocol.TypeErrorMessage:      func() interface{} { return &protocol.ErrorMessage{} },
 	protocol.TypeUserMessage:       func() interface{} { return &protocol.UserMessage{} },
 	protocol.TypeAssistantMessage:  func() interface{} { return &protocol.AssistantMessage{} },
@@ -35,35 +32,25 @@ var messageTypeRegistry = map[protocol.MessageType]messageFactory{
 	protocol.TypeMemoryTrace:       func() interface{} { return &protocol.MemoryTrace{} },
 	protocol.TypeCommentary:        func() interface{} { return &protocol.Commentary{} },
 	protocol.TypeAssistantSentence: func() interface{} { return &protocol.AssistantSentence{} },
-	// Feedback and voting messages (20-25)
 	protocol.TypeFeedback:             func() interface{} { return &protocol.Feedback{} },
 	protocol.TypeFeedbackConfirmation: func() interface{} { return &protocol.FeedbackConfirmation{} },
 	protocol.TypeUserNote:             func() interface{} { return &protocol.UserNote{} },
 	protocol.TypeNoteConfirmation:     func() interface{} { return &protocol.NoteConfirmation{} },
 	protocol.TypeMemoryAction:         func() interface{} { return &protocol.MemoryAction{} },
 	protocol.TypeMemoryConfirmation:   func() interface{} { return &protocol.MemoryConfirmation{} },
-	// Server info and stats (26-27)
 	protocol.TypeServerInfo:   func() interface{} { return &protocol.ServerInfo{} },
 	protocol.TypeSessionStats: func() interface{} { return &protocol.SessionStats{} },
-	// Dimension optimization messages (29-32)
-	protocol.TypeDimensionPreference:   func() interface{} { return &protocol.DimensionPreference{} },
-	protocol.TypeEliteSelect:           func() interface{} { return &protocol.EliteSelect{} },
-	protocol.TypeEliteOptions:          func() interface{} { return &protocol.EliteOptions{} },
-	protocol.TypeOptimizationProgress:  func() interface{} { return &protocol.OptimizationProgress{} },
 }
 
-// Encode serializes an envelope to MessagePack bytes
 func (c *Codec) Encode(envelope *protocol.Envelope) ([]byte, error) {
 	if envelope == nil {
 		return nil, fmt.Errorf("envelope is nil")
 	}
 
-	// Validate message type is in the registry
 	if _, ok := messageTypeRegistry[envelope.Type]; !ok {
 		return nil, fmt.Errorf("invalid message type: %d", envelope.Type)
 	}
 
-	// Validate body
 	if envelope.Body == nil {
 		return nil, fmt.Errorf("envelope body is nil")
 	}
@@ -76,7 +63,6 @@ func (c *Codec) Encode(envelope *protocol.Envelope) ([]byte, error) {
 	return data, nil
 }
 
-// Decode deserializes MessagePack bytes to an envelope
 func (c *Codec) Decode(data []byte) (*protocol.Envelope, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("empty data")
@@ -94,13 +80,11 @@ func (c *Codec) Decode(data []byte) (*protocol.Envelope, error) {
 		return nil, fmt.Errorf("failed to unmarshal envelope: %w", err)
 	}
 
-	// Look up the message type in the registry
 	factory, ok := messageTypeRegistry[tempEnv.Type]
 	if !ok {
 		return nil, fmt.Errorf("unknown message type: %d", tempEnv.Type)
 	}
 
-	// Create a new message instance and unmarshal into it
 	body := factory()
 	if err := msgpack.Unmarshal(tempEnv.Body, body); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal message body (type %s): %w", tempEnv.Type.String(), err)

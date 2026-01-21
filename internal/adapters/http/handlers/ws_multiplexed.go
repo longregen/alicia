@@ -13,11 +13,9 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/vmihailenco/msgpack/v5"
 
-	// Import encoding package for msgpack extension type registration
 	_ "github.com/longregen/alicia/internal/adapters/http/encoding"
 )
 
-// MultiplexedWSHandler handles WebSocket connections that can subscribe to multiple conversations
 type MultiplexedWSHandler struct {
 	upgrader         websocket.Upgrader
 	conversationRepo ports.ConversationRepository
@@ -26,13 +24,12 @@ type MultiplexedWSHandler struct {
 	broadcaster      *WebSocketBroadcaster
 }
 
-// connectionState tracks the state of a single WebSocket connection
 type connectionState struct {
 	conn          *websocket.Conn
-	subscriptions map[string]struct{} // conversationID -> struct{}
+	subscriptions map[string]struct{}
 	mu            sync.RWMutex
-	stanzaID      int32 // server stanza ID counter (negative, decrementing)
-	isAgent       bool  // true if this is the response generation agent
+	stanzaID      int32
+	isAgent       bool
 }
 
 func (cs *connectionState) nextStanzaID() int32 {
@@ -71,7 +68,6 @@ func (cs *connectionState) getSubscriptions() []string {
 	return subs
 }
 
-// NewMultiplexedWSHandler creates a new multiplexed WebSocket handler
 func NewMultiplexedWSHandler(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
@@ -103,9 +99,7 @@ func NewMultiplexedWSHandler(
 	}
 }
 
-// Handle upgrades HTTP connection to WebSocket for multiplexed message sync
 func (h *MultiplexedWSHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	// Upgrade connection to WebSocket
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade WebSocket connection: %v", err)
@@ -113,7 +107,6 @@ func (h *MultiplexedWSHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Create connection state
 	state := &connectionState{
 		conn:          conn,
 		subscriptions: make(map[string]struct{}),
@@ -122,34 +115,28 @@ func (h *MultiplexedWSHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Multiplexed WebSocket connection established")
 
-	// Set up context with cancellation
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Cleanup subscriptions on exit
 	defer func() {
 		for _, convID := range state.getSubscriptions() {
 			h.broadcaster.Unsubscribe(convID, conn)
 		}
-		// Clean up agent connection if this was an agent
 		if state.isAgent {
 			h.broadcaster.UnsubscribeAgent(conn)
 		}
 		log.Printf("Multiplexed WebSocket connection closed, cleaned up %d subscriptions", len(state.subscriptions))
 	}()
 
-	// Use WaitGroup to coordinate goroutines
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Start read pump
 	go func() {
 		defer wg.Done()
 		h.readPump(ctx, state)
 		cancel()
 	}()
 
-	// Start write pump (heartbeat)
 	go func() {
 		defer wg.Done()
 		h.writePump(ctx, state)
@@ -158,7 +145,6 @@ func (h *MultiplexedWSHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 }
 
-// readPump reads messages from the WebSocket connection
 func (h *MultiplexedWSHandler) readPump(ctx context.Context, state *connectionState) {
 	defer state.conn.Close()
 
@@ -188,7 +174,6 @@ func (h *MultiplexedWSHandler) readPump(ctx context.Context, state *connectionSt
 			continue
 		}
 
-		// Decode envelope
 		var envelope protocol.Envelope
 		if err := msgpack.Unmarshal(data, &envelope); err != nil {
 			log.Printf("Failed to decode envelope: %v", err)
@@ -196,28 +181,21 @@ func (h *MultiplexedWSHandler) readPump(ctx context.Context, state *connectionSt
 			continue
 		}
 
-		// Handle message based on type
 		switch envelope.Type {
 		case protocol.TypeSubscribe:
 			h.handleSubscribe(ctx, state, &envelope)
 		case protocol.TypeUnsubscribe:
 			h.handleUnsubscribe(state, &envelope)
 		case protocol.TypeSyncRequest:
-			// Forward sync requests if subscribed
 			if state.isSubscribed(envelope.ConversationID) {
 				h.handleSyncRequest(ctx, state, &envelope)
 			} else {
 				h.sendError(state, envelope.ConversationID, "not_subscribed", "Not subscribed to conversation")
 			}
 		default:
-			// If sender is agent, re-broadcast response messages to other subscribers
 			if state.isAgent && envelope.ConversationID != "" {
-				// Agent sends response messages (AssistantMessage, AssistantSentence, ToolUseRequest, etc.)
-				// Re-broadcast to all subscribers in the conversation (excluding the agent)
 				h.broadcaster.BroadcastBinaryExcluding(envelope.ConversationID, data, state.conn)
 			} else if envelope.ConversationID != "" && state.isSubscribed(envelope.ConversationID) {
-				// Forward other messages if subscribed
-				// Broadcast to other subscribers
 				broadcastData, _ := msgpack.Marshal(&envelope)
 				h.broadcaster.BroadcastBinary(envelope.ConversationID, broadcastData)
 			}
@@ -225,9 +203,7 @@ func (h *MultiplexedWSHandler) readPump(ctx context.Context, state *connectionSt
 	}
 }
 
-// handleSubscribe processes a subscription request
 func (h *MultiplexedWSHandler) handleSubscribe(ctx context.Context, state *connectionState, envelope *protocol.Envelope) {
-	// Decode body as SubscribeRequest
 	bodyBytes, err := msgpack.Marshal(envelope.Body)
 	if err != nil {
 		h.sendSubscribeAck(state, "", false, "Invalid subscribe request body")
@@ -240,7 +216,6 @@ func (h *MultiplexedWSHandler) handleSubscribe(ctx context.Context, state *conne
 		return
 	}
 
-	// Check if this is an agent subscription
 	if req.AgentMode {
 		state.isAgent = true
 		h.broadcaster.SubscribeAgent(state.conn)
@@ -251,7 +226,6 @@ func (h *MultiplexedWSHandler) handleSubscribe(ctx context.Context, state *conne
 
 	conversationID := req.ConversationID
 	if conversationID == "" {
-		// Fall back to envelope's conversationID
 		conversationID = envelope.ConversationID
 	}
 
@@ -260,7 +234,6 @@ func (h *MultiplexedWSHandler) handleSubscribe(ctx context.Context, state *conne
 		return
 	}
 
-	// Subscribe to the broadcaster
 	h.broadcaster.Subscribe(conversationID, state.conn)
 	state.subscribe(conversationID)
 
@@ -268,7 +241,6 @@ func (h *MultiplexedWSHandler) handleSubscribe(ctx context.Context, state *conne
 	h.sendSubscribeAck(state, conversationID, true, "")
 }
 
-// handleUnsubscribe processes an unsubscription request
 func (h *MultiplexedWSHandler) handleUnsubscribe(state *connectionState, envelope *protocol.Envelope) {
 	bodyBytes, err := msgpack.Marshal(envelope.Body)
 	if err != nil {
@@ -292,7 +264,6 @@ func (h *MultiplexedWSHandler) handleUnsubscribe(state *connectionState, envelop
 		return
 	}
 
-	// Unsubscribe from the broadcaster
 	h.broadcaster.Unsubscribe(conversationID, state.conn)
 	state.unsubscribe(conversationID)
 
@@ -300,7 +271,6 @@ func (h *MultiplexedWSHandler) handleUnsubscribe(state *connectionState, envelop
 	h.sendUnsubscribeAck(state, conversationID, true)
 }
 
-// handleSyncRequest processes a sync request for a subscribed conversation
 func (h *MultiplexedWSHandler) handleSyncRequest(ctx context.Context, state *connectionState, envelope *protocol.Envelope) {
 	bodyBytes, err := msgpack.Marshal(envelope.Body)
 	if err != nil {
@@ -314,7 +284,6 @@ func (h *MultiplexedWSHandler) handleSyncRequest(ctx context.Context, state *con
 		return
 	}
 
-	// Process sync request (simplified - delegates to message processing)
 	syncedMessages := make([]dto.SyncedMessage, 0, len(syncReq.Messages))
 	for _, msgReq := range syncReq.Messages {
 		syncedMsg := h.processMessage(ctx, envelope.ConversationID, msgReq)
@@ -326,7 +295,6 @@ func (h *MultiplexedWSHandler) handleSyncRequest(ctx context.Context, state *con
 		SyncedAt:       time.Now().Format(time.RFC3339),
 	}
 
-	// Send response
 	responseEnvelope := protocol.NewEnvelope(
 		state.nextStanzaID(),
 		envelope.ConversationID,
@@ -346,7 +314,6 @@ func (h *MultiplexedWSHandler) handleSyncRequest(ctx context.Context, state *con
 	}
 }
 
-// processMessage processes a single sync message (simplified version)
 func (h *MultiplexedWSHandler) processMessage(ctx context.Context, conversationID string, msgReq dto.SyncMessageRequest) dto.SyncedMessage {
 	if msgReq.LocalID == "" {
 		return dto.ToSyncedMessageWithConflict(msgReq.LocalID, "Local ID is required", nil)
@@ -356,8 +323,6 @@ func (h *MultiplexedWSHandler) processMessage(ctx context.Context, conversationI
 		return dto.ToSyncedMessageWithConflict(msgReq.LocalID, "Message role is required", nil)
 	}
 
-	// For now, just acknowledge receipt without full persistence
-	// The full sync logic would involve messageRepo operations
 	return dto.SyncedMessage{
 		LocalID:  msgReq.LocalID,
 		ServerID: h.idGen.GenerateMessageID(),
@@ -365,7 +330,6 @@ func (h *MultiplexedWSHandler) processMessage(ctx context.Context, conversationI
 	}
 }
 
-// writePump sends periodic ping messages
 func (h *MultiplexedWSHandler) writePump(ctx context.Context, state *connectionState) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -384,7 +348,6 @@ func (h *MultiplexedWSHandler) writePump(ctx context.Context, state *connectionS
 	}
 }
 
-// sendSubscribeAck sends a subscription acknowledgement
 func (h *MultiplexedWSHandler) sendSubscribeAck(state *connectionState, conversationID string, success bool, errorMsg string) {
 	ack := dto.SubscribeAck{
 		ConversationID: conversationID,
@@ -411,7 +374,6 @@ func (h *MultiplexedWSHandler) sendSubscribeAck(state *connectionState, conversa
 	}
 }
 
-// sendUnsubscribeAck sends an unsubscription acknowledgement
 func (h *MultiplexedWSHandler) sendUnsubscribeAck(state *connectionState, conversationID string, success bool) {
 	ack := dto.UnsubscribeAck{
 		ConversationID: conversationID,
@@ -437,7 +399,6 @@ func (h *MultiplexedWSHandler) sendUnsubscribeAck(state *connectionState, conver
 	}
 }
 
-// sendError sends an error message to the client
 func (h *MultiplexedWSHandler) sendError(state *connectionState, conversationID string, errorType, message string) {
 	errorResp := dto.NewErrorResponse(errorType, message, http.StatusBadRequest)
 

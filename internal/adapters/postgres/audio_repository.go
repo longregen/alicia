@@ -170,13 +170,11 @@ func (r *AudioRepository) scanAudio(row pgx.Row) (*models.Audio, error) {
 		return nil, err
 	}
 
-	// Use helpers to extract nullable fields
 	a.MessageID = getString(messageID)
 	a.DurationMs = getInt(durationMs)
 	a.Transcription = getString(transcription)
 	a.LiveKitTrackSID = getString(livekitTrackSID)
 
-	// Use generic JSON unmarshaling helper
 	a.TranscriptionMeta, err = unmarshalJSONPointer[models.TranscriptionMeta](transcriptionMeta)
 	if err != nil {
 		return nil, err

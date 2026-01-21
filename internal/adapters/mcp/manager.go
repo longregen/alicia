@@ -8,10 +8,9 @@ import (
 	"time"
 )
 
-// ServerConfig represents configuration for an MCP server
 type ServerConfig struct {
 	Name           string        `json:"name"`
-	Transport      string        `json:"transport"` // "stdio" or "http"
+	Transport      string        `json:"transport"`
 	Command        string        `json:"command,omitempty"`
 	Args           []string      `json:"args,omitempty"`
 	Env            []string      `json:"env,omitempty"`
@@ -21,10 +20,8 @@ type ServerConfig struct {
 	ReconnectDelay time.Duration `json:"reconnect_delay,omitempty"`
 }
 
-// ConnectionCallback is called when a server's connection status changes
 type ConnectionCallback func(serverName string, connected bool)
 
-// Manager manages multiple MCP server connections
 type Manager struct {
 	servers            map[string]*ManagedClient
 	mu                 sync.RWMutex
@@ -33,7 +30,6 @@ type Manager struct {
 	connectionCallback ConnectionCallback
 }
 
-// ManagedClient wraps a client with reconnection logic
 type ManagedClient struct {
 	config       *ServerConfig
 	client       *Client
@@ -42,10 +38,9 @@ type ManagedClient struct {
 	connected    bool
 	reconnecting bool
 	stopCh       chan struct{}
-	manager      *Manager // Reference to parent manager for callbacks
+	manager      *Manager
 }
 
-// NewManager creates a new MCP manager
 func NewManager(ctx context.Context) *Manager {
 	ctx, cancel := context.WithCancel(ctx)
 	return &Manager{
@@ -55,15 +50,12 @@ func NewManager(ctx context.Context) *Manager {
 	}
 }
 
-// SetConnectionCallback sets a callback that will be called when server connection status changes.
-// The callback receives the server name and the new connection status (true = connected, false = disconnected).
 func (m *Manager) SetConnectionCallback(callback ConnectionCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.connectionCallback = callback
 }
 
-// notifyConnectionChange calls the connection callback if set
 func (m *Manager) notifyConnectionChange(serverName string, connected bool) {
 	m.mu.RLock()
 	callback := m.connectionCallback
@@ -74,7 +66,6 @@ func (m *Manager) notifyConnectionChange(serverName string, connected bool) {
 	}
 }
 
-// AddServer adds and connects to an MCP server
 func (m *Manager) AddServer(config *ServerConfig) error {
 	m.mu.Lock()
 
@@ -86,15 +77,13 @@ func (m *Manager) AddServer(config *ServerConfig) error {
 	managed := &ManagedClient{
 		config:  config,
 		stopCh:  make(chan struct{}),
-		manager: m, // Set reference to parent manager for callbacks
+		manager: m,
 	}
 
-	// Set default reconnect delay
 	if config.ReconnectDelay == 0 {
 		config.ReconnectDelay = 5 * time.Second
 	}
 
-	// Initial connection
 	if err := managed.connect(m.ctx); err != nil {
 		m.mu.Unlock()
 		return fmt.Errorf("failed to connect to server %s: %w", config.Name, err)
@@ -105,10 +94,9 @@ func (m *Manager) AddServer(config *ServerConfig) error {
 	serverName := config.Name
 	m.mu.Unlock()
 
-	// Notify that server is now connected (must be called outside the lock to avoid deadlock)
+	// Notify outside the lock to avoid deadlock
 	m.notifyConnectionChange(serverName, true)
 
-	// Start reconnection monitor if enabled
 	if autoReconnect {
 		go managed.monitorConnection(m.ctx)
 	}
@@ -116,7 +104,6 @@ func (m *Manager) AddServer(config *ServerConfig) error {
 	return nil
 }
 
-// RemoveServer removes and disconnects from an MCP server
 func (m *Manager) RemoveServer(name string) error {
 	m.mu.Lock()
 	managed, exists := m.servers[name]
@@ -130,7 +117,6 @@ func (m *Manager) RemoveServer(name string) error {
 	return managed.close()
 }
 
-// GetClient returns the client for a specific server
 func (m *Manager) GetClient(name string) (*Client, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -150,7 +136,6 @@ func (m *Manager) GetClient(name string) (*Client, error) {
 	return managed.client, nil
 }
 
-// ListServers returns a list of all server names
 func (m *Manager) ListServers() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -162,7 +147,6 @@ func (m *Manager) ListServers() []string {
 	return names
 }
 
-// GetServerStatus returns the connection status for a server
 func (m *Manager) GetServerStatus(name string) (bool, error) {
 	m.mu.RLock()
 	managed, exists := m.servers[name]
@@ -177,12 +161,10 @@ func (m *Manager) GetServerStatus(name string) (bool, error) {
 	return managed.connected, nil
 }
 
-// Close closes all server connections
 func (m *Manager) Close() error {
 	m.cancel()
 
-	// Collect all managed clients under lock, then close them outside the lock
-	// to avoid deadlock (close() calls notifyConnectionChange which needs the lock)
+	// Close clients outside the lock to avoid deadlock (close() calls notifyConnectionChange)
 	m.mu.Lock()
 	clients := make([]*ManagedClient, 0, len(m.servers))
 	for _, managed := range m.servers {
@@ -200,12 +182,10 @@ func (m *Manager) Close() error {
 	return lastErr
 }
 
-// connect establishes a connection to the MCP server
 func (mc *ManagedClient) connect(ctx context.Context) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	// Create transport based on config
 	var transport Transport
 	var err error
 
@@ -228,15 +208,12 @@ func (mc *ManagedClient) connect(ctx context.Context) error {
 		}
 
 		transport = httpTransport
-
 	default:
 		return fmt.Errorf("unsupported transport type: %s", mc.config.Transport)
 	}
 
-	// Create client
 	client := NewClient(mc.config.Name, transport)
 
-	// Initialize the client
 	if err := client.Initialize(ctx); err != nil {
 		transport.Close()
 		return fmt.Errorf("failed to initialize client: %w", err)
@@ -250,7 +227,6 @@ func (mc *ManagedClient) connect(ctx context.Context) error {
 	return nil
 }
 
-// close closes the connection to the MCP server
 func (mc *ManagedClient) close() error {
 	close(mc.stopCh)
 
@@ -269,7 +245,6 @@ func (mc *ManagedClient) close() error {
 	}
 	mc.mu.Unlock()
 
-	// Notify about disconnection if we were previously connected
 	if wasConnected && mc.manager != nil {
 		mc.manager.notifyConnectionChange(mc.config.Name, false)
 	}
@@ -277,7 +252,6 @@ func (mc *ManagedClient) close() error {
 	return err
 }
 
-// monitorConnection monitors the connection and reconnects if necessary
 func (mc *ManagedClient) monitorConnection(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -301,7 +275,6 @@ func (mc *ManagedClient) monitorConnection(ctx context.Context) {
 	}
 }
 
-// reconnect attempts to reconnect to the server
 func (mc *ManagedClient) reconnect(ctx context.Context) {
 	mc.mu.Lock()
 	if mc.reconnecting {
@@ -319,7 +292,6 @@ func (mc *ManagedClient) reconnect(ctx context.Context) {
 
 	log.Printf("Attempting to reconnect to MCP server: %s", mc.config.Name)
 
-	// Exponential backoff
 	backoff := mc.config.ReconnectDelay
 	maxBackoff := 60 * time.Second
 	attempts := 0
@@ -333,7 +305,6 @@ func (mc *ManagedClient) reconnect(ctx context.Context) {
 		case <-time.After(backoff):
 			attempts++
 
-			// Clean up old connection
 			mc.mu.Lock()
 			if mc.client != nil {
 				mc.client.Close()
@@ -345,11 +316,9 @@ func (mc *ManagedClient) reconnect(ctx context.Context) {
 			}
 			mc.mu.Unlock()
 
-			// Attempt to connect
 			if err := mc.connect(ctx); err != nil {
 				log.Printf("Reconnection attempt %d failed for %s: %v", attempts, mc.config.Name, err)
 
-				// Increase backoff
 				backoff *= 2
 				if backoff > maxBackoff {
 					backoff = maxBackoff
@@ -359,7 +328,6 @@ func (mc *ManagedClient) reconnect(ctx context.Context) {
 
 			log.Printf("Successfully reconnected to MCP server: %s after %d attempts", mc.config.Name, attempts)
 
-			// Notify about successful reconnection
 			if mc.manager != nil {
 				mc.manager.notifyConnectionChange(mc.config.Name, true)
 			}
@@ -368,7 +336,6 @@ func (mc *ManagedClient) reconnect(ctx context.Context) {
 	}
 }
 
-// IsConnected returns true if the client is connected
 func (mc *ManagedClient) IsConnected() bool {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()

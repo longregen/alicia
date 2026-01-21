@@ -23,7 +23,6 @@ type CircuitBreaker struct {
 	successes   int
 	lastFailure time.Time
 
-	// Configuration
 	maxFailures int
 	timeout     time.Duration
 	halfOpenMax int

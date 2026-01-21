@@ -148,7 +148,6 @@ func (r *MemoryUsageRepository) GetUsageStats(ctx context.Context, memoryID stri
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Return zero stats if memory has never been used
 			return &ports.MemoryUsageStats{
 				MemoryID:          memoryID,
 				TotalUsageCount:   0,

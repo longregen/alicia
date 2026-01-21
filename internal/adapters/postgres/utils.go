@@ -12,9 +12,7 @@ import (
 
 const DefaultQueryTimeout = 30 * time.Second
 
-// withTimeout wraps a context with a default query timeout if not already set
 func withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	// Check if context already has a deadline
 	if _, ok := ctx.Deadline(); ok {
 		return ctx, func() {}
 	}

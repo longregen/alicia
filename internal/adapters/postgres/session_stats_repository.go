@@ -113,10 +113,8 @@ func (r *SessionStatsRepository) scanSessionStats(row pgx.Row) (*models.SessionS
 		return nil, err
 	}
 
-	// Convert seconds to milliseconds
 	stats.SessionDurationMs = sessionDurationSeconds * 1000
 
-	// Initialize fields not stored in database
 	stats.UserMessageCount = 0
 	stats.TotalTokensUsed = 0
 	stats.TotalLatencyMs = 0

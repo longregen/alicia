@@ -12,28 +12,18 @@ import (
 	"sync"
 )
 
-// Transport defines the interface for MCP communication
 type Transport interface {
-	// Send sends a message to the MCP server
 	Send(ctx context.Context, message any) error
-
-	// Receive returns a channel for receiving messages from the MCP server
 	Receive() <-chan Message
-
-	// Close closes the transport
 	Close() error
-
-	// IsConnected returns true if the transport is connected
 	IsConnected() bool
 }
 
-// Message represents a message received from the transport
 type Message struct {
 	Data  []byte
 	Error error
 }
 
-// StdioTransport implements Transport using stdio (stdin/stdout)
 type StdioTransport struct {
 	cmd       *exec.Cmd
 	stdin     io.WriteCloser
@@ -42,40 +32,31 @@ type StdioTransport struct {
 	receiveCh chan Message
 	closeCh   chan struct{}
 	closeOnce sync.Once
-	wg        sync.WaitGroup // tracks goroutines that send on receiveCh
+	wg        sync.WaitGroup
 	mu        sync.RWMutex
 	connected bool
 }
 
-// validateCommand validates a command and its arguments to prevent command injection.
-// It ensures the command exists as an executable and validates arguments for safety.
 func validateCommand(command string, args []string) (string, error) {
-	// Reject empty commands
 	if command == "" {
 		return "", fmt.Errorf("command cannot be empty")
 	}
 
-	// Reject commands containing shell metacharacters that could enable injection
 	shellMetaChars := regexp.MustCompile(`[;&|$` + "`" + `\(\)<>]`)
 	if shellMetaChars.MatchString(command) {
 		return "", fmt.Errorf("command contains invalid characters")
 	}
 
-	// Use LookPath to resolve the command to its full path
-	// This validates the command exists and is executable
 	cmdPath, err := exec.LookPath(command)
 	if err != nil {
 		return "", fmt.Errorf("command not found: %s", command)
 	}
 
-	// Validate arguments don't contain shell injection patterns
 	for i, arg := range args {
 		if shellMetaChars.MatchString(arg) {
 			return "", fmt.Errorf("argument %d contains invalid characters", i)
 		}
-		// Prevent flag injection for commands that may execute arbitrary code
-		// Some commands (like git, curl) can be tricked with flags like --config
-		// For safety, reject arguments that look like flags attempting to set dangerous options
+		// Some commands (like git, curl) can be tricked with flags like --config to execute arbitrary code
 		lowerArg := strings.ToLower(arg)
 		if strings.HasPrefix(lowerArg, "--exec") ||
 			strings.HasPrefix(lowerArg, "--config=") ||
@@ -87,9 +68,7 @@ func validateCommand(command string, args []string) (string, error) {
 	return cmdPath, nil
 }
 
-// NewStdioTransport creates a new stdio transport
 func NewStdioTransport(command string, args []string, env []string) (*StdioTransport, error) {
-	// Validate and resolve the command path to prevent command injection
 	cmdPath, err := validateCommand(command, args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid command: %w", err)
@@ -139,22 +118,15 @@ func NewStdioTransport(command string, args []string, env []string) (*StdioTrans
 	transport.connected = true
 	transport.mu.Unlock()
 
-	// Track goroutines that may send to receiveCh
-	transport.wg.Add(2) // readLoop and monitorProcess
+	transport.wg.Add(2)
 
-	// Start reading from stdout
 	go transport.readLoop()
-
-	// Start reading from stderr (for logging)
 	go transport.readStderr()
-
-	// Monitor process exit
 	go transport.monitorProcess()
 
 	return transport, nil
 }
 
-// Send sends a message to the MCP server
 func (t *StdioTransport) Send(ctx context.Context, message any) error {
 	t.mu.RLock()
 	if !t.connected {
@@ -168,7 +140,6 @@ func (t *StdioTransport) Send(ctx context.Context, message any) error {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
-	// MCP uses newline-delimited JSON
 	data = append(data, '\n')
 
 	if _, err := t.stdin.Write(data); err != nil {
@@ -178,12 +149,10 @@ func (t *StdioTransport) Send(ctx context.Context, message any) error {
 	return nil
 }
 
-// Receive returns a channel for receiving messages
 func (t *StdioTransport) Receive() <-chan Message {
 	return t.receiveCh
 }
 
-// Close closes the transport
 func (t *StdioTransport) Close() error {
 	var err error
 	t.closeOnce.Do(func() {
@@ -211,8 +180,7 @@ func (t *StdioTransport) Close() error {
 			t.stderr.Close()
 		}
 
-		// Wait for all senders to finish, then close receiveCh
-		// Use a goroutine to avoid blocking Close() indefinitely
+		// Use a goroutine to avoid blocking Close() indefinitely while waiting for senders
 		go func() {
 			t.wg.Wait()
 			close(t.receiveCh)
@@ -221,21 +189,18 @@ func (t *StdioTransport) Close() error {
 	return err
 }
 
-// IsConnected returns true if the transport is connected
 func (t *StdioTransport) IsConnected() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.connected
 }
 
-// readLoop reads messages from stdout
 func (t *StdioTransport) readLoop() {
 	defer t.wg.Done()
 
 	scanner := bufio.NewScanner(t.stdout)
-	// Set a larger buffer size for scanner to handle large messages
 	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024) // 1MB max
+	scanner.Buffer(buf, 1024*1024)
 
 	for {
 		select {
@@ -257,7 +222,7 @@ func (t *StdioTransport) readLoop() {
 				continue
 			}
 
-			// Make a copy of the data since scanner reuses the buffer
+			// Scanner reuses the buffer, so we need a copy
 			dataCopy := make([]byte, len(data))
 			copy(dataCopy, data)
 
@@ -270,17 +235,13 @@ func (t *StdioTransport) readLoop() {
 	}
 }
 
-// readStderr reads and logs stderr output
 func (t *StdioTransport) readStderr() {
 	scanner := bufio.NewScanner(t.stderr)
 	for scanner.Scan() {
-		// In production, this should use proper logging
-		// For now, we'll just ignore stderr unless there's an error
 		_ = scanner.Text()
 	}
 }
 
-// monitorProcess monitors the process and closes the transport if it exits
 func (t *StdioTransport) monitorProcess() {
 	defer t.wg.Done()
 

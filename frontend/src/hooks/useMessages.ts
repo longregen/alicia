@@ -6,6 +6,7 @@ import { useSync } from './useSync';
 import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
 import { useBranchStore } from '../stores/branchStore';
+import { useFeedbackStore, type VoteAggregates } from '../stores/feedbackStore';
 
 // Generate a temporary local ID for optimistic updates
 function generateLocalId(): string {
@@ -65,6 +66,9 @@ export function useMessages(conversationId: string | null) {
     setMessages(mergedMessages);
   }, [conversationId]);
 
+  // Get batch aggregates setter from feedback store
+  const setBatchAggregates = useFeedbackStore((state) => state.setBatchAggregates);
+
   // Wrap onSuccess callback to merge server messages into SQLite
   const handleFetchSuccess = useCallback((data: Message[]) => {
     // Cache server messages with their related entities
@@ -90,9 +94,29 @@ export function useMessages(conversationId: string | null) {
       initializeFromMessages(convId, data);
     }
 
+    // Prefetch votes for all messages in a single batch request
+    const messageIds = data.map(msg => msg.id);
+    if (messageIds.length > 0) {
+      api.getBatchMessageVotes(messageIds).then(votes => {
+        // Convert API response to VoteAggregates format
+        const aggregatesMap: Record<string, VoteAggregates> = {};
+        for (const [id, vote] of Object.entries(votes)) {
+          aggregatesMap[id] = {
+            upvotes: vote.upvotes,
+            downvotes: vote.downvotes,
+            special: vote.special,
+          };
+        }
+        setBatchAggregates('message', aggregatesMap);
+      }).catch(err => {
+        // Silently fail - individual hooks will fetch on demand if needed
+        console.warn('Failed to batch fetch message votes:', err);
+      });
+    }
+
     // Refresh from SQLite to get merged state
     setRefreshCounter(prev => prev + 1);
-  }, [initializeFromMessages]);
+  }, [initializeFromMessages, setBatchAggregates]);
 
   // Fetch messages with loading and error handling
   const {

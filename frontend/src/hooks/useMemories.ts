@@ -5,6 +5,9 @@ import {
   type MemoryCategory,
 } from '../stores/memoryStore';
 
+/** Reasons for deleting a memory */
+export type MemoryDeletionReason = 'wrong' | 'useless' | 'old' | 'duplicate' | 'other';
+
 export interface MemoryAPIResponse {
   id: string;
   content: string;
@@ -89,11 +92,20 @@ export function useMemories() {
   // Subscribe to raw memories object and compute locally to avoid infinite loops
   const rawMemories = useMemoryStore((state) => state.memories);
 
-  // Compute filtered/sorted memories locally
+  // Compute active memories (not archived)
   const memories = useMemo(
     () =>
       Object.values(rawMemories)
         .filter((m) => !m.archived)
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+    [rawMemories]
+  );
+
+  // Compute deleted/archived memories
+  const deletedMemories = useMemo(
+    () =>
+      Object.values(rawMemories)
+        .filter((m) => m.archived)
         .sort((a, b) => b.updatedAt - a.updatedAt),
     [rawMemories]
   );
@@ -213,8 +225,64 @@ export function useMemories() {
     }
   }, [updateMemory]);
 
-  // Delete memory
-  const remove = useCallback(async (id: string) => {
+  // Soft delete memory (archive with optional reason)
+  const remove = useCallback(async (id: string, reason?: MemoryDeletionReason) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Archive the memory (soft delete)
+      const response = await fetch(`/api/v1/memories/${id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete memory: ${response.status}`);
+      }
+
+      // Update local store to mark as archived
+      archiveMemory(id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete memory';
+      setError(message);
+      console.error('Delete memory error:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [archiveMemory]);
+
+  // Restore archived memory
+  const restore = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/v1/memories/${id}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to restore memory: ${response.status}`);
+      }
+
+      // Update local store to unarchive
+      updateMemory(id, { archived: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to restore memory';
+      setError(message);
+      console.error('Restore memory error:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [updateMemory]);
+
+  // Permanently delete memory
+  const permanentDelete = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
 
@@ -224,14 +292,14 @@ export function useMemories() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to delete memory: ${response.status}`);
+        throw new Error(`Failed to permanently delete memory: ${response.status}`);
       }
 
       deleteMemory(id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete memory';
+      const message = err instanceof Error ? err.message : 'Failed to permanently delete memory';
       setError(message);
-      console.error('Delete memory error:', err);
+      console.error('Permanent delete memory error:', err);
       throw err;
     } finally {
       setIsLoading(false);
@@ -297,6 +365,68 @@ export function useMemories() {
     }
   }, [archiveMemory]);
 
+  // Set importance rating (1-5 stars mapped to 0.2-1.0 importance)
+  const setRating = useCallback(async (id: string, stars: number) => {
+    setIsLoading(true);
+    setError(null);
+
+    // Convert stars (1-5) to importance (0.2-1.0)
+    const importance = stars <= 0 ? 0.5 : Math.min(1.0, Math.max(0.2, stars * 0.2));
+
+    try {
+      const response = await fetch(`/api/v1/memories/${id}/importance`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ importance }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to set memory importance: ${response.status}`);
+      }
+
+      await response.json();
+
+      // Update local store
+      updateMemory(id, { importance });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set importance';
+      setError(message);
+      console.error('Set importance error:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [updateMemory]);
+
+  // Set category for a memory
+  const setCategory = useCallback(async (id: string, category: MemoryCategory) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Update tags via API (category is stored as first tag)
+      const response = await fetch(`/api/v1/memories/${id}/tags`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: [category] }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to set memory category: ${response.status}`);
+      }
+
+      // Update local store
+      updateMemory(id, { category, tags: [category] });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set category';
+      setError(message);
+      console.error('Set category error:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [updateMemory]);
+
   // Search memories locally to avoid creating new references
   const search = useCallback((query: string): Memory[] => {
     if (!query.trim()) {
@@ -314,6 +444,7 @@ export function useMemories() {
   return {
     // State
     memories,
+    deletedMemories,
     isLoading,
     isFetching,
     error,
@@ -322,8 +453,12 @@ export function useMemories() {
     create,
     update,
     remove,
+    restore,
+    permanentDelete,
     pin,
     archive,
+    setRating,
+    setCategory,
     search,
     filterByCategory,
     refresh: fetchMemories,

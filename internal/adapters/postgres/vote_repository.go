@@ -25,13 +25,11 @@ func (r *VoteRepository) Create(ctx context.Context, vote *models.Vote) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
 
-	// Map Vote.Value to database vote string
 	voteStr := "up"
 	if vote.Value == models.VoteValueDown {
 		voteStr = "down"
 	}
 
-	// Handle optional quick_feedback and note
 	var quickFeedback, note sql.NullString
 	if vote.QuickFeedback != "" {
 		quickFeedback = sql.NullString{String: vote.QuickFeedback, Valid: true}
@@ -40,13 +38,11 @@ func (r *VoteRepository) Create(ctx context.Context, vote *models.Vote) error {
 		note = sql.NullString{String: vote.Note, Valid: true}
 	}
 
-	// Build query based on target type to get conversation_id from appropriate source
 	var query string
 	var args []interface{}
 
 	switch vote.TargetType {
 	case "message":
-		// For message votes, get conversation_id from the message itself
 		query = `
 			INSERT INTO alicia_votes (
 				id, conversation_id, message_id, target_type, target_id, vote, quick_feedback, note, created_at, updated_at
@@ -59,7 +55,6 @@ func (r *VoteRepository) Create(ctx context.Context, vote *models.Vote) error {
 			voteStr, quickFeedback, note, vote.CreatedAt, vote.UpdatedAt,
 		}
 	case "tool_use":
-		// For tool_use votes, get conversation_id through the tool_use's message
 		query = `
 			INSERT INTO alicia_votes (
 				id, conversation_id, message_id, target_type, target_id, vote, quick_feedback, note, created_at, updated_at
@@ -73,7 +68,6 @@ func (r *VoteRepository) Create(ctx context.Context, vote *models.Vote) error {
 			voteStr, quickFeedback, note, vote.CreatedAt, vote.UpdatedAt,
 		}
 	case "reasoning":
-		// For reasoning votes, get conversation_id through the reasoning step's message
 		query = `
 			INSERT INTO alicia_votes (
 				id, conversation_id, message_id, target_type, target_id, vote, quick_feedback, note, created_at, updated_at
@@ -87,8 +81,6 @@ func (r *VoteRepository) Create(ctx context.Context, vote *models.Vote) error {
 			voteStr, quickFeedback, note, vote.CreatedAt, vote.UpdatedAt,
 		}
 	case "memory":
-		// For memory votes, get conversation_id through memory_used junction table
-		// If no memory_used record exists, use NULL for message_id and look up any conversation
 		query = `
 			INSERT INTO alicia_votes (
 				id, conversation_id, message_id, target_type, target_id, vote, quick_feedback, note, created_at, updated_at
@@ -104,7 +96,6 @@ func (r *VoteRepository) Create(ctx context.Context, vote *models.Vote) error {
 			voteStr, quickFeedback, note, vote.CreatedAt, vote.UpdatedAt,
 		}
 	default:
-		// Fallback to original behavior for unknown types
 		query = `
 			INSERT INTO alicia_votes (
 				id, conversation_id, message_id, target_type, target_id, vote, quick_feedback, note, created_at, updated_at
@@ -199,7 +190,6 @@ func (r *VoteRepository) GetAggregates(ctx context.Context, targetType string, t
 
 	if err != nil {
 		if checkNoRows(err) {
-			// No votes found, return zero aggregates
 			return &models.VoteAggregates{
 				TargetType: targetType,
 				TargetID:   targetID,
@@ -241,7 +231,6 @@ func (r *VoteRepository) scanVotes(rows pgx.Rows) ([]*models.Vote, error) {
 			return nil, err
 		}
 
-		// Map database vote string to Vote.Value
 		if voteStr == "up" {
 			v.Value = models.VoteValueUp
 		} else if voteStr == "down" {
@@ -318,7 +307,6 @@ func (r *VoteRepository) GetToolUseVotesWithContext(ctx context.Context, limit i
 			return nil, err
 		}
 
-		// Map vote fields
 		if voteStr == "up" {
 			v.Value = models.VoteValueUp
 		} else if voteStr == "down" {
@@ -328,7 +316,6 @@ func (r *VoteRepository) GetToolUseVotesWithContext(ctx context.Context, limit i
 		v.QuickFeedback = getString(quickFeedback)
 		v.Note = getString(note)
 
-		// Unmarshal tool use JSON fields
 		if len(tuArguments) > 0 {
 			if err := json.Unmarshal(tuArguments, &tu.Arguments); err != nil {
 				tu.Arguments = make(map[string]any)
@@ -425,7 +412,6 @@ func (r *VoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit in
 			return nil, err
 		}
 
-		// Map vote fields
 		if voteStr == "up" {
 			v.Value = models.VoteValueUp
 		} else if voteStr == "down" {
@@ -435,7 +421,6 @@ func (r *VoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit in
 		v.QuickFeedback = getString(quickFeedback)
 		v.Note = getString(note)
 
-		// Map memory fields
 		if userRating.Valid {
 			rating := int(userRating.Int32)
 			mem.UserRating = &rating
@@ -456,7 +441,6 @@ func (r *VoteRepository) GetMemoryVotesWithContext(ctx context.Context, limit in
 			mem.Tags = []string{}
 		}
 
-		// Map memory usage fields (if exists)
 		var memoryUsage *models.MemoryUsage
 		if muID.Valid {
 			mu.ID = getString(muID)
@@ -574,7 +558,6 @@ func (r *VoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, lim
 			return nil, err
 		}
 
-		// Map vote fields
 		if voteStr == "up" {
 			v.Value = models.VoteValueUp
 		} else if voteStr == "down" {
@@ -584,7 +567,6 @@ func (r *VoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, lim
 		v.QuickFeedback = getString(quickFeedback)
 		v.Note = getString(note)
 
-		// Map memory usage fields
 		mu.QueryPrompt = getString(queryPrompt)
 
 		if len(queryPromptMeta) > 0 {
@@ -607,7 +589,6 @@ func (r *VoteRepository) GetMemoryUsageVotesWithContext(ctx context.Context, lim
 			mu.PositionInResults = int(positionInResults.Int32)
 		}
 
-		// Map memory fields
 		if userRating.Valid {
 			rating := int(userRating.Int32)
 			mem.UserRating = &rating
@@ -699,7 +680,6 @@ func (r *VoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context
 			return nil, err
 		}
 
-		// Map vote fields
 		if voteStr == "up" {
 			v.Value = models.VoteValueUp
 		} else if voteStr == "down" {
@@ -709,7 +689,6 @@ func (r *VoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context
 		v.QuickFeedback = getString(quickFeedback)
 		v.Note = getString(note)
 
-		// Map memory fields
 		if userRating.Valid {
 			rating := int(userRating.Int32)
 			mem.UserRating = &rating
@@ -730,7 +709,6 @@ func (r *VoteRepository) GetMemoryExtractionVotesWithContext(ctx context.Context
 			mem.Tags = []string{}
 		}
 
-		// Map message fields
 		msg.PreviousID = getString(previousID)
 		msg.LocalID = getString(localID)
 		msg.ServerID = getString(serverID)

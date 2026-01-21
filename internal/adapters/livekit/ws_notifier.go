@@ -7,19 +7,16 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// WSNotifier implements ports.GenerationNotifier by sending events through a WebSocket client
 type WSNotifier struct {
 	client *WSClient
 }
 
-// NewWSNotifier creates a new WebSocket-based notifier
 func NewWSNotifier(client *WSClient) *WSNotifier {
 	return &WSNotifier{
 		client: client,
 	}
 }
 
-// NotifyGenerationStarted sends a StartAnswer message
 func (n *WSNotifier) NotifyGenerationStarted(messageID, previousID, conversationID string) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -37,7 +34,6 @@ func (n *WSNotifier) NotifyGenerationStarted(messageID, previousID, conversation
 	}
 }
 
-// NotifyThinkingSummary sends a ThinkingSummary message with what the agent is about to do
 func (n *WSNotifier) NotifyThinkingSummary(messageID, conversationID string, summary string) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -57,7 +53,6 @@ func (n *WSNotifier) NotifyThinkingSummary(messageID, conversationID string, sum
 	}
 }
 
-// NotifyMemoryRetrieved sends a MemoryTrace message
 func (n *WSNotifier) NotifyMemoryRetrieved(messageID, conversationID string, memoryID string, content string, relevance float32) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -77,7 +72,6 @@ func (n *WSNotifier) NotifyMemoryRetrieved(messageID, conversationID string, mem
 	}
 }
 
-// NotifyReasoningStep sends a ReasoningStep message
 func (n *WSNotifier) NotifyReasoningStep(id, messageID, conversationID string, sequence int, content string) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -96,13 +90,11 @@ func (n *WSNotifier) NotifyReasoningStep(id, messageID, conversationID string, s
 	}
 }
 
-// NotifyToolUseStart sends a ToolUseRequest message
 func (n *WSNotifier) NotifyToolUseStart(id, messageID, conversationID string, toolName string, arguments map[string]any) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
 	}
 
-	// Convert map[string]any to map[string]interface{}
 	args := make(map[string]interface{})
 	for k, v := range arguments {
 		args[k] = v
@@ -122,7 +114,6 @@ func (n *WSNotifier) NotifyToolUseStart(id, messageID, conversationID string, to
 	}
 }
 
-// NotifyToolUseComplete sends a ToolUseResult message
 func (n *WSNotifier) NotifyToolUseComplete(id, requestID, conversationID string, success bool, result any, errorMsg string) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -146,7 +137,6 @@ func (n *WSNotifier) NotifyToolUseComplete(id, requestID, conversationID string,
 	}
 }
 
-// NotifySentence sends an AssistantSentence message
 func (n *WSNotifier) NotifySentence(id, previousID, conversationID string, sequence int, text string, isFinal bool) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -166,7 +156,6 @@ func (n *WSNotifier) NotifySentence(id, previousID, conversationID string, seque
 	}
 }
 
-// NotifyGenerationComplete sends the final AssistantMessage
 func (n *WSNotifier) NotifyGenerationComplete(messageID, conversationID string, content string) {
 	if n.client == nil || !n.client.IsConnected() {
 		return
@@ -184,7 +173,6 @@ func (n *WSNotifier) NotifyGenerationComplete(messageID, conversationID string, 
 	}
 }
 
-// NotifyGenerationFailed sends an error message
 func (n *WSNotifier) NotifyGenerationFailed(messageID, conversationID string, err error) {
 	if n.client == nil || !n.client.IsConnected() {
 		return

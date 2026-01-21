@@ -16,12 +16,10 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-// HealthCheckConfig holds configuration for health checks
 type HealthCheckConfig struct {
-	Timeout time.Duration // Timeout for each individual health check
+	Timeout time.Duration
 }
 
-// DefaultHealthCheckConfig returns default health check configuration
 func DefaultHealthCheckConfig() HealthCheckConfig {
 	return HealthCheckConfig{
 		Timeout: 5 * time.Second,
@@ -83,7 +81,6 @@ type ServiceHealth struct {
 	Error     *string `json:"error,omitempty"`
 }
 
-// Handle provides a basic health check endpoint
 func (h *HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	response := HealthResponse{
 		Status:  "ok",
@@ -95,7 +92,6 @@ func (h *HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// HandleDetailed provides a detailed health check endpoint that checks all dependencies
 func (h *HealthHandler) HandleDetailed(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -104,45 +100,37 @@ func (h *HealthHandler) HandleDetailed(w http.ResponseWriter, r *http.Request) {
 		Services: make(map[string]ServiceHealth),
 	}
 
-	// Check database
 	if h.db != nil {
 		response.Services["database"] = h.checkDatabase(ctx)
 	}
 
-	// Check LLM service
 	if h.llmClient != nil {
 		response.Services["llm"] = h.checkLLM(ctx)
 	}
 
-	// Check ASR service (if configured)
 	if h.cfg != nil && h.cfg.IsASRConfigured() && h.asrAdapter != nil {
 		response.Services["asr"] = h.checkASR(ctx)
 	}
 
-	// Check TTS service (if configured)
 	if h.cfg != nil && h.cfg.IsTTSConfigured() && h.ttsAdapter != nil {
 		response.Services["tts"] = h.checkTTS(ctx)
 	}
 
-	// Check Embedding service (if configured)
 	if h.cfg != nil && h.cfg.IsEmbeddingConfigured() && h.embeddingClient != nil {
 		response.Services["embedding"] = h.checkEmbedding(ctx)
 	}
 
-	// Check LiveKit service (if configured)
 	if h.cfg != nil && h.cfg.IsLiveKitConfigured() && h.liveKitService != nil {
 		response.Services["livekit"] = h.checkLiveKit(ctx)
 	}
 
-	// Determine overall status
 	response.Status = h.calculateOverallStatus(response.Services)
 
-	// Set appropriate HTTP status code
 	statusCode := http.StatusOK
 	if response.Status == "degraded" {
-		statusCode = http.StatusOK // 200 OK but degraded
+		statusCode = http.StatusOK
 	} else if response.Status == "unhealthy" {
-		statusCode = http.StatusServiceUnavailable // 503
+		statusCode = http.StatusServiceUnavailable
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -150,7 +138,6 @@ func (h *HealthHandler) HandleDetailed(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// checkDatabase checks database connectivity
 func (h *HealthHandler) checkDatabase(ctx context.Context) ServiceHealth {
 	start := time.Now()
 	checkCtx, cancel := context.WithTimeout(ctx, h.config.Timeout)
@@ -174,13 +161,11 @@ func (h *HealthHandler) checkDatabase(ctx context.Context) ServiceHealth {
 	}
 }
 
-// checkLLM checks LLM service availability
 func (h *HealthHandler) checkLLM(ctx context.Context) ServiceHealth {
 	start := time.Now()
 	checkCtx, cancel := context.WithTimeout(ctx, h.config.Timeout)
 	defer cancel()
 
-	// Simple ping by sending a minimal chat request
 	messages := []llm.ChatMessage{
 		{Role: "system", Content: "health check"},
 		{Role: "user", Content: "ping"},
@@ -204,14 +189,12 @@ func (h *HealthHandler) checkLLM(ctx context.Context) ServiceHealth {
 	}
 }
 
-// checkASR checks ASR service availability
 func (h *HealthHandler) checkASR(ctx context.Context) ServiceHealth {
 	start := time.Now()
 	checkCtx, cancel := context.WithTimeout(ctx, h.config.Timeout)
 	defer cancel()
 
-	// Create a minimal silent WAV file (44 bytes header + 1 second of silence at 16kHz, 16-bit mono)
-	silentWAV := createSilentWAV(16000, 1) // 1 second
+	silentWAV := createSilentWAV(16000, 1)
 
 	_, err := h.asrAdapter.Transcribe(checkCtx, silentWAV, "wav")
 	latency := time.Since(start).Milliseconds()
@@ -231,13 +214,11 @@ func (h *HealthHandler) checkASR(ctx context.Context) ServiceHealth {
 	}
 }
 
-// checkTTS checks TTS service availability
 func (h *HealthHandler) checkTTS(ctx context.Context) ServiceHealth {
 	start := time.Now()
 	checkCtx, cancel := context.WithTimeout(ctx, h.config.Timeout)
 	defer cancel()
 
-	// Simple synthesis with minimal text
 	_, err := h.ttsAdapter.Synthesize(checkCtx, "health", nil)
 	latency := time.Since(start).Milliseconds()
 
@@ -256,13 +237,11 @@ func (h *HealthHandler) checkTTS(ctx context.Context) ServiceHealth {
 	}
 }
 
-// checkEmbedding checks embedding service availability
 func (h *HealthHandler) checkEmbedding(ctx context.Context) ServiceHealth {
 	start := time.Now()
 	checkCtx, cancel := context.WithTimeout(ctx, h.config.Timeout)
 	defer cancel()
 
-	// Simple embedding with minimal text
 	_, err := h.embeddingClient.Embed(checkCtx, "health check")
 	latency := time.Since(start).Milliseconds()
 
@@ -281,13 +260,11 @@ func (h *HealthHandler) checkEmbedding(ctx context.Context) ServiceHealth {
 	}
 }
 
-// checkLiveKit checks LiveKit service availability
 func (h *HealthHandler) checkLiveKit(ctx context.Context) ServiceHealth {
 	start := time.Now()
 	checkCtx, cancel := context.WithTimeout(ctx, h.config.Timeout)
 	defer cancel()
 
-	// Try to create a temporary room and delete it
 	testRoomName := fmt.Sprintf("healthcheck_%d", time.Now().Unix())
 
 	_, err := h.liveKitService.CreateRoom(checkCtx, testRoomName)
@@ -301,7 +278,6 @@ func (h *HealthHandler) checkLiveKit(ctx context.Context) ServiceHealth {
 		}
 	}
 
-	// Clean up the test room
 	_ = h.liveKitService.DeleteRoom(checkCtx, testRoomName)
 
 	latency := time.Since(start).Milliseconds()
@@ -311,10 +287,9 @@ func (h *HealthHandler) checkLiveKit(ctx context.Context) ServiceHealth {
 	}
 }
 
-// calculateOverallStatus determines the overall system status based on individual services
 func (h *HealthHandler) calculateOverallStatus(services map[string]ServiceHealth) string {
 	if len(services) == 0 {
-		return "healthy" // No services to check
+		return "healthy"
 	}
 
 	hasUnhealthy := false
@@ -322,7 +297,6 @@ func (h *HealthHandler) calculateOverallStatus(services map[string]ServiceHealth
 
 	for name, service := range services {
 		if service.Status == "unhealthy" {
-			// Core services (database, llm) are critical
 			if name == "database" || name == "llm" {
 				return "unhealthy"
 			}
@@ -333,7 +307,6 @@ func (h *HealthHandler) calculateOverallStatus(services map[string]ServiceHealth
 		}
 	}
 
-	// If optional services are down, system is degraded
 	if hasUnhealthy || hasDegraded {
 		return "degraded"
 	}
@@ -341,34 +314,29 @@ func (h *HealthHandler) calculateOverallStatus(services map[string]ServiceHealth
 	return "healthy"
 }
 
-// createSilentWAV creates a minimal silent WAV file for health checking
 func createSilentWAV(sampleRate, durationSec int) []byte {
 	numSamples := sampleRate * durationSec
-	dataSize := numSamples * 2 // 16-bit = 2 bytes per sample
-	fileSize := 36 + dataSize  // 44 byte header - 8 + data size
+	dataSize := numSamples * 2
+	fileSize := 36 + dataSize
 
 	buf := new(bytes.Buffer)
 
-	// RIFF header
 	buf.WriteString("RIFF")
 	writeUint32(buf, uint32(fileSize))
 	buf.WriteString("WAVE")
 
-	// fmt chunk
 	buf.WriteString("fmt ")
-	writeUint32(buf, 16)                   // chunk size
-	writeUint16(buf, 1)                    // audio format (PCM)
-	writeUint16(buf, 1)                    // number of channels (mono)
-	writeUint32(buf, uint32(sampleRate))   // sample rate
-	writeUint32(buf, uint32(sampleRate*2)) // byte rate
-	writeUint16(buf, 2)                    // block align
-	writeUint16(buf, 16)                   // bits per sample
+	writeUint32(buf, 16)
+	writeUint16(buf, 1)
+	writeUint16(buf, 1)
+	writeUint32(buf, uint32(sampleRate))
+	writeUint32(buf, uint32(sampleRate*2))
+	writeUint16(buf, 2)
+	writeUint16(buf, 16)
 
-	// data chunk
 	buf.WriteString("data")
 	writeUint32(buf, uint32(dataSize))
 
-	// Write silent samples (all zeros)
 	silence := make([]byte, dataSize)
 	buf.Write(silence)
 

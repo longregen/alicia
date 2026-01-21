@@ -4,6 +4,10 @@ import { cls } from '../../../utils/cls';
 import type { MemoryCategory } from '../../../stores/memoryStore';
 import { useMemoryStore } from '../../../stores/memoryStore';
 import { MemoryEditor } from './MemoryEditor';
+import StarRating, { importanceToStar, starToImportance } from '../../atoms/StarRating';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../atoms/Dialog';
+import Button from '../../atoms/Button';
+import type { MemoryDeletionReason } from '../../../hooks/useMemories';
 
 export interface MemoryDetailProps {
   memoryId: string;
@@ -66,6 +70,10 @@ export const MemoryDetail: React.FC<MemoryDetailProps> = ({
   const [editorOpen, setEditorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Deletion dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedDeletionReason, setSelectedDeletionReason] = useState<MemoryDeletionReason | null>(null);
 
   // Get memory from store
   const memory = useMemoryStore((state) => state.memories[memoryId]);
@@ -193,23 +201,57 @@ export const MemoryDetail: React.FC<MemoryDetailProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this memory? This action cannot be undone.')) return;
+  const handleDeleteClick = () => {
+    setSelectedDeletionReason(null);
+    setDeleteDialogOpen(true);
+  };
 
+  const handleConfirmDelete = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/v1/memories/${memoryId}`, {
+      const options: RequestInit = {
         method: 'DELETE',
-      });
+      };
+
+      if (selectedDeletionReason) {
+        options.headers = { 'Content-Type': 'application/json' };
+        options.body = JSON.stringify({ reason: selectedDeletionReason });
+      }
+
+      const response = await fetch(`/api/v1/memories/${memoryId}`, options);
 
       if (!response.ok) {
         throw new Error(`Failed to delete memory: ${response.status}`);
       }
 
       deleteMemory(memoryId);
+      setDeleteDialogOpen(false);
       navigate('/memory');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete memory');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRatingChange = async (stars: number) => {
+    if (!memory) return;
+    setIsLoading(true);
+    try {
+      const importance = starToImportance(stars);
+      const response = await fetch(`/api/v1/memories/${memoryId}/importance`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ importance }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update importance: ${response.status}`);
+      }
+
+      updateMemory(memoryId, { importance });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update importance');
     } finally {
       setIsLoading(false);
     }
@@ -339,7 +381,7 @@ export const MemoryDetail: React.FC<MemoryDetailProps> = ({
             </svg>
           </button>
           <button
-            onClick={handleDelete}
+            onClick={handleDeleteClick}
             disabled={isLoading}
             className="p-2 rounded text-muted hover:text-error hover:bg-surface-hover transition-colors disabled:opacity-50"
             title="Delete"
@@ -378,12 +420,15 @@ export const MemoryDetail: React.FC<MemoryDetailProps> = ({
             >
               {memory.category}
             </span>
-            <span className="flex items-center gap-1 text-sm text-muted">
-              <svg className="w-4 h-4 text-warning" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-              {Math.round(memory.importance * 100)}% importance
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted">Importance:</span>
+              <StarRating
+                rating={importanceToStar(memory.importance)}
+                onRate={handleRatingChange}
+                isLoading={isLoading}
+                showValue
+              />
+            </div>
             <span className="flex items-center gap-1 text-sm text-muted">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -450,6 +495,65 @@ export const MemoryDetail: React.FC<MemoryDetailProps> = ({
         onCancel={() => setEditorOpen(false)}
         isLoading={isLoading}
       />
+
+      {/* Delete confirmation dialog with reason selection */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Memory</DialogTitle>
+            <DialogDescription>
+              <span className="block mt-2 p-3 bg-sunken rounded text-sm text-default">
+                "{memory.content.slice(0, 100)}{memory.content.length > 100 ? '...' : ''}"
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p className="text-sm text-muted mb-3">Why are you deleting this memory? (optional)</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'wrong' as const, label: 'Wrong', icon: '❌' },
+                { value: 'useless' as const, label: 'Useless', icon: '🗑️' },
+                { value: 'old' as const, label: 'Outdated', icon: '📅' },
+                { value: 'duplicate' as const, label: 'Duplicate', icon: '📋' },
+                { value: 'other' as const, label: 'Other', icon: '💭' },
+              ].map((reason) => (
+                <button
+                  key={reason.value}
+                  onClick={() => setSelectedDeletionReason(
+                    selectedDeletionReason === reason.value ? null : reason.value
+                  )}
+                  className={cls(
+                    'flex items-center gap-2 px-3 py-2 rounded-md border transition-colors text-sm',
+                    selectedDeletionReason === reason.value
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-border hover:border-muted hover:bg-surface-hover text-default'
+                  )}
+                >
+                  <span>{reason.icon}</span>
+                  <span>{reason.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Deleting...' : 'Delete Memory'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

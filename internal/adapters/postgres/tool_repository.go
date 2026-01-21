@@ -177,7 +177,6 @@ func (r *ToolRepository) scanTool(row pgx.Row) (*models.Tool, error) {
 		return nil, err
 	}
 
-	// Use generic JSON unmarshaling helper
 	if err := unmarshalJSONField(schema, &t.Schema); err != nil {
 		return nil, err
 	}
@@ -206,7 +205,6 @@ func (r *ToolRepository) scanTools(rows pgx.Rows) ([]*models.Tool, error) {
 			return nil, err
 		}
 
-		// Use helper to reduce boilerplate
 		if err := unmarshalJSONField(schema, &t.Schema); err != nil {
 			return nil, err
 		}

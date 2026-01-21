@@ -12,65 +12,39 @@ import (
 )
 
 const (
-	// MaxOpusFrameSize is the maximum size of an Opus frame in bytes.
-	// Opus frames can be up to 1275 bytes for a single frame, but we use 4000
-	// as a safe buffer size to accommodate any encoding scenario.
-	MaxOpusFrameSize = 4000
-
-	// OpusFrameDuration is the duration of an Opus frame in nanoseconds (20ms).
-	// Opus typically uses 20ms frames for voice encoding.
-	OpusFrameDuration = 20_000_000
-
-	// BytesPerPCMSample is the number of bytes per PCM16 sample.
-	// PCM16 uses 16-bit (2-byte) signed integers for each sample.
-	BytesPerPCMSample = 2
-
-	// OpusFramesPerSecond is the number of Opus frames per second.
-	// With 20ms frames, there are 50 frames per second (1000ms / 20ms = 50).
-	OpusFramesPerSecond = 50
-
-	// StreamBufferSize is the buffer size for streaming channels.
-	// This allows buffering of up to 10 audio samples before blocking.
-	StreamBufferSize = 10
-
-	// OpusEncoderComplexity is the computational complexity for Opus encoding (0-10).
-	// Higher values produce better quality but use more CPU. 10 is maximum quality.
+	MaxOpusFrameSize      = 4000
+	OpusFrameDuration     = 20_000_000
+	BytesPerPCMSample     = 2
+	OpusFramesPerSecond   = 50
+	StreamBufferSize      = 10
 	OpusEncoderComplexity = 10
 )
 
-// AudioConverter handles conversion between different audio formats
 type AudioConverter struct {
-	// Opus encoder for PCM -> Opus conversion
 	opusEncoder *opus.Encoder
-	// Opus decoder for Opus -> PCM conversion
 	opusDecoder *opus.Decoder
 	sampleRate  int
 	channels    int
-	frameSize   int // Opus frame size in samples
+	frameSize   int
 }
 
-// NewAudioConverter creates a new audio converter
 func NewAudioConverter(sampleRate, channels int) (*AudioConverter, error) {
-	// Create Opus encoder
 	encoder, err := opus.NewEncoder(sampleRate, channels, opus.AppVoIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create opus encoder: %w", err)
 	}
 
-	// Set encoder parameters for voice
-	// Use 64kbps bitrate - excellent quality for voice while keeping frames
+	// 64kbps is excellent quality for voice while keeping frames
 	// well under the 1200-byte RTP MTU limit for WebRTC
 	encoder.SetBitrate(64000)
 	encoder.SetComplexity(OpusEncoderComplexity)
 
-	// Create Opus decoder
 	decoder, err := opus.NewDecoder(sampleRate, channels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create opus decoder: %w", err)
 	}
 
-	// Calculate frame size (20ms at the given sample rate)
-	frameSize := sampleRate / OpusFramesPerSecond // 20ms frames
+	frameSize := sampleRate / OpusFramesPerSecond
 
 	return &AudioConverter{
 		opusEncoder: encoder,
@@ -81,32 +55,26 @@ func NewAudioConverter(sampleRate, channels int) (*AudioConverter, error) {
 	}, nil
 }
 
-// ConvertPCMToOpus converts PCM16 audio data to Opus format
-// PCM data should be 16-bit signed little-endian samples
 func (ac *AudioConverter) ConvertPCMToOpus(pcmData []byte) ([]media.Sample, error) {
 	if len(pcmData) == 0 {
 		return nil, fmt.Errorf("empty PCM data")
 	}
 
-	// PCM16 is 2 bytes per sample
 	bytesPerSample := BytesPerPCMSample
 	samplesCount := len(pcmData) / bytesPerSample
 
-	// Convert bytes to int16 samples
 	pcmSamples := make([]int16, samplesCount)
 	reader := bytes.NewReader(pcmData)
 	if err := binary.Read(reader, binary.LittleEndian, &pcmSamples); err != nil {
 		return nil, fmt.Errorf("failed to read PCM samples: %w", err)
 	}
 
-	// Split into frames and encode each
 	var samples []media.Sample
-	frameSize := ac.frameSize * ac.channels // Total samples per frame (all channels)
+	frameSize := ac.frameSize * ac.channels
 
 	for i := 0; i < len(pcmSamples); i += frameSize {
 		end := i + frameSize
 		if end > len(pcmSamples) {
-			// Pad the last frame if needed
 			end = len(pcmSamples)
 			paddedFrame := make([]int16, frameSize)
 			copy(paddedFrame, pcmSamples[i:end])
@@ -115,14 +83,12 @@ func (ac *AudioConverter) ConvertPCMToOpus(pcmData []byte) ([]media.Sample, erro
 
 		frame := pcmSamples[i:end]
 
-		// Encode frame to Opus
 		opusData := make([]byte, MaxOpusFrameSize)
 		n, err := ac.opusEncoder.Encode(frame, opusData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode opus frame: %w", err)
 		}
 
-		// Create media sample
 		sample := media.Sample{
 			Data:     opusData[:n],
 			Duration: OpusFrameDuration,
@@ -133,50 +99,38 @@ func (ac *AudioConverter) ConvertPCMToOpus(pcmData []byte) ([]media.Sample, erro
 	return samples, nil
 }
 
-// ConvertPCMStream converts a stream of PCM data to Opus samples
-// This is useful for streaming scenarios
-// The context parameter allows cancellation to prevent goroutine leaks if the caller stops reading
 func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Reader) (<-chan media.Sample, <-chan error) {
 	sampleChan := make(chan media.Sample, StreamBufferSize)
 	errorChan := make(chan error, 1)
 
 	go func() {
-		// Ensure channels are always closed, even on panic
 		defer func() {
 			if r := recover(); r != nil {
-				// Send panic as error if possible
 				select {
 				case errorChan <- fmt.Errorf("panic in ConvertPCMStream: %v", r):
 				default:
 				}
 			}
-			// Close channels in reverse order of creation to avoid races
 			close(errorChan)
 			close(sampleChan)
 		}()
 
-		// Read PCM data in chunks
 		bytesPerSample := BytesPerPCMSample
 		frameBytes := ac.frameSize * ac.channels * bytesPerSample
 		buffer := make([]byte, frameBytes)
 		pcmSamples := make([]int16, ac.frameSize*ac.channels)
 
 		for {
-			// Check for context cancellation
 			select {
 			case <-ctx.Done():
-				// Context cancelled, exit gracefully
 				return
 			default:
 			}
 
-			// Read a full frame
 			n, err := io.ReadFull(pcmReader, buffer)
 			if err != nil {
 				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					// End of stream
 					if n > 0 {
-						// Process remaining data
 						reader := bytes.NewReader(buffer[:n])
 						if err := binary.Read(reader, binary.LittleEndian, pcmSamples[:n/bytesPerSample]); err != nil {
 							select {
@@ -186,7 +140,6 @@ func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Rea
 							return
 						}
 
-						// Encode final frame
 						opusData := make([]byte, MaxOpusFrameSize)
 						encoded, err := ac.opusEncoder.Encode(pcmSamples, opusData)
 						if err != nil {
@@ -197,7 +150,6 @@ func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Rea
 							return
 						}
 
-						// Send sample with context cancellation support
 						select {
 						case sampleChan <- media.Sample{
 							Data:     opusData[:encoded],
@@ -216,7 +168,6 @@ func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Rea
 				return
 			}
 
-			// Convert to int16 samples
 			reader := bytes.NewReader(buffer)
 			if err := binary.Read(reader, binary.LittleEndian, &pcmSamples); err != nil {
 				select {
@@ -226,7 +177,6 @@ func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Rea
 				return
 			}
 
-			// Encode to Opus
 			opusData := make([]byte, MaxOpusFrameSize)
 			encoded, err := ac.opusEncoder.Encode(pcmSamples, opusData)
 			if err != nil {
@@ -237,7 +187,6 @@ func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Rea
 				return
 			}
 
-			// Send sample with context cancellation support to prevent goroutine leak
 			select {
 			case sampleChan <- media.Sample{
 				Data:     opusData[:encoded],
@@ -252,24 +201,18 @@ func (ac *AudioConverter) ConvertPCMStream(ctx context.Context, pcmReader io.Rea
 	return sampleChan, errorChan
 }
 
-// ConvertOpusToPCM decodes Opus audio data to PCM16 format
-// Returns PCM data as 16-bit signed little-endian samples
 func (ac *AudioConverter) ConvertOpusToPCM(opusData []byte) ([]byte, error) {
 	if len(opusData) == 0 {
 		return nil, fmt.Errorf("empty Opus data")
 	}
 
-	// Allocate buffer for PCM samples
-	// Opus frames are typically 20ms, which at 48kHz stereo is 960 samples/channel * 2 channels = 1920 samples
 	pcmSamples := make([]int16, ac.frameSize*ac.channels)
 
-	// Decode Opus frame to PCM
 	n, err := ac.opusDecoder.Decode(opusData, pcmSamples)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode opus frame: %w", err)
 	}
 
-	// Convert int16 samples to bytes
 	pcmBytes := new(bytes.Buffer)
 	if err := binary.Write(pcmBytes, binary.LittleEndian, pcmSamples[:n*ac.channels]); err != nil {
 		return nil, fmt.Errorf("failed to write PCM samples: %w", err)
@@ -278,17 +221,13 @@ func (ac *AudioConverter) ConvertOpusToPCM(opusData []byte) ([]byte, error) {
 	return pcmBytes.Bytes(), nil
 }
 
-// ConvertOpusToPCMFloat decodes Opus audio data to float32 PCM format
-// This is useful when you need floating-point samples for audio processing
 func (ac *AudioConverter) ConvertOpusToPCMFloat(opusData []byte) ([]float32, error) {
 	if len(opusData) == 0 {
 		return nil, fmt.Errorf("empty Opus data")
 	}
 
-	// Allocate buffer for PCM samples
 	pcmSamples := make([]float32, ac.frameSize*ac.channels)
 
-	// Decode Opus frame to PCM (float32)
 	n, err := ac.opusDecoder.DecodeFloat32(opusData, pcmSamples)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode opus frame: %w", err)
@@ -297,24 +236,17 @@ func (ac *AudioConverter) ConvertOpusToPCMFloat(opusData []byte) ([]float32, err
 	return pcmSamples[:n*ac.channels], nil
 }
 
-// ResamplePCM converts PCM audio from one format to another
-// Supports sample rate conversion and mono-to-stereo conversion
-// inputRate/outputRate: sample rates in Hz (e.g., 24000, 48000)
-// inputChannels/outputChannels: 1 for mono, 2 for stereo
 func ResamplePCM(input []byte, inputRate, outputRate, inputChannels, outputChannels int) ([]byte, error) {
 	if len(input) == 0 {
 		return nil, fmt.Errorf("empty input data")
 	}
 
-	// If no conversion needed, return input as-is
 	if inputRate == outputRate && inputChannels == outputChannels {
 		return input, nil
 	}
 
-	// Calculate sample counts
 	inputSamplesPerChannel := len(input) / (BytesPerPCMSample * inputChannels)
 
-	// Read input samples
 	totalInputSamples := len(input) / BytesPerPCMSample
 	inputInt16 := make([]int16, totalInputSamples)
 	reader := bytes.NewReader(input)
@@ -322,7 +254,6 @@ func ResamplePCM(input []byte, inputRate, outputRate, inputChannels, outputChann
 		return nil, fmt.Errorf("failed to read input samples: %w", err)
 	}
 
-	// Convert to mono if input is stereo (average L+R)
 	var monoSamples []int16
 	if inputChannels == 2 {
 		monoSamples = make([]int16, inputSamplesPerChannel)
@@ -335,14 +266,12 @@ func ResamplePCM(input []byte, inputRate, outputRate, inputChannels, outputChann
 		monoSamples = inputInt16
 	}
 
-	// Resample if needed
 	var resampledMono []int16
 	if inputRate != outputRate {
 		ratio := float64(outputRate) / float64(inputRate)
 		outputSamplesPerChannel := int(float64(len(monoSamples)) * ratio)
 		resampledMono = make([]int16, outputSamplesPerChannel)
 
-		// Linear interpolation resampling
 		for i := 0; i < outputSamplesPerChannel; i++ {
 			srcPos := float64(i) / ratio
 			srcIdx := int(srcPos)
@@ -351,7 +280,6 @@ func ResamplePCM(input []byte, inputRate, outputRate, inputChannels, outputChann
 			if srcIdx >= len(monoSamples)-1 {
 				resampledMono[i] = monoSamples[len(monoSamples)-1]
 			} else {
-				// Linear interpolation between samples
 				sample1 := int32(monoSamples[srcIdx])
 				sample2 := int32(monoSamples[srcIdx+1])
 				resampledMono[i] = int16(sample1 + int32(float64(sample2-sample1)*frac))
@@ -361,15 +289,14 @@ func ResamplePCM(input []byte, inputRate, outputRate, inputChannels, outputChann
 		resampledMono = monoSamples
 	}
 
-	// Convert to stereo if needed
 	outputBytes := len(resampledMono) * outputChannels * BytesPerPCMSample
 	output := make([]byte, 0, outputBytes)
 	writer := bytes.NewBuffer(output)
 
 	for _, sample := range resampledMono {
-		binary.Write(writer, binary.LittleEndian, sample) // Left (or mono)
+		binary.Write(writer, binary.LittleEndian, sample)
 		if outputChannels == 2 {
-			binary.Write(writer, binary.LittleEndian, sample) // Right (duplicate for stereo)
+			binary.Write(writer, binary.LittleEndian, sample)
 		}
 	}
 

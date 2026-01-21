@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	readability "github.com/go-shiori/go-readability"
 	md "github.com/JohannesKaufmann/html-to-markdown"
+	readability "github.com/go-shiori/go-readability"
 )
 
 const (
@@ -21,7 +21,6 @@ const (
 	maxSearchResults    = 10
 )
 
-// WebSearchTool performs web searches
 type WebSearchTool struct {
 	client *http.Client
 }
@@ -98,13 +97,11 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) (any, 
 		fetchContent = v
 	}
 
-	// Perform search
 	results, err := t.performSearch(ctx, query, numResults)
 	if err != nil {
 		return nil, err
 	}
 
-	// Optionally fetch content
 	if fetchContent {
 		for i := range results {
 			content, err := t.fetchResultContent(ctx, results[i].URL)
@@ -125,14 +122,12 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) (any, 
 	return output, nil
 }
 
-// WebSearchResult is the full search response
 type WebSearchResult struct {
-	Query       string             `json:"query"`
-	ResultCount int                `json:"result_count"`
-	Results     []WebSearchHit     `json:"results"`
+	Query       string         `json:"query"`
+	ResultCount int            `json:"result_count"`
+	Results     []WebSearchHit `json:"results"`
 }
 
-// WebSearchHit represents a single search result
 type WebSearchHit struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
@@ -182,11 +177,8 @@ func (t *WebSearchTool) performSearch(ctx context.Context, query string, limit i
 func parseSearchResults(html string, limit int) []WebSearchHit {
 	var results []WebSearchHit
 
-	// Pattern to find result links
 	linkPattern := regexp.MustCompile(`<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)</a>`)
 	snippetPattern := regexp.MustCompile(`<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)</a>`)
-
-	// Find all result containers
 	resultPattern := regexp.MustCompile(`<div class="result[^"]*"[^>]*>([\s\S]*?)</div>\s*(?:<div class="result|<div class="footer|$)`)
 	resultBlocks := resultPattern.FindAllStringSubmatch(html, -1)
 
@@ -264,7 +256,6 @@ func decodeHTMLEntities(s string) string {
 		s = strings.ReplaceAll(s, entity, char)
 	}
 
-	// Numeric entities
 	numPattern := regexp.MustCompile(`&#(\d+);`)
 	s = numPattern.ReplaceAllStringFunc(s, func(match string) string {
 		numStr := strings.TrimPrefix(strings.TrimSuffix(match, ";"), "&#")
@@ -305,7 +296,6 @@ func (t *WebSearchTool) fetchResultContent(ctx context.Context, urlStr string) (
 		return "", err
 	}
 
-	// Truncate to reasonable size
 	const maxContentLength = 5000
 	if len(markdown) > maxContentLength {
 		markdown = markdown[:maxContentLength] + "\n[truncated...]"

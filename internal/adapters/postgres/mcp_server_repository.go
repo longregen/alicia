@@ -86,7 +86,6 @@ func (r *MCPServerRepository) GetByName(ctx context.Context, name string) (*mode
 	return r.scanMCPServer(r.conn(ctx).QueryRow(ctx, query, name))
 }
 
-// WasDeleted checks if a server with the given name was soft-deleted
 func (r *MCPServerRepository) WasDeleted(ctx context.Context, name string) (bool, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -148,7 +147,6 @@ func (r *MCPServerRepository) Update(ctx context.Context, server *models.MCPServ
 	return err
 }
 
-// Delete performs a soft delete by setting deleted_at timestamp
 func (r *MCPServerRepository) Delete(ctx context.Context, id string) error {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()
@@ -159,7 +157,6 @@ func (r *MCPServerRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-// List returns all non-deleted MCP servers
 func (r *MCPServerRepository) List(ctx context.Context) ([]*models.MCPServer, error) {
 	ctx, cancel := withTimeout(ctx)
 	defer cancel()

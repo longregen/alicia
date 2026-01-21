@@ -6,7 +6,6 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 )
 
-// AgentFactory creates and wires up LiveKit agents with all dependencies
 type AgentFactory struct {
 	conversationRepo          ports.ConversationRepository
 	messageRepo               ports.MessageRepository
@@ -35,7 +34,6 @@ type AgentFactory struct {
 	synthesizeSpeechUseCase     ports.SynthesizeSpeechUseCase
 }
 
-// NewAgentFactory creates a new agent factory
 func NewAgentFactory(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
@@ -88,7 +86,6 @@ func NewAgentFactory(
 	}
 }
 
-// CreateAgent creates a fully-wired agent for a conversation
 func (f *AgentFactory) CreateAgent(
 	config *AgentConfig,
 	conversationID string,
@@ -150,8 +147,6 @@ func (f *AgentFactory) CreateAgent(
 	return agent, messageRouter, nil
 }
 
-// CreateAgentWithCallbacks creates an agent with custom callbacks wrapper
-// This allows you to wrap the message router with additional logic if needed
 func (f *AgentFactory) CreateAgentWithCallbacks(
 	config *AgentConfig,
 	conversationID string,

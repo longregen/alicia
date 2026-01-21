@@ -9,11 +9,10 @@ import (
 	"strings"
 	"time"
 
-	readability "github.com/go-shiori/go-readability"
 	md "github.com/JohannesKaufmann/html-to-markdown"
+	readability "github.com/go-shiori/go-readability"
 )
 
-// WebReadTool fetches a URL and returns clean markdown content
 type WebReadTool struct {
 	client *http.Client
 }
@@ -74,7 +73,6 @@ func (t *WebReadTool) Execute(ctx context.Context, args map[string]any) (any, er
 		return nil, fmt.Errorf("url is required")
 	}
 
-	// Parse options
 	includeLinks := true
 	if v, ok := args["include_links"].(bool); ok {
 		includeLinks = v
@@ -90,7 +88,6 @@ func (t *WebReadTool) Execute(ctx context.Context, args map[string]any) (any, er
 		maxLength = int(v)
 	}
 
-	// Fetch HTML
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -108,20 +105,17 @@ func (t *WebReadTool) Execute(ctx context.Context, args map[string]any) (any, er
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	// Extract main content using readability
 	article, err := readability.FromReader(resp.Body, resp.Request.URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract content: %w", err)
 	}
 
-	// Convert to markdown
 	converter := md.NewConverter("", true, nil)
 	markdown, err := converter.ConvertString(article.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert to markdown: %w", err)
 	}
 
-	// Post-process based on options
 	if !includeLinks {
 		markdown = stripLinks(markdown)
 	}
@@ -129,15 +123,12 @@ func (t *WebReadTool) Execute(ctx context.Context, args map[string]any) (any, er
 		markdown = stripImages(markdown)
 	}
 
-	// Clean up whitespace
 	markdown = cleanWhitespace(markdown)
 
-	// Truncate if needed
 	if len(markdown) > maxLength {
 		markdown = markdown[:maxLength] + "\n\n[Content truncated...]"
 	}
 
-	// Build result
 	result := WebReadResult{
 		URL:             resp.Request.URL.String(),
 		Title:           article.Title,
@@ -152,7 +143,6 @@ func (t *WebReadTool) Execute(ctx context.Context, args map[string]any) (any, er
 	return result, nil
 }
 
-// WebReadResult is the structured output of the web read tool
 type WebReadResult struct {
 	URL             string `json:"url"`
 	Title           string `json:"title,omitempty"`
@@ -164,30 +154,22 @@ type WebReadResult struct {
 	EstimatedTokens int    `json:"estimated_tokens"`
 }
 
-// stripLinks removes markdown links but keeps the text
 func stripLinks(md string) string {
-	// Replace [text](url) with just text
 	re := regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	return re.ReplaceAllString(md, "$1")
 }
 
-// stripImages removes markdown images
 func stripImages(md string) string {
-	// Remove ![alt](url)
 	re := regexp.MustCompile(`!\[[^\]]*\]\([^)]+\)`)
 	return re.ReplaceAllString(md, "")
 }
 
-// cleanWhitespace normalizes whitespace in markdown
 func cleanWhitespace(md string) string {
-	// Replace multiple newlines with double newlines
 	re := regexp.MustCompile(`\n{3,}`)
 	md = re.ReplaceAllString(md, "\n\n")
-	// Trim leading/trailing whitespace
 	return strings.TrimSpace(md)
 }
 
-// fetchHTML is a helper to fetch raw HTML content
 func fetchHTML(ctx context.Context, url string) (string, string, error) {
 	client := &http.Client{
 		Timeout: 30 * time.Second,

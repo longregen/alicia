@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	// MaxConversationTitleLength is the maximum allowed length for conversation titles
 	MaxConversationTitleLength = 500
 )
 
@@ -37,31 +36,26 @@ func NewConversationsHandler(
 }
 
 func (h *ConversationsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
 		return
 	}
 
-	// Limit request body size to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024) // 1MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024)
 	defer r.Body.Close()
 	req, ok := decodeJSON[dto.CreateConversationRequest](r, w)
 	if !ok {
 		return
 	}
 
-	// Trim whitespace from title
 	req.Title = strings.TrimSpace(req.Title)
 
-	// Validate title is not empty
 	if req.Title == "" {
 		respondError(w, "validation_error", "Title is required", http.StatusBadRequest)
 		return
 	}
 
-	// Validate title length
 	if len(req.Title) > MaxConversationTitleLength {
 		respondError(w, "validation_error", "Title exceeds maximum length of 500 characters", http.StatusBadRequest)
 		return
@@ -84,7 +78,6 @@ func (h *ConversationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConversationsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
@@ -121,7 +114,6 @@ func (h *ConversationsHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConversationsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
@@ -149,7 +141,6 @@ func (h *ConversationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConversationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
@@ -161,12 +152,8 @@ func (h *ConversationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete memories associated with this conversation first
-	// (memories extracted from messages in this conversation)
 	if err := h.memoryService.DeleteByConversationID(r.Context(), id); err != nil {
 		log.Printf("Failed to delete memories for conversation %s: %v", id, err)
-		// Continue with conversation deletion even if memory deletion fails
-		// The memories will become orphaned but won't cause data inconsistency
 	}
 
 	if err := h.conversationRepo.DeleteByIDAndUserID(r.Context(), id, userID); err != nil {
@@ -179,15 +166,13 @@ func (h *ConversationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ConversationsHandler) Patch(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
 		return
 	}
 
-	// Limit request body size to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024) // 1MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, 1*1024*1024)
 	defer r.Body.Close()
 
 	id, ok := validateURLParam(r, w, "id", "Conversation ID")
@@ -195,7 +180,6 @@ func (h *ConversationsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get existing conversation
 	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), id, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -212,7 +196,6 @@ func (h *ConversationsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apply updates
 	if req.Title != nil {
 		title := strings.TrimSpace(*req.Title)
 		if title == "" {

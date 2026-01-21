@@ -10,7 +10,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// WebExtractLinksTool extracts all links from a web page
 type WebExtractLinksTool struct{}
 
 func NewWebExtractLinksTool() *WebExtractLinksTool {
@@ -88,7 +87,6 @@ func (t *WebExtractLinksTool) Execute(ctx context.Context, args map[string]any) 
 		maxResults = int(v)
 	}
 
-	// Fetch HTML
 	htmlContent, finalURL, err := fetchHTML(ctx, urlStr)
 	if err != nil {
 		return nil, err
@@ -99,13 +97,11 @@ func (t *WebExtractLinksTool) Execute(ctx context.Context, args map[string]any) 
 		return nil, fmt.Errorf("failed to parse base URL: %w", err)
 	}
 
-	// Parse HTML
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}
 
-	// Extract links
 	var links []WebLink
 	seen := make(map[string]bool)
 
@@ -119,25 +115,21 @@ func (t *WebExtractLinksTool) Execute(ctx context.Context, args map[string]any) 
 			return
 		}
 
-		// Resolve relative URLs
 		linkURL, err := baseURL.Parse(href)
 		if err != nil {
 			return
 		}
 
-		// Skip javascript: and mailto: links
 		if linkURL.Scheme == "javascript" || linkURL.Scheme == "mailto" {
 			return
 		}
 
 		absoluteURL := linkURL.String()
 
-		// Skip duplicates
 		if seen[absoluteURL] {
 			return
 		}
 
-		// Apply filter
 		isInternal := linkURL.Host == baseURL.Host || linkURL.Host == ""
 		switch filter {
 		case "internal":
@@ -150,7 +142,6 @@ func (t *WebExtractLinksTool) Execute(ctx context.Context, args map[string]any) 
 			}
 		}
 
-		// Apply pattern filter
 		if pattern != nil && !pattern.MatchString(absoluteURL) {
 			return
 		}
@@ -178,21 +169,18 @@ func (t *WebExtractLinksTool) Execute(ctx context.Context, args map[string]any) 
 	return result, nil
 }
 
-// WebLink represents a single extracted link
 type WebLink struct {
 	URL      string `json:"url"`
 	Text     string `json:"text,omitempty"`
 	Internal bool   `json:"internal"`
 }
 
-// WebExtractLinksResult is the output of the extract links tool
 type WebExtractLinksResult struct {
 	URL        string    `json:"url"`
 	TotalFound int       `json:"total_found"`
 	Links      []WebLink `json:"links"`
 }
 
-// WebExtractMetadataTool extracts metadata from a web page
 type WebExtractMetadataTool struct{}
 
 func NewWebExtractMetadataTool() *WebExtractMetadataTool {
@@ -226,13 +214,11 @@ func (t *WebExtractMetadataTool) Execute(ctx context.Context, args map[string]an
 		return nil, fmt.Errorf("url is required")
 	}
 
-	// Fetch HTML
 	htmlContent, finalURL, err := fetchHTML(ctx, urlStr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse HTML
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
@@ -242,10 +228,8 @@ func (t *WebExtractMetadataTool) Execute(ctx context.Context, args map[string]an
 		URL: finalURL,
 	}
 
-	// Title
 	meta.Title = doc.Find("title").First().Text()
 
-	// Basic meta tags
 	doc.Find("meta").Each(func(i int, s *goquery.Selection) {
 		name, _ := s.Attr("name")
 		property, _ := s.Attr("property")
@@ -295,24 +279,20 @@ func (t *WebExtractMetadataTool) Execute(ctx context.Context, args map[string]an
 		}
 	})
 
-	// Canonical URL
 	if canonical, exists := doc.Find("link[rel='canonical']").Attr("href"); exists {
 		meta.Canonical = canonical
 	}
 
-	// Language
 	if lang, exists := doc.Find("html").Attr("lang"); exists {
 		meta.Language = lang
 	}
 
-	// Favicon
 	doc.Find("link[rel='icon'], link[rel='shortcut icon']").Each(func(i int, s *goquery.Selection) {
 		if href, exists := s.Attr("href"); exists && meta.Favicon == "" {
 			meta.Favicon = href
 		}
 	})
 
-	// JSON-LD structured data
 	doc.Find("script[type='application/ld+json']").Each(func(i int, s *goquery.Selection) {
 		meta.JSONLD = append(meta.JSONLD, s.Text())
 	})
@@ -320,25 +300,23 @@ func (t *WebExtractMetadataTool) Execute(ctx context.Context, args map[string]an
 	return meta, nil
 }
 
-// WebMetadata represents extracted page metadata
 type WebMetadata struct {
-	URL           string         `json:"url"`
-	Title         string         `json:"title,omitempty"`
-	Description   string         `json:"description,omitempty"`
-	Author        string         `json:"author,omitempty"`
-	Keywords      []string       `json:"keywords,omitempty"`
-	Canonical     string         `json:"canonical,omitempty"`
-	Language      string         `json:"language,omitempty"`
-	Favicon       string         `json:"favicon,omitempty"`
-	PublishedTime string         `json:"published_time,omitempty"`
-	ModifiedTime  string         `json:"modified_time,omitempty"`
-	Robots        string         `json:"robots,omitempty"`
-	OpenGraph     OpenGraphData  `json:"open_graph,omitempty"`
-	TwitterCard   TwitterData    `json:"twitter_card,omitempty"`
-	JSONLD        []string       `json:"json_ld,omitempty"`
+	URL           string        `json:"url"`
+	Title         string        `json:"title,omitempty"`
+	Description   string        `json:"description,omitempty"`
+	Author        string        `json:"author,omitempty"`
+	Keywords      []string      `json:"keywords,omitempty"`
+	Canonical     string        `json:"canonical,omitempty"`
+	Language      string        `json:"language,omitempty"`
+	Favicon       string        `json:"favicon,omitempty"`
+	PublishedTime string        `json:"published_time,omitempty"`
+	ModifiedTime  string        `json:"modified_time,omitempty"`
+	Robots        string        `json:"robots,omitempty"`
+	OpenGraph     OpenGraphData `json:"open_graph,omitempty"`
+	TwitterCard   TwitterData   `json:"twitter_card,omitempty"`
+	JSONLD        []string      `json:"json_ld,omitempty"`
 }
 
-// OpenGraphData contains Open Graph metadata
 type OpenGraphData struct {
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -348,7 +326,6 @@ type OpenGraphData struct {
 	SiteName    string `json:"site_name,omitempty"`
 }
 
-// TwitterData contains Twitter Card metadata
 type TwitterData struct {
 	Card        string `json:"card,omitempty"`
 	Title       string `json:"title,omitempty"`

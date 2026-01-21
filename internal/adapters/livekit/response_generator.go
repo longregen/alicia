@@ -8,46 +8,36 @@ import (
 	"time"
 )
 
-// ActiveGeneration tracks an active response generation
 type ActiveGeneration struct {
 	MessageID  string
 	CancelFunc context.CancelFunc
 	StartedAt  time.Time
 }
 
-// ResponseGenerationManager manages the lifecycle of active response generations and TTS operations
 type ResponseGenerationManager interface {
-	// Generation management
 	RegisterGeneration(messageID string, cancelFunc context.CancelFunc)
 	UnregisterGeneration(messageID string)
 	CancelGeneration(targetID string) error
 	CleanupStaleGenerations(maxAge time.Duration) int
 
-	// TTS management
 	RegisterTTS(targetID string, cancelFunc context.CancelFunc)
 	UnregisterTTS(targetID string)
 	CancelTTS(targetID string) error
 
-	// Cancel all active operations (generations and TTS)
 	CancelAll()
 }
 
-// DefaultResponseGenerationManager implements ResponseGenerationManager
 type DefaultResponseGenerationManager struct {
-	// Track active generations for cancellation
 	activeGenerations map[string]*ActiveGeneration
 	generationsMutex  sync.RWMutex
 
-	// Track active TTS operations for cancellation
 	activeTTS map[string]context.CancelFunc
 	ttsMutex  sync.RWMutex
 
-	// Background cleanup
 	cleanupStopCh chan struct{}
 	cleanupDone   chan struct{}
 }
 
-// NewDefaultResponseGenerationManager creates a new response generation manager
 func NewDefaultResponseGenerationManager() *DefaultResponseGenerationManager {
 	return &DefaultResponseGenerationManager{
 		activeGenerations: make(map[string]*ActiveGeneration),
@@ -57,7 +47,6 @@ func NewDefaultResponseGenerationManager() *DefaultResponseGenerationManager {
 	}
 }
 
-// RegisterGeneration registers an active generation for tracking
 func (m *DefaultResponseGenerationManager) RegisterGeneration(messageID string, cancelFunc context.CancelFunc) {
 	m.generationsMutex.Lock()
 	defer m.generationsMutex.Unlock()
@@ -69,7 +58,6 @@ func (m *DefaultResponseGenerationManager) RegisterGeneration(messageID string, 
 	}
 }
 
-// UnregisterGeneration removes a generation from tracking
 func (m *DefaultResponseGenerationManager) UnregisterGeneration(messageID string) {
 	m.generationsMutex.Lock()
 	defer m.generationsMutex.Unlock()
@@ -77,12 +65,10 @@ func (m *DefaultResponseGenerationManager) UnregisterGeneration(messageID string
 	delete(m.activeGenerations, messageID)
 }
 
-// CancelGeneration cancels an active generation
 func (m *DefaultResponseGenerationManager) CancelGeneration(targetID string) error {
 	m.generationsMutex.Lock()
 	defer m.generationsMutex.Unlock()
 
-	// If targetID is empty, cancel all active generations
 	if targetID == "" {
 		if len(m.activeGenerations) == 0 {
 			log.Printf("No active generations to cancel")
@@ -97,7 +83,6 @@ func (m *DefaultResponseGenerationManager) CancelGeneration(targetID string) err
 		return nil
 	}
 
-	// Cancel specific generation
 	gen, exists := m.activeGenerations[targetID]
 	if !exists {
 		log.Printf("No active generation found for target: %s", targetID)
@@ -111,8 +96,6 @@ func (m *DefaultResponseGenerationManager) CancelGeneration(targetID string) err
 	return nil
 }
 
-// CleanupStaleGenerations removes and cancels generations that have been running longer than maxAge
-// Returns the number of stale generations that were cleaned up
 func (m *DefaultResponseGenerationManager) CleanupStaleGenerations(maxAge time.Duration) int {
 	m.generationsMutex.Lock()
 	defer m.generationsMutex.Unlock()
@@ -121,14 +104,12 @@ func (m *DefaultResponseGenerationManager) CleanupStaleGenerations(maxAge time.D
 	cleanedCount := 0
 	staleIDs := make([]string, 0)
 
-	// Find all stale generations
 	for id, gen := range m.activeGenerations {
 		if now.Sub(gen.StartedAt) > maxAge {
 			staleIDs = append(staleIDs, id)
 		}
 	}
 
-	// Cancel and remove stale generations
 	for _, id := range staleIDs {
 		if gen, exists := m.activeGenerations[id]; exists {
 			log.Printf("Cleaning up stale generation: %s (age: %v)", id, now.Sub(gen.StartedAt))
@@ -145,7 +126,6 @@ func (m *DefaultResponseGenerationManager) CleanupStaleGenerations(maxAge time.D
 	return cleanedCount
 }
 
-// RegisterTTS registers an active TTS operation for tracking
 func (m *DefaultResponseGenerationManager) RegisterTTS(targetID string, cancelFunc context.CancelFunc) {
 	m.ttsMutex.Lock()
 	defer m.ttsMutex.Unlock()
@@ -153,7 +133,6 @@ func (m *DefaultResponseGenerationManager) RegisterTTS(targetID string, cancelFu
 	m.activeTTS[targetID] = cancelFunc
 }
 
-// UnregisterTTS removes a TTS operation from tracking
 func (m *DefaultResponseGenerationManager) UnregisterTTS(targetID string) {
 	m.ttsMutex.Lock()
 	defer m.ttsMutex.Unlock()
@@ -161,12 +140,10 @@ func (m *DefaultResponseGenerationManager) UnregisterTTS(targetID string) {
 	delete(m.activeTTS, targetID)
 }
 
-// CancelTTS cancels active TTS operations
 func (m *DefaultResponseGenerationManager) CancelTTS(targetID string) error {
 	m.ttsMutex.Lock()
 	defer m.ttsMutex.Unlock()
 
-	// If targetID is empty, cancel all active TTS operations
 	if targetID == "" {
 		if len(m.activeTTS) == 0 {
 			log.Printf("No active TTS operations to cancel")
@@ -181,7 +158,6 @@ func (m *DefaultResponseGenerationManager) CancelTTS(targetID string) error {
 		return nil
 	}
 
-	// Cancel specific TTS operation
 	cancel, exists := m.activeTTS[targetID]
 	if !exists {
 		log.Printf("No active TTS found for target: %s", targetID)
@@ -195,17 +171,11 @@ func (m *DefaultResponseGenerationManager) CancelTTS(targetID string) error {
 	return nil
 }
 
-// CancelAll cancels all active generations and TTS operations
-// This is used for interruption when the user starts speaking
 func (m *DefaultResponseGenerationManager) CancelAll() {
-	// Cancel all generations (passing empty string cancels all)
 	_ = m.CancelGeneration("")
-	// Cancel all TTS operations (passing empty string cancels all)
 	_ = m.CancelTTS("")
 }
 
-// StartPeriodicCleanup starts a background goroutine that periodically cleans up stale generations
-// Call StopPeriodicCleanup to stop the cleanup routine
 func (m *DefaultResponseGenerationManager) StartPeriodicCleanup(interval time.Duration, maxAge time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
@@ -229,7 +199,6 @@ func (m *DefaultResponseGenerationManager) StartPeriodicCleanup(interval time.Du
 	}()
 }
 
-// StopPeriodicCleanup stops the background cleanup routine
 func (m *DefaultResponseGenerationManager) StopPeriodicCleanup() {
 	close(m.cleanupStopCh)
 	<-m.cleanupDone

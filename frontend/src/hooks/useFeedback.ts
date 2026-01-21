@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   useFeedbackStore,
   type VotableType,
@@ -6,6 +6,26 @@ import {
   type VoteAggregates,
 } from '../stores/feedbackStore';
 import { api, type VoteResponse } from '../services/api';
+
+// Request deduplication: prevent concurrent requests for the same target
+const pendingRequests = new Map<string, Promise<VoteResponse>>();
+
+function getOrCreateRequest(
+  key: string,
+  fetcher: () => Promise<VoteResponse>
+): Promise<VoteResponse> {
+  const existing = pendingRequests.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = fetcher().finally(() => {
+    pendingRequests.delete(key);
+  });
+
+  pendingRequests.set(key, promise);
+  return promise;
+}
 
 /**
  * Unified hook for feedback operations on a specific target.
@@ -206,18 +226,37 @@ export function useFeedback(targetType: VotableType, targetId: string) {
     }
   }, [targetType, targetId, removeVote, removeVoteFromServer, updateAggregatesFromResponse]);
 
-  // Fetch aggregates on mount
+  // Track if we've already fetched for this target to avoid refetching on remount
+  const hasFetchedRef = useRef<string | null>(null);
+
+  // Fetch aggregates on mount - with caching and request deduplication
   useEffect(() => {
     if (!targetId) {
       setLoadingAggregates(false);
       return;
     }
 
+    const cacheKey = `${targetType}:${targetId}`;
+
+    // Skip fetch if we already have aggregates in the store
+    const existingAggregates = useFeedbackStore.getState().aggregates[cacheKey];
+    if (existingAggregates) {
+      setLoadingAggregates(false);
+      return;
+    }
+
+    // Skip if we already fetched for this exact target in this component instance
+    if (hasFetchedRef.current === cacheKey) {
+      return;
+    }
+
     let isMounted = true;
+    hasFetchedRef.current = cacheKey;
 
     const loadAggregates = async () => {
       try {
-        const response = await fetchAggregatesFromServer();
+        // Use deduplication to prevent concurrent requests for the same target
+        const response = await getOrCreateRequest(cacheKey, fetchAggregatesFromServer);
         if (isMounted) {
           updateAggregatesFromResponse(response);
         }
@@ -238,7 +277,7 @@ export function useFeedback(targetType: VotableType, targetId: string) {
     return () => {
       isMounted = false;
     };
-  }, [targetId, fetchAggregatesFromServer, updateAggregatesFromResponse]);
+  }, [targetType, targetId, fetchAggregatesFromServer, updateAggregatesFromResponse]);
 
   return {
     // Current state

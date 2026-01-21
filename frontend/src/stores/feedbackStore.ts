@@ -49,6 +49,10 @@ interface FeedbackStoreActions {
     targetId: string,
     aggregates: VoteAggregates
   ) => void;
+  setBatchAggregates: (
+    targetType: VotableType,
+    aggregatesMap: Record<string, VoteAggregates>
+  ) => void;
   getAggregates: (
     targetType: VotableType,
     targetId: string
@@ -128,6 +132,14 @@ export const useFeedbackStore = create<FeedbackStore>()(
       set((state) => {
         const key = getVoteKey(targetType, targetId);
         state.aggregates[key] = aggregates;
+      }),
+
+    setBatchAggregates: (targetType, aggregatesMap) =>
+      set((state) => {
+        for (const [targetId, aggregates] of Object.entries(aggregatesMap)) {
+          const key = getVoteKey(targetType, targetId);
+          state.aggregates[key] = aggregates;
+        }
       }),
 
     getAggregates: (targetType, targetId) => {

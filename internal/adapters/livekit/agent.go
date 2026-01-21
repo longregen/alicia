@@ -16,15 +16,11 @@ import (
 )
 
 const (
-	// AckTimeout is the duration to wait for an acknowledgement before retrying
-	AckTimeout = 5 * time.Second
-	// MaxRetries is the maximum number of retry attempts for unacknowledged messages
-	MaxRetries = 3
-	// WorkQueueTimeout is the maximum time to wait for work queue space before rejecting
+	AckTimeout       = 5 * time.Second
+	MaxRetries       = 3
 	WorkQueueTimeout = 100 * time.Millisecond
 )
 
-// PendingMessage tracks a message awaiting acknowledgement
 type PendingMessage struct {
 	StanzaID   int32
 	Data       []byte
@@ -194,7 +190,6 @@ func NewAgent(config *AgentConfig, callbacks ports.LiveKitAgentCallbacks) (*Agen
 	return agent, nil
 }
 
-// SetCallbacks sets the agent callbacks (useful for two-phase initialization)
 func (a *Agent) SetCallbacks(callbacks ports.LiveKitAgentCallbacks) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -469,7 +464,6 @@ func (a *Agent) GetRoom() *ports.LiveKitRoom {
 	return a.roomInfo
 }
 
-// SendMessageWithAck sends a message and tracks it for acknowledgement
 func (a *Agent) SendMessageWithAck(ctx context.Context, conversationID string, msgType protocol.MessageType, body interface{}) (int32, error) {
 	a.mu.RLock()
 	if !a.connected {
@@ -508,7 +502,6 @@ func (a *Agent) SendMessageWithAck(ctx context.Context, conversationID string, m
 	return stanzaID, nil
 }
 
-// SendAcknowledgement sends an acknowledgement for a received message
 func (a *Agent) SendAcknowledgement(ctx context.Context, conversationID string, ackedStanzaID int32) error {
 	ack := &protocol.Acknowledgement{
 		ConversationID: conversationID,
@@ -530,7 +523,6 @@ func (a *Agent) SendAcknowledgement(ctx context.Context, conversationID string, 
 	return nil
 }
 
-// SendErrorMessage sends an error message to the client
 func (a *Agent) SendErrorMessage(ctx context.Context, conversationID string, code int32, message string, severity protocol.Severity, recoverable bool, originatingStanzaID int32) error {
 	errorMsg := &protocol.ErrorMessage{
 		ConversationID: conversationID,
@@ -568,7 +560,6 @@ func (a *Agent) SendErrorMessage(ctx context.Context, conversationID string, cod
 	return nil
 }
 
-// handleAcknowledgement processes a received acknowledgement
 func (a *Agent) handleAcknowledgement(ack *protocol.Acknowledgement) {
 	a.pendingMu.Lock()
 	defer a.pendingMu.Unlock()
@@ -581,7 +572,6 @@ func (a *Agent) handleAcknowledgement(ack *protocol.Acknowledgement) {
 	}
 }
 
-// checkAckTimeouts periodically checks for messages that haven't been acknowledged
 func (a *Agent) checkAckTimeouts() {
 	defer a.wg.Done()
 	for {
@@ -596,7 +586,6 @@ func (a *Agent) checkAckTimeouts() {
 	}
 }
 
-// retryUnacknowledgedMessages retries or removes messages that haven't been acknowledged
 func (a *Agent) retryUnacknowledgedMessages() {
 	a.pendingMu.Lock()
 	defer a.pendingMu.Unlock()
@@ -632,7 +621,6 @@ func (a *Agent) retryUnacknowledgedMessages() {
 	}
 }
 
-// worker processes work items from the work queue
 func (a *Agent) worker() {
 	defer a.wg.Done()
 	for {

@@ -130,18 +130,15 @@ func (c *Client) PostMultipart(ctx context.Context, endpoint string, fields map[
 	var statusCode int
 
 	err := retry.WithBackoffHTTP(ctx, c.retryConfig, func() (int, error) {
-		// Rebuild multipart body for each retry attempt
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
 
-		// Add form fields
 		for key, val := range fields {
 			if err := writer.WriteField(key, val); err != nil {
 				return 0, fmt.Errorf("failed to write field %s: %w", key, err)
 			}
 		}
 
-		// Add file
 		if fileField != "" && fileData != nil {
 			part, err := writer.CreateFormFile(fileField, fileName)
 			if err != nil {

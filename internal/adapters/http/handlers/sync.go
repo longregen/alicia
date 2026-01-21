@@ -30,24 +30,20 @@ func NewSyncHandler(
 	}
 }
 
-// SyncMessages handles POST /api/v1/conversations/{id}/sync
 func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
 		return
 	}
 
-	// Limit request body size to prevent memory exhaustion (10MB for batch message sync)
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024) // 10MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	defer r.Body.Close()
 	conversationID, ok := validateURLParam(r, w, "id", "Conversation ID")
 	if !ok {
 		return
 	}
 
-	// Verify conversation exists, is active, and belongs to the user
 	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), conversationID, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -62,7 +58,6 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse sync request based on Content-Type
 	contentType := r.Header.Get("Content-Type")
 	var req *dto.SyncRequest
 
@@ -76,7 +71,6 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call the use case
 	output, err := h.syncMessagesUseCase.Execute(r.Context(), &ports.SyncMessagesInput{
 		ConversationID: conversationID,
 		Messages:       convertToSyncItems(req.Messages),
@@ -86,7 +80,6 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert output to response DTO
 	syncedMessages := make([]dto.SyncedMessage, 0, len(output.Results))
 	for _, result := range output.Results {
 		if result.Status == "conflict" {
@@ -100,13 +93,11 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Return sync response
 	response := &dto.SyncResponse{
 		SyncedMessages: syncedMessages,
 		SyncedAt:       output.SyncedAt.Format(time.RFC3339),
 	}
 
-	// Respond based on Accept header
 	acceptType := encoding.NegotiateContentType(r)
 	if acceptType == encoding.ContentTypeMsgpack {
 		respondMsgpack(w, response, http.StatusOK)
@@ -115,11 +106,9 @@ func (h *SyncHandler) SyncMessages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// convertToSyncItems converts request DTOs to ports.SyncMessageItem
 func convertToSyncItems(messages []dto.SyncMessageRequest) []ports.SyncMessageItem {
 	items := make([]ports.SyncMessageItem, len(messages))
 	for i, msg := range messages {
-		// Parse timestamps
 		createdAt, err := time.Parse(time.RFC3339, msg.CreatedAt)
 		if err != nil {
 			createdAt = time.Now().UTC()
@@ -145,9 +134,7 @@ func convertToSyncItems(messages []dto.SyncMessageRequest) []ports.SyncMessageIt
 	return items
 }
 
-// GetSyncStatus handles GET /api/v1/conversations/{id}/sync/status
 func (h *SyncHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
@@ -159,7 +146,6 @@ func (h *SyncHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify conversation exists and belongs to the user
 	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), conversationID, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -174,14 +160,12 @@ func (h *SyncHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get all messages to calculate status
 	messages, err := h.messageRepo.GetByConversation(r.Context(), conversationID)
 	if err != nil {
 		respondError(w, "internal_error", "Failed to retrieve messages", http.StatusInternalServerError)
 		return
 	}
 
-	// Count messages by sync status
 	var pendingCount, syncedCount, conflictCount int
 	var lastSyncedAt *time.Time
 

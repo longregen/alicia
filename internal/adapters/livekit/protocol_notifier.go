@@ -8,16 +8,12 @@ import (
 	"github.com/longregen/alicia/pkg/protocol"
 )
 
-// ProtocolNotifier implements ports.GenerationNotifier by sending protocol messages
-// via a ProtocolHandlerInterface. This allows real-time streaming of generation
-// progress to connected clients.
 type ProtocolNotifier struct {
 	ctx             context.Context
 	protocolHandler ProtocolHandlerInterface
 	idGenerator     ports.IDGenerator
 }
 
-// NewProtocolNotifier creates a new ProtocolNotifier
 func NewProtocolNotifier(
 	ctx context.Context,
 	protocolHandler ProtocolHandlerInterface,
@@ -30,7 +26,6 @@ func NewProtocolNotifier(
 	}
 }
 
-// NotifyGenerationStarted sends a StartAnswer message when generation begins
 func (n *ProtocolNotifier) NotifyGenerationStarted(messageID, previousID, conversationID string) {
 	startAnswer := &protocol.StartAnswer{
 		ID:             messageID,
@@ -49,7 +44,6 @@ func (n *ProtocolNotifier) NotifyGenerationStarted(messageID, previousID, conver
 	}
 }
 
-// NotifyThinkingSummary sends a ThinkingSummary message with what the agent is about to do
 func (n *ProtocolNotifier) NotifyThinkingSummary(messageID, conversationID string, summary string) {
 	thinkingSummary := &protocol.ThinkingSummary{
 		ID:             n.idGenerator.GenerateMessageID(),
@@ -69,7 +63,6 @@ func (n *ProtocolNotifier) NotifyThinkingSummary(messageID, conversationID strin
 	}
 }
 
-// NotifyMemoryRetrieved sends a MemoryTrace message for each retrieved memory
 func (n *ProtocolNotifier) NotifyMemoryRetrieved(messageID, conversationID string, memoryID string, content string, relevance float32) {
 	memoryTrace := &protocol.MemoryTrace{
 		ID:             n.idGenerator.GenerateMessageID(),
@@ -91,7 +84,6 @@ func (n *ProtocolNotifier) NotifyMemoryRetrieved(messageID, conversationID strin
 	}
 }
 
-// NotifyReasoningStep sends a ReasoningStep message
 func (n *ProtocolNotifier) NotifyReasoningStep(id, messageID, conversationID string, sequence int, content string) {
 	reasoningStep := &protocol.ReasoningStep{
 		ID:             id,
@@ -112,7 +104,6 @@ func (n *ProtocolNotifier) NotifyReasoningStep(id, messageID, conversationID str
 	}
 }
 
-// NotifyToolUseStart sends a ToolUseRequest message before tool execution
 func (n *ProtocolNotifier) NotifyToolUseStart(id, messageID, conversationID string, toolName string, arguments map[string]any) {
 	toolUseRequest := &protocol.ToolUseRequest{
 		ID:             id,
@@ -134,7 +125,6 @@ func (n *ProtocolNotifier) NotifyToolUseStart(id, messageID, conversationID stri
 	}
 }
 
-// NotifyToolUseComplete sends a ToolUseResult message after tool execution
 func (n *ProtocolNotifier) NotifyToolUseComplete(id, requestID, conversationID string, success bool, result any, errorMsg string) {
 	toolUseResult := &protocol.ToolUseResult{
 		ID:             id,
@@ -160,7 +150,6 @@ func (n *ProtocolNotifier) NotifyToolUseComplete(id, requestID, conversationID s
 	}
 }
 
-// NotifySentence sends an AssistantSentence message for streaming text chunks
 func (n *ProtocolNotifier) NotifySentence(id, previousID, conversationID string, sequence int, text string, isFinal bool) {
 	sentence := &protocol.AssistantSentence{
 		ID:             id,
@@ -182,13 +171,9 @@ func (n *ProtocolNotifier) NotifySentence(id, previousID, conversationID string,
 	}
 }
 
-// NotifyGenerationComplete sends a final AssistantMessage when generation completes.
-// This signals to the frontend that streaming is done and provides the final content.
 func (n *ProtocolNotifier) NotifyGenerationComplete(messageID, conversationID string, content string) {
 	log.Printf("Generation completed for message %s", messageID)
 
-	// Send the complete AssistantMessage to signal completion
-	// The frontend uses this to finalize the message state
 	assistantMsg := &protocol.AssistantMessage{
 		ID:             messageID,
 		ConversationID: conversationID,
@@ -206,11 +191,9 @@ func (n *ProtocolNotifier) NotifyGenerationComplete(messageID, conversationID st
 	}
 }
 
-// NotifyGenerationFailed logs the failure (error handling is done via the stream)
 func (n *ProtocolNotifier) NotifyGenerationFailed(messageID, conversationID string, err error) {
 	log.Printf("Generation failed for message %s: %v", messageID, err)
 
-	// Send an error message to the client
 	errorMsg := &protocol.ErrorMessage{
 		ID:             n.idGenerator.GenerateMessageID(),
 		ConversationID: conversationID,
@@ -232,5 +215,4 @@ func (n *ProtocolNotifier) NotifyGenerationFailed(messageID, conversationID stri
 	}
 }
 
-// Ensure ProtocolNotifier implements ports.GenerationNotifier
 var _ ports.GenerationNotifier = (*ProtocolNotifier)(nil)

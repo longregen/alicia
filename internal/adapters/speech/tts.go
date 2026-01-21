@@ -12,8 +12,7 @@ import (
 const (
 	defaultTTSEndpoint = "http://localhost:8000"
 	speechPath         = "/audio/speech"
-	// TTSTimeout is the maximum time to wait for TTS synthesis
-	TTSTimeout = 30 * time.Second
+	TTSTimeout         = 30 * time.Second
 )
 
 type TTSAdapter struct {
@@ -32,11 +31,10 @@ func NewTTSAdapter(endpoint string) *TTSAdapter {
 		client:       NewClient(endpoint),
 		model:        "kokoro",
 		defaultVoice: "af_sarah",
-		breaker:      circuitbreaker.New(5, 30*time.Second), // 5 failures, 30s timeout
+		breaker:      circuitbreaker.New(5, 30*time.Second),
 	}
 }
 
-// NewTTSAdapterWithModel creates a new TTS adapter with a specific model and default voice
 func NewTTSAdapterWithModel(endpoint, model, defaultVoice string) *TTSAdapter {
 	adapter := NewTTSAdapter(endpoint)
 	adapter.model = model
@@ -98,7 +96,6 @@ func (t *TTSAdapter) doSynthesize(ctx context.Context, text string, options *por
 		return nil, fmt.Errorf("TTS synthesis failed: %w", err)
 	}
 
-	// Estimate duration from audio data size
 	durationMs := estimateAudioDuration(audioData, req.ResponseFormat)
 
 	result := &ports.TTSResult{
@@ -110,7 +107,6 @@ func (t *TTSAdapter) doSynthesize(ctx context.Context, text string, options *por
 	return result, nil
 }
 
-// estimateAudioDuration calculates approximate duration in milliseconds from audio data
 func estimateAudioDuration(data []byte, format string) int64 {
 	if len(data) == 0 {
 		return 0

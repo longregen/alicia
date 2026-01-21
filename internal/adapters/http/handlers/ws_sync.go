@@ -16,7 +16,6 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// WebSocketSyncHandler handles WebSocket-based message synchronization
 type WebSocketSyncHandler struct {
 	upgrader         websocket.Upgrader
 	conversationRepo ports.ConversationRepository
@@ -25,7 +24,6 @@ type WebSocketSyncHandler struct {
 	broadcaster      *WebSocketBroadcaster
 }
 
-// NewWebSocketSyncHandler creates a new WebSocket sync handler
 func NewWebSocketSyncHandler(
 	conversationRepo ports.ConversationRepository,
 	messageRepo ports.MessageRepository,
@@ -33,7 +31,6 @@ func NewWebSocketSyncHandler(
 	broadcaster *WebSocketBroadcaster,
 	allowedOrigins []string,
 ) *WebSocketSyncHandler {
-	// Pre-build a map for faster origin lookups
 	allowedOriginsMap := make(map[string]bool)
 	for _, origin := range allowedOrigins {
 		allowedOriginsMap[origin] = true
@@ -45,13 +42,9 @@ func NewWebSocketSyncHandler(
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
-
-				// If no origin header is present (e.g., same-origin request), allow
 				if origin == "" {
 					return true
 				}
-
-				// Check if origin is in allowed list
 				return allowedOriginsMap[origin]
 			},
 		},
@@ -62,9 +55,7 @@ func NewWebSocketSyncHandler(
 	}
 }
 
-// Handle upgrades HTTP connection to WebSocket and manages message sync
 func (h *WebSocketSyncHandler) Handle(w http.ResponseWriter, r *http.Request) {
-	// Extract user ID from context
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		respondError(w, "auth_error", "User ID not found in context", http.StatusUnauthorized)
@@ -76,7 +67,6 @@ func (h *WebSocketSyncHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify conversation exists, is active, and belongs to the user
 	conversation, err := h.conversationRepo.GetByIDAndUserID(r.Context(), conversationID, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -91,7 +81,6 @@ func (h *WebSocketSyncHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upgrade connection to WebSocket
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade WebSocket connection: %v", err)
@@ -99,43 +88,35 @@ func (h *WebSocketSyncHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Subscribe to conversation broadcasts
 	h.broadcaster.Subscribe(conversationID, conn)
 	defer h.broadcaster.Unsubscribe(conversationID, conn)
 
 	log.Printf("WebSocket connection established for conversation %s (user %s)", conversationID, userID)
 
-	// Set up context with cancellation
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Use WaitGroup to coordinate goroutines
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Start read pump (reads messages from client)
 	go func() {
 		defer wg.Done()
 		h.readPump(ctx, conn, conversationID)
-		cancel() // Cancel context when read pump exits
+		cancel()
 	}()
 
-	// Start write pump (sends heartbeats and responses)
 	go func() {
 		defer wg.Done()
 		h.writePump(ctx, conn, conversationID)
 	}()
 
-	// Wait for both pumps to finish
 	wg.Wait()
 	log.Printf("WebSocket connection closed for conversation %s", conversationID)
 }
 
-// readPump reads messages from the WebSocket connection
 func (h *WebSocketSyncHandler) readPump(ctx context.Context, conn *websocket.Conn, conversationID string) {
 	defer conn.Close()
 
-	// Set read deadline
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -149,7 +130,6 @@ func (h *WebSocketSyncHandler) readPump(ctx context.Context, conn *websocket.Con
 		default:
 		}
 
-		// Read message
 		messageType, data, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -163,7 +143,6 @@ func (h *WebSocketSyncHandler) readPump(ctx context.Context, conn *websocket.Con
 			continue
 		}
 
-		// Decode MessagePack message
 		var syncReq dto.SyncRequest
 		if err := msgpack.Unmarshal(data, &syncReq); err != nil {
 			log.Printf("Failed to decode MessagePack: %v", err)
@@ -171,10 +150,8 @@ func (h *WebSocketSyncHandler) readPump(ctx context.Context, conn *websocket.Con
 			continue
 		}
 
-		// Process sync request
 		response := h.processSyncRequest(ctx, conversationID, &syncReq)
 
-		// Send response
 		responseData, err := msgpack.Marshal(response)
 		if err != nil {
 			log.Printf("Failed to encode response: %v", err)
@@ -188,7 +165,6 @@ func (h *WebSocketSyncHandler) readPump(ctx context.Context, conn *websocket.Con
 	}
 }
 
-// writePump sends periodic ping messages to keep the connection alive
 func (h *WebSocketSyncHandler) writePump(ctx context.Context, conn *websocket.Conn, conversationID string) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -207,7 +183,6 @@ func (h *WebSocketSyncHandler) writePump(ctx context.Context, conn *websocket.Co
 	}
 }
 
-// processSyncRequest processes a sync request and returns the response
 func (h *WebSocketSyncHandler) processSyncRequest(ctx context.Context, conversationID string, req *dto.SyncRequest) *dto.SyncResponse {
 	syncedMessages := make([]dto.SyncedMessage, 0, len(req.Messages))
 
@@ -230,9 +205,7 @@ func (h *WebSocketSyncHandler) processSyncRequest(ctx context.Context, conversat
 	}
 }
 
-// processMessage processes a single message sync request
 func (h *WebSocketSyncHandler) processMessage(ctx context.Context, conversationID string, msgReq dto.SyncMessageRequest) (dto.SyncedMessage, error) {
-	// Validation
 	if msgReq.LocalID == "" {
 		return dto.ToSyncedMessageWithConflict(
 			msgReq.LocalID,
@@ -249,19 +222,16 @@ func (h *WebSocketSyncHandler) processMessage(ctx context.Context, conversationI
 		), nil
 	}
 
-	// Check if message with this local ID already exists
 	existingMsg, err := h.messageRepo.GetByLocalID(ctx, msgReq.LocalID)
 	if err != nil && err != pgx.ErrNoRows {
 		return dto.SyncedMessage{}, err
 	}
 
-	// If message already exists, check for conflicts
 	if existingMsg != nil {
 		if existingMsg.Contents == msgReq.Contents {
 			return dto.ToSyncedMessage(existingMsg), nil
 		}
 
-		// Content differs - conflict detected
 		existingMsg.MarkAsConflict()
 		if err := h.messageRepo.Update(ctx, existingMsg); err != nil {
 			return dto.SyncedMessage{}, err
@@ -274,10 +244,8 @@ func (h *WebSocketSyncHandler) processMessage(ctx context.Context, conversationI
 		), nil
 	}
 
-	// Create new message
 	serverID := h.idGen.GenerateMessageID()
 
-	// Parse timestamps
 	createdAt, err := time.Parse(time.RFC3339, msgReq.CreatedAt)
 	if err != nil {
 		createdAt = time.Now()
@@ -290,7 +258,6 @@ func (h *WebSocketSyncHandler) processMessage(ctx context.Context, conversationI
 		}
 	}
 
-	// Create message with sync tracking
 	message := &models.Message{
 		ID:               serverID,
 		ConversationID:   conversationID,
@@ -306,23 +273,19 @@ func (h *WebSocketSyncHandler) processMessage(ctx context.Context, conversationI
 		UpdatedAt:        updatedAt,
 	}
 
-	// Mark as synced
 	now := time.Now()
 	message.SyncedAt = &now
 
-	// Save to database
 	if err := h.messageRepo.Create(ctx, message); err != nil {
 		return dto.SyncedMessage{}, err
 	}
 
-	// Broadcast to other WebSocket clients
 	messageResponse := (&dto.MessageResponse{}).FromModel(message)
 	h.broadcaster.BroadcastMessage(conversationID, messageResponse)
 
 	return dto.ToSyncedMessage(message), nil
 }
 
-// sendError sends an error message to the WebSocket client
 func (h *WebSocketSyncHandler) sendError(conn *websocket.Conn, errorType, message string) {
 	errorResp := dto.NewErrorResponse(errorType, message, http.StatusBadRequest)
 	data, err := msgpack.Marshal(errorResp)

@@ -12,8 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/longregen/alicia/internal/adapters/id"
 	"github.com/longregen/alicia/internal/adapters/postgres"
+	"github.com/longregen/alicia/internal/application/usecases"
 	"github.com/longregen/alicia/internal/domain/models"
-	"github.com/longregen/alicia/internal/llm"
+	"github.com/longregen/alicia/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -36,9 +37,37 @@ Provide a conversation ID to continue an existing conversation, or omit it to cr
 			}
 			defer pool.Close()
 
+			// Initialize repositories
 			conversationRepo := postgres.NewConversationRepository(pool)
 			messageRepo := postgres.NewMessageRepository(pool)
 			idGen := id.New()
+			txManager := postgres.NewTransactionManager(pool)
+
+			// Create use cases using the same path as serve/agent
+			simpleGenerateResponse := usecases.NewSimpleGenerateResponse(
+				messageRepo,
+				conversationRepo,
+				llmClient,
+				idGen,
+			)
+
+			processUserMessage := usecases.NewProcessUserMessage(
+				messageRepo,
+				nil, // audioRepo - not needed for text chat
+				conversationRepo,
+				nil, // asrService - not needed for text chat
+				nil, // memoryService - optional
+				idGen,
+				txManager,
+			)
+
+			sendMessage := usecases.NewSendMessage(
+				conversationRepo,
+				messageRepo,
+				processUserMessage,
+				simpleGenerateResponse,
+				txManager,
+			)
 
 			var conversation *models.Conversation
 
@@ -89,69 +118,35 @@ Provide a conversation ID to continue an existing conversation, or omit it to cr
 					break
 				}
 
-				// Get next sequence number
-				seqNum, err := messageRepo.GetNextSequenceNumber(ctx, conversation.ID)
+				// Use SendMessage use case - same path as HTTP API and agent
+				input := &ports.SendMessageInput{
+					ConversationID:  conversation.ID,
+					TextContent:     userInput,
+					EnableStreaming: true,
+				}
+
+				output, err := sendMessage.Execute(ctx, input)
 				if err != nil {
-					return fmt.Errorf("failed to get sequence number: %w", err)
+					fmt.Printf("Error: %v\n", err)
+					continue
 				}
 
-				// Create and save user message
-				userMessage := models.NewUserMessage(idGen.GenerateMessageID(), conversation.ID, seqNum, userInput)
-				if err := messageRepo.Create(ctx, userMessage); err != nil {
-					return fmt.Errorf("failed to save user message: %w", err)
-				}
-
-				// Get conversation history for LLM
-				messages, err := messageRepo.GetByConversation(ctx, conversation.ID)
-				if err != nil {
-					return fmt.Errorf("failed to get message history: %w", err)
-				}
-
-				// Convert to LLM format
-				llmMessages := make([]llm.ChatMessage, 0, len(messages))
-				for _, msg := range messages {
-					llmMessages = append(llmMessages, llm.ChatMessage{
-						Role:    string(msg.Role),
-						Content: msg.Contents,
-					})
-				}
-
-				// Stream response from LLM
+				// Stream the response
 				fmt.Print("Alicia: ")
-				responseChunks, err := llmClient.ChatStream(ctx, llmMessages)
-				if err != nil {
-					return fmt.Errorf("failed to get LLM response: %w", err)
-				}
-
-				var fullResponse strings.Builder
-				for chunk := range responseChunks {
-					if chunk.Error != nil {
-						return fmt.Errorf("error during streaming: %w", chunk.Error)
+				if output.StreamChannel != nil {
+					for chunk := range output.StreamChannel {
+						if chunk.Error != nil {
+							fmt.Printf("\nError: %v\n", chunk.Error)
+							break
+						}
+						if chunk.Text != "" {
+							fmt.Print(chunk.Text)
+						}
 					}
-					if chunk.Content != "" {
-						fmt.Print(chunk.Content)
-						fullResponse.WriteString(chunk.Content)
-					}
+				} else if output.AssistantMessage != nil {
+					fmt.Print(output.AssistantMessage.Contents)
 				}
 				fmt.Println()
-
-				// Get next sequence number for assistant message
-				seqNum, err = messageRepo.GetNextSequenceNumber(ctx, conversation.ID)
-				if err != nil {
-					return fmt.Errorf("failed to get sequence number: %w", err)
-				}
-
-				// Save assistant response
-				assistantMessage := models.NewAssistantMessage(
-					idGen.GenerateMessageID(),
-					conversation.ID,
-					seqNum,
-					fullResponse.String(),
-				)
-				if err := messageRepo.Create(ctx, assistantMessage); err != nil {
-					return fmt.Errorf("failed to save assistant message: %w", err)
-				}
-
 				fmt.Println()
 			}
 
