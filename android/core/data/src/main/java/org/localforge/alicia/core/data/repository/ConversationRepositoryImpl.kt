@@ -27,9 +27,6 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Implementation of ConversationRepository that combines local (Room) and remote (API) data sources.
- */
 @Singleton
 class ConversationRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -39,8 +36,6 @@ class ConversationRepositoryImpl @Inject constructor(
 ) : ConversationRepository {
 
     private val logger = Logger.forTag("ConversationRepository")
-
-    // ========== Conversation Operations ==========
 
     override fun getAllConversations(): Flow<List<Conversation>> {
         return conversationDao.getAllConversations()
@@ -123,11 +118,9 @@ class ConversationRepositoryImpl @Inject constructor(
                     UpdateConversationRequest(title = title)
                 )
             } catch (e: Exception) {
-                // Network errors are expected in offline-first mode; log and proceed with local update
                 logger.w("Failed to update conversation $conversationId on server, proceeding with local update", e)
             }
 
-            // Update local database
             val updated = conversation.copy(
                 title = title,
                 updatedAt = System.currentTimeMillis()
@@ -152,11 +145,9 @@ class ConversationRepositoryImpl @Inject constructor(
                     UpdateConversationRequest(status = ConversationStatus.ARCHIVED.value)
                 )
             } catch (e: Exception) {
-                // Network errors are expected in offline-first mode; log and proceed with local update
                 logger.w("Failed to archive conversation $conversationId on server, proceeding with local update", e)
             }
 
-            // Update local database
             val updated = conversation.copy(
                 status = ConversationStatus.ARCHIVED.value,
                 updatedAt = System.currentTimeMillis()
@@ -181,11 +172,9 @@ class ConversationRepositoryImpl @Inject constructor(
                     UpdateConversationRequest(status = ConversationStatus.ACTIVE.value)
                 )
             } catch (e: Exception) {
-                // Network errors are expected in offline-first mode; log and proceed with local update
                 logger.w("Failed to unarchive conversation $conversationId on server, proceeding with local update", e)
             }
 
-            // Update local database
             val updated = conversation.copy(
                 status = ConversationStatus.ACTIVE.value,
                 updatedAt = System.currentTimeMillis()
@@ -200,15 +189,12 @@ class ConversationRepositoryImpl @Inject constructor(
 
     override suspend fun deleteConversation(conversationId: String): Result<Unit> {
         return try {
-            // Delete from server
             try {
                 apiService.deleteConversation(conversationId)
             } catch (e: Exception) {
-                // Network errors are expected in offline-first mode; log and proceed with local deletion
                 logger.w("Failed to delete conversation $conversationId from server, proceeding with local deletion", e)
             }
 
-            // Delete from local database (cascade will delete messages too)
             conversationDao.deleteConversation(conversationId)
 
             Result.success(Unit)
@@ -228,16 +214,11 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getConversationCount(): Int {
-        return try {
-            conversationDao.getConversationCount()
-        } catch (e: Exception) {
-            0
-        }
+        return conversationDao.getConversationCount()
     }
 
     override suspend fun getConversationToken(conversationId: String): Result<org.localforge.alicia.core.domain.model.TokenResponse> {
         return try {
-            // Use persistent device ID instead of random timestamp
             val participantId = DeviceId.getParticipantId(context)
 
             val request = org.localforge.alicia.core.network.model.GenerateTokenRequest(
@@ -256,26 +237,19 @@ class ConversationRepositoryImpl @Inject constructor(
         }
     }
 
-    // ========== Message Operations ==========
-
     override fun getMessagesForConversation(conversationId: String): Flow<List<Message>> {
         return messageDao.getMessagesForConversation(conversationId)
             .map { entities -> entities.toDomain() }
     }
 
     override suspend fun getMessageById(messageId: String): Message? {
-        return try {
-            messageDao.getMessageById(messageId)?.toDomain()
-        } catch (e: Exception) {
-            null
-        }
+        return messageDao.getMessageById(messageId)?.toDomain()
     }
 
     override suspend fun insertMessage(message: Message): Result<Unit> {
         return try {
             messageDao.insertMessage(message.toEntity())
 
-            // Update conversation timestamp
             val conversation = conversationDao.getConversationByIdSuspend(message.conversationId)
             if (conversation != null) {
                 conversationDao.updateConversation(
@@ -318,24 +292,15 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getLastMessages(conversationId: String, limit: Int): List<Message> {
-        return try {
-            messageDao.getLastMessages(conversationId, limit).toDomain()
-        } catch (e: Exception) {
-            emptyList()
-        }
+        return messageDao.getLastMessages(conversationId, limit).toDomain()
     }
 
     override suspend fun getMessageCount(conversationId: String): Int {
-        return try {
-            messageDao.getMessageCount(conversationId)
-        } catch (e: Exception) {
-            0
-        }
+        return messageDao.getMessageCount(conversationId)
     }
 
     override suspend fun sendTextMessage(conversationId: String, content: String): Result<Message> {
         return try {
-            // Send message to server
             val request = org.localforge.alicia.core.network.model.SendMessageRequest(contents = content)
             val response = apiService.sendMessage(conversationId, request)
 
@@ -343,10 +308,8 @@ class ConversationRepositoryImpl @Inject constructor(
                 val messageResponse = response.body()!!
                 val message = messageResponse.toDomain()
 
-                // Save to local database
                 messageDao.insertMessage(message.toEntity())
 
-                // Update conversation timestamp
                 val conversation = conversationDao.getConversationByIdSuspend(conversationId)
                 if (conversation != null) {
                     conversationDao.updateConversation(
@@ -362,8 +325,6 @@ class ConversationRepositoryImpl @Inject constructor(
             Result.failure(e)
         }
     }
-
-    // ========== Branch/Sibling Operations ==========
 
     override suspend fun getMessageSiblings(messageId: String): Result<List<Message>> {
         return try {
@@ -398,11 +359,6 @@ class ConversationRepositoryImpl @Inject constructor(
         }
     }
 
-    // ========== Search Operations ==========
-
-    /**
-     * Search messages across all conversations using database query. See MessageDao.searchMessages() for search implementation details.
-     */
     override fun searchMessages(query: String): Flow<List<Message>> {
         return messageDao.searchMessages(query)
             .map { entities -> entities.toDomain() }
@@ -412,7 +368,6 @@ class ConversationRepositoryImpl @Inject constructor(
         conversationId: String,
         query: String
     ): Flow<List<Message>> {
-        // Client-side filter: searches messages by substring match (case-insensitive). Unlike searchMessages(), this filters in-memory rather than using a database query.
         return messageDao.getMessagesForConversation(conversationId)
             .map { entities ->
                 entities.filter { it.content.contains(query, ignoreCase = true) }
@@ -420,14 +375,8 @@ class ConversationRepositoryImpl @Inject constructor(
             }
     }
 
-    // ========== Sync Operations ==========
-
     override suspend fun getUnsyncedMessages(): List<Message> {
-        return try {
-            messageDao.getPendingMessages().toDomain()
-        } catch (e: Exception) {
-            emptyList()
-        }
+        return messageDao.getPendingMessages().toDomain()
     }
 
     override suspend fun markMessageSynced(messageId: String) {
@@ -466,11 +415,7 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getUnsyncedConversations(): List<Conversation> {
-        return try {
-            conversationDao.getUnsyncedConversations().toDomain()
-        } catch (e: Exception) {
-            emptyList()
-        }
+        return conversationDao.getUnsyncedConversations().toDomain()
     }
 
     override suspend fun markConversationSynced(conversationId: String) {
@@ -488,18 +433,15 @@ class ConversationRepositoryImpl @Inject constructor(
 
     override suspend fun syncWithServer(): Result<Unit> {
         return try {
-            // Fetch conversations from server
             val conversationsResponse = apiService.getConversations()
 
             if (conversationsResponse.isSuccessful && conversationsResponse.body() != null) {
                 val conversationListResponse = conversationsResponse.body()!!
                 val conversations = conversationListResponse.conversations
 
-                // Save to local database
                 val conversationEntities = conversations.map { it.toEntity() }
                 conversationDao.insertConversations(conversationEntities)
 
-                // Sync messages for each conversation using bidirectional sync protocol
                 for (conversation in conversations) {
                     syncConversationMessages(conversation.id)
                 }
@@ -511,18 +453,12 @@ class ConversationRepositoryImpl @Inject constructor(
         }
     }
 
-    /**
-     * Sync messages for a specific conversation using bidirectional sync protocol.
-     * Matches the web frontend implementation in useSync.ts.
-     */
     private suspend fun syncConversationMessages(conversationId: String): Result<Unit> {
         return try {
-            // Step 1: Get all local messages for the conversation
             val localMessages = messageDao.getMessagesForConversation(conversationId)
                 .map { entities -> entities.toDomain() }
-                .first() // Get current state for sync request
+                .first()
 
-            // Step 2: Build sync request with local message state
             val syncItems = localMessages.map { message ->
                 SyncMessageItem(
                     localId = message.localId ?: message.id,
@@ -537,26 +473,21 @@ class ConversationRepositoryImpl @Inject constructor(
 
             val syncRequest = SyncMessagesRequest(messages = syncItems)
 
-            // Step 3: Call sync API endpoint (POST)
             val syncResponse = apiService.syncMessages(conversationId, syncRequest)
 
             if (syncResponse.isSuccessful && syncResponse.body() != null) {
                 val result = syncResponse.body()!!
                 val syncedAt = parseTimestamp(result.syncedAt)
 
-                // Step 4: Process SyncResponse and update message sync status
                 result.syncedMessages.forEach { syncedMessage ->
                     when (syncedMessage.status) {
                         "synced" -> {
-                            // Message was synced successfully
                             val message = syncedMessage.message
                             if (message != null) {
-                                // Insert or update the server message
                                 val serverMessage = message.toDomain()
                                 messageDao.insertMessage(serverMessage.toEntity())
                             }
 
-                            // Update sync status for local message
                             messageDao.updateSyncStatus(
                                 localId = syncedMessage.localId,
                                 serverId = syncedMessage.serverId,
@@ -565,7 +496,6 @@ class ConversationRepositoryImpl @Inject constructor(
                             )
                         }
                         "conflict" -> {
-                            // Handle conflicts: use server version as authoritative
                             val conflict = syncedMessage.conflict
                             if (conflict != null) {
                                 val serverMessage = conflict.serverMessage
@@ -574,7 +504,6 @@ class ConversationRepositoryImpl @Inject constructor(
                                     messageDao.insertMessage(domainMessage.toEntity())
                                 }
 
-                                // Mark local message as conflict
                                 messageDao.updateSyncStatus(
                                     localId = syncedMessage.localId,
                                     serverId = null,
@@ -582,19 +511,15 @@ class ConversationRepositoryImpl @Inject constructor(
                                     syncedAt = syncedAt
                                 )
 
-                                // Log conflict for debugging
                                 logger.w("Sync conflict for message ${syncedMessage.localId}: ${conflict.reason}")
                             }
                         }
                         "local-only" -> {
-                            // Message exists only locally, keep pending status
-                            // No action needed - will be synced in next round
-                            logger.d("Message ${syncedMessage.localId} exists only locally, keeping pending status for next sync")
+                            logger.d("Message ${syncedMessage.localId} exists only locally")
                         }
                     }
                 }
 
-                // Update conversation sync timestamp
                 markConversationSynced(conversationId)
             }
 

@@ -10,14 +10,6 @@ import org.localforge.alicia.core.domain.model.MemoryCategory
 import org.localforge.alicia.core.domain.repository.MemoryRepository
 import javax.inject.Inject
 
-/**
- * ViewModel for the MemoryScreen.
- *
- * Manages:
- * - Memory list with filtering and search
- * - Memory CRUD operations
- * - Editor state
- */
 @HiltViewModel
 class MemoryViewModel @Inject constructor(
     private val memoryRepository: MemoryRepository
@@ -40,13 +32,11 @@ class MemoryViewModel @Inject constructor(
     private val _editingMemory = MutableStateFlow<Memory?>(null)
     val editingMemory: StateFlow<Memory?> = _editingMemory.asStateFlow()
 
-    // Expose memories for detail screen access
     val memories: StateFlow<List<Memory>> = _memories.asStateFlow()
 
     private val _isEditorOpen = MutableStateFlow(false)
     val isEditorOpen: StateFlow<Boolean> = _isEditorOpen.asStateFlow()
 
-    // Combined filtered memories
     val filteredMemories: StateFlow<List<Memory>> = combine(
         _memories,
         _searchQuery,
@@ -54,9 +44,7 @@ class MemoryViewModel @Inject constructor(
     ) { memories, query, category ->
         memories
             .filter { memory ->
-                // Filter by category
                 (category == null || memory.category == category) &&
-                // Filter by search query
                 (query.isEmpty() || memory.content.contains(query, ignoreCase = true))
             }
             .sortedWith(
@@ -84,7 +72,7 @@ class MemoryViewModel @Inject constructor(
                     }
             } catch (e: Exception) {
                 _isLoading.value = false
-                // Handle error
+                _errorMessage.value = e.message ?: "Failed to load memories"
             }
         }
     }
@@ -118,7 +106,7 @@ class MemoryViewModel @Inject constructor(
                 }
                 closeEditor()
             } catch (e: Exception) {
-                // Handle error
+                _errorMessage.value = e.message ?: "Failed to save memory"
             }
         }
     }
@@ -131,7 +119,7 @@ class MemoryViewModel @Inject constructor(
                     memoryRepository.pinMemory(memoryId, !memory.pinned)
                 }
             } catch (e: Exception) {
-                // Handle error
+                _errorMessage.value = e.message ?: "Failed to update pin status"
             }
         }
     }
@@ -141,7 +129,7 @@ class MemoryViewModel @Inject constructor(
             try {
                 memoryRepository.archiveMemory(memoryId)
             } catch (e: Exception) {
-                // Handle error
+                _errorMessage.value = e.message ?: "Failed to archive memory"
             }
         }
     }
@@ -156,9 +144,6 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Load a specific memory by ID (for detail screen)
-     */
     fun loadMemory(memoryId: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -166,7 +151,6 @@ class MemoryViewModel @Inject constructor(
             try {
                 val memory = memoryRepository.getMemory(memoryId)
                 if (memory != null) {
-                    // Add to memories list if not present
                     _memories.update { current ->
                         if (current.none { it.id == memoryId }) {
                             current + memory
@@ -185,9 +169,6 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Toggle pin status for a memory
-     */
     fun togglePinMemory(memoryId: String) {
         viewModelScope.launch {
             try {
@@ -201,18 +182,10 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Clear any error message
-     */
     fun clearError() {
         _errorMessage.value = null
     }
 
-    // ========== Tag Operations (matching web frontend) ==========
-
-    /**
-     * Add tags to a memory
-     */
     fun addTags(memoryId: String, tags: List<String>) {
         viewModelScope.launch {
             try {
@@ -231,9 +204,6 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Remove a tag from a memory
-     */
     fun removeTag(memoryId: String, tag: String) {
         viewModelScope.launch {
             try {
@@ -252,11 +222,6 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
-    // ========== Importance Operations (matching web frontend) ==========
-
-    /**
-     * Set memory importance (0.0 - 1.0)
-     */
     fun setImportance(memoryId: String, importance: Double) {
         viewModelScope.launch {
             try {
@@ -275,11 +240,6 @@ class MemoryViewModel @Inject constructor(
         }
     }
 
-    // ========== Server-side Search (matching web frontend) ==========
-
-    /**
-     * Search memories on server with semantic search
-     */
     fun searchOnServer(query: String, limit: Int = 10) {
         viewModelScope.launch {
             _isLoading.value = true

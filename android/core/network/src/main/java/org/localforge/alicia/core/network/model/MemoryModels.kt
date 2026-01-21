@@ -3,9 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Request to create a new memory
- */
 @JsonClass(generateAdapter = true)
 data class CreateMemoryRequest(
     @Json(name = "content")
@@ -15,45 +12,30 @@ data class CreateMemoryRequest(
     val category: String
 )
 
-/**
- * Request to update a memory
- */
 @JsonClass(generateAdapter = true)
 data class UpdateMemoryRequest(
     @Json(name = "content")
     val content: String
 )
 
-/**
- * Request to add tags to a memory
- */
 @JsonClass(generateAdapter = true)
 data class AddMemoryTagsRequest(
     @Json(name = "tags")
     val tags: List<String>
 )
 
-/**
- * Request to pin/unpin a memory
- */
 @JsonClass(generateAdapter = true)
 data class PinMemoryRequest(
     @Json(name = "pinned")
     val pinned: Boolean
 )
 
-/**
- * Request to set memory importance
- */
 @JsonClass(generateAdapter = true)
 data class SetMemoryImportanceRequest(
     @Json(name = "importance")
     val importance: Int
 )
 
-/**
- * Request to search memories
- */
 @JsonClass(generateAdapter = true)
 data class SearchMemoriesRequest(
     @Json(name = "query")
@@ -63,9 +45,6 @@ data class SearchMemoriesRequest(
     val limit: Int = 10
 )
 
-/**
- * Response model for a single memory
- */
 @JsonClass(generateAdapter = true)
 data class MemoryResponse(
     @Json(name = "id")
@@ -96,9 +75,6 @@ data class MemoryResponse(
     val updatedAt: Long
 )
 
-/**
- * Response model for memory list
- */
 @JsonClass(generateAdapter = true)
 data class MemoryListResponse(
     @Json(name = "memories")
@@ -108,9 +84,6 @@ data class MemoryListResponse(
     val total: Int
 )
 
-/**
- * Memory categories
- */
 object MemoryCategory {
     const val PREFERENCE = "preference"
     const val FACT = "fact"

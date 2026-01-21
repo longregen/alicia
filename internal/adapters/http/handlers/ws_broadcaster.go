@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/longregen/alicia/internal/adapters/http/dto"
 	"github.com/longregen/alicia/internal/domain/models"
-	"github.com/longregen/alicia/internal/ports"
 	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -150,72 +149,6 @@ func (b *WebSocketBroadcaster) BroadcastConversationUpdate(conversation *models.
 	}
 
 	b.BroadcastBinary(conversation.ID, data)
-}
-
-// BroadcastOptimizationProgress broadcasts optimization progress to all subscribed clients
-// This broadcasts to all connections since optimization progress is a global event
-// (unlike conversation-specific messages)
-func (b *WebSocketBroadcaster) BroadcastOptimizationProgress(runID string, progress ports.OptimizationProgressUpdate) {
-	// Create the protocol message
-	progressMsg := protocol.OptimizationProgress{
-		RunID:           progress.RunID,
-		Status:          progress.Status,
-		Iteration:       int32(progress.Iteration),
-		MaxIterations:   int32(progress.MaxIterations),
-		CurrentScore:    progress.CurrentScore,
-		BestScore:       progress.BestScore,
-		DimensionScores: progress.DimensionScores,
-		Message:         progress.Message,
-		Timestamp:       progress.Timestamp,
-	}
-
-	// Create envelope with the optimization progress message
-	envelope := protocol.Envelope{
-		Type: protocol.TypeOptimizationProgress,
-		Body: progressMsg,
-	}
-
-	// Encode to MessagePack
-	data, err := msgpack.Marshal(envelope)
-	if err != nil {
-		log.Printf("Failed to encode optimization progress for WebSocket broadcast: %v", err)
-		return
-	}
-
-	// Broadcast to all connected clients
-	// Optimization progress is a global event, so we broadcast to all conversations
-	b.broadcastToAll(data)
-
-	log.Printf("Broadcasted optimization progress for run %s (iteration %d/%d, status: %s)",
-		runID, progress.Iteration, progress.MaxIterations, progress.Status)
-}
-
-// broadcastToAll broadcasts data to all connected WebSocket clients
-func (b *WebSocketBroadcaster) broadcastToAll(data []byte) {
-	b.mu.RLock()
-	// Collect all unique connections across all conversations
-	allConns := make(map[*websocket.Conn]struct{})
-	for _, conns := range b.connections {
-		for conn := range conns {
-			allConns[conn] = struct{}{}
-		}
-	}
-	b.mu.RUnlock()
-
-	if len(allConns) == 0 {
-		return
-	}
-
-	// Broadcast to all connections
-	for conn := range allConns {
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
-			log.Printf("Failed to broadcast optimization progress to WebSocket connection: %v", err)
-			// Note: we don't unsubscribe here since we don't know which conversation
-			// the connection belongs to. The connection will be cleaned up on next
-			// conversation-specific operation.
-		}
-	}
 }
 
 // SubscribeAgent registers the agent's WebSocket connection for receiving ResponseGenerationRequests

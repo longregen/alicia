@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * Dimension weights for optimization
- */
 data class DimensionWeights(
     val successRate: Float,
     val quality: Float,
@@ -13,9 +10,6 @@ data class DimensionWeights(
     val innovation: Float
 )
 
-/**
- * Dimension scores
- */
 data class DimensionScores(
     val successRate: Float,
     val quality: Float,
@@ -26,9 +20,6 @@ data class DimensionScores(
     val innovation: Float
 )
 
-/**
- * Dimension preset
- */
 enum class DimensionPreset(val value: String) {
     ACCURACY("accuracy"),
     SPEED("speed"),
@@ -41,9 +32,6 @@ enum class DimensionPreset(val value: String) {
     }
 }
 
-/**
- * Dimension preference body (Type 30)
- */
 data class DimensionPreferenceBody(
     val conversationId: String,
     val weights: DimensionWeights,
@@ -51,9 +39,6 @@ data class DimensionPreferenceBody(
     val timestamp: Long
 )
 
-/**
- * Elite summary
- */
 data class EliteSummary(
     val id: String,
     val label: String,
@@ -62,9 +47,6 @@ data class EliteSummary(
     val bestFor: String
 )
 
-/**
- * Elite options body (Type 31)
- */
 data class EliteOptionsBody(
     val conversationId: String,
     val elites: List<EliteSummary>,
@@ -72,9 +54,6 @@ data class EliteOptionsBody(
     val timestamp: Long
 )
 
-/**
- * Optimization status
- */
 enum class OptimizationStatus(val value: String) {
     PENDING("pending"),
     RUNNING("running"),
@@ -86,9 +65,6 @@ enum class OptimizationStatus(val value: String) {
     }
 }
 
-/**
- * Optimization progress body (Type 32)
- */
 data class OptimizationProgressBody(
     val runId: String,
     val status: OptimizationStatus,
@@ -101,9 +77,6 @@ data class OptimizationProgressBody(
     val timestamp: Long
 )
 
-/**
- * Elite select body (Type 33)
- */
 data class EliteSelectBody(
     val conversationId: String,
     val eliteId: String,

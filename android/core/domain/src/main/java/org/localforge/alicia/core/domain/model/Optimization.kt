@@ -1,10 +1,5 @@
 package org.localforge.alicia.core.domain.model
 
-/**
- * Dimension weights for Pareto optimization.
- * Each weight represents the importance of a dimension in the optimization process.
- * All weights should sum to 1.0.
- */
 data class DimensionWeights(
     val successRate: Float = 0.25f,
     val quality: Float = 0.2f,
@@ -14,9 +9,6 @@ data class DimensionWeights(
     val diversity: Float = 0.1f,
     val innovation: Float = 0.05f
 ) {
-    /**
-     * Normalize weights to sum to 1.0
-     */
     fun normalize(): DimensionWeights {
         val sum = successRate + quality + efficiency + robustness +
                   generalization + diversity + innovation
@@ -47,9 +39,6 @@ data class DimensionWeights(
     }
 }
 
-/**
- * Preset ID for response style presets.
- */
 enum class PresetId {
     ACCURACY,
     SPEED,
@@ -58,9 +47,6 @@ enum class PresetId {
     BALANCED
 }
 
-/**
- * A preset configuration for response style.
- */
 data class PivotPreset(
     val id: PresetId,
     val label: String,
@@ -69,18 +55,12 @@ data class PivotPreset(
     val description: String
 )
 
-/**
- * Dimension configuration for UI display.
- */
 data class DimensionConfig(
     val key: DimensionKey,
     val label: String,
     val icon: String
 )
 
-/**
- * Keys for accessing dimension weights.
- */
 enum class DimensionKey {
     SUCCESS_RATE,
     QUALITY,
@@ -91,9 +71,6 @@ enum class DimensionKey {
     INNOVATION
 }
 
-/**
- * Default pivot presets matching the web frontend.
- */
 object PivotPresets {
     val ACCURACY = PivotPreset(
         id = PresetId.ACCURACY,
@@ -186,9 +163,6 @@ object PivotPresets {
     }
 }
 
-/**
- * Dimension configurations for UI.
- */
 object DimensionConfigs {
     val ALL = listOf(
         DimensionConfig(DimensionKey.SUCCESS_RATE, "Accuracy", "✓"),
@@ -201,9 +175,6 @@ object DimensionConfigs {
     )
 }
 
-/**
- * Get dimension value from weights by key.
- */
 fun DimensionWeights.getByKey(key: DimensionKey): Float = when (key) {
     DimensionKey.SUCCESS_RATE -> successRate
     DimensionKey.QUALITY -> quality
@@ -214,9 +185,6 @@ fun DimensionWeights.getByKey(key: DimensionKey): Float = when (key) {
     DimensionKey.INNOVATION -> innovation
 }
 
-/**
- * Create new weights with a specific dimension updated.
- */
 fun DimensionWeights.withKey(key: DimensionKey, value: Float): DimensionWeights = when (key) {
     DimensionKey.SUCCESS_RATE -> copy(successRate = value)
     DimensionKey.QUALITY -> copy(quality = value)

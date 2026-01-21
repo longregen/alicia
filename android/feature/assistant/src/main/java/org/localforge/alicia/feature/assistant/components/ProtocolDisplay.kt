@@ -46,13 +46,11 @@ fun ProtocolDisplay(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Errors
         errors.forEach { error ->
             ErrorMessageItem(error)
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Reasoning Steps
         if (reasoningSteps.isNotEmpty()) {
             ProtocolSection(
                 title = "Reasoning",
@@ -66,7 +64,6 @@ fun ProtocolDisplay(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Tool Usage
         if (toolUsages.isNotEmpty()) {
             ProtocolSection(
                 title = "Tool Usage",
@@ -80,7 +77,6 @@ fun ProtocolDisplay(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Memory Traces
         if (memoryTraces.isNotEmpty()) {
             ProtocolSection(
                 title = "Retrieved Memories",
@@ -94,7 +90,6 @@ fun ProtocolDisplay(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Commentaries
         if (commentaries.isNotEmpty()) {
             ProtocolSection(
                 title = "System Commentary",
@@ -273,10 +268,8 @@ fun ToolUsageItem(usage: ToolUsage) {
         else -> "Failed"
     }
 
-    // Use beautiful visualization for native tools with results
     if (isNativeTool && result?.success == true && result.result != null) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Compact header with expand toggle
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -333,7 +326,6 @@ fun ToolUsageItem(usage: ToolUsage) {
                 }
             }
 
-            // Expanded visualization
             AnimatedVisibility(
                 visible = expanded,
                 enter = expandVertically(),
@@ -348,7 +340,6 @@ fun ToolUsageItem(usage: ToolUsage) {
             }
         }
     } else {
-        // Fallback to original display for non-native tools or pending/failed results
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(6.dp),

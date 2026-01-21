@@ -26,7 +26,6 @@ type DefaultMessageDispatcher struct {
 	voteRepo                  ports.VoteRepository
 	noteRepo                  ports.NoteRepository
 	memoryService             ports.MemoryService
-	optimizationService       ports.OptimizationServiceFull
 	conversationID            string
 	asrService                ports.ASRService
 	ttsService                ports.TTSService
@@ -55,7 +54,6 @@ func NewDefaultMessageDispatcher(
 	voteRepo ports.VoteRepository,
 	noteRepo ports.NoteRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationServiceFull,
 	conversationID string,
 	asrService ports.ASRService,
 	ttsService ports.TTSService,
@@ -80,7 +78,6 @@ func NewDefaultMessageDispatcher(
 		voteRepo:                    voteRepo,
 		noteRepo:                    noteRepo,
 		memoryService:               memoryService,
-		optimizationService:         optimizationService,
 		conversationID:              conversationID,
 		asrService:                  asrService,
 		ttsService:                  ttsService,
@@ -147,12 +144,6 @@ func (d *DefaultMessageDispatcher) DispatchMessage(ctx context.Context, envelope
 
 	case protocol.TypeMemoryAction:
 		return d.handleMemoryAction(ctx, envelope)
-
-	case protocol.TypeDimensionPreference:
-		return d.handleDimensionPreference(ctx, envelope)
-
-	case protocol.TypeEliteSelect:
-		return d.handleEliteSelect(ctx, envelope)
 
 	case protocol.TypeResponseGenerationRequest:
 		return d.handleResponseGenerationRequest(ctx, envelope)

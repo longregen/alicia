@@ -11,21 +11,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
-/**
- * Extension property to create a DataStore instance.
- */
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "alicia_settings"
 )
 
-/**
- * DataStore wrapper for managing app settings.
- */
 class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
 
-    /**
-     * Wake word setting.
-     */
     val wakeWord: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -44,9 +35,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Wake word sensitivity (0.0 to 1.0).
-     */
     val wakeWordSensitivity: Flow<Float> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -62,14 +50,10 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setWakeWordSensitivity(value: Float) {
         dataStore.edit { preferences ->
-            // Clamp sensitivity to valid range [0.0, 1.0]
             preferences[PreferencesKeys.WAKE_WORD_SENSITIVITY] = value.coerceIn(0f, 1f)
         }
     }
 
-    /**
-     * Volume button activation enabled.
-     */
     val volumeButtonEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -89,9 +73,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Shake to activate enabled.
-     */
     val shakeEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -110,9 +91,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Floating button overlay enabled.
-     */
     val floatingButtonEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -132,9 +110,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Selected voice ID for TTS.
-     */
     val selectedVoice: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -153,9 +128,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Speech rate for TTS (0.5 to 2.0).
-     */
     val speechRate: Flow<Float> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -170,14 +142,10 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setSpeechRate(value: Float) {
         dataStore.edit { preferences ->
-            // Clamp speech rate to valid range [0.5x, 2.0x]
             preferences[PreferencesKeys.SPEECH_RATE] = value.coerceIn(0.5f, 2.0f)
         }
     }
 
-    /**
-     * Server URL for Alicia backend.
-     */
     val serverUrl: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -191,11 +159,8 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
 
     suspend fun setServerUrl(value: String) {
-        // Validate and normalize URL: trim whitespace, allow empty, require http/https prefix,
-        // remove trailing slashes, and verify valid URL structure with java.net.URL
         val trimmedUrl = value.trim()
 
-        // Allow empty string (user can clear the URL)
         if (trimmedUrl.isEmpty()) {
             dataStore.edit { preferences ->
                 preferences[PreferencesKeys.SERVER_URL] = ""
@@ -203,15 +168,12 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
             return
         }
 
-        // Basic URL validation
         require(trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) {
             "Server URL must start with http:// or https://"
         }
 
-        // Ensure no trailing slash for consistency
         val normalizedUrl = trimmedUrl.trimEnd('/')
 
-        // Additional validation: check for valid URL structure
         try {
             java.net.URL(normalizedUrl)
         } catch (e: Exception) {
@@ -223,9 +185,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Save conversation history locally.
-     */
     val saveHistory: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -244,9 +203,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Auto-start enabled on boot.
-     */
     val autoStartEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -266,9 +222,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Floating button auto-start on boot.
-     */
     val floatingButtonAutoStart: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -288,9 +241,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Wake word detection auto-start on boot.
-     */
     val wakeWordAutoStart: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -310,11 +260,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    // ========== Appearance Settings ==========
-
-    /**
-     * Theme preference: "light", "dark", or "system".
-     */
     val theme: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -336,9 +281,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Compact mode for smaller UI elements.
-     */
     val compactMode: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -357,9 +299,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Reduce motion for accessibility.
-     */
     val reduceMotion: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -378,11 +317,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    // ========== Audio Settings ==========
-
-    /**
-     * Audio output enabled.
-     */
     val audioOutputEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -401,11 +335,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    // ========== Response Settings ==========
-
-    /**
-     * Response length preference: "concise", "balanced", or "detailed".
-     */
     val responseLength: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -427,9 +356,6 @@ class SettingsDataStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /**
-     * Clear all settings and restore defaults.
-     */
     suspend fun clearAllSettings() {
         dataStore.edit { preferences ->
             preferences.clear()

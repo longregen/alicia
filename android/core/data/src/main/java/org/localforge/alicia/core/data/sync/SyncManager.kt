@@ -18,10 +18,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-/**
- * Manages periodic synchronization with the server.
- * Uses adaptive polling with exponential backoff when idle to reduce battery and server load.
- */
 @Singleton
 class SyncManager @Inject constructor(
     private val conversationRepository: ConversationRepository
@@ -42,18 +38,13 @@ class SyncManager @Inject constructor(
     private val lastActivityTimeMs = AtomicLong(System.currentTimeMillis())
 
     companion object {
-        private const val BASE_SYNC_INTERVAL_MS = 5000L // Base interval: 5 seconds
-        private const val MAX_SYNC_INTERVAL_MS = 60000L // Max interval when idle: 60 seconds
-        private const val INITIAL_RETRY_DELAY_MS = 1000L // 1 second
-        private const val MAX_RETRY_DELAY_MS = 30000L // 30 seconds
-        private const val IDLE_THRESHOLD_MS = 30000L // Consider idle after 30 seconds of no new messages
+        private const val BASE_SYNC_INTERVAL_MS = 5000L
+        private const val MAX_SYNC_INTERVAL_MS = 60000L
+        private const val INITIAL_RETRY_DELAY_MS = 1000L
+        private const val MAX_RETRY_DELAY_MS = 30000L
+        private const val IDLE_THRESHOLD_MS = 30000L
     }
 
-    /**
-     * Calculate sync interval with exponential backoff when idle.
-     * Matches web frontend behavior for consistency across platforms.
-     * Also incorporates error-based retry delay when sync failures occur.
-     */
     private fun getSyncInterval(): Long {
         val timeSinceActivity = System.currentTimeMillis() - lastActivityTimeMs.get()
 
@@ -61,30 +52,21 @@ class SyncManager @Inject constructor(
             // Active: use base interval
             BASE_SYNC_INTERVAL_MS
         } else {
-            // Idle: use exponential backoff (2x for every 30s idle, up to max)
             val idlePeriods = (timeSinceActivity / IDLE_THRESHOLD_MS).toInt()
             val backoffInterval = (BASE_SYNC_INTERVAL_MS * 2.0.pow(idlePeriods)).toLong()
             min(backoffInterval, MAX_SYNC_INTERVAL_MS)
         }
 
-        // Apply error-based retry delay (adds on top of idle backoff)
         return max(baseInterval, retryDelayMs.get())
     }
 
-    /**
-     * Mark activity to reset adaptive polling interval.
-     * Call this when new messages arrive or user interacts.
-     */
     fun markActivity() {
         lastActivityTimeMs.set(System.currentTimeMillis())
     }
 
-    /**
-     * Start periodic sync with adaptive polling.
-     */
     fun startPeriodicSync() {
         if (syncJob?.isActive == true) {
-            return // Already running
+            return
         }
 
         syncJob = scope.launch {
@@ -96,27 +78,18 @@ class SyncManager @Inject constructor(
         }
     }
 
-    /**
-     * Stop periodic sync.
-     */
     fun stopPeriodicSync() {
         syncJob?.cancel()
         syncJob = null
     }
 
-    /**
-     * Perform immediate sync.
-     */
     suspend fun syncNow() {
         performSync()
     }
 
-    /**
-     * Perform the sync operation.
-     */
     private suspend fun performSync() {
         if (_isSyncing.value) {
-            return // Already syncing
+            return
         }
 
         try {
@@ -127,17 +100,11 @@ class SyncManager @Inject constructor(
 
             if (result.isSuccess) {
                 _lastSyncTime.value = System.currentTimeMillis()
-                retryDelayMs.set(INITIAL_RETRY_DELAY_MS) // Reset backoff on success
-
-                // Note: We do NOT call markActivity() here to preserve adaptive polling.
-                // Successful syncs should not reset the idle timer - only actual user
-                // activity (new messages, interactions) should reset it via explicit
-                // markActivity() calls from those events.
+                retryDelayMs.set(INITIAL_RETRY_DELAY_MS)
             } else {
                 val error = result.exceptionOrNull()
                 _syncError.value = error?.message ?: "Sync failed"
 
-                // Exponential backoff
                 retryDelayMs.updateAndGet { current -> minOf(current * 2, MAX_RETRY_DELAY_MS) }
             }
         } catch (e: Exception) {
@@ -148,8 +115,5 @@ class SyncManager @Inject constructor(
         }
     }
 
-    /**
-     * Check if sync is currently active.
-     */
     fun isSyncActive(): Boolean = syncJob?.isActive == true
 }

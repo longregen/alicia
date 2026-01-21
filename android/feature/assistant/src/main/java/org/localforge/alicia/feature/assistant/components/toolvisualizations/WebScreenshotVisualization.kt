@@ -22,10 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
-/**
- * Visualization for web_screenshot tool results.
- * Displays screenshot with fullscreen preview.
- */
 @Composable
 fun WebScreenshotVisualization(
     result: Map<String, Any?>?,

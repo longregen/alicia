@@ -19,36 +19,14 @@ import androidx.compose.ui.unit.sp
 import org.localforge.alicia.core.common.ui.AppIcons
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * Audio playback state
- */
 enum class AudioState {
     IDLE, LOADING, PLAYING, PAUSED
 }
 
-/**
- * Display mode for AudioAddon
- */
 enum class AudioAddonMode {
     COMPACT, FULL
 }
 
-/**
- * AudioAddon component for audio playback controls.
- * Matches the web frontend's AudioAddon.tsx
- *
- * Displays play/pause/stop buttons with progress bar and time display.
- *
- * @param state Current audio state
- * @param onPlay Callback when play is clicked
- * @param onPause Callback when pause is clicked
- * @param onStop Callback when stop is clicked (resets to beginning)
- * @param duration Total duration in seconds
- * @param currentTime Current playback time in seconds
- * @param disabled Whether the addon is disabled
- * @param mode Display mode - compact for inline use, full for expanded view
- * @param modifier Modifier for the component
- */
 @Composable
 fun AudioAddon(
     state: AudioState = AudioState.IDLE,
@@ -63,7 +41,6 @@ fun AudioAddon(
 ) {
     val extendedColors = AliciaTheme.extendedColors
 
-    // Auto-expand when playing in full mode
     var isExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(state, mode) {
@@ -123,7 +100,6 @@ private fun CompactAudioAddon(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Play/Pause button
         Box(
             modifier = Modifier
                 .size(24.dp)
@@ -162,7 +138,6 @@ private fun CompactAudioAddon(
             }
         }
 
-        // Time display
         Text(
             text = if (isPlaying) {
                 "${formatTime(currentTime)} / ${formatTime(duration)}"
@@ -194,7 +169,6 @@ private fun FullAudioAddon(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Main play/pause button
         Box(
             modifier = Modifier
                 .size(32.dp)
@@ -231,7 +205,6 @@ private fun FullAudioAddon(
         }
 
         if (isExpanded) {
-            // Progress bar
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -248,7 +221,6 @@ private fun FullAudioAddon(
                 )
             }
 
-            // Time display
             Text(
                 text = "${formatTime(currentTime)} / ${formatTime(duration)}",
                 style = MaterialTheme.typography.bodySmall,
@@ -257,7 +229,6 @@ private fun FullAudioAddon(
                 modifier = Modifier.widthIn(min = 70.dp)
             )
 
-            // Stop button
             if (state == AudioState.PLAYING || state == AudioState.PAUSED) {
                 Box(
                     modifier = Modifier
@@ -278,9 +249,6 @@ private fun FullAudioAddon(
     }
 }
 
-/**
- * Format seconds to MM:SS string
- */
 private fun formatTime(seconds: Int): String {
     val mins = seconds / 60
     val secs = seconds % 60

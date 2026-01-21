@@ -5,23 +5,6 @@ import android.content.Context
 import android.content.Intent
 import timber.log.Timber
 
-/**
- * BroadcastReceiver for handling notification actions from external components.
- * This receiver is registered in AndroidManifest.xml and handles broadcasts from:
- * - System components (e.g., notification actions from notification shade)
- * - Other app components outside the VoiceService
- *
- * Note: VoiceService also has an internal BroadcastReceiver (notificationActionReceiver)
- * that is dynamically registered when the service starts. The internal receiver handles
- * actions while the service is running, while this standalone receiver can handle
- * actions even when the service is not running (e.g., starting the service from notification).
- *
- * Architecture:
- * - VoiceServiceReceiver (this class): Registered in manifest, creates/forwards intents to service
- * - VoiceService.notificationActionReceiver: Dynamically registered, directly calls service methods
- *
- * Both receivers handle the same actions but serve different lifecycle scopes.
- */
 class VoiceServiceReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {

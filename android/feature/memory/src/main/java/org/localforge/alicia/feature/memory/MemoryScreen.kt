@@ -25,15 +25,6 @@ import org.localforge.alicia.core.domain.model.MemoryCategory
 import org.localforge.alicia.feature.memory.components.MemoryEditorDialog
 import org.localforge.alicia.feature.memory.components.MemorySearchBar
 
-/**
- * MemoryScreen - The memory management screen for Alicia
- *
- * Features matching the web frontend:
- * - Display all memories with category, pinned status, creation date
- * - Search/filter by content or category
- * - Create new memories (content + category)
- * - Edit, pin, archive, delete memories
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryScreen(
@@ -99,7 +90,6 @@ fun MemoryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Search and filter bar
             MemorySearchBar(
                 searchQuery = searchQuery,
                 selectedCategory = selectedCategory,
@@ -112,7 +102,6 @@ fun MemoryScreen(
 
             HorizontalDivider()
 
-            // Memory list
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -145,7 +134,6 @@ fun MemoryScreen(
             }
         }
 
-        // Editor dialog
         if (isEditorOpen) {
             MemoryEditorDialog(
                 memory = editingMemory,
@@ -192,7 +180,6 @@ private fun MemoryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                // Pinned indicator
                 if (memory.pinned) {
                     Icon(
                         imageVector = Icons.Filled.PushPin,
@@ -204,7 +191,6 @@ private fun MemoryCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Category badge
                 Surface(
                     shape = RoundedCornerShape(4.dp),
                     color = categoryColor.copy(alpha = 0.15f),
@@ -222,7 +208,6 @@ private fun MemoryCard(
                 }
             }
 
-            // Content
             Text(
                 text = memory.content,
                 style = MaterialTheme.typography.bodyMedium,
@@ -230,7 +215,6 @@ private fun MemoryCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Tags
             if (memory.tags.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -257,7 +241,6 @@ private fun MemoryCard(
                 }
             }
 
-            // Footer
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -267,7 +250,6 @@ private fun MemoryCard(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Importance
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -285,14 +267,12 @@ private fun MemoryCard(
                         )
                     }
 
-                    // Usage count
                     Text(
                         text = "Used ${memory.usageCount}x",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Date
                     Text(
                         text = formatDate(memory.createdAt),
                         style = MaterialTheme.typography.labelSmall,
@@ -300,7 +280,6 @@ private fun MemoryCard(
                     )
                 }
 
-                // Actions
                 Box {
                     IconButton(
                         onClick = { showMenu = true },
@@ -376,7 +355,6 @@ private fun MemoryCard(
         }
     }
 
-    // Delete confirmation dialog
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },

@@ -7,35 +7,24 @@ import org.msgpack.core.MessagePacker
 import org.msgpack.core.MessageUnpacker
 import java.io.ByteArrayOutputStream
 
-/**
- * Handles MessagePack encoding and decoding of protocol envelopes
- */
 class ProtocolHandler {
 
-    /**
-     * Encode an envelope to MessagePack bytes
-     */
     fun encode(envelope: Envelope): ByteArray {
         val output = ByteArrayOutputStream()
         val packer = MessagePack.newDefaultPacker(output)
 
         try {
-            // Pack envelope as map with exactly 5 fields per protocol spec: stanzaId, conversationId, type, meta, body
             packer.packMapHeader(5)
 
-            // stanzaId
             packer.packString("stanzaId")
             packer.packInt(envelope.stanzaId)
 
-            // conversationId
             packer.packString("conversationId")
             packer.packString(envelope.conversationId)
 
-            // type
             packer.packString("type")
             packer.packInt(envelope.type.value)
 
-            // meta (optional)
             packer.packString("meta")
             if (envelope.meta != null) {
                 packMap(packer, envelope.meta)
@@ -43,7 +32,6 @@ class ProtocolHandler {
                 packer.packNil()
             }
 
-            // body
             packer.packString("body")
             packBody(packer, envelope.type, envelope.body)
 
@@ -57,14 +45,10 @@ class ProtocolHandler {
         }
     }
 
-    /**
-     * Decode MessagePack bytes to an envelope
-     */
     fun decode(data: ByteArray): Envelope {
         val unpacker = MessagePack.newDefaultUnpacker(data)
 
         try {
-            // Unpack envelope map
             val mapSize = unpacker.unpackMapHeader()
             if (mapSize != 5) {
                 throw IllegalArgumentException("Invalid envelope: expected 5 fields, got $mapSize")
@@ -88,8 +72,7 @@ class ProtocolHandler {
                     }
                 }
             }
-        // Filter out null values from meta to match Envelope's Map<String, Any> type
-        val filteredMeta = meta?.filterValues { it != null }?.mapValues { it.value!! }
+            val filteredMeta = meta?.filterValues { it != null }?.mapValues { it.value!! }
 
 
             return Envelope(
@@ -197,7 +180,6 @@ class ProtocolHandler {
         }
     }
 
-    // Helper functions for packing
     private fun packMap(packer: org.msgpack.core.MessagePacker, map: Map<String, Any>) {
         packer.packMapHeader(map.size)
         for ((key, value) in map) {
@@ -206,11 +188,6 @@ class ProtocolHandler {
         }
     }
 
-    /**
-     * Pack a value into MessagePack format.
-     * Supported types: String, Int, Long, Float, Double, Boolean, ByteArray, Map<String,Any>, List.
-     * Unknown types are coerced to String via toString() with a warning logged.
-     */
     private fun packValue(packer: org.msgpack.core.MessagePacker, value: Any?) {
         when (value) {
             null -> packer.packNil()
@@ -235,7 +212,6 @@ class ProtocolHandler {
                 value.forEach { packValue(packer, it) }
             }
             else -> {
-                // Warning: Unknown type coerced to String. Prefer explicit types in protocol definitions.
                 Timber.w("packValue: Unknown type ${value::class.simpleName} coerced to String")
                 packer.packString(value.toString())
             }
@@ -299,10 +275,7 @@ class ProtocolHandler {
         }
     }
 
-    // Pack/Unpack methods for each message type
     private fun packTranscription(packer: org.msgpack.core.MessagePacker, body: TranscriptionBody) {
-        // Always packs 7 fields: id, previousId, conversationId, text, final, confidence, language
-        // Optional fields (previousId, confidence, language) are packed as nil when absent
         packer.packMapHeader(7)
         packer.packString("id").packString(body.id)
         packer.packString("previousId")
@@ -350,15 +323,12 @@ class ProtocolHandler {
     }
 
     private fun packStartAnswer(packer: org.msgpack.core.MessagePacker, body: StartAnswerBody) {
-        // Always packs 5 fields: id, previousId, conversationId, answerType, plannedSentenceCount
-        // Optional fields (answerType, plannedSentenceCount) are packed as nil when absent
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
         packer.packString("previousId").packString(body.previousId)
         packer.packString("conversationId").packString(body.conversationId)
         packer.packString("answerType")
         if (body.answerType != null) {
-            // Convert enum underscores to plus signs (e.g., TEXT_VOICE -> text+voice)
             packer.packString(body.answerType.name.lowercase().replace("_", "+"))
         } else {
             packer.packNil()
@@ -395,8 +365,6 @@ class ProtocolHandler {
     }
 
     private fun packAssistantSentence(packer: org.msgpack.core.MessagePacker, body: AssistantSentenceBody) {
-        // Always packs 7 fields: id, previousId, conversationId, sequence, text, isFinal, audio
-        // Optional fields (id, isFinal, audio) are packed as nil when absent
         packer.packMapHeader(7)
         packer.packString("id")
         if (body.id != null) packer.packString(body.id) else packer.packNil()
@@ -450,9 +418,6 @@ class ProtocolHandler {
         )
     }
 
-    // Message type serialization methods.
-    // All types use explicit field packing. Most use generic unpacking (unpackMap),
-    // while types with ByteArray fields use explicit unpacking for proper binary handling.
     private fun packUserMessage(packer: org.msgpack.core.MessagePacker, body: UserMessageBody) {
         packer.packMapHeader(5)
         packer.packString("id").packString(body.id)
@@ -798,8 +763,6 @@ class ProtocolHandler {
         )
     }
 
-    // ========== Sync types (17-18) ==========
-
     private fun packSyncRequest(packer: MessagePacker, body: SyncRequestBody) {
         packer.packMapHeader(2)
         packer.packString("conversationId").packString(body.conversationId)
@@ -833,8 +796,6 @@ class ProtocolHandler {
             lastSequence = (map["lastSequence"] as Number).toInt()
         )
     }
-
-    // ========== Feedback types (20-25) ==========
 
     private fun packFeedback(packer: MessagePacker, body: FeedbackBody) {
         packer.packMapHeader(9)
@@ -996,8 +957,6 @@ class ProtocolHandler {
         )
     }
 
-    // ========== Server info types (26-28) ==========
-
     private fun packServerInfo(packer: MessagePacker, body: ServerInfoBody) {
         packer.packMapHeader(3)
         packer.packString("connection")
@@ -1080,8 +1039,6 @@ class ProtocolHandler {
             updatedAt = map["updatedAt"] as String
         )
     }
-
-    // ========== Optimization types (30-33) ==========
 
     private fun packDimensionPreference(packer: MessagePacker, body: DimensionPreferenceBody) {
         packer.packMapHeader(4)
@@ -1229,8 +1186,6 @@ class ProtocolHandler {
             timestamp = (map["timestamp"] as Number).toLong()
         )
     }
-
-    // ========== Subscription types (40-43) ==========
 
     private fun packSubscribe(packer: MessagePacker, body: SubscribeBody) {
         packer.packMapHeader(2)

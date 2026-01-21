@@ -6,9 +6,6 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Implementation of SettingsRepository using DataStore for preferences.
- */
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
     private val settingsDataStore: SettingsDataStore
@@ -98,8 +95,6 @@ class SettingsRepositoryImpl @Inject constructor(
         settingsDataStore.setWakeWordAutoStart(value)
     }
 
-    // ========== Appearance Settings ==========
-
     override val theme: Flow<String>
         get() = settingsDataStore.theme
 
@@ -121,16 +116,12 @@ class SettingsRepositoryImpl @Inject constructor(
         settingsDataStore.setReduceMotion(value)
     }
 
-    // ========== Audio Settings ==========
-
     override val audioOutputEnabled: Flow<Boolean>
         get() = settingsDataStore.audioOutputEnabled
 
     override suspend fun setAudioOutputEnabled(value: Boolean) {
         settingsDataStore.setAudioOutputEnabled(value)
     }
-
-    // ========== Response Settings ==========
 
     override val responseLength: Flow<String>
         get() = settingsDataStore.responseLength

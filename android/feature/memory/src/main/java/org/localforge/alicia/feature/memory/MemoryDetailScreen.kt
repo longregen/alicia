@@ -24,19 +24,6 @@ import org.localforge.alicia.ui.theme.AliciaTheme
 import java.text.SimpleDateFormat
 import java.util.*
 
-/**
- * MemoryDetailScreen - Displays detailed view of a single memory.
- * Matches the web frontend's MemoryDetail.tsx component.
- *
- * Features:
- * - Full content display
- * - Category badge with color
- * - Importance score
- * - Usage count
- * - Tags display
- * - Timestamps (created, updated)
- * - Actions: Pin, Edit, Archive, Delete
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryDetailScreen(
@@ -133,7 +120,6 @@ fun MemoryDetailScreen(
         ) {
             when {
                 isLoading && memory == null -> {
-                    // Loading state
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -153,7 +139,6 @@ fun MemoryDetailScreen(
                 }
 
                 errorMessage != null && memory == null -> {
-                    // Error state
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -181,7 +166,6 @@ fun MemoryDetailScreen(
                 }
 
                 memory != null -> {
-                    // Content
                     MemoryDetailContent(
                         memory = memory,
                         modifier = Modifier.fillMaxSize()
@@ -191,7 +175,6 @@ fun MemoryDetailScreen(
         }
     }
 
-    // Delete confirmation dialog
     if (showDeleteDialog && memory != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -219,7 +202,6 @@ fun MemoryDetailScreen(
         )
     }
 
-    // Archive confirmation dialog
     if (showArchiveDialog && memory != null) {
         AlertDialog(
             onDismissRequest = { showArchiveDialog = false },
@@ -259,13 +241,11 @@ private fun MemoryDetailContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Category and metadata row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Category badge
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
@@ -282,7 +262,6 @@ private fun MemoryDetailContent(
                 )
             }
 
-            // Importance
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -300,7 +279,6 @@ private fun MemoryDetailContent(
                 )
             }
 
-            // Usage count
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -319,7 +297,6 @@ private fun MemoryDetailContent(
             }
         }
 
-        // Main content card
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp),
@@ -334,7 +311,6 @@ private fun MemoryDetailContent(
             )
         }
 
-        // Tags
         if (memory.tags.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -366,7 +342,6 @@ private fun MemoryDetailContent(
             }
         }
 
-        // Timestamps
         HorizontalDivider(color = extendedColors.border)
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

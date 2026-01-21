@@ -20,10 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Visualization for garden_schema_explore tool results.
- * Displays database schema with tables and relationships.
- */
 @Composable
 fun GardenSchemaVisualization(
     result: Map<String, Any?>?,

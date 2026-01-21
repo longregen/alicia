@@ -6,8 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/longregen/alicia/internal/adapters/id"
 	"github.com/longregen/alicia/internal/domain/models"
 )
+
+// testIDGenerator creates an ID generator for testing
+func testIDGenerator() *id.Generator {
+	return id.New()
+}
 
 // Integration tests for SystemPromptVersionRepository
 // These require a real PostgreSQL instance with the test database
@@ -18,7 +24,7 @@ func TestSystemPromptVersionRepository_Create(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 
 	version := &models.SystemPromptVersion{
@@ -69,7 +75,7 @@ func TestSystemPromptVersionRepository_GetByHash(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 
 	version := &models.SystemPromptVersion{
@@ -114,7 +120,7 @@ func TestSystemPromptVersionRepository_SetActive(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 
 	// Create first version and set as active
@@ -208,7 +214,7 @@ func TestSystemPromptVersionRepository_List(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 	ctx := context.Background()
 
@@ -297,7 +303,7 @@ func TestSystemPromptVersionRepository_GetLatestByType(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 
 	// Create versions at different times
@@ -373,7 +379,7 @@ func TestSystemPromptVersionRepository_GetActiveByType_NoActive(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 
 	// Create a version but don't activate it
@@ -381,7 +387,7 @@ func TestSystemPromptVersionRepository_GetActiveByType_NoActive(t *testing.T) {
 		ID:            idGen.GenerateSystemPromptVersionID(),
 		PromptHash:    "hash_inactive",
 		PromptContent: "Inactive version",
-		PromptType:    models.PromptTypeMemoryExtraction,
+		PromptType:    models.PromptTypeMemorySelection,
 		Description:   "Not activated",
 		Active:        false,
 		CreatedAt:     time.Now(),
@@ -393,7 +399,7 @@ func TestSystemPromptVersionRepository_GetActiveByType_NoActive(t *testing.T) {
 	}
 
 	// Try to get active version (should fail)
-	_, err = repo.GetActiveByType(context.Background(), models.PromptTypeMemoryExtraction)
+	_, err = repo.GetActiveByType(context.Background(), models.PromptTypeMemorySelection)
 	if err == nil {
 		t.Error("expected error when no active version exists, got nil")
 	}
@@ -405,7 +411,7 @@ func TestSystemPromptVersionRepository_MultiplePromptTypes(t *testing.T) {
 	}
 
 	pool := setupTestDB(t)
-	idGen := newTestIDGenerator()
+	idGen := testIDGenerator()
 	repo := NewSystemPromptVersionRepository(pool, idGen)
 
 	// Create and activate versions for different prompt types
@@ -413,7 +419,7 @@ func TestSystemPromptVersionRepository_MultiplePromptTypes(t *testing.T) {
 		models.PromptTypeMain,
 		models.PromptTypeToolSelection,
 		models.PromptTypeMemorySelection,
-		models.PromptTypeMemoryExtraction,
+		models.PromptTypeMemorySelection,
 	}
 
 	createdVersions := make(map[string]string) // type -> ID

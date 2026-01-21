@@ -22,16 +22,6 @@ import androidx.compose.ui.unit.dp
 import org.localforge.alicia.core.common.ui.AppIcons
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * InputSendButton - Send button for the input area.
- * Matches the web's InputSendButton.tsx component.
- *
- * Features:
- * - Paper airplane icon rotated 90°
- * - Color changes based on canSend state
- * - Scale animation on press
- * - Hover/shine effect simulation
- */
 @Composable
 fun InputSendButton(
     onSend: () -> Unit = {},
@@ -43,7 +33,6 @@ fun InputSendButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Background color animation
     val backgroundColor by animateColorAsState(
         targetValue = when {
             disabled -> extendedColors.muted
@@ -54,7 +43,6 @@ fun InputSendButton(
         label = "send_bg_color"
     )
 
-    // Icon color animation
     val iconColor by animateColorAsState(
         targetValue = when {
             disabled -> extendedColors.mutedForeground
@@ -65,14 +53,12 @@ fun InputSendButton(
         label = "send_icon_color"
     )
 
-    // Scale animation when pressed
     val scale by animateFloatAsState(
         targetValue = if (isPressed && canSend && !disabled) 0.95f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessHigh),
         label = "send_scale"
     )
 
-    // Icon scale animation on hover simulation (when canSend)
     val iconScale by animateFloatAsState(
         targetValue = if (isPressed && canSend) 1.1f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
@@ -100,7 +86,6 @@ fun InputSendButton(
             .semantics { this.contentDescription = contentDesc },
         contentAlignment = Alignment.Center
     ) {
-        // Paper airplane icon - rotated 90° like web
         Icon(
             imageVector = AppIcons.Send,
             contentDescription = null,
@@ -111,12 +96,10 @@ fun InputSendButton(
                 .size(20.dp)
                 .scale(iconScale)
                 .graphicsLayer {
-                    // Slight offset to center the rotated icon visually
                     translationX = 2.dp.toPx()
                 }
         )
 
-        // Shine effect overlay (simulated with a semi-transparent layer)
         if (canSend) {
             Box(
                 modifier = Modifier

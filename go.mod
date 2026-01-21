@@ -4,11 +4,14 @@ go 1.25.4
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.0
+	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/XiaoConstantine/dspy-go v0.74.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-rod/rod v0.116.2
+	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/livekit/protocol v1.43.4
@@ -35,7 +38,6 @@ require (
 	buf.build/go/protoyaml v0.6.0 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	github.com/JohannesKaufmann/dom v0.2.0 // indirect
-	github.com/JohannesKaufmann/html-to-markdown v1.6.0 // indirect
 	github.com/XiaoConstantine/mcp-go v0.3.1 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.19.0 // indirect
@@ -55,10 +57,8 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
-	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0 // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/google/cel-go v0.26.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
@@ -97,7 +97,6 @@ require (
 	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/redis/go-redis/v9 v9.17.2 // indirect
-	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect

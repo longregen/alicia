@@ -54,7 +54,6 @@ fun SoundWaveAnimation(
         val centerY = size.height / 2
         val maxRadius = size.minDimension / 2
 
-        // Draw three concentric wave circles
         listOf(
             Triple(maxRadius * 0.6f, phase1, 0.8f),
             Triple(maxRadius * 0.8f, phase2, 0.5f),
@@ -74,7 +73,6 @@ fun SoundWaveAnimation(
                 path.add(Offset(x, y))
             }
 
-            // Draw the wave path
             for (i in 0 until path.size - 1) {
                 drawLine(
                     color = color.copy(alpha = alpha),

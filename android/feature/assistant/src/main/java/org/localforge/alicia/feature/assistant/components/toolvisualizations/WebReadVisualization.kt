@@ -21,10 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Beautiful visualization for web_read tool results.
- * Displays fetched web page content with metadata badges.
- */
 @Composable
 fun WebReadVisualization(
     result: Map<String, Any?>?,

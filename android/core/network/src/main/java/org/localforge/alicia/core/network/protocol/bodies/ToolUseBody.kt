@@ -1,13 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * This file contains both ToolUseRequestBody and ToolUseResultBody classes,
- * which are related message types for tool execution.
- */
-
-/**
- * ToolUseRequest (Type 6) represents a request to execute a tool
- */
 data class ToolUseRequestBody(
     val id: String,
     val messageId: String,
@@ -18,9 +10,6 @@ data class ToolUseRequestBody(
     val timeoutMs: Int? = null
 )
 
-/**
- * ToolUseResult (Type 7) represents a tool execution result
- */
 data class ToolUseResultBody(
     val id: String,
     val requestId: String,
@@ -48,7 +37,4 @@ enum class ToolExecution {
     }
 }
 
-/**
- * Default timeout for tool execution in milliseconds
- */
 const val DEFAULT_TOOL_TIMEOUT = 30000

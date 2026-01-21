@@ -19,10 +19,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Wake word detector using Porcupine for on-device wake word detection.
- * Supports multiple built-in and custom wake words.
- */
 @Singleton
 class WakeWordDetector @Inject constructor(
     @ApplicationContext private val context: Context
@@ -37,11 +33,6 @@ class WakeWordDetector @Inject constructor(
     private var currentSensitivity: Float = DEFAULT_SENSITIVITY
     private var onDetectedCallback: (() -> Unit)? = null
 
-    /**
-     * Supported wake words.
-     * ALICIA and HEY_ALICIA are custom-trained models.
-     * JARVIS and COMPUTER are built-in Porcupine models.
-     */
     enum class WakeWord(val displayName: String, val modelFileName: String) {
         ALICIA("Alicia", "alicia_android.ppn"),
         HEY_ALICIA("Hey Alicia", "hey_alicia_android.ppn"),
@@ -49,13 +40,6 @@ class WakeWordDetector @Inject constructor(
         COMPUTER("Computer", "computer_android.ppn")
     }
 
-    /**
-     * Start wake word detection.
-     *
-     * @param wakeWord The wake word to detect
-     * @param sensitivity Detection sensitivity (0.0 to 1.0). Higher = more sensitive but more false positives.
-     * @param onDetected Callback when wake word is detected
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun start(
         wakeWord: WakeWord,
@@ -107,10 +91,6 @@ class WakeWordDetector @Inject constructor(
         Timber.i("Wake word detection stopped")
     }
 
-    /**
-     * Pause wake word detection (keeps resources allocated).
-     * Useful when user is actively speaking to the assistant.
-     */
     fun pause() {
         if (!isListening.get()) {
             Timber.w("Cannot pause - not currently listening")
@@ -121,9 +101,6 @@ class WakeWordDetector @Inject constructor(
         Timber.i("Wake word detection paused")
     }
 
-    /**
-     * Resume wake word detection after pause.
-     */
     fun resume() {
         if (!isListening.get()) {
             Timber.w("Cannot resume - not currently listening")
@@ -134,16 +111,10 @@ class WakeWordDetector @Inject constructor(
         Timber.i("Wake word detection resumed")
     }
 
-    /**
-     * Update detection sensitivity.
-     *
-     * @param sensitivity New sensitivity value (0.0 to 1.0)
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun setSensitivity(sensitivity: Float) {
         currentSensitivity = sensitivity.coerceIn(0f, 1f)
 
-        // If currently running, restart with new sensitivity
         if (isListening.get()) {
             val wakeWord = currentWakeWord ?: return
             val callback = onDetectedCallback ?: return
@@ -217,38 +188,21 @@ class WakeWordDetector @Inject constructor(
                 if (keywordIndex >= 0) {
                     Timber.i("Wake word detected!")
                     onDetectedCallback?.invoke()
-
-                    // Automatically pause after detection
                     pause()
                 }
-            } catch (e: PorcupineException) {
-                Timber.e(e, "Porcupine processing error")
-                break
-            } catch (e: InterruptedException) {
-                Timber.d("Audio processing thread interrupted")
-                break
-            } catch (e: Exception) {
-                Timber.e(e, "Unexpected error in audio processing")
+            } catch (_: InterruptedException) {
                 break
             }
         }
     }
 
     private fun cleanup() {
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
-        } catch (e: Exception) {
-            Timber.e(e, "Error releasing AudioRecord")
-        }
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
 
-        try {
-            porcupine?.delete()
-            porcupine = null
-        } catch (e: Exception) {
-            Timber.e(e, "Error releasing Porcupine")
-        }
+        porcupine?.delete()
+        porcupine = null
 
         onDetectedCallback = null
     }
@@ -260,16 +214,7 @@ class WakeWordDetector @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * Get Porcupine access key from BuildConfig.
-     * The access key is configured via build.gradle.kts:
-     * buildConfigField("String", "PORCUPINE_ACCESS_KEY", "\"your-key-here\"")
-     *
-     * @throws IllegalStateException if the access key is not configured
-     */
     private fun getAccessKey(): String {
-        // BuildConfig.PORCUPINE_ACCESS_KEY is generated at compile time by Android Gradle Plugin
-        // based on the buildConfigField defined in build.gradle.kts
         return BuildConfig.PORCUPINE_ACCESS_KEY.ifEmpty {
             throw IllegalStateException(
                 "Porcupine access key not configured. " +
@@ -279,19 +224,11 @@ class WakeWordDetector @Inject constructor(
     }
 
     private fun getModelPath(wakeWord: WakeWord): String {
-        /**
-         * Check if custom model exists in assets. If found, copy to internal storage for Porcupine access.
-         * If not found:
-         * - JARVIS/COMPUTER: Fall back to built-in Porcupine models
-         * - ALICIA/HEY_ALICIA: Throw error (require custom models in assets/models/)
-         */
         val modelPath = "models/${wakeWord.modelFileName}"
 
         return try {
-            // Verify the model exists in assets
             context.assets.open(modelPath).use { }
 
-            // Copy to internal storage for Porcupine to access
             val outputFile = File(context.filesDir, wakeWord.modelFileName)
             if (!outputFile.exists()) {
                 context.assets.open(modelPath).use { input ->
@@ -303,20 +240,13 @@ class WakeWordDetector @Inject constructor(
 
             outputFile.absolutePath
         } catch (e: Exception) {
-            Timber.w(e, "Custom model not found, using built-in: ${wakeWord.modelFileName}")
-
-            // Fall back to built-in models if custom not available
+            // JARVIS/COMPUTER have built-in Porcupine models; ALICIA/HEY_ALICIA require custom models
             when (wakeWord) {
-                WakeWord.JARVIS, WakeWord.COMPUTER -> {
-                    // These are built-in Porcupine keywords
-                    wakeWord.modelFileName
-                }
-                else -> {
-                    throw IllegalArgumentException(
-                        "Custom wake word model not found: ${wakeWord.modelFileName}. " +
-                            "Please add model to assets/models/"
-                    )
-                }
+                WakeWord.JARVIS, WakeWord.COMPUTER -> wakeWord.modelFileName
+                else -> throw IllegalArgumentException(
+                    "Custom wake word model not found: ${wakeWord.modelFileName}. " +
+                        "Please add model to assets/models/"
+                )
             }
         }
     }

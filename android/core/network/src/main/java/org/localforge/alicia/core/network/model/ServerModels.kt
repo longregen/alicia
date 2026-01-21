@@ -3,9 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Response model for server info
- */
 @JsonClass(generateAdapter = true)
 data class ServerInfoResponse(
     @Json(name = "connection")
@@ -66,9 +63,6 @@ data class SessionStatsResponse(
     val conversationId: String? = null
 )
 
-/**
- * Response model for public config
- */
 @JsonClass(generateAdapter = true)
 data class PublicConfigResponse(
     @Json(name = "livekit_url")
@@ -123,7 +117,4 @@ data class TTSVoice(
     val category: String
 )
 
-/**
- * Type alias for AddTagsRequest to match API service naming
- */
 typealias AddTagsRequest = AddMemoryTagsRequest

@@ -165,15 +165,6 @@ type CommentaryRepository interface {
 	GetByMessage(ctx context.Context, messageID string) ([]*models.Commentary, error)
 }
 
-// MetaRepository defines operations for metadata persistence
-type MetaRepository interface {
-	Set(ctx context.Context, ref, key, value string) error
-	Get(ctx context.Context, ref, key string) (string, error)
-	GetAll(ctx context.Context, ref string) (map[string]string, error)
-	Delete(ctx context.Context, ref, key string) error
-	DeleteAll(ctx context.Context, ref string) error
-}
-
 // MCPServerRepository defines operations for MCP server configuration persistence
 type MCPServerRepository interface {
 	Create(ctx context.Context, server *models.MCPServer) error
@@ -264,34 +255,6 @@ type SystemPromptVersionRepository interface {
 	SetActive(ctx context.Context, id string) error
 	List(ctx context.Context, promptType string, limit int) ([]*models.SystemPromptVersion, error)
 	GetLatestByType(ctx context.Context, promptType string) (*models.SystemPromptVersion, error)
-}
-
-// OptimizedTool represents a GEPA-optimized tool with enhanced schema and examples
-type OptimizedTool struct {
-	ID                   string
-	ToolID               string
-	OptimizedDescription string
-	OptimizedSchema      map[string]any
-	ResultTemplate       string
-	Examples             []map[string]any
-	Version              int
-	Score                *float64
-	OptimizedAt          time.Time
-	Active               bool
-	DeletedAt            *time.Time
-}
-
-// ToolResultFormatter represents formatting rules for tool results
-type ToolResultFormatter struct {
-	ID            string
-	ToolName      string
-	Template      string
-	MaxLength     int
-	SummarizeAt   int
-	SummaryPrompt string
-	KeyFields     []string
-	CreatedAt     time.Time
-	DeletedAt     *time.Time
 }
 
 // TransactionManager handles database transactions

@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * MemoryTrace (Type 14) logs memory retrieval events
- */
 data class MemoryTraceBody(
     val id: String,
     val messageId: String,

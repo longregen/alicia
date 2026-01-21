@@ -23,9 +23,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/**
- * Toast variant types matching the web frontend.
- */
 enum class ToastVariant {
     DEFAULT,
     SUCCESS,
@@ -33,9 +30,6 @@ enum class ToastVariant {
     ERROR
 }
 
-/**
- * Data class representing a toast notification.
- */
 data class Toast(
     val id: String = UUID.randomUUID().toString(),
     val message: String,
@@ -43,10 +37,6 @@ data class Toast(
     val duration: Long = 4000L
 )
 
-/**
- * Controller for managing toast notifications.
- * Can be used as a singleton or injected via Hilt.
- */
 class ToastController {
     private val _toasts = MutableStateFlow<List<Toast>>(emptyList())
     val toasts: StateFlow<List<Toast>> = _toasts.asStateFlow()
@@ -77,14 +67,10 @@ class ToastController {
     }
 
     companion object {
-        // Global singleton for convenience
         val instance = ToastController()
     }
 }
 
-/**
- * Convenience object for showing toasts globally.
- */
 object AppToast {
     fun show(message: String, variant: ToastVariant = ToastVariant.DEFAULT, duration: Long = 4000L) =
         ToastController.instance.show(message, variant, duration)
@@ -99,10 +85,6 @@ object AppToast {
         ToastController.instance.warning(message, duration)
 }
 
-/**
- * Composable that renders the toast container.
- * Should be placed at the root of your app's UI hierarchy.
- */
 @Composable
 fun ToastHost(
     controller: ToastController = ToastController.instance,
@@ -148,7 +130,7 @@ private fun ToastItem(
         if (toast.duration > 0) {
             delay(toast.duration)
             isVisible = false
-            delay(200) // Wait for exit animation
+            delay(200)
             onDismiss()
         }
     }
@@ -192,7 +174,6 @@ private fun ToastContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Icon
             Icon(
                 imageVector = colors.icon,
                 contentDescription = null,
@@ -200,7 +181,6 @@ private fun ToastContent(
                 modifier = Modifier.size(20.dp)
             )
 
-            // Message
             Text(
                 text = toast.message,
                 style = MaterialTheme.typography.bodyMedium,
@@ -209,7 +189,6 @@ private fun ToastContent(
                 modifier = Modifier.weight(1f)
             )
 
-            // Close button
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier.size(28.dp)

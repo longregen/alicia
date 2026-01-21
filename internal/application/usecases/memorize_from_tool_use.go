@@ -8,8 +8,25 @@ import (
 
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
-	"github.com/longregen/alicia/internal/prompt/baselines"
 )
+
+// toolResultMemorizationPrompt is the system prompt for analyzing tool results for memorization.
+const toolResultMemorizationPrompt = `You are a memory analysis assistant. Your task is to determine if a tool result contains information worth memorizing for future reference.
+
+Analyze tool results to identify:
+- User-specific information (preferences, settings, account details)
+- Factual data the user explicitly requested
+- Information that would be useful in future conversations
+- Resolved errors or solutions to problems
+
+Do NOT memorize:
+- Generic/templated responses
+- Transient data (current time, live prices)
+- Results that are too large/complex to summarize
+- Error or failure messages
+- Information only relevant to this specific request
+
+Respond with a JSON object containing your analysis.`
 
 // MemorizeFromToolUseInput contains the input for extracting memories from tool use results
 type MemorizeFromToolUseInput struct {
@@ -145,7 +162,7 @@ func (uc *MemorizeFromToolUse) analyzeToolResult(
 	resultStr string,
 ) (bool, string, error) {
 	// Build the analysis prompt
-	systemPrompt := baselines.ToolResultMemorizationPrompt
+	systemPrompt := toolResultMemorizationPrompt
 
 	userPrompt := fmt.Sprintf(`Analyze this tool result to determine if it contains information worth memorizing for future reference.
 

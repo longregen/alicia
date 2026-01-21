@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * ControlVariation (Type 11) requests a variation of a previous message
- */
 data class ControlVariationBody(
     val conversationId: String,
     val targetId: String,

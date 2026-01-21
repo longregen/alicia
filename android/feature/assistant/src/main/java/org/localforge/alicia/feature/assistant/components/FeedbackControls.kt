@@ -21,19 +21,10 @@ import androidx.compose.ui.unit.sp
 import org.localforge.alicia.core.common.ui.AppIcons
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * Vote type for feedback
- */
 enum class VoteType {
     UP, DOWN, NONE
 }
 
-/**
- * FeedbackControls component for voting on messages, tools, memories, and reasoning.
- * Matches the web frontend's FeedbackControls.tsx
- *
- * Displays upvote/downvote buttons with counts and handles vote state.
- */
 @Composable
 fun FeedbackControls(
     currentVote: VoteType,
@@ -51,7 +42,6 @@ fun FeedbackControls(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Upvote button
         FeedbackButton(
             isSelected = currentVote == VoteType.UP,
             onClick = {
@@ -66,7 +56,6 @@ fun FeedbackControls(
             count = upvotes
         )
 
-        // Downvote button
         FeedbackButton(
             isSelected = currentVote == VoteType.DOWN,
             onClick = {
@@ -81,7 +70,6 @@ fun FeedbackControls(
             count = downvotes
         )
 
-        // Loading indicator
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(16.dp),

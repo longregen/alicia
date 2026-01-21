@@ -19,9 +19,6 @@ fun ResponseControls(
 ) {
     var isStopping by remember { mutableStateOf(false) }
 
-    // Reset stopping state after a delay
-    // The 1 second timeout allows the UI to show "Stopping..." feedback before returning to normal state
-    // This provides user feedback even if the stop operation doesn't have a completion callback
     LaunchedEffect(isStopping) {
         if (isStopping) {
             delay(1000)
@@ -41,7 +38,6 @@ fun ResponseControls(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isGenerating) {
-            // Stop button
             Button(
                 onClick = {
                     isStopping = true
@@ -63,7 +59,6 @@ fun ResponseControls(
                 Text(if (isStopping) "Stopping..." else "Stop")
             }
         } else {
-            // Regenerate button
             OutlinedButton(
                 onClick = onRegenerate,
                 modifier = Modifier.padding(4.dp)

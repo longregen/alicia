@@ -21,10 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.gson.GsonBuilder
 
-/**
- * Generic visualization for tools without a specific component.
- * Displays tool name and formatted JSON result.
- */
 @Composable
 fun GenericToolVisualization(
     toolName: String,

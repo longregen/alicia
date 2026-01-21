@@ -22,10 +22,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Beautiful visualization for web_search tool results.
- * Displays search results with expandable content.
- */
 @Composable
 fun WebSearchVisualization(
     result: Map<String, Any?>?,

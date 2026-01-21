@@ -1,12 +1,9 @@
 package org.localforge.alicia.core.domain.model
 
-/**
- * Vote type enum matching web's vote options.
- */
 enum class Vote(val value: String) {
     UP("up"),
     DOWN("down"),
-    CRITICAL("critical"); // Special vote for memories
+    CRITICAL("critical");
 
     companion object {
         fun fromString(value: String?): Vote? {
@@ -15,9 +12,6 @@ enum class Vote(val value: String) {
     }
 }
 
-/**
- * Result of a voting operation.
- */
 data class VoteResult(
     val targetId: String,
     val targetType: String,
@@ -36,9 +30,6 @@ data class VoteResult(
         get() = userVote != null
 }
 
-/**
- * Target types for voting
- */
 object VoteTargetType {
     const val MESSAGE = "message"
     const val TOOL_USE = "tool_use"

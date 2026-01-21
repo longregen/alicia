@@ -26,16 +26,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-/**
- * User notes panel component matching the web frontend's UserNotesPanel.
- *
- * Features:
- * - Display notes for messages, tool uses, or reasoning steps
- * - Add new notes with category selection
- * - Edit existing notes
- * - Delete notes
- * - Category color coding
- */
 @Composable
 fun UserNotesPanel(
     targetType: NoteTargetType,
@@ -65,7 +55,6 @@ fun UserNotesPanel(
             modifier = Modifier.padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -106,7 +95,6 @@ fun UserNotesPanel(
                 }
             }
 
-            // Error display
             error?.let {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
@@ -121,7 +109,6 @@ fun UserNotesPanel(
                 }
             }
 
-            // Add note form
             AnimatedVisibility(
                 visible = isAddingNote,
                 enter = expandVertically(),
@@ -149,7 +136,6 @@ fun UserNotesPanel(
                 )
             }
 
-            // Notes list
             if (notes.isEmpty() && !isAddingNote) {
                 Text(
                     text = "No notes yet. Add one to get started.",
@@ -193,7 +179,6 @@ fun UserNotesPanel(
                 }
             }
 
-            // Loading indicator
             if (isLoading) {
                 Row(
                     modifier = Modifier
@@ -236,7 +221,6 @@ private fun AddNoteForm(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Category selection
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -249,7 +233,6 @@ private fun AddNoteForm(
                 }
             }
 
-            // Content input
             OutlinedTextField(
                 value = content,
                 onValueChange = onContentChange,
@@ -260,7 +243,6 @@ private fun AddNoteForm(
                 textStyle = MaterialTheme.typography.bodyMedium
             )
 
-            // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -308,7 +290,6 @@ private fun NoteItem(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Note header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -322,7 +303,6 @@ private fun NoteItem(
                 )
             }
 
-            // Note content
             if (isEditing) {
                 OutlinedTextField(
                     value = editContent,
@@ -356,7 +336,6 @@ private fun NoteItem(
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                // Note actions
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically

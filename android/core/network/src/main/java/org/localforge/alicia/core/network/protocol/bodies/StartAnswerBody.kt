@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * StartAnswer (Type 13) initiates a streaming assistant response
- */
 data class StartAnswerBody(
     val id: String,
     val previousId: String,
@@ -11,7 +8,6 @@ data class StartAnswerBody(
     val plannedSentenceCount: Int? = null
 )
 
-// Note: Enum names use underscore (TEXT_VOICE) but are serialized with plus sign (text+voice)
 enum class AnswerType {
     TEXT,
     VOICE,

@@ -30,14 +30,6 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Central coordinator for the voice assistant.
- * Manages the lifecycle and orchestrates interactions between:
- * - Wake word detection
- * - Audio capture/playback
- * - LiveKit connection
- * - State management
- */
 @Singleton
 class VoiceController @Inject constructor(
     @ApplicationContext context: Context,
@@ -85,14 +77,10 @@ class VoiceController @Inject constructor(
     private val currentConversationId = AtomicReference<String?>(null)
     private val clientStanzaId = AtomicInteger(0)
 
-    /**
-     * Start wake word detection.
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun startWakeWordDetection() {
         updateState(VoiceState.ListeningForWakeWord)
 
-        // Get configured wake word from preferences (default to ALICIA)
         val wakeWord = getConfiguredWakeWord()
         val sensitivity = getConfiguredSensitivity()
 
@@ -105,10 +93,6 @@ class VoiceController @Inject constructor(
         )
     }
 
-    /**
-     * Activate the voice assistant (manually or via wake word).
-     * Permission is validated by VoiceService before calling this method.
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun activate() {
         if (_currentState.value == VoiceState.Listening || _currentState.value == VoiceState.Processing) {
@@ -119,9 +103,6 @@ class VoiceController @Inject constructor(
         handleWakeWordDetected()
     }
 
-    /**
-     * Deactivate the voice assistant and return to wake word listening.
-     */
     suspend fun deactivate() {
         Timber.i("Deactivating voice assistant")
 
@@ -137,16 +118,12 @@ class VoiceController @Inject constructor(
 
         currentConversationId.set(null)
 
-        // Clear protocol message state
         clearProtocolMessages()
 
         updateState(VoiceState.ListeningForWakeWord)
         wakeWordDetector.resume()
     }
 
-    /**
-     * Clear all protocol message state.
-     */
     private fun clearProtocolMessages() {
         _currentTranscription.value = ""
         _streamingSentences.value = emptyMap()
@@ -172,9 +149,6 @@ class VoiceController @Inject constructor(
         Timber.i("Microphone unmuted")
     }
 
-    /**
-     * Send a stop control message to halt current generation.
-     */
     fun sendStop() {
         val conversationId = currentConversationId.get() ?: run {
             Timber.w("Cannot send stop: no active conversation")
@@ -197,13 +171,10 @@ class VoiceController @Inject constructor(
             Timber.i("Sent stop control message")
         } catch (e: Exception) {
             Timber.e(e, "Failed to send stop message")
+            throw e
         }
     }
 
-    /**
-     * Send a regenerate control message to request a variation of the last assistant message.
-     * @param targetId ID of the message to regenerate
-     */
     fun sendRegenerate(targetId: String) {
         val conversationId = currentConversationId.get() ?: run {
             Timber.w("Cannot send regenerate: no active conversation")
@@ -226,14 +197,10 @@ class VoiceController @Inject constructor(
             Timber.i("Sent regenerate control message for target: $targetId")
         } catch (e: Exception) {
             Timber.e(e, "Failed to send regenerate message")
+            throw e
         }
     }
 
-    /**
-     * Send an edit control message to update a user message and trigger new assistant response.
-     * @param targetId ID of the user message to edit
-     * @param newContent The new content for the message
-     */
     fun sendEdit(targetId: String, newContent: String) {
         val conversationId = currentConversationId.get() ?: run {
             Timber.w("Cannot send edit: no active conversation")
@@ -256,13 +223,10 @@ class VoiceController @Inject constructor(
             Timber.i("Sent edit control message for target: $targetId")
         } catch (e: Exception) {
             Timber.e(e, "Failed to send edit message")
+            throw e
         }
     }
 
-    /**
-     * Send initial Configuration message after connecting.
-     * Matches web frontend's initial connection behavior.
-     */
     private fun sendInitialConfiguration(conversationId: String) {
         try {
             val envelope = Envelope(
@@ -271,7 +235,7 @@ class VoiceController @Inject constructor(
                 type = MessageType.CONFIGURATION,
                 body = ConfigurationBody(
                     conversationId = conversationId,
-                    lastSequenceSeen = 0, // First connection, no messages seen yet
+                    lastSequenceSeen = 0,
                     clientVersion = "android-1.0.0",
                     device = "android",
                     features = listOf(
@@ -287,13 +251,10 @@ class VoiceController @Inject constructor(
             Timber.i("Sent initial Configuration message")
         } catch (e: Exception) {
             Timber.e(e, "Failed to send initial configuration")
+            throw e
         }
     }
 
-    /**
-     * Send Configuration message after reconnection to trigger message replay.
-     * Matches web frontend's Reconnected handler behavior.
-     */
     private fun sendConfigurationOnReconnect() {
         val conversationId = currentConversationId.get() ?: run {
             Timber.w("Cannot send configuration on reconnect: no active conversation")
@@ -326,12 +287,10 @@ class VoiceController @Inject constructor(
             Timber.i("Sent Configuration on reconnect with lastSequenceSeen=$lastSequence")
         } catch (e: Exception) {
             Timber.e(e, "Failed to send configuration on reconnect")
+            throw e
         }
     }
 
-    /**
-     * Shutdown the voice controller and release all resources.
-     */
     suspend fun shutdown() {
         Timber.i("Shutting down voice controller")
 
@@ -346,10 +305,6 @@ class VoiceController @Inject constructor(
         updateState(VoiceState.Idle)
     }
 
-    /**
-     * Handle wake word detection event.
-     * Permission is already validated by the wake word detector or activate() caller.
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun handleWakeWordDetected() {
         Timber.i("Wake word detected!")
@@ -357,7 +312,6 @@ class VoiceController @Inject constructor(
         updateState(VoiceState.Activated)
         wakeWordDetector.pause()
 
-        // Start voice conversation
         conversationJob = controllerScope.launch {
             try {
                 startVoiceConversation()
@@ -368,20 +322,14 @@ class VoiceController @Inject constructor(
         }
     }
 
-    /**
-     * Handle silence detection (user stopped speaking).
-     */
     private fun handleSilenceDetected() {
         Timber.i("Silence detected")
 
         when (_currentState.value) {
             is VoiceState.Listening -> {
-                // User finished speaking, wait for response
                 updateState(VoiceState.Processing)
             }
             is VoiceState.Speaking -> {
-                // Assistant finished speaking, wait for user
-                // If silence continues, end conversation
                 controllerScope.launch {
                     delay(END_CONVERSATION_TIMEOUT)
                     if (_currentState.value is VoiceState.Speaking) {
@@ -389,43 +337,33 @@ class VoiceController @Inject constructor(
                     }
                 }
             }
-            else -> Unit // Ignore silence in other states
+            else -> Unit
         }
     }
 
-    /**
-     * Start a voice conversation via LiveKit.
-     * Permission is already validated by the wake word detector or activate() caller.
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private suspend fun startVoiceConversation() {
         updateState(VoiceState.Listening)
 
-        // Set up callbacks before connecting
-        // Handle protocol messages
         liveKitManager.onDataReceived { envelope ->
             controllerScope.launch {
                 handleProtocolMessage(envelope)
             }
         }
 
-        // Handle reconnection - send Configuration with lastSeenStanzaId for message replay
         liveKitManager.onReconnected {
             controllerScope.launch {
                 sendConfigurationOnReconnect()
             }
         }
 
-        // Set audio output enabled callback to respect user settings
         liveKitManager.setAudioOutputEnabledCallback {
-            // Check the current audioOutputEnabled setting
             kotlinx.coroutines.runBlocking {
                 settingsRepository.audioOutputEnabled.first()
             }
         }
 
         try {
-            // Get or create a conversation for this voice session
             val conversationId = currentConversationId.get() ?: run {
                 val result = conversationRepository.createConversation(title = "Voice Conversation")
                 if (result.isFailure) {
@@ -436,10 +374,8 @@ class VoiceController @Inject constructor(
                 conversation.id
             }
 
-            // Get server URL from settings
             val serverUrl = settingsRepository.serverUrl.first()
 
-            // Get LiveKit token from backend API
             val tokenResult = conversationRepository.getConversationToken(conversationId)
             if (tokenResult.isFailure) {
                 throw tokenResult.exceptionOrNull() ?: Exception("Failed to get LiveKit token")
@@ -450,14 +386,10 @@ class VoiceController @Inject constructor(
 
             Timber.i("Connecting to LiveKit: url=$liveKitUrl, room=${tokenResponse.roomName}")
 
-            // Connect to LiveKit with real token (room name is encoded in the token)
             liveKitManager.connect(liveKitUrl, tokenResponse.token)
 
-            // Send initial Configuration message (matching web frontend behavior)
             sendInitialConfiguration(conversationId)
 
-            // LiveKit automatically handles audio capture and publishing
-            // Start silence detection
             startSilenceDetection()
         } catch (e: Exception) {
             Timber.e(e, "Failed to start voice conversation: ${e.message}")
@@ -465,15 +397,10 @@ class VoiceController @Inject constructor(
         }
     }
 
-    /**
-     * Start silence detection to determine when user stops speaking.
-     */
     private fun startSilenceDetection() {
         lastAudioTime.set(System.currentTimeMillis())
 
         silenceDetectionJob = controllerScope.launch {
-            // Infinite loop exits via coroutine cancellation when silenceDetectionJob is cancelled
-            // (in deactivate() or shutdown() methods)
             while (true) {
                 delay(SILENCE_CHECK_INTERVAL)
 
@@ -486,9 +413,6 @@ class VoiceController @Inject constructor(
         }
     }
 
-    /**
-     * Handle protocol messages from LiveKit data channel.
-     */
     private fun handleProtocolMessage(envelope: Envelope) {
         try {
             Timber.d("Received protocol message: type=${envelope.type}")
@@ -537,6 +461,7 @@ class VoiceController @Inject constructor(
             }
         } catch (e: Exception) {
             Timber.e(e, "Error handling protocol message")
+            throw e
         }
     }
 
@@ -548,7 +473,6 @@ class VoiceController @Inject constructor(
         _currentTranscription.value = text
 
         if (isFinal) {
-            // Clear transcription after a delay
             controllerScope.launch {
                 delay(1000)
                 _currentTranscription.value = ""
@@ -562,13 +486,11 @@ class VoiceController @Inject constructor(
         val text = body["text"] as? String ?: ""
         val isFinal = body["isFinal"] as? Boolean ?: false
 
-        // Update streaming sentences map
         val current = _streamingSentences.value.toMutableMap()
         current[sequence] = text
         _streamingSentences.value = current
 
         if (isFinal) {
-            // Clear streaming sentences and stop generating when complete
             controllerScope.launch {
                 delay(500)
                 _streamingSentences.value = emptyMap()
@@ -578,19 +500,16 @@ class VoiceController @Inject constructor(
     }
 
     private fun handleStartAnswer(_envelope: Envelope) {
-        // Clear streaming sentences when new answer starts
         _streamingSentences.value = emptyMap()
         _isGenerating.value = true
         updateState(VoiceState.Processing)
     }
 
     private fun handleUserMessage(_envelope: Envelope) {
-        // User messages are typically already displayed via transcription
         Timber.d("User message received")
     }
 
     private fun handleAssistantMessage(_envelope: Envelope) {
-        // Non-streaming assistant message
         Timber.d("Assistant message received")
     }
 
@@ -622,7 +541,6 @@ class VoiceController @Inject constructor(
             content = body["content"] as? String ?: ""
         )
 
-        // Add step if not already present
         if (_reasoningSteps.value.none { it.id == step.id }) {
             _reasoningSteps.value = (_reasoningSteps.value + step).sortedBy { it.sequence }
         }
@@ -631,8 +549,6 @@ class VoiceController @Inject constructor(
     private fun handleToolUseRequest(envelope: Envelope) {
         val body = envelope.body as? Map<*, *> ?: return
 
-        // Safe cast with type checking - Map<*, *> can contain any key-value pairs
-        // We validate each parameter individually with safe casts, filtering out null values
         val parameters: Map<String, Any> = when (val params = body["parameters"]) {
             is Map<*, *> -> params.mapNotNull { (k, v) ->
                 val key = k as? String ?: return@mapNotNull null
@@ -667,7 +583,6 @@ class VoiceController @Inject constructor(
             errorMessage = body["errorMessage"] as? String
         )
 
-        // Update corresponding tool usage
         _toolUsages.value = _toolUsages.value.map { usage ->
             if (usage.request.id == result.requestId) {
                 usage.copy(result = result)
@@ -695,7 +610,6 @@ class VoiceController @Inject constructor(
             relevance = (body["relevance"] as? Number)?.toDouble() ?: 0.0
         )
 
-        // Add trace if not already present
         if (_memoryTraces.value.none { it.id == trace.id }) {
             _memoryTraces.value = _memoryTraces.value + trace
         }
@@ -712,7 +626,6 @@ class VoiceController @Inject constructor(
             commentaryType = body["commentaryType"] as? String
         )
 
-        // Add commentary if not already present
         if (_commentaries.value.none { it.id == commentary.id }) {
             _commentaries.value = _commentaries.value + commentary
         }
@@ -720,28 +633,22 @@ class VoiceController @Inject constructor(
 
     private fun handleControlStop(_envelope: Envelope) {
         Timber.d("Control stop received")
-        // Stop current processing/generation
         _isGenerating.value = false
         updateState(VoiceState.Listening)
     }
 
     private fun handleControlVariation(_envelope: Envelope) {
         Timber.d("Control variation received")
-        // Handle regeneration/variation requests
         _isGenerating.value = true
     }
 
     private fun handleConfiguration(_envelope: Envelope) {
         Timber.d("Configuration received")
-        // Handle configuration updates
     }
 
     private fun handleAudioChunk(_envelope: Envelope) {
-        // Audio chunks are typically handled via LiveKit audio tracks
         Timber.d("Audio chunk received (handled by LiveKit)")
     }
-
-    // ========== Sync types (17-18) ==========
 
     private fun handleSyncRequest(_envelope: Envelope) {
         Timber.d("Sync request received")
@@ -749,26 +656,20 @@ class VoiceController @Inject constructor(
 
     private fun handleSyncResponse(_envelope: Envelope) {
         Timber.d("Sync response received")
-        // Handle sync data - could be used to update local state
     }
-
-    // ========== Feedback types (20-25) ==========
 
     private fun handleFeedback(_envelope: Envelope) {
         Timber.d("Feedback received")
-        // Feedback messages are typically sent from client, not received
     }
 
     private fun handleFeedbackConfirmation(envelope: Envelope) {
         val body = envelope.body as? Map<*, *> ?: return
         val feedbackId = body["feedbackId"] as? String
         Timber.d("Feedback confirmation received for: $feedbackId")
-        // Could update UI to show feedback was recorded
     }
 
     private fun handleUserNote(_envelope: Envelope) {
         Timber.d("User note received")
-        // User notes are typically sent from client, not received
     }
 
     private fun handleNoteConfirmation(envelope: Envelope) {
@@ -780,7 +681,6 @@ class VoiceController @Inject constructor(
 
     private fun handleMemoryAction(_envelope: Envelope) {
         Timber.d("Memory action received")
-        // Memory actions are typically sent from client
     }
 
     private fun handleMemoryConfirmation(envelope: Envelope) {
@@ -790,12 +690,9 @@ class VoiceController @Inject constructor(
         Timber.d("Memory confirmation received: memoryId=$memoryId, success=$success")
     }
 
-    // ========== Server info types (26-28) ==========
-
     private fun handleServerInfo(envelope: Envelope) {
         val body = envelope.body as? Map<*, *> ?: return
         Timber.d("Server info received")
-        // Could update server connection status display
     }
 
     private fun handleSessionStats(envelope: Envelope) {
@@ -811,19 +708,14 @@ class VoiceController @Inject constructor(
         val title = body["title"] as? String
         val status = body["status"] as? String
         Timber.d("Conversation update: title=$title, status=$status")
-        // Could update conversation title in UI
     }
-
-    // ========== Optimization types (29-32) ==========
 
     private fun handleDimensionPreference(_envelope: Envelope) {
         Timber.d("Dimension preference received")
-        // Handle optimization dimension preferences
     }
 
     private fun handleEliteSelect(_envelope: Envelope) {
         Timber.d("Elite select received")
-        // Handle elite solution selection
     }
 
     private fun handleEliteOptions(envelope: Envelope) {
@@ -831,7 +723,6 @@ class VoiceController @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val elites = body["elites"] as? List<*> ?: emptyList<Any>()
         Timber.d("Elite options received: ${elites.size} options")
-        // Could display optimization options to user
     }
 
     private fun handleOptimizationProgress(envelope: Envelope) {
@@ -840,19 +731,14 @@ class VoiceController @Inject constructor(
         val maxIterations = (body["maxIterations"] as? Number)?.toInt() ?: 0
         val status = body["status"] as? String
         Timber.d("Optimization progress: $iteration/$maxIterations, status=$status")
-        // Could update optimization progress UI
     }
-
-    // ========== Subscription types (40-43) ==========
 
     private fun handleSubscribe(_envelope: Envelope) {
         Timber.d("Subscribe request received")
-        // Subscription requests are typically sent from client
     }
 
     private fun handleUnsubscribe(_envelope: Envelope) {
         Timber.d("Unsubscribe request received")
-        // Unsubscribe requests are typically sent from client
     }
 
     private fun handleSubscribeAck(envelope: Envelope) {
@@ -868,9 +754,6 @@ class VoiceController @Inject constructor(
         Timber.d("Unsubscribe ack: success=$success")
     }
 
-    /**
-     * End the current conversation and return to wake word listening.
-     */
     private suspend fun endConversation() {
         Timber.i("Ending conversation")
         deactivate()
@@ -881,11 +764,6 @@ class VoiceController @Inject constructor(
         _currentState.value = newState
     }
 
-    /**
-     * Get configured wake word from user preferences.
-     * Reads from SettingsRepository and maps string to WakeWord enum.
-     * Falls back to ALICIA if configured value is invalid.
-     */
     private suspend fun getConfiguredWakeWord(): WakeWordDetector.WakeWord {
         val wakeWordName = settingsRepository.wakeWord.first()
         return try {
@@ -896,28 +774,19 @@ class VoiceController @Inject constructor(
         }
     }
 
-    /**
-     * Get configured sensitivity from user preferences.
-     * Reads from SettingsRepository with range validation (0.0-1.0).
-     * Falls back to 0.5f if configured value is out of range.
-     */
     private suspend fun getConfiguredSensitivity(): Float {
         val sensitivity = settingsRepository.wakeWordSensitivity.first()
         return sensitivity.coerceIn(0.0f, 1.0f)
     }
 
-    /**
-     * Generate incrementing client stanza IDs (positive integers).
-     */
     private fun generateClientStanzaId(): Int {
         return clientStanzaId.incrementAndGet()
     }
 
     companion object {
-        // Silence detection configuration
-        private const val SILENCE_THRESHOLD = 1500L // 1.5 seconds of silence
-        private const val SILENCE_CHECK_INTERVAL = 200L // Check every 200ms
-        private const val END_CONVERSATION_TIMEOUT = 3000L // End conversation after 3s of silence
+        private const val SILENCE_THRESHOLD = 1500L
+        private const val SILENCE_CHECK_INTERVAL = 200L
+        private const val END_CONVERSATION_TIMEOUT = 3000L
     }
 }
 

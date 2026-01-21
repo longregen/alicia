@@ -16,10 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Visualization for garden_describe_table tool results.
- * Displays table schema with columns, keys, and indexes.
- */
 @Composable
 fun GardenTableVisualization(
     result: Map<String, Any?>?,

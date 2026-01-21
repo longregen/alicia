@@ -21,15 +21,6 @@ import org.localforge.alicia.core.common.ui.AppIcons
 import org.localforge.alicia.core.domain.model.*
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * OptimizationSettingsScreen - Response style and dimension weight configuration.
- * Matches the web frontend's Optimization settings tab.
- *
- * Features:
- * - Preset buttons for quick style selection
- * - Custom weight sliders for fine-grained control
- * - Real-time weight normalization
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OptimizationSettingsScreen(
@@ -76,7 +67,6 @@ fun OptimizationSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Response Style Section
             item {
                 ResponseStyleSection(
                     selectedPreset = selectedPreset,
@@ -98,7 +88,6 @@ fun OptimizationSettingsScreen(
                 )
             }
 
-            // Info message when no conversation
             if (conversationId == null) {
                 item {
                     Surface(
@@ -134,7 +123,6 @@ private fun ResponseStyleSection(
     val isDisabled = conversationId == null
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Section header
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -160,7 +148,6 @@ private fun ResponseStyleSection(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Preset button row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -176,7 +163,6 @@ private fun ResponseStyleSection(
                     }
                 }
 
-                // Custom weights toggle
                 TextButton(
                     onClick = onToggleAdvanced,
                     modifier = Modifier.fillMaxWidth()
@@ -188,7 +174,6 @@ private fun ResponseStyleSection(
                     )
                 }
 
-                // Advanced weight sliders
                 AnimatedVisibility(
                     visible = showAdvanced,
                     enter = expandVertically(),
@@ -302,7 +287,6 @@ private fun DimensionSlider(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Label with icon
         Row(
             modifier = Modifier.width(100.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -319,7 +303,6 @@ private fun DimensionSlider(
             )
         }
 
-        // Slider
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -333,7 +316,6 @@ private fun DimensionSlider(
             )
         )
 
-        // Value display
         Text(
             text = "${(value * 100).toInt()}%",
             style = MaterialTheme.typography.bodySmall,

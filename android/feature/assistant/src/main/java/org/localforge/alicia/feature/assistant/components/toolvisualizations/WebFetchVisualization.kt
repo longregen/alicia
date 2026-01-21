@@ -25,9 +25,6 @@ enum class FetchType {
     RAW, STRUCTURED
 }
 
-/**
- * Visualization for web_fetch_raw and web_fetch_structured tool results.
- */
 @Composable
 fun WebFetchVisualization(
     result: Map<String, Any?>?,

@@ -9,8 +9,24 @@ import (
 
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
-	"github.com/longregen/alicia/internal/prompt/baselines"
 )
+
+// memoryExtractionPrompt is the system prompt for extracting memories from conversation text.
+const memoryExtractionPrompt = `You are a memory extraction assistant. Your task is to extract important facts, preferences, and information from conversations that should be remembered for future reference.
+
+Extract memories that are:
+- User preferences (likes, dislikes, habits)
+- Personal information the user shared (name, location, occupation, etc.)
+- Important facts mentioned in the conversation
+- Recurring topics or interests
+- Decisions or choices the user made
+
+Output your response as a JSON object with:
+- "extracted_facts": array of memory strings
+- "importance_scores": array of numbers (0-1) for each memory
+- "extraction_reasoning": brief explanation of why these were extracted
+
+If no significant memories are found, respond with: {"extracted_facts": [], "importance_scores": [], "extraction_reasoning": "No significant memories found"}`
 
 // ExtractMemoriesInput contains the input for memory extraction
 type ExtractMemoriesInput struct {
@@ -173,8 +189,8 @@ func (uc *ExtractMemories) Execute(ctx context.Context, input *ExtractMemoriesIn
 
 // extractFacts uses the LLM to extract facts from the conversation text
 func (uc *ExtractMemories) extractFacts(ctx context.Context, input *ExtractMemoriesInput) ([]string, []float64, string, error) {
-	// Build the extraction prompt using GEPA seed prompt
-	systemPrompt := baselines.MemoryExtractionSeedPrompt
+	// Build the extraction prompt
+	systemPrompt := memoryExtractionPrompt
 
 	userPrompt := fmt.Sprintf("Extract memories from the following conversation:\n\nConversation:\n%s", input.ConversationText)
 	if input.ConversationContext != "" {

@@ -5,10 +5,6 @@ import androidx.compose.ui.Modifier
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-/**
- * ToolVisualizationRouter automatically selects the appropriate visualization
- * component based on the tool name and renders it with the result data.
- */
 @Composable
 fun ToolVisualizationRouter(
     toolName: String,
@@ -17,7 +13,6 @@ fun ToolVisualizationRouter(
 ) {
     val gson = Gson()
 
-    // Parse result to appropriate type
     val resultMap: Map<String, Any?>? = try {
         when (result) {
             is Map<*, *> -> @Suppress("UNCHECKED_CAST") (result as Map<String, Any?>)
@@ -92,9 +87,6 @@ fun ToolVisualizationRouter(
     }
 }
 
-/**
- * Tool icons for display
- */
 object ToolIcons {
     val icons = mapOf(
         "web_read" to "📖",

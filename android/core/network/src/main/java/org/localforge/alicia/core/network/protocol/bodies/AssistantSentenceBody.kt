@@ -1,11 +1,8 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * AssistantSentence (Type 16) delivers a streaming response chunk
- */
 data class AssistantSentenceBody(
     val id: String? = null,
-    val previousId: String, // References StartAnswer's ID
+    val previousId: String,
     val conversationId: String,
     val sequence: Int,
     val text: String,

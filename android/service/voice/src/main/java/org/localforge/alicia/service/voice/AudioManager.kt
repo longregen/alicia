@@ -24,10 +24,6 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages audio capture and playback for the voice assistant.
- * Handles audio focus, echo cancellation, and noise suppression.
- */
 @Singleton
 class AudioManager @Inject constructor(
     @ApplicationContext private val context: Context
@@ -47,11 +43,6 @@ class AudioManager @Inject constructor(
     private var hasAudioFocus = false
     private val audioFocusRequest by lazy { createAudioFocusRequest() }
 
-    /**
-     * Start capturing audio from the microphone.
-     *
-     * @param onAudioData Callback for captured audio data (PCM 16-bit, mono, 16kHz)
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun startCapture(onAudioData: (ByteArray) -> Unit) = withContext(Dispatchers.IO) {
         if (isCapturing.get()) {
@@ -80,9 +71,6 @@ class AudioManager @Inject constructor(
         }
     }
 
-    /**
-     * Stop capturing audio and release resources.
-     */
     fun stopCapture() {
         if (!isCapturing.get()) {
             return
@@ -103,47 +91,29 @@ class AudioManager @Inject constructor(
         Timber.i("Audio capture stopped")
     }
 
-    /**
-     * Play audio data through the default assistant audio output.
-     * Routes to speaker, Bluetooth, or wired headset based on system audio routing.
-     * Initializes AudioTrack if not already created.
-     *
-     * @param audioData PCM audio data to play
-     */
     suspend fun playAudio(audioData: ByteArray) = withContext(Dispatchers.IO) {
-        try {
-            if (audioTrack == null) {
-                initializeAudioTrack()
-            }
+        if (audioTrack == null) {
+            initializeAudioTrack()
+        }
 
-            audioTrack?.let { track ->
-                if (track.state == AudioTrack.STATE_INITIALIZED) {
-                    track.play()
-                    val written = track.write(audioData, 0, audioData.size)
+        audioTrack?.let { track ->
+            if (track.state == AudioTrack.STATE_INITIALIZED) {
+                track.play()
+                val written = track.write(audioData, 0, audioData.size)
 
-                    if (written < 0) {
-                        Timber.e("Error writing to AudioTrack: $written")
-                    }
+                if (written < 0) {
+                    throw IllegalStateException("Error writing to AudioTrack: $written")
                 }
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Error playing audio")
         }
     }
 
-    /**
-     * Stop audio playback and release AudioTrack.
-     */
     fun stopPlayback() {
-        try {
-            audioTrack?.stop()
-            audioTrack?.flush()
-            audioTrack?.release()
-            audioTrack = null
-            Timber.i("Audio playback stopped")
-        } catch (e: Exception) {
-            Timber.e(e, "Error stopping playback")
-        }
+        audioTrack?.stop()
+        audioTrack?.flush()
+        audioTrack?.release()
+        audioTrack = null
+        Timber.i("Audio playback stopped")
     }
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
@@ -212,7 +182,6 @@ class AudioManager @Inject constructor(
     private fun enableAudioEffects() {
         val audioSessionId = audioRecord?.audioSessionId ?: return
 
-        // Enable acoustic echo cancellation if available
         if (AcousticEchoCanceler.isAvailable()) {
             echoCanceler = AcousticEchoCanceler.create(audioSessionId)?.apply {
                 enabled = true
@@ -220,7 +189,6 @@ class AudioManager @Inject constructor(
             }
         }
 
-        // Enable noise suppression if available
         if (NoiseSuppressor.isAvailable()) {
             noiseSuppressor = NoiseSuppressor.create(audioSessionId)?.apply {
                 enabled = true
@@ -239,10 +207,6 @@ class AudioManager @Inject constructor(
         Timber.i("Audio effects disabled")
     }
 
-    /**
-     * Start recording audio.
-     * Requires RECORD_AUDIO permission - caller (startCapture) has already validated permissions.
-     */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun startRecording() {
         audioRecord?.startRecording()
@@ -289,13 +253,9 @@ class AudioManager @Inject constructor(
     }
 
     private fun releaseAudioRecord() {
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
-        } catch (e: Exception) {
-            Timber.e(e, "Error releasing AudioRecord")
-        }
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
     }
 
     private fun requestAudioFocus() {
@@ -348,11 +308,10 @@ class AudioManager @Inject constructor(
     }
 
     companion object {
-        // Audio configuration
-        private const val SAMPLE_RATE = 16000 // 16kHz for speech
-        private const val PLAYBACK_SAMPLE_RATE = 24000 // 24kHz for TTS playback
+        private const val SAMPLE_RATE = 16000
+        private const val PLAYBACK_SAMPLE_RATE = 24000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val BUFFER_SIZE_BYTES = 3200 // 100ms at 16kHz
+        private const val BUFFER_SIZE_BYTES = 3200
     }
 }

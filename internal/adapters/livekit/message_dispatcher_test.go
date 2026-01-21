@@ -18,7 +18,6 @@ func TestNewDefaultMessageDispatcher(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -40,7 +39,6 @@ func TestNewDefaultMessageDispatcher(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		asrService,
 		ttsService,
@@ -80,10 +78,6 @@ func TestNewDefaultMessageDispatcher(t *testing.T) {
 
 	if dispatcher.memoryService != memoryService {
 		t.Error("expected memoryService to be set")
-	}
-
-	if dispatcher.optimizationService != optimizationService {
-		t.Error("expected optimizationService to be set")
 	}
 }
 

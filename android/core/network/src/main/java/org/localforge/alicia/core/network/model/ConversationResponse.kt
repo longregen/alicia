@@ -3,15 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Response model for conversation data from the API
- *
- * @property createdAt ISO 8601 timestamp string. The API contract guarantees this field is always
- *                     present and non-null for all conversation responses.
- * @property updatedAt ISO 8601 timestamp string. The API contract guarantees this field is always
- *                     present and non-null for all conversation responses. Will match createdAt
- *                     if the conversation has never been modified.
- */
 @JsonClass(generateAdapter = true)
 data class ConversationResponse(
     @Json(name = "id")
@@ -36,9 +27,6 @@ data class ConversationResponse(
     val updatedAt: String
 )
 
-/**
- * List response for conversations
- */
 @JsonClass(generateAdapter = true)
 data class ConversationListResponse(
     @Json(name = "conversations")
@@ -54,9 +42,6 @@ data class ConversationListResponse(
     val offset: Int
 )
 
-/**
- * Conversation preferences
- */
 @JsonClass(generateAdapter = true)
 data class ConversationPreferences(
     @Json(name = "voice_id")
@@ -72,9 +57,6 @@ data class ConversationPreferences(
     val enableMemory: Boolean? = null
 )
 
-/**
- * Request to update a conversation
- */
 @JsonClass(generateAdapter = true)
 data class UpdateConversationRequest(
     @Json(name = "title")

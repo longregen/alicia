@@ -18,7 +18,6 @@ type AgentFactory struct {
 	voteRepo                  ports.VoteRepository
 	noteRepo                  ports.NoteRepository
 	memoryService             ports.MemoryService
-	optimizationService       ports.OptimizationServiceFull
 	handleToolUseCase         ports.HandleToolUseCase
 	generateResponseUseCase   ports.GenerateResponseUseCase
 	processUserMessageUseCase ports.ProcessUserMessageUseCase
@@ -48,7 +47,6 @@ func NewAgentFactory(
 	voteRepo ports.VoteRepository,
 	noteRepo ports.NoteRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationServiceFull,
 	handleToolUseCase ports.HandleToolUseCase,
 	generateResponseUseCase ports.GenerateResponseUseCase,
 	processUserMessageUseCase ports.ProcessUserMessageUseCase,
@@ -74,7 +72,6 @@ func NewAgentFactory(
 		voteRepo:                    voteRepo,
 		noteRepo:                    noteRepo,
 		memoryService:               memoryService,
-		optimizationService:         optimizationService,
 		handleToolUseCase:           handleToolUseCase,
 		generateResponseUseCase:     generateResponseUseCase,
 		processUserMessageUseCase:   processUserMessageUseCase,
@@ -133,7 +130,6 @@ func (f *AgentFactory) CreateAgent(
 		f.voteRepo,
 		f.noteRepo,
 		f.memoryService,
-		f.optimizationService,
 		conversationID,
 		f.asrService,
 		f.ttsService,

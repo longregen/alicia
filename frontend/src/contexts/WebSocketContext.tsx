@@ -261,22 +261,6 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
       type: MessageType.SessionStats,
       body: data,
     };
-  } else if ('elites' in dto && 'currentEliteId' in dto) {
-    // EliteOptions
-    return {
-      stanzaId: 0,
-      conversationId: (dto.conversationId as string) || conversationId,
-      type: MessageType.EliteOptions,
-      body: data,
-    };
-  } else if ('runId' in dto && 'iteration' in dto && 'maxIterations' in dto && 'currentScore' in dto) {
-    // OptimizationProgress
-    return {
-      stanzaId: 0,
-      conversationId,
-      type: MessageType.OptimizationProgress,
-      body: data,
-    };
   }
 
   return {
@@ -450,8 +434,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.MemoryConfirmation:
       case MessageType.ServerInfo:
       case MessageType.SessionStats:
-      case MessageType.EliteOptions:
-      case MessageType.OptimizationProgress:
       case MessageType.BranchUpdate:
       case MessageType.ThinkingSummary:
         handleProtocolMessage(envelope);

@@ -12,11 +12,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages runtime permissions for the Alicia voice assistant app.
- * Handles checking and requesting various permissions needed for
- * voice recording, overlays, accessibility service, and more.
- */
 @Singleton
 class PermissionManager @Inject constructor(
     @ApplicationContext private val context: Context
@@ -26,25 +21,16 @@ class PermissionManager @Inject constructor(
         const val OVERLAY_PERMISSION_REQUEST_CODE = 1002
     }
 
-    /**
-     * Core permissions required for basic app functionality
-     */
     val requiredPermissions = listOf(
         Manifest.permission.RECORD_AUDIO
     )
 
-    /**
-     * Optional permissions for enhanced functionality
-     */
     val optionalPermissions = mapOf(
         Manifest.permission.SYSTEM_ALERT_WINDOW to "Floating button overlay",
         Manifest.permission.VIBRATE to "Haptic feedback on activation",
         Manifest.permission.RECEIVE_BOOT_COMPLETED to "Auto-start on device boot"
     )
 
-    /**
-     * Check if microphone permission is granted
-     */
     fun checkMicrophonePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -52,16 +38,10 @@ class PermissionManager @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * Check if overlay permission is granted (for floating button)
-     */
     fun checkOverlayPermission(): Boolean {
         return Settings.canDrawOverlays(context)
     }
 
-    /**
-     * Check if vibration permission is granted
-     */
     fun checkVibratePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -69,9 +49,6 @@ class PermissionManager @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * Check if the accessibility service is enabled for hardware button detection
-     */
     fun isAccessibilityServiceEnabled(): Boolean {
         try {
             val accessibilityEnabled = Settings.Secure.getInt(
@@ -86,7 +63,6 @@ class PermissionManager @Inject constructor(
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: return false
 
-            // Check if our service is in the list
             val serviceName = "${context.packageName}/org.localforge.alicia.service.hotkey.HotkeyAccessibilityService"
             return enabledServices.contains(serviceName)
         } catch (e: Settings.SettingNotFoundException) {
@@ -94,9 +70,6 @@ class PermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Check if boot receiver permission is granted
-     */
     fun checkBootPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -104,9 +77,6 @@ class PermissionManager @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /**
-     * Check if all required permissions are granted
-     */
     fun areAllRequiredPermissionsGranted(): Boolean {
         return requiredPermissions.all { permission ->
             ContextCompat.checkSelfPermission(
@@ -116,9 +86,6 @@ class PermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Get a list of required permissions that are not yet granted
-     */
     fun getMissingRequiredPermissions(): List<String> {
         return requiredPermissions.filter { permission ->
             ContextCompat.checkSelfPermission(
@@ -128,9 +95,6 @@ class PermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Create an intent to open app settings
-     */
     fun createAppSettingsIntent(): Intent {
         return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = "package:${context.packageName}".toUri()
@@ -138,18 +102,12 @@ class PermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Create an intent to open accessibility settings
-     */
     fun createAccessibilitySettingsIntent(): Intent {
         return Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
     }
 
-    /**
-     * Create an intent to request overlay permission
-     */
     fun createOverlayPermissionIntent(): Intent {
         return Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
             data = "package:${context.packageName}".toUri()
@@ -157,9 +115,6 @@ class PermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Get a human-readable explanation for why a permission is needed
-     */
     fun getPermissionRationale(permission: String): String {
         return when (permission) {
             Manifest.permission.RECORD_AUDIO ->
@@ -178,9 +133,6 @@ class PermissionManager @Inject constructor(
         }
     }
 
-    /**
-     * Check all permissions and return a status report
-     */
     fun getPermissionStatus(): PermissionStatus {
         return PermissionStatus(
             microphone = checkMicrophonePermission(),
@@ -191,9 +143,6 @@ class PermissionManager @Inject constructor(
         )
     }
 
-    /**
-     * Data class representing the current status of all permissions
-     */
     data class PermissionStatus(
         val microphone: Boolean,
         val overlay: Boolean,

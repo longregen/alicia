@@ -11,10 +11,6 @@ import androidx.compose.ui.window.DialogProperties
 import org.localforge.alicia.core.domain.model.Memory
 import org.localforge.alicia.core.domain.model.MemoryCategory
 
-/**
- * Dialog for creating or editing a memory.
- * Matches the web frontend's MemoryEditor component.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryEditorDialog(
@@ -42,13 +38,11 @@ fun MemoryEditorDialog(
                 modifier = Modifier.padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Title
                 Text(
                     text = if (isEditing) "Edit Memory" else "Create Memory",
                     style = MaterialTheme.typography.headlineSmall
                 )
 
-                // Content field
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
@@ -62,7 +56,6 @@ fun MemoryEditorDialog(
                     shape = RoundedCornerShape(8.dp)
                 )
 
-                // Category selector
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,
                     onExpandedChange = { categoryExpanded = it }
@@ -106,7 +99,6 @@ fun MemoryEditorDialog(
                     }
                 }
 
-                // Actions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -127,7 +119,7 @@ fun MemoryEditorDialog(
     }
 }
 
-private fun getCategoryDescription(category: MemoryCategory): String {
+fun getCategoryDescription(category: MemoryCategory): String {
     return when (category) {
         MemoryCategory.PREFERENCE -> "User preferences and settings"
         MemoryCategory.FACT -> "Facts about the user or their environment"

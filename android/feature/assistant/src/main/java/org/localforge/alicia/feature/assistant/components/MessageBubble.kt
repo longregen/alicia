@@ -40,21 +40,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/**
- * Message bubble component matching the web frontend's ChatBubble.
- *
- * Features:
- * - User messages aligned right with primary color
- * - Assistant messages aligned left with surface variant
- * - Reasoning blocks with collapsible content
- * - Streaming indicator for in-progress responses
- * - Tool usages inline display
- * - Timestamp display
- * - Edit button for user messages
- * - Voting buttons for assistant messages
- * - Copy functionality
- * - Branch navigation synced with backend (same as web frontend)
- */
 @Composable
 fun MessageBubble(
     message: Message,
@@ -76,15 +61,10 @@ fun MessageBubble(
     var showActions by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
-    // Filter tool usages for this specific message
     val messageToolUsages = toolUsages.filter { it.request.messageId == message.id }
 
-    // Get the effective content to display:
-    // - If we have siblings and the current sibling's content differs, use the sibling's content
-    // - Otherwise use the message's content
     val effectiveContent = branchState?.currentSibling?.content ?: message.content
 
-    // Branch navigation data from server-synced state
     val hasBranches = (branchState?.count ?: 0) > 1
     val branchCount = branchState?.count ?: 0
     val currentBranchIndex = branchState?.currentIndex ?: 0
@@ -100,17 +80,14 @@ fun MessageBubble(
             modifier = Modifier.widthIn(max = 320.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Streaming indicator
             if (isStreaming && !isUser) {
                 StreamingIndicator()
             }
 
-            // Main message content with tap to show actions
             Box(
                 modifier = Modifier.clickable { showActions = !showActions }
             ) {
                 if (isEditing && isUser) {
-                    // Edit mode for user messages
                     EditableMessageContent(
                         content = editedContent,
                         onContentChange = { editedContent = it },
@@ -125,7 +102,6 @@ fun MessageBubble(
                         focusRequester = focusRequester
                     )
 
-                    // Request focus when entering edit mode
                     LaunchedEffect(isEditing) {
                         if (isEditing) {
                             focusRequester.requestFocus()
@@ -140,8 +116,6 @@ fun MessageBubble(
                 }
             }
 
-            // Branch navigator (when multiple branches exist from server)
-            // This matches the web frontend's BranchNavigator behavior
             if (hasBranches && onBranchNavigate != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -152,13 +126,10 @@ fun MessageBubble(
                         currentIndex = currentBranchIndex,
                         totalBranches = branchCount,
                         onNavigate = { direction ->
-                            // Trigger ViewModel to switch branch on server
-                            // This will call PUT /conversations/{id}/switch-branch
                             onBranchNavigate(message.id, direction)
                         }
                     )
 
-                    // Show loading indicator while switching branches
                     if (isLoadingBranches) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(12.dp),
@@ -169,7 +140,6 @@ fun MessageBubble(
                 }
             }
 
-            // Action buttons (shown on tap)
             AnimatedVisibility(
                 visible = showActions && !isEditing,
                 enter = expandVertically(),
@@ -197,7 +167,6 @@ fun MessageBubble(
                 )
             }
 
-            // Tool usages for assistant messages
             if (!isUser && messageToolUsages.isNotEmpty()) {
                 ToolUsageDisplay(
                     toolUsages = messageToolUsages,
@@ -206,7 +175,6 @@ fun MessageBubble(
                 )
             }
 
-            // Timestamp
             MessageTimestamp(
                 timestamp = message.createdAt,
                 isUser = isUser
@@ -215,9 +183,6 @@ fun MessageBubble(
     }
 }
 
-/**
- * Action buttons for messages (edit, copy, vote, notes).
- */
 @Composable
 private fun MessageActions(
     isUser: Boolean,
@@ -232,7 +197,6 @@ private fun MessageActions(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(horizontal = 4.dp)
     ) {
-        // Edit button (user messages only)
         onEdit?.let {
             IconButton(
                 onClick = it,
@@ -247,7 +211,6 @@ private fun MessageActions(
             }
         }
 
-        // Copy button
         IconButton(
             onClick = onCopy,
             modifier = Modifier.size(32.dp)
@@ -260,7 +223,6 @@ private fun MessageActions(
             )
         }
 
-        // Notes button
         onNotes?.let {
             IconButton(
                 onClick = it,
@@ -275,7 +237,6 @@ private fun MessageActions(
             }
         }
 
-        // Vote buttons (assistant messages only)
         if (!isUser) {
             Spacer(modifier = Modifier.width(8.dp))
 
@@ -288,7 +249,7 @@ private fun MessageActions(
                         imageVector = AppIcons.ThumbUp,
                         contentDescription = "Upvote",
                         modifier = Modifier.size(16.dp),
-                        tint = Color(0xFF10B981) // Success green
+                        tint = Color(0xFF10B981)
                     )
                 }
             }
@@ -302,7 +263,7 @@ private fun MessageActions(
                         imageVector = AppIcons.ThumbDown,
                         contentDescription = "Downvote",
                         modifier = Modifier.size(16.dp),
-                        tint = Color(0xFFEF4444) // Destructive red
+                        tint = Color(0xFFEF4444)
                     )
                 }
             }
@@ -310,9 +271,6 @@ private fun MessageActions(
     }
 }
 
-/**
- * Editable message content for user message editing.
- */
 @Composable
 private fun EditableMessageContent(
     content: String,
@@ -407,7 +365,7 @@ private fun StreamingDot() {
         modifier = Modifier
             .size(6.dp)
             .clip(RoundedCornerShape(3.dp))
-            .background(Color(0xFF4DD4C5).copy(alpha = alpha)) // Accent color
+            .background(Color(0xFF4DD4C5).copy(alpha = alpha))
     )
 }
 
@@ -417,7 +375,6 @@ private fun MessageContent(
     isUser: Boolean,
     isStreaming: Boolean
 ) {
-    // Parse reasoning blocks from content
     val parts = parseMessageContent(content)
 
     Surface(
@@ -458,7 +415,6 @@ private fun MessageContent(
                 }
             }
 
-            // Cursor for streaming
             if (isStreaming && !isUser) {
                 Box(
                     modifier = Modifier
@@ -477,7 +433,7 @@ private fun ReasoningBlock(
     sequence: Int
 ) {
     var isExpanded by remember { mutableStateOf(false) }
-    val accentColor = Color(0xFF4DD4C5) // Accent color from theme
+    val accentColor = Color(0xFF4DD4C5)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -492,7 +448,6 @@ private fun ReasoningBlock(
                 .drawLeftBorder(accentColor, 4.dp)
                 .padding(12.dp)
         ) {
-            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -514,7 +469,6 @@ private fun ReasoningBlock(
                 )
             }
 
-            // Content
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = if (isExpanded || content.length <= 100) content else content.take(100) + "...",
@@ -522,7 +476,6 @@ private fun ReasoningBlock(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Show more button
             if (!isExpanded && content.length > 100) {
                 Text(
                     text = "Show more",
@@ -556,7 +509,6 @@ private fun MessageTimestamp(
     )
 }
 
-// Helper to draw left border
 private fun Modifier.drawLeftBorder(color: Color, width: androidx.compose.ui.unit.Dp) = this.then(
     Modifier.drawWithContent {
         drawContent()
@@ -568,7 +520,6 @@ private fun Modifier.drawLeftBorder(color: Color, width: androidx.compose.ui.uni
     }
 )
 
-// Message content parsing
 private sealed class MessagePart {
     data class Text(val content: String) : MessagePart()
     data class Reasoning(val content: String, val sequence: Int) : MessagePart()
@@ -582,7 +533,6 @@ private fun parseMessageContent(content: String): List<MessagePart> {
     var sequenceCounter = 0
 
     reasoningPattern.findAll(content).forEach { match ->
-        // Add text before this reasoning block
         if (match.range.first > lastIndex) {
             val textBefore = content.substring(lastIndex, match.range.first).trim()
             if (textBefore.isNotEmpty()) {
@@ -590,7 +540,6 @@ private fun parseMessageContent(content: String): List<MessagePart> {
             }
         }
 
-        // Add reasoning block
         val sequence = match.groupValues[1].toIntOrNull() ?: sequenceCounter++
         val reasoningContent = match.groupValues[2].trim()
         parts.add(MessagePart.Reasoning(reasoningContent, sequence))
@@ -598,7 +547,6 @@ private fun parseMessageContent(content: String): List<MessagePart> {
         lastIndex = match.range.last + 1
     }
 
-    // Add remaining text
     if (lastIndex < content.length) {
         val remainingText = content.substring(lastIndex).trim()
         if (remainingText.isNotEmpty()) {
@@ -606,7 +554,6 @@ private fun parseMessageContent(content: String): List<MessagePart> {
         }
     }
 
-    // If no parts were added, the entire content is text
     if (parts.isEmpty() && content.isNotEmpty()) {
         parts.add(MessagePart.Text(content))
     }

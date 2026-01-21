@@ -4,10 +4,7 @@ import androidx.compose.material.icons.materialIcon
 import androidx.compose.material.icons.materialPath
 import androidx.compose.ui.graphics.vector.ImageVector
 
-/**
- * Custom icon definitions to avoid material-icons-extended dependency.
- * All icons are defined locally to eliminate the ~5MB extended icons dependency.
- */
+// Icons defined locally to avoid the ~5MB material-icons-extended dependency
 object AppIcons {
     val Add: ImageVector by lazy {
         materialIcon(name = "Filled.Add") {
@@ -580,7 +577,6 @@ object AppIcons {
         }
     }
 
-    // AutoMirrored icons
     val ArrowBack: ImageVector by lazy {
         materialIcon(name = "AutoMirrored.Filled.ArrowBack", autoMirror = true) {
             materialPath {

@@ -3,9 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Request to create an optimization run
- */
 @JsonClass(generateAdapter = true)
 data class CreateOptimizationRequest(
     @Json(name = "name")
@@ -18,9 +15,6 @@ data class CreateOptimizationRequest(
     val baselinePrompt: String? = null
 )
 
-/**
- * Optimization run response
- */
 @JsonClass(generateAdapter = true)
 data class OptimizationRunResponse(
     @Json(name = "id")
@@ -60,9 +54,6 @@ data class OptimizationRunResponse(
     val bestDimScores: Map<String, Double>? = null
 )
 
-/**
- * Optimization candidate response
- */
 @JsonClass(generateAdapter = true)
 data class OptimizationCandidateResponse(
     @Json(name = "id")
@@ -90,18 +81,12 @@ data class OptimizationCandidateResponse(
     val createdAt: String
 )
 
-/**
- * Response for optimization candidates list
- */
 @JsonClass(generateAdapter = true)
 data class OptimizationCandidatesResponse(
     @Json(name = "candidates")
     val candidates: List<OptimizationCandidateResponse>
 )
 
-/**
- * Optimization run status values
- */
 object OptimizationStatus {
     const val PENDING = "pending"
     const val RUNNING = "running"

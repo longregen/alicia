@@ -31,14 +31,9 @@ import org.localforge.alicia.core.domain.repository.VotingRepository
 import org.localforge.alicia.core.network.api.AliciaApiService
 import javax.inject.Singleton
 
-/**
- * Hilt module providing data layer dependencies.
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object DataModule {
-
-    // ========== DataStore ==========
 
     @Provides
     @Singleton
@@ -55,8 +50,6 @@ object DataModule {
     ): SettingsDataStore {
         return SettingsDataStore(dataStore)
     }
-
-    // ========== Repositories ==========
 
     @Provides
     @Singleton

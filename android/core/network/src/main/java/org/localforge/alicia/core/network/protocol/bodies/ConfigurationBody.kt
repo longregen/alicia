@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * Configuration (Type 12) initializes and configures the connection
- */
 data class ConfigurationBody(
     val conversationId: String? = null,
     val lastSequenceSeen: Int? = null,
@@ -12,7 +9,6 @@ data class ConfigurationBody(
     val features: List<String>? = null
 )
 
-// Common features
 object Features {
     const val STREAMING = "streaming"
     const val PARTIAL_RESPONSES = "partial_responses"

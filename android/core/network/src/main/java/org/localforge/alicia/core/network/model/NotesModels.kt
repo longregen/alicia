@@ -3,9 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Request to create a note
- */
 @JsonClass(generateAdapter = true)
 data class CreateNoteRequest(
     @Json(name = "content")
@@ -15,18 +12,12 @@ data class CreateNoteRequest(
     val category: String = "general"
 )
 
-/**
- * Request to update a note
- */
 @JsonClass(generateAdapter = true)
 data class UpdateNoteRequest(
     @Json(name = "content")
     val content: String
 )
 
-/**
- * Response model for a single note
- */
 @JsonClass(generateAdapter = true)
 data class NoteResponse(
     @Json(name = "id")
@@ -54,9 +45,6 @@ data class NoteResponse(
     val updatedAt: Long
 )
 
-/**
- * Response model for note list
- */
 @JsonClass(generateAdapter = true)
 data class NoteListResponse(
     @Json(name = "notes")
@@ -66,18 +54,12 @@ data class NoteListResponse(
     val total: Int
 )
 
-/**
- * Note target types
- */
 object NoteTargetType {
     const val MESSAGE = "message"
     const val TOOL_USE = "tool_use"
     const val REASONING = "reasoning"
 }
 
-/**
- * Note categories - matches web frontend
- */
 object NoteCategory {
     const val IMPROVEMENT = "improvement"
     const val CORRECTION = "correction"

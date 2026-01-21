@@ -16,10 +16,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Visualization for web_extract_links tool results.
- * Displays extracted links with filtering by internal/external.
- */
 @Composable
 fun WebLinksVisualization(
     result: Map<String, Any?>?,

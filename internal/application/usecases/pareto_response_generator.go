@@ -5,62 +5,50 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
-	"github.com/longregen/alicia/internal/prompt"
-	"github.com/longregen/alicia/internal/prompt/baselines"
 )
 
 // Type aliases for backwards compatibility and convenience.
 // These types are defined in ports and re-exported here for ease of use.
 type (
-	// ParetoResponseConfig configures the Pareto-based response generation.
+	// ParetoResponseConfig configures the response generation.
 	// See ports.ParetoResponseConfig for full documentation.
 	ParetoResponseConfig = ports.ParetoResponseConfig
 
-	// ParetoResponseInput contains the input parameters for Pareto-based response generation.
+	// ParetoResponseInput contains the input parameters for response generation.
 	// See ports.ParetoResponseInput for full documentation.
 	ParetoResponseInput = ports.ParetoResponseInput
 
-	// ParetoResponseOutput contains the result of Pareto-based response generation.
+	// ParetoResponseOutput contains the result of response generation.
 	// See ports.ParetoResponseOutput for full documentation.
 	ParetoResponseOutput = ports.ParetoResponseOutput
 )
 
-// DefaultParetoResponseConfig returns sensible defaults for Pareto response generation.
+// DefaultParetoResponseConfig returns sensible defaults for response generation.
 func DefaultParetoResponseConfig() *ParetoResponseConfig {
 	return &ParetoResponseConfig{
-		MaxGenerations:         3,   // Fewer generations for response generation (faster)
-		BranchesPerGen:         2,   // Explore 2 paths per generation
+		MaxGenerations:         1,   // Single-pass generation
+		BranchesPerGen:         1,   // Single path
 		TargetScore:            0.8, // Target 80% quality score
-		MaxToolCalls:           50,  // Budget: total tool calls across all paths
-		MaxLLMCalls:            30,  // Budget: total LLM calls across all paths
-		ParetoArchiveSize:      20,  // Keep up to 20 Pareto-optimal candidates
-		EnableCrossover:        true,
-		ExecutionTimeoutMs:     60000, // 60 seconds per path execution
-		EnableParallelBranches: true,
-		MaxParallelBranches:    3,
+		MaxToolCalls:           50,  // Budget: total tool calls
+		MaxLLMCalls:            30,  // Budget: total LLM calls
+		ParetoArchiveSize:      1,   // No archive needed
+		EnableCrossover:        false,
+		ExecutionTimeoutMs:     60000, // 60 seconds per execution
+		EnableParallelBranches: false,
+		MaxParallelBranches:    1,
 		MaxToolLoopIterations:  5,
 	}
 }
 
-// ParetoResponseGenerator is the SINGLE unified way to generate responses in Alicia.
-// It uses GEPA (Genetic-Pareto) path search to find optimal responses:
-//   - Explores multiple execution paths (branching attempts)
-//   - Uses Pareto selection across 5 dimensions (quality, efficiency, cost, robustness, latency)
-//   - Genetically mutates strategy/reflection TEXT via LLM
-//   - Accumulates lessons to guide future attempts
-//   - Actually executes tools and persists results
-//
-// This replaces the old GenerateResponse use case and AgentService.
+// ParetoResponseGenerator generates responses using a straightforward approach.
+// It executes tools and persists results.
 type ParetoResponseGenerator struct {
 	// Core LLM services
-	llmService    ports.LLMService
-	reflectionLLM ports.LLMService // Optional stronger model for mutation/reflection
+	llmService ports.LLMService
 
 	// Repositories
 	messageRepo      ports.MessageRepository
@@ -81,10 +69,6 @@ type ParetoResponseGenerator struct {
 	// Transaction manager
 	txManager ports.TransactionManager
 
-	// GEPA components (shared, stateless)
-	mutator   *prompt.PathMutator
-	evaluator *baselines.PathEvaluator
-
 	// Default configuration
 	config *ParetoResponseConfig
 
@@ -96,11 +80,17 @@ type ParetoResponseGenerator struct {
 	memorizeFromToolUse *MemorizeFromToolUse
 }
 
-// NewParetoResponseGenerator creates a new unified Pareto-based response generator.
-// This is the ONLY way to generate responses in Alicia - all other methods should use this.
+// executionContext holds per-execution state.
+type paretoExecutionContext struct {
+	config     *ParetoResponseConfig
+	tools      []*models.Tool
+	toolRunner ports.ToolRunner
+}
+
+// NewParetoResponseGenerator creates a new response generator.
 func NewParetoResponseGenerator(
 	llmService ports.LLMService,
-	reflectionLLM ports.LLMService,
+	reflectionLLM ports.LLMService, // kept for API compatibility, unused
 	messageRepo ports.MessageRepository,
 	conversationRepo ports.ConversationRepository,
 	toolRepo ports.ToolRepository,
@@ -119,18 +109,8 @@ func NewParetoResponseGenerator(
 		config = DefaultParetoResponseConfig()
 	}
 
-	// Use main LLM for reflection if none specified
-	if reflectionLLM == nil {
-		reflectionLLM = llmService
-	}
-
-	// Create GEPA components
-	mutator := prompt.NewPathMutator(llmService, reflectionLLM)
-	evaluator := baselines.NewPathEvaluator(llmService)
-
 	gen := &ParetoResponseGenerator{
 		llmService:       llmService,
-		reflectionLLM:    reflectionLLM,
 		messageRepo:      messageRepo,
 		conversationRepo: conversationRepo,
 		toolRepo:         toolRepo,
@@ -142,8 +122,6 @@ func NewParetoResponseGenerator(
 		memoryService:    memoryService,
 		idGenerator:      idGenerator,
 		txManager:        txManager,
-		mutator:          mutator,
-		evaluator:        evaluator,
 		config:           config,
 	}
 
@@ -159,18 +137,10 @@ func NewParetoResponseGenerator(
 	return gen
 }
 
-// executionContext holds per-execution state to ensure thread-safety.
-type paretoExecutionContext struct {
-	config        *ParetoResponseConfig
-	paretoArchive *prompt.PathParetoArchive
-	tools         []*models.Tool
-	toolRunner    ports.ToolRunner
-}
-
-// Execute generates a response using the Pareto search evolutionary approach.
+// Execute generates a response using a straightforward approach.
 // This is the main entry point for response generation.
 func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResponseInput) (*ParetoResponseOutput, error) {
-	log.Printf("[ParetoResponseGenerator] Execute called for conversation=%s, userMessage=%s, previousID=%s", input.ConversationID, input.UserMessageID, input.PreviousID)
+	log.Printf("[ResponseGenerator] Execute called for conversation=%s, userMessage=%s, previousID=%s", input.ConversationID, input.UserMessageID, input.PreviousID)
 
 	if input == nil {
 		return nil, fmt.Errorf("input cannot be nil")
@@ -189,7 +159,7 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
-	log.Printf("[ParetoResponseGenerator] Loaded conversation: %s (title=%q)", conversation.ID, conversation.Title)
+	log.Printf("[ResponseGenerator] Loaded conversation: %s (title=%q)", conversation.ID, conversation.Title)
 
 	// Get user message to respond to
 	userMessage, err := g.messageRepo.GetByID(ctx, input.UserMessageID)
@@ -204,18 +174,18 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 	}
 
 	// Retrieve relevant memories
-	log.Printf("[ParetoResponseGenerator] Retrieving relevant memories...")
+	log.Printf("[ResponseGenerator] Retrieving relevant memories...")
 	var relevantMemories []*models.Memory
 	if g.memoryService != nil {
 		searchResults, err := g.memoryService.SearchWithScores(ctx, userMessage.Contents, 0.7, 5)
 		if err != nil {
-			log.Printf("[ParetoResponseGenerator] WARNING: failed to retrieve memories: %v", err)
+			log.Printf("[ResponseGenerator] WARNING: failed to retrieve memories: %v", err)
 		} else {
-			log.Printf("[ParetoResponseGenerator] Found %d relevant memories", len(searchResults))
+			log.Printf("[ResponseGenerator] Found %d relevant memories", len(searchResults))
 			relevantMemories = make([]*models.Memory, len(searchResults))
 			for i, result := range searchResults {
 				relevantMemories[i] = result.Memory
-				log.Printf("[ParetoResponseGenerator]   Memory[%d]: id=%s similarity=%.3f content=%q",
+				log.Printf("[ResponseGenerator]   Memory[%d]: id=%s similarity=%.3f content=%q",
 					i, result.Memory.ID, result.Similarity, truncateForLog(result.Memory.Content, 80))
 				// Notify about retrieved memory
 				if input.Notifier != nil {
@@ -232,30 +202,27 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 			}
 		}
 	} else {
-		log.Printf("[ParetoResponseGenerator] Memory service not available, skipping memory retrieval")
+		log.Printf("[ResponseGenerator] Memory service not available, skipping memory retrieval")
 	}
 
 	// Get available tools (only those with registered executors)
-	log.Printf("[ParetoResponseGenerator] Loading tools (enableTools=%v)...", input.EnableTools)
+	log.Printf("[ResponseGenerator] Loading tools (enableTools=%v)...", input.EnableTools)
 	var tools []*models.Tool
 	if input.EnableTools && g.toolService != nil {
 		tools, err = g.toolService.ListAvailable(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get available tools: %w", err)
 		}
-		log.Printf("[ParetoResponseGenerator] Loaded %d available tools (with executors)", len(tools))
+		log.Printf("[ResponseGenerator] Loaded %d available tools (with executors)", len(tools))
 		for i, tool := range tools {
-			log.Printf("[ParetoResponseGenerator]   Tool[%d]: %s", i, tool.Name)
+			log.Printf("[ResponseGenerator]   Tool[%d]: %s", i, tool.Name)
 		}
 	} else {
-		log.Printf("[ParetoResponseGenerator] Tools disabled or toolService not available")
+		log.Printf("[ResponseGenerator] Tools disabled or toolService not available")
 	}
 
 	// Create per-execution context
 	execCtx := g.newExecutionContext(input.Config, tools)
-	log.Printf("[ParetoResponseGenerator] Execution context created with config: maxGen=%d, branchesPerGen=%d, targetScore=%.2f, maxToolCalls=%d, maxLLMCalls=%d, parallelBranches=%v",
-		execCtx.config.MaxGenerations, execCtx.config.BranchesPerGen, execCtx.config.TargetScore,
-		execCtx.config.MaxToolCalls, execCtx.config.MaxLLMCalls, execCtx.config.EnableParallelBranches)
 
 	// Create assistant message
 	sequenceNumber, err := g.messageRepo.GetNextSequenceNumber(ctx, input.ConversationID)
@@ -271,7 +238,7 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 	if input.PreviousID != "" {
 		message.SetPreviousMessage(input.PreviousID)
 	}
-	log.Printf("[ParetoResponseGenerator] Creating assistant message: id=%s, previousID=%s (input.PreviousID=%s)", message.ID, message.PreviousID, input.PreviousID)
+	log.Printf("[ResponseGenerator] Creating assistant message: id=%s, previousID=%s (input.PreviousID=%s)", message.ID, message.PreviousID, input.PreviousID)
 
 	if err := g.messageRepo.Create(ctx, message); err != nil {
 		return nil, fmt.Errorf("failed to create message: %w", err)
@@ -299,48 +266,48 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 
 	// Build the query from user message and context
 	query := g.buildQueryWithContext(userMessage.Contents, messages, relevantMemories, conversation)
-	log.Printf("[ParetoResponseGenerator] Built query context (%d chars) for Pareto search", len(query))
+	log.Printf("[ResponseGenerator] Built query context (%d chars) for response generation", len(query))
 
-	// Run Pareto search
-	log.Printf("[ParetoResponseGenerator] Starting Pareto search...")
-	searchStartTime := time.Now()
-	result, err := g.runParetoSearch(ctx, query, input, message, execCtx)
-	searchDuration := time.Since(searchStartTime)
+	// Generate response
+	log.Printf("[ResponseGenerator] Starting response generation...")
+	startTime := time.Now()
+	result, err := g.generateResponse(ctx, query, input, message, execCtx)
+	duration := time.Since(startTime)
 	if err != nil {
-		log.Printf("[ParetoResponseGenerator] Pareto search FAILED after %v: %v", searchDuration, err)
+		log.Printf("[ResponseGenerator] Response generation FAILED after %v: %v", duration, err)
 		// Mark message as failed
 		message.MarkAsFailed()
 		_ = g.messageRepo.Update(ctx, message)
 		if input.Notifier != nil {
 			input.Notifier.NotifyGenerationFailed(message.ID, input.ConversationID, err)
 		}
-		return nil, fmt.Errorf("pareto search failed: %w", err)
+		return nil, fmt.Errorf("response generation failed: %w", err)
 	}
-	log.Printf("[ParetoResponseGenerator] Pareto search completed in %v: score=%.3f iterations=%d answer=%d chars",
-		searchDuration, result.Score, result.Iterations, len(result.Answer))
+	log.Printf("[ResponseGenerator] Response generation completed in %v: answer=%d chars",
+		duration, len(result.Answer))
 
-	// Update message with best response
+	// Update message with response
 	message.Contents = strings.TrimSpace(result.Answer)
 	message.MarkAsCompleted()
 	if err := g.messageRepo.Update(ctx, message); err != nil {
 		return nil, fmt.Errorf("failed to update message: %w", err)
 	}
 
-	// Create tool uses from the best path's trace
+	// Create tool uses from the trace
 	var toolUses []*models.ToolUse
 	if result.BestPath != nil && result.BestPath.Trace != nil {
-		log.Printf("[ParetoResponseGenerator] Best path has %d tool calls", len(result.BestPath.Trace.ToolCalls))
+		log.Printf("[ResponseGenerator] Path has %d tool calls", len(result.BestPath.Trace.ToolCalls))
 		for i, tc := range result.BestPath.Trace.ToolCalls {
-			log.Printf("[ParetoResponseGenerator]   ToolCall[%d]: %s success=%v", i, tc.ToolName, tc.Success)
+			log.Printf("[ResponseGenerator]   ToolCall[%d]: %s success=%v", i, tc.ToolName, tc.Success)
 			toolUse, err := g.createToolUseFromTrace(ctx, message.ID, &tc, input)
 			if err != nil {
-				log.Printf("[ParetoResponseGenerator] WARNING: failed to create tool use record: %v", err)
+				log.Printf("[ResponseGenerator] WARNING: failed to create tool use record: %v", err)
 				continue
 			}
 			toolUses = append(toolUses, toolUse)
 		}
 	} else {
-		log.Printf("[ParetoResponseGenerator] No tool calls in best path")
+		log.Printf("[ResponseGenerator] No tool calls in path")
 	}
 
 	// Notify completion
@@ -358,20 +325,18 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 	// Generate title if needed
 	g.titleGenerator.ExecuteAsync(ctx, input.ConversationID)
 
-	paretoFront := execCtx.paretoArchive.GetParetoFront()
-	log.Printf("[ParetoResponseGenerator] Execute complete: messageID=%s paretoFrontSize=%d toolUses=%d finalScore=%.3f",
-		message.ID, len(paretoFront), len(toolUses), result.Score)
+	log.Printf("[ResponseGenerator] Execute complete: messageID=%s toolUses=%d",
+		message.ID, len(toolUses))
 
 	return &ParetoResponseOutput{
-		Message:     message,
-		ToolUses:    toolUses,
-		ParetoFront: paretoFront,
-		Score:       result.Score,
-		Iterations:  result.Iterations,
+		Message:    message,
+		ToolUses:   toolUses,
+		Score:      1.0,
+		Iterations: 1,
 	}, nil
 }
 
-// newExecutionContext creates a per-execution context with local config copy and fresh Pareto archive.
+// newExecutionContext creates a per-execution context.
 func (g *ParetoResponseGenerator) newExecutionContext(inputConfig *ParetoResponseConfig, tools []*models.Tool) *paretoExecutionContext {
 	// Copy base config
 	cfg := &ParetoResponseConfig{
@@ -390,20 +355,17 @@ func (g *ParetoResponseGenerator) newExecutionContext(inputConfig *ParetoRespons
 
 	// Apply overrides
 	if inputConfig != nil {
-		if inputConfig.MaxGenerations > 0 {
-			cfg.MaxGenerations = inputConfig.MaxGenerations
-		}
-		if inputConfig.BranchesPerGen > 0 {
-			cfg.BranchesPerGen = inputConfig.BranchesPerGen
-		}
-		if inputConfig.TargetScore > 0 && inputConfig.TargetScore <= 1.0 {
-			cfg.TargetScore = inputConfig.TargetScore
-		}
 		if inputConfig.MaxToolCalls > 0 {
 			cfg.MaxToolCalls = inputConfig.MaxToolCalls
 		}
 		if inputConfig.MaxLLMCalls > 0 {
 			cfg.MaxLLMCalls = inputConfig.MaxLLMCalls
+		}
+		if inputConfig.ExecutionTimeoutMs > 0 {
+			cfg.ExecutionTimeoutMs = inputConfig.ExecutionTimeoutMs
+		}
+		if inputConfig.MaxToolLoopIterations > 0 {
+			cfg.MaxToolLoopIterations = inputConfig.MaxToolLoopIterations
 		}
 	}
 
@@ -416,10 +378,9 @@ func (g *ParetoResponseGenerator) newExecutionContext(inputConfig *ParetoRespons
 	}
 
 	return &paretoExecutionContext{
-		config:        cfg,
-		paretoArchive: prompt.NewPathParetoArchive(cfg.ParetoArchiveSize),
-		tools:         tools,
-		toolRunner:    toolRunner,
+		config:     cfg,
+		tools:      tools,
+		toolRunner: toolRunner,
 	}
 }
 
@@ -474,7 +435,6 @@ func (g *ParetoResponseGenerator) buildQueryWithContext(
 }
 
 // generateThinkingSummary generates a brief summary of what the agent is about to do.
-// It uses a fast LLM call to create a one-liner description for the user.
 func (g *ParetoResponseGenerator) generateThinkingSummary(ctx context.Context, userQuery string, tools []*models.Tool, memories []*models.Memory) string {
 	// Build a list of available tool names
 	var toolNames []string
@@ -513,7 +473,7 @@ Response (one short sentence):`, userQuery, memoryHint, toolHint)
 
 	response, err := g.llmService.Chat(summaryCtx, messages)
 	if err != nil {
-		log.Printf("[ParetoResponseGenerator] Failed to generate thinking summary: %v", err)
+		log.Printf("[ResponseGenerator] Failed to generate thinking summary: %v", err)
 		return ""
 	}
 
@@ -533,443 +493,14 @@ Response (one short sentence):`, userQuery, memoryHint, toolHint)
 	return summary
 }
 
-// runParetoSearch executes the GEPA evolutionary loop to find the best response.
-func (g *ParetoResponseGenerator) runParetoSearch(
+// generateResponse generates a response using the LLM with tool loop.
+func (g *ParetoResponseGenerator) generateResponse(
 	ctx context.Context,
 	query string,
 	input *ParetoResponseInput,
 	message *models.Message,
 	execCtx *paretoExecutionContext,
 ) (*models.PathSearchResult, error) {
-	// Generate run ID
-	runID := g.idGenerator.GenerateOptimizationRunID()
-	log.Printf("[ParetoSearch] Starting search runID=%s maxGenerations=%d branchesPerGen=%d targetScore=%.2f",
-		runID, execCtx.config.MaxGenerations, execCtx.config.BranchesPerGen, execCtx.config.TargetScore)
-
-	// Create seed candidate
-	var seed *models.PathCandidate
-	if input.SeedStrategy != "" {
-		candidateID := g.idGenerator.GeneratePromptCandidateID()
-		seed = models.NewPathCandidate(candidateID, runID, 0, nil, input.SeedStrategy, nil)
-		log.Printf("[ParetoSearch] Created seed with custom strategy: %q", truncateForLog(input.SeedStrategy, 100))
-	} else {
-		candidateID := g.idGenerator.GeneratePromptCandidateID()
-		seed = models.NewSeedCandidate(candidateID, runID)
-		log.Printf("[ParetoSearch] Created default seed candidate id=%s", candidateID)
-	}
-
-	// Execute and evaluate seed
-	log.Printf("[ParetoSearch] Executing seed path...")
-	trace, err := g.executePath(ctx, query, seed, execCtx, input)
-	if err != nil {
-		log.Printf("[ParetoSearch] Seed execution failed: %v (using empty trace)", err)
-		trace = &models.ExecutionTrace{
-			Query:       query,
-			ToolCalls:   []models.ToolCallRecord{},
-			FinalAnswer: "",
-			DurationMs:  0,
-		}
-	} else {
-		log.Printf("[ParetoSearch] Seed execution complete: %d tool calls, %d ms, answer=%d chars",
-			len(trace.ToolCalls), trace.DurationMs, len(trace.FinalAnswer))
-	}
-	seed.SetTrace(trace)
-
-	log.Printf("[ParetoSearch] Evaluating seed candidate...")
-	scores, feedback, err := g.evaluateCandidate(ctx, query, trace)
-	if err != nil {
-		log.Printf("[ParetoSearch] Seed evaluation failed: %v", err)
-		scores = models.PathScores{}
-		feedback = "Evaluation failed: " + err.Error()
-	} else {
-		log.Printf("[ParetoSearch] Seed scores: quality=%.3f efficiency=%.3f cost=%.3f robustness=%.3f latency=%.3f",
-			scores.AnswerQuality, scores.Efficiency, scores.TokenCost, scores.Robustness, scores.Latency)
-		log.Printf("[ParetoSearch] Seed feedback: %q", truncateForLog(feedback, 150))
-	}
-	seed.SetScores(scores)
-	seed.SetFeedback(feedback)
-
-	execCtx.paretoArchive.Add(seed)
-
-	// Budget tracking
-	toolCallsUsed := len(trace.ToolCalls)
-	llmCallsUsed := 1
-	log.Printf("[ParetoSearch] Initial budget: toolCalls=%d/%d llmCalls=%d/%d",
-		toolCallsUsed, execCtx.config.MaxToolCalls, llmCallsUsed, execCtx.config.MaxLLMCalls)
-
-	bestPath := seed
-	log.Printf("[ParetoSearch] Initial best path: score=%.3f", bestPath.Scores.AnswerQuality)
-
-	// Main evolutionary loop
-	for gen := 0; gen < execCtx.config.MaxGenerations; gen++ {
-		log.Printf("[ParetoSearch] === Generation %d/%d ===", gen+1, execCtx.config.MaxGenerations)
-		log.Printf("[ParetoSearch] Budget status: toolCalls=%d/%d llmCalls=%d/%d archiveSize=%d bestScore=%.3f",
-			toolCallsUsed, execCtx.config.MaxToolCalls, llmCallsUsed, execCtx.config.MaxLLMCalls,
-			execCtx.paretoArchive.Size(), bestPath.Scores.AnswerQuality)
-
-		// Check budget
-		if toolCallsUsed >= execCtx.config.MaxToolCalls || llmCallsUsed >= execCtx.config.MaxLLMCalls {
-			log.Printf("[ParetoSearch] Budget exhausted, stopping search")
-			break
-		}
-
-		// Select candidates for mutation
-		selected := execCtx.paretoArchive.SelectForMutation(execCtx.config.BranchesPerGen)
-		log.Printf("[ParetoSearch] Selected %d candidates for mutation (requested %d)", len(selected), execCtx.config.BranchesPerGen)
-		if len(selected) == 0 {
-			if bestPath != nil {
-				log.Printf("[ParetoSearch] No candidates selected, falling back to best path")
-				selected = []*models.PathCandidate{bestPath}
-			} else {
-				log.Printf("[ParetoSearch] No candidates available, stopping search")
-				break
-			}
-		}
-		for i, cand := range selected {
-			log.Printf("[ParetoSearch]   Candidate[%d]: id=%s gen=%d score=%.3f", i, cand.ID, cand.Generation, cand.Scores.AnswerQuality)
-		}
-
-		// Process branches
-		if execCtx.config.EnableParallelBranches && len(selected) > 1 {
-			log.Printf("[ParetoSearch] Processing %d branches in PARALLEL (max=%d)", len(selected), execCtx.config.MaxParallelBranches)
-			result := g.processBranchesParallel(ctx, query, selected, feedback, toolCallsUsed, llmCallsUsed, bestPath, execCtx, input)
-			toolCallsUsed = result.toolCallsUsed
-			llmCallsUsed = result.llmCallsUsed
-			bestPath = result.bestPath
-			log.Printf("[ParetoSearch] Parallel processing complete: bestScore=%.3f earlyExit=%v", bestPath.Scores.AnswerQuality, result.earlyExit)
-
-			if result.earlyExit {
-				log.Printf("[ParetoSearch] EARLY EXIT: target score reached (%.3f >= %.3f)", bestPath.Scores.AnswerQuality, execCtx.config.TargetScore)
-				return &models.PathSearchResult{
-					BestPath:   result.bestPath,
-					Answer:     result.bestPath.Trace.FinalAnswer,
-					Score:      result.bestPath.Scores.AnswerQuality,
-					Iterations: gen + 1,
-				}, nil
-			}
-		} else {
-			// Sequential processing
-			log.Printf("[ParetoSearch] Processing %d branches SEQUENTIALLY", len(selected))
-			for branchIdx, candidate := range selected {
-				if toolCallsUsed >= execCtx.config.MaxToolCalls || llmCallsUsed >= execCtx.config.MaxLLMCalls {
-					log.Printf("[ParetoSearch] Budget exhausted during sequential processing")
-					break
-				}
-
-				log.Printf("[ParetoSearch] Branch[%d]: mutating candidate %s", branchIdx, candidate.ID)
-				candidateFeedback := candidate.Feedback
-				if candidateFeedback == "" {
-					candidateFeedback = feedback
-				}
-
-				mutated, err := g.mutateCandidate(ctx, candidate, candidateFeedback)
-				llmCallsUsed++
-				if err != nil {
-					log.Printf("[ParetoSearch] Branch[%d]: mutation failed: %v", branchIdx, err)
-					continue
-				}
-				log.Printf("[ParetoSearch] Branch[%d]: mutation successful, new id=%s", branchIdx, mutated.ID)
-
-				log.Printf("[ParetoSearch] Branch[%d]: executing mutated path...", branchIdx)
-				mutatedTrace, err := g.executePath(ctx, query, mutated, execCtx, input)
-				llmCallsUsed++
-				if err != nil {
-					log.Printf("[ParetoSearch] Branch[%d]: execution failed: %v", branchIdx, err)
-					continue
-				}
-				mutated.SetTrace(mutatedTrace)
-				toolCallsUsed += len(mutatedTrace.ToolCalls)
-				log.Printf("[ParetoSearch] Branch[%d]: execution complete: %d tool calls, %d ms",
-					branchIdx, len(mutatedTrace.ToolCalls), mutatedTrace.DurationMs)
-
-				log.Printf("[ParetoSearch] Branch[%d]: evaluating...", branchIdx)
-				mutatedScores, mutatedFeedback, err := g.evaluateCandidate(ctx, query, mutatedTrace)
-				llmCallsUsed++
-				if err != nil {
-					log.Printf("[ParetoSearch] Branch[%d]: evaluation failed: %v", branchIdx, err)
-					continue
-				}
-				mutated.SetScores(mutatedScores)
-				mutated.SetFeedback(mutatedFeedback)
-				log.Printf("[ParetoSearch] Branch[%d]: scores: quality=%.3f efficiency=%.3f", branchIdx, mutatedScores.AnswerQuality, mutatedScores.Efficiency)
-
-				execCtx.paretoArchive.Add(mutated)
-
-				if mutatedScores.AnswerQuality > bestPath.Scores.AnswerQuality {
-					log.Printf("[ParetoSearch] Branch[%d]: NEW BEST PATH! %.3f > %.3f", branchIdx, mutatedScores.AnswerQuality, bestPath.Scores.AnswerQuality)
-					bestPath = mutated
-				}
-
-				// Early exit if target reached
-				if mutatedScores.AnswerQuality >= execCtx.config.TargetScore {
-					log.Printf("[ParetoSearch] Branch[%d]: EARLY EXIT: target score reached (%.3f >= %.3f)",
-						branchIdx, mutatedScores.AnswerQuality, execCtx.config.TargetScore)
-					return &models.PathSearchResult{
-						BestPath:   bestPath,
-						Answer:     mutatedTrace.FinalAnswer,
-						Score:      mutatedScores.AnswerQuality,
-						Iterations: gen + 1,
-					}, nil
-				}
-			}
-		}
-
-		// Crossover
-		if execCtx.config.EnableCrossover && execCtx.paretoArchive.Size() >= 2 {
-			log.Printf("[ParetoSearch] Attempting crossover (archiveSize=%d)", execCtx.paretoArchive.Size())
-			parent1, parent2 := g.selectDiversePair(execCtx.paretoArchive)
-			if parent1 != nil && parent2 != nil {
-				log.Printf("[ParetoSearch] Crossover parents: %s (score=%.3f) x %s (score=%.3f)",
-					parent1.ID, parent1.Scores.AnswerQuality, parent2.ID, parent2.Scores.AnswerQuality)
-				child, err := g.crossoverCandidates(ctx, parent1, parent2)
-				llmCallsUsed++
-				if err == nil && child != nil {
-					log.Printf("[ParetoSearch] Crossover produced child %s, executing...", child.ID)
-					childTrace, err := g.executePath(ctx, query, child, execCtx, input)
-					llmCallsUsed++
-					if err == nil {
-						child.SetTrace(childTrace)
-						toolCallsUsed += len(childTrace.ToolCalls)
-						childScores, childFeedback, _ := g.evaluateCandidate(ctx, query, childTrace)
-						llmCallsUsed++
-						child.SetScores(childScores)
-						child.SetFeedback(childFeedback)
-						execCtx.paretoArchive.Add(child)
-						log.Printf("[ParetoSearch] Crossover child scores: quality=%.3f efficiency=%.3f", childScores.AnswerQuality, childScores.Efficiency)
-
-						if childScores.AnswerQuality > bestPath.Scores.AnswerQuality {
-							log.Printf("[ParetoSearch] Crossover child is NEW BEST PATH! %.3f > %.3f", childScores.AnswerQuality, bestPath.Scores.AnswerQuality)
-							bestPath = child
-						}
-					} else {
-						log.Printf("[ParetoSearch] Crossover child execution failed: %v", err)
-					}
-				} else if err != nil {
-					log.Printf("[ParetoSearch] Crossover failed: %v", err)
-				}
-			} else {
-				log.Printf("[ParetoSearch] Could not select diverse pair for crossover")
-			}
-		}
-
-		log.Printf("[ParetoSearch] Generation %d complete: archiveSize=%d bestScore=%.3f budget(tools=%d/%d llm=%d/%d)",
-			gen+1, execCtx.paretoArchive.Size(), bestPath.Scores.AnswerQuality,
-			toolCallsUsed, execCtx.config.MaxToolCalls, llmCallsUsed, execCtx.config.MaxLLMCalls)
-	}
-
-	if bestPath == nil || bestPath.Trace == nil {
-		log.Printf("[ParetoSearch] FAILED: no valid path found after %d generations", execCtx.config.MaxGenerations)
-		return nil, fmt.Errorf("no valid path found after %d generations", execCtx.config.MaxGenerations)
-	}
-
-	log.Printf("[ParetoSearch] Search complete: finalScore=%.3f iterations=%d archiveSize=%d totalToolCalls=%d totalLLMCalls=%d",
-		bestPath.Scores.AnswerQuality, execCtx.config.MaxGenerations, execCtx.paretoArchive.Size(), toolCallsUsed, llmCallsUsed)
-	log.Printf("[ParetoSearch] Best path: id=%s gen=%d scores(q=%.3f e=%.3f c=%.3f r=%.3f l=%.3f)",
-		bestPath.ID, bestPath.Generation, bestPath.Scores.AnswerQuality, bestPath.Scores.Efficiency,
-		bestPath.Scores.TokenCost, bestPath.Scores.Robustness, bestPath.Scores.Latency)
-
-	return &models.PathSearchResult{
-		BestPath:   bestPath,
-		Answer:     bestPath.Trace.FinalAnswer,
-		Score:      bestPath.Scores.AnswerQuality,
-		Iterations: execCtx.config.MaxGenerations,
-	}, nil
-}
-
-// parallelResult holds the aggregated result from parallel branch execution.
-// Uses atomic counters for lock-free budget tracking.
-type parallelResult struct {
-	toolCallsUsed int
-	llmCallsUsed  int
-	bestPath      *models.PathCandidate
-	earlyExit     bool
-}
-
-// branchResult holds the result of processing a single branch.
-type branchResult struct {
-	mutated   *models.PathCandidate
-	toolCalls int
-	llmCalls  int
-	success   bool
-	targetMet bool
-}
-
-// processBranchesParallel processes multiple branches concurrently.
-// Uses atomic counters and batched archive updates for reduced lock contention.
-func (g *ParetoResponseGenerator) processBranchesParallel(
-	ctx context.Context,
-	query string,
-	candidates []*models.PathCandidate,
-	fallbackFeedback string,
-	initialToolCalls int,
-	initialLLMCalls int,
-	currentBest *models.PathCandidate,
-	execCtx *paretoExecutionContext,
-	input *ParetoResponseInput,
-) parallelResult {
-	log.Printf("[ParallelBranches] Starting parallel processing of %d candidates", len(candidates))
-
-	// Use atomic counters for lock-free budget tracking
-	var toolCallsUsed int64 = int64(initialToolCalls)
-	var llmCallsUsed int64 = int64(initialLLMCalls)
-	var stopEarly int32 // atomic bool: 0 = false, 1 = true
-
-	maxParallel := execCtx.config.MaxParallelBranches
-	if maxParallel <= 0 {
-		maxParallel = execCtx.config.BranchesPerGen
-		if maxParallel > 5 {
-			maxParallel = 5
-		}
-	}
-	log.Printf("[ParallelBranches] Max parallel: %d", maxParallel)
-
-	sem := make(chan struct{}, maxParallel)
-	resultsChan := make(chan branchResult, len(candidates))
-	var wg sync.WaitGroup
-
-	for _, candidate := range candidates {
-		// Check budget using atomic loads (lock-free)
-		if atomic.LoadInt32(&stopEarly) == 1 ||
-			atomic.LoadInt64(&toolCallsUsed) >= int64(execCtx.config.MaxToolCalls) ||
-			atomic.LoadInt64(&llmCallsUsed) >= int64(execCtx.config.MaxLLMCalls) {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			break
-		default:
-		}
-
-		wg.Add(1)
-		candidate := candidate
-
-		go func() {
-			defer wg.Done()
-
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-ctx.Done():
-				return
-			}
-
-			// Check early exit flag (lock-free)
-			if atomic.LoadInt32(&stopEarly) == 1 {
-				return
-			}
-
-			candidateFeedback := candidate.Feedback
-			if candidateFeedback == "" {
-				candidateFeedback = fallbackFeedback
-			}
-
-			brResult := branchResult{llmCalls: 0, success: false}
-
-			mutated, err := g.mutateCandidate(ctx, candidate, candidateFeedback)
-			brResult.llmCalls++
-			if err != nil {
-				resultsChan <- brResult
-				return
-			}
-
-			mutatedTrace, err := g.executePath(ctx, query, mutated, execCtx, input)
-			brResult.llmCalls++
-			if err != nil {
-				resultsChan <- brResult
-				return
-			}
-			mutated.SetTrace(mutatedTrace)
-			brResult.toolCalls = len(mutatedTrace.ToolCalls)
-
-			mutatedScores, mutatedFeedback, err := g.evaluateCandidate(ctx, query, mutatedTrace)
-			brResult.llmCalls++
-			if err != nil {
-				resultsChan <- brResult
-				return
-			}
-			mutated.SetScores(mutatedScores)
-			mutated.SetFeedback(mutatedFeedback)
-
-			brResult.mutated = mutated
-			brResult.success = true
-			brResult.targetMet = mutatedScores.AnswerQuality >= execCtx.config.TargetScore
-
-			resultsChan <- brResult
-		}()
-	}
-
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Collect results with minimal locking
-	var completedBranches []*models.PathCandidate
-	bestPath := currentBest
-	earlyExit := false
-	completedCount := 0
-	successCount := 0
-
-	for brResult := range resultsChan {
-		completedCount++
-
-		// Update atomic counters (lock-free)
-		atomic.AddInt64(&llmCallsUsed, int64(brResult.llmCalls))
-		atomic.AddInt64(&toolCallsUsed, int64(brResult.toolCalls))
-
-		if brResult.success && brResult.mutated != nil {
-			successCount++
-			completedBranches = append(completedBranches, brResult.mutated)
-			log.Printf("[ParallelBranches] Branch completed successfully: id=%s score=%.3f",
-				brResult.mutated.ID, brResult.mutated.Scores.AnswerQuality)
-
-			if brResult.mutated.Scores.AnswerQuality > bestPath.Scores.AnswerQuality {
-				log.Printf("[ParallelBranches] NEW BEST PATH: %.3f > %.3f",
-					brResult.mutated.Scores.AnswerQuality, bestPath.Scores.AnswerQuality)
-				bestPath = brResult.mutated
-			}
-
-			if brResult.targetMet {
-				log.Printf("[ParallelBranches] Target score met! Triggering early exit")
-				earlyExit = true
-				atomic.StoreInt32(&stopEarly, 1)
-			}
-		} else {
-			log.Printf("[ParallelBranches] Branch failed or produced no result")
-		}
-	}
-
-	// Batch archive update (single pass, archive handles its own locking)
-	for _, candidate := range completedBranches {
-		execCtx.paretoArchive.Add(candidate)
-	}
-
-	log.Printf("[ParallelBranches] Complete: %d/%d successful, bestScore=%.3f, earlyExit=%v",
-		successCount, completedCount, bestPath.Scores.AnswerQuality, earlyExit)
-
-	return parallelResult{
-		toolCallsUsed: int(atomic.LoadInt64(&toolCallsUsed)),
-		llmCallsUsed:  int(atomic.LoadInt64(&llmCallsUsed)),
-		bestPath:      bestPath,
-		earlyExit:     earlyExit,
-	}
-}
-
-// executePath runs the agent with the candidate's strategy and captures the execution trace.
-func (g *ParetoResponseGenerator) executePath(
-	ctx context.Context,
-	query string,
-	candidate *models.PathCandidate,
-	execCtx *paretoExecutionContext,
-	input *ParetoResponseInput,
-) (*models.ExecutionTrace, error) {
-	if candidate == nil {
-		return nil, fmt.Errorf("candidate cannot be nil")
-	}
-
-	log.Printf("[ExecutePath] Starting execution for candidate %s (gen=%d)", candidate.ID, candidate.Generation)
-
 	timeout := time.Duration(execCtx.config.ExecutionTimeoutMs) * time.Millisecond
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -977,8 +508,7 @@ func (g *ParetoResponseGenerator) executePath(
 	startTime := time.Now()
 
 	// Build agent prompt
-	agentPrompt := g.buildAgentPrompt(candidate, query, execCtx.tools)
-	log.Printf("[ExecutePath] Built agent prompt (%d chars), %d lessons", len(agentPrompt), len(candidate.AccumulatedLessons))
+	agentPrompt := g.buildAgentPrompt(query, execCtx.tools)
 
 	// Create initial messages
 	messages := []ports.LLMMessage{
@@ -988,18 +518,58 @@ func (g *ParetoResponseGenerator) executePath(
 
 	// Run tool loop if tools available
 	if execCtx.toolRunner != nil && len(execCtx.tools) > 0 {
-		log.Printf("[ExecutePath] Executing with tool loop (tools=%d, maxIterations=%d, timeout=%v)",
+		log.Printf("[ResponseGenerator] Executing with tool loop (tools=%d, maxIterations=%d, timeout=%v)",
 			len(execCtx.tools), execCtx.config.MaxToolLoopIterations, timeout)
-		return g.executePathWithToolLoop(timeoutCtx, messages, agentPrompt, query, startTime, execCtx, input)
+		trace, err := g.executeWithToolLoop(timeoutCtx, messages, agentPrompt, query, startTime, execCtx, input)
+		if err != nil {
+			return nil, err
+		}
+		return &models.PathSearchResult{
+			BestPath: &models.PathCandidate{
+				Trace: trace,
+			},
+			Answer:     trace.FinalAnswer,
+			Score:      1.0,
+			Iterations: 1,
+		}, nil
 	}
 
-	// Single-turn execution
-	log.Printf("[ExecutePath] Executing single-turn (no tools or toolRunner)")
-	return g.executePathSingleTurn(timeoutCtx, messages, agentPrompt, query, startTime, execCtx)
+	// Single-turn execution without tools
+	log.Printf("[ResponseGenerator] Executing single-turn (no tools or toolRunner)")
+	trace, err := g.executeSingleTurn(timeoutCtx, messages, agentPrompt, query, startTime, execCtx)
+	if err != nil {
+		return nil, err
+	}
+	return &models.PathSearchResult{
+		BestPath: &models.PathCandidate{
+			Trace: trace,
+		},
+		Answer:     trace.FinalAnswer,
+		Score:      1.0,
+		Iterations: 1,
+	}, nil
 }
 
-// executePathSingleTurn performs single-turn execution without tool loop.
-func (g *ParetoResponseGenerator) executePathSingleTurn(
+// buildAgentPrompt constructs the full prompt for agent execution.
+func (g *ParetoResponseGenerator) buildAgentPrompt(query string, tools []*models.Tool) string {
+	var sb strings.Builder
+
+	sb.WriteString("You are Alicia, a helpful AI assistant. Think step by step and provide clear, accurate answers.\n\n")
+
+	// Add tool descriptions
+	if len(tools) > 0 {
+		sb.WriteString("Available tools:\n")
+		for _, tool := range tools {
+			sb.WriteString(fmt.Sprintf("- %s: %s\n", tool.Name, tool.Description))
+		}
+		sb.WriteString("\nUse tools as needed to find the best answer.\n")
+	}
+
+	return sb.String()
+}
+
+// executeSingleTurn performs single-turn execution without tool loop.
+func (g *ParetoResponseGenerator) executeSingleTurn(
 	ctx context.Context,
 	messages []ports.LLMMessage,
 	agentPrompt, query string,
@@ -1045,8 +615,8 @@ func (g *ParetoResponseGenerator) executePathSingleTurn(
 	}, nil
 }
 
-// executePathWithToolLoop performs multi-turn execution with actual tool execution.
-func (g *ParetoResponseGenerator) executePathWithToolLoop(
+// executeWithToolLoop performs multi-turn execution with actual tool execution.
+func (g *ParetoResponseGenerator) executeWithToolLoop(
 	ctx context.Context,
 	messages []ports.LLMMessage,
 	agentPrompt, query string,
@@ -1095,26 +665,55 @@ func (g *ParetoResponseGenerator) executePathWithToolLoop(
 			break
 		}
 
-		// Execute tool calls in PARALLEL for better performance
-		log.Printf("[ToolLoop] Executing %d tool calls in parallel...", len(response.ToolCalls))
-		toolRecords := g.executeToolCallsParallel(ctx, response.ToolCalls, execCtx, input)
-
-		// Append results to messages (maintain order for LLM context)
-		for i, record := range toolRecords {
-			if record.Success {
-				resultContent := fmt.Sprintf("%v", record.Result)
-				currentMessages = append(currentMessages, ports.LLMMessage{
-					Role:    "tool",
-					Content: resultContent,
-				})
-			} else {
-				currentMessages = append(currentMessages, ports.LLMMessage{
-					Role:    "tool",
-					Content: fmt.Sprintf("Error executing %s: %s", response.ToolCalls[i].Name, record.Error),
-				})
+		// Execute tool calls
+		log.Printf("[ToolLoop] Executing %d tool calls...", len(response.ToolCalls))
+		for _, tc := range response.ToolCalls {
+			toolRecord := models.ToolCallRecord{
+				ToolName:  tc.Name,
+				Arguments: tc.Arguments,
+				Success:   false,
+				Result:    nil,
+				Error:     "",
 			}
+
+			// Notify tool start
+			if input.Notifier != nil {
+				input.Notifier.NotifyToolUseStart(tc.ID, "", input.ConversationID, tc.Name, tc.Arguments)
+			}
+
+			// Execute tool
+			if execCtx.toolRunner == nil {
+				toolRecord.Error = "tool runner not available"
+			} else {
+				result, execErr := execCtx.toolRunner.RunTool(ctx, tc.Name, tc.Arguments)
+				if execErr != nil {
+					log.Printf("[ToolLoop] Tool %s FAILED: %v", tc.Name, execErr)
+					toolRecord.Success = false
+					toolRecord.Error = execErr.Error()
+					currentMessages = append(currentMessages, ports.LLMMessage{
+						Role:    "tool",
+						Content: fmt.Sprintf("Error executing %s: %s", tc.Name, execErr.Error()),
+					})
+					if input.Notifier != nil {
+						input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, false, nil, execErr.Error())
+					}
+				} else {
+					log.Printf("[ToolLoop] Tool %s SUCCESS", tc.Name)
+					toolRecord.Success = true
+					toolRecord.Result = result
+					resultContent := fmt.Sprintf("%v", result)
+					currentMessages = append(currentMessages, ports.LLMMessage{
+						Role:    "tool",
+						Content: resultContent,
+					})
+					if input.Notifier != nil {
+						input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, true, result, "")
+					}
+				}
+			}
+
+			allToolCalls = append(allToolCalls, toolRecord)
 		}
-		allToolCalls = append(allToolCalls, toolRecords...)
 
 		// If last iteration, use current response as answer
 		if iteration == execCtx.config.MaxToolLoopIterations-1 {
@@ -1138,218 +737,6 @@ func (g *ParetoResponseGenerator) executePathWithToolLoop(
 		TotalTokens:    totalTokens + g.estimateTokens(agentPrompt, ""),
 		DurationMs:     durationMs,
 	}, nil
-}
-
-// executeToolCallsParallel executes multiple tool calls concurrently.
-// Results are returned in the same order as the input tool calls.
-func (g *ParetoResponseGenerator) executeToolCallsParallel(
-	ctx context.Context,
-	toolCalls []*ports.LLMToolCall,
-	execCtx *paretoExecutionContext,
-	input *ParetoResponseInput,
-) []models.ToolCallRecord {
-	if len(toolCalls) == 0 {
-		return nil
-	}
-
-	// For single tool call, skip goroutine overhead
-	if len(toolCalls) == 1 {
-		tc := toolCalls[0]
-		record := g.executeSingleToolWithNotify(ctx, tc, execCtx, input, nil)
-		return []models.ToolCallRecord{record}
-	}
-
-	results := make([]models.ToolCallRecord, len(toolCalls))
-	var wg sync.WaitGroup
-	var notifyMu sync.Mutex // Protect notifier calls
-
-	for i, tc := range toolCalls {
-		wg.Add(1)
-		go func(idx int, call *ports.LLMToolCall) {
-			defer wg.Done()
-			results[idx] = g.executeSingleToolWithNotify(ctx, call, execCtx, input, &notifyMu)
-		}(i, tc)
-	}
-
-	wg.Wait()
-	return results
-}
-
-// executeSingleToolWithNotify executes a single tool call and returns the record.
-// The notifyMu mutex protects notifier calls when running in parallel (can be nil for sequential).
-func (g *ParetoResponseGenerator) executeSingleToolWithNotify(
-	ctx context.Context,
-	tc *ports.LLMToolCall,
-	execCtx *paretoExecutionContext,
-	input *ParetoResponseInput,
-	notifyMu *sync.Mutex,
-) models.ToolCallRecord {
-	toolRecord := models.ToolCallRecord{
-		ToolName:  tc.Name,
-		Arguments: tc.Arguments,
-		Success:   false,
-		Result:    nil,
-		Error:     "",
-	}
-
-	// Notify tool start (protected if running in parallel)
-	if input.Notifier != nil {
-		if notifyMu != nil {
-			notifyMu.Lock()
-		}
-		input.Notifier.NotifyToolUseStart(tc.ID, "", input.ConversationID, tc.Name, tc.Arguments)
-		if notifyMu != nil {
-			notifyMu.Unlock()
-		}
-	}
-
-	// Execute tool (this is the parallel part)
-	if execCtx.toolRunner == nil {
-		toolRecord.Error = "tool runner not available"
-		return toolRecord
-	}
-	result, execErr := execCtx.toolRunner.RunTool(ctx, tc.Name, tc.Arguments)
-
-	if execErr != nil {
-		log.Printf("[ToolExec] %s FAILED: %v", tc.Name, execErr)
-		toolRecord.Success = false
-		toolRecord.Error = execErr.Error()
-		if input.Notifier != nil {
-			if notifyMu != nil {
-				notifyMu.Lock()
-			}
-			input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, false, nil, execErr.Error())
-			if notifyMu != nil {
-				notifyMu.Unlock()
-			}
-		}
-	} else {
-		log.Printf("[ToolExec] %s SUCCESS", tc.Name)
-		toolRecord.Success = true
-		toolRecord.Result = result
-		if input.Notifier != nil {
-			if notifyMu != nil {
-				notifyMu.Lock()
-			}
-			input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, true, result, "")
-			if notifyMu != nil {
-				notifyMu.Unlock()
-			}
-		}
-	}
-
-	return toolRecord
-}
-
-// buildAgentPrompt constructs the full prompt for agent execution.
-func (g *ParetoResponseGenerator) buildAgentPrompt(candidate *models.PathCandidate, query string, tools []*models.Tool) string {
-	var sb strings.Builder
-
-	// Add strategy prompt
-	sb.WriteString(candidate.StrategyPrompt)
-	sb.WriteString("\n\n")
-
-	// Add accumulated lessons
-	if len(candidate.AccumulatedLessons) > 0 {
-		sb.WriteString("ACCUMULATED LESSONS FROM PREVIOUS ATTEMPTS:\n")
-		for i, lesson := range candidate.AccumulatedLessons {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, lesson))
-		}
-		sb.WriteString("\n")
-	}
-
-	// Add tool descriptions
-	if len(tools) > 0 {
-		sb.WriteString("Available tools:\n")
-		for _, tool := range tools {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", tool.Name, tool.Description))
-		}
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("Think step by step. Use tools as needed to find the best answer.\n")
-
-	return sb.String()
-}
-
-// evaluateCandidate evaluates a path trace using the PathEvaluator.
-func (g *ParetoResponseGenerator) evaluateCandidate(ctx context.Context, query string, trace *models.ExecutionTrace) (models.PathScores, string, error) {
-	promptTrace := g.convertToPromptTrace(trace)
-
-	promptScores, feedback, err := g.evaluator.Evaluate(ctx, query, promptTrace)
-	if err != nil {
-		return models.PathScores{}, "", fmt.Errorf("evaluation failed: %w", err)
-	}
-
-	modelScores := models.PathScores{
-		AnswerQuality: promptScores.AnswerQuality,
-		Efficiency:    promptScores.Efficiency,
-		TokenCost:     promptScores.TokenCost,
-		Robustness:    promptScores.Robustness,
-		Latency:       promptScores.Latency,
-	}
-
-	return modelScores, feedback, nil
-}
-
-// mutateCandidate creates a mutated version of the candidate.
-func (g *ParetoResponseGenerator) mutateCandidate(ctx context.Context, candidate *models.PathCandidate, feedback string) (*models.PathCandidate, error) {
-	promptCandidate := g.convertToPromptCandidate(candidate)
-
-	var promptTrace *prompt.ExecutionTrace
-	if candidate.Trace != nil {
-		promptTrace = g.convertToPromptTrace(candidate.Trace)
-	} else {
-		promptTrace = &prompt.ExecutionTrace{
-			Query:       "",
-			ToolCalls:   []prompt.ToolCallRecord{},
-			FinalAnswer: "",
-		}
-	}
-
-	mutatedPrompt, err := g.mutator.MutateStrategy(ctx, promptCandidate, promptTrace, feedback)
-	if err != nil {
-		return nil, fmt.Errorf("mutation failed: %w", err)
-	}
-
-	return g.convertFromPromptCandidate(mutatedPrompt), nil
-}
-
-// crossoverCandidates creates a child candidate by crossing over two parents.
-func (g *ParetoResponseGenerator) crossoverCandidates(ctx context.Context, parent1, parent2 *models.PathCandidate) (*models.PathCandidate, error) {
-	promptParent1 := g.convertToPromptCandidate(parent1)
-	promptParent2 := g.convertToPromptCandidate(parent2)
-
-	child, err := g.mutator.Crossover(ctx, promptParent1, promptParent2)
-	if err != nil {
-		return nil, fmt.Errorf("crossover failed: %w", err)
-	}
-
-	return g.convertFromPromptCandidate(child), nil
-}
-
-// selectDiversePair selects two diverse candidates for crossover.
-func (g *ParetoResponseGenerator) selectDiversePair(archive *prompt.PathParetoArchive) (*models.PathCandidate, *models.PathCandidate) {
-	front := archive.GetParetoFront()
-	if len(front) < 2 {
-		return nil, nil
-	}
-
-	var best1, best2 *models.PathCandidate
-	maxDistance := 0.0
-
-	for i := 0; i < len(front); i++ {
-		for j := i + 1; j < len(front); j++ {
-			distance := front[i].Scores.EuclideanDistance(front[j].Scores)
-			if distance > maxDistance {
-				maxDistance = distance
-				best1 = front[i]
-				best2 = front[j]
-			}
-		}
-	}
-
-	return best1, best2
 }
 
 // createToolUseFromTrace creates a ToolUse record from a tool call trace.
@@ -1401,109 +788,6 @@ func (g *ParetoResponseGenerator) extractAndStoreMemories(ctx context.Context, m
 func (g *ParetoResponseGenerator) estimateTokens(prompt, response string) int {
 	totalChars := len(prompt) + len(response)
 	return totalChars / 4
-}
-
-// --- Type conversion helpers ---
-
-func (g *ParetoResponseGenerator) convertToPromptTrace(trace *models.ExecutionTrace) *prompt.ExecutionTrace {
-	if trace == nil {
-		return nil
-	}
-
-	toolCalls := make([]prompt.ToolCallRecord, len(trace.ToolCalls))
-	for i, tc := range trace.ToolCalls {
-		toolCalls[i] = prompt.ToolCallRecord{
-			ToolName:  tc.ToolName,
-			Arguments: tc.Arguments,
-			Result:    tc.Result,
-			Success:   tc.Success,
-			Error:     tc.Error,
-		}
-	}
-
-	return &prompt.ExecutionTrace{
-		Query:          trace.Query,
-		ToolCalls:      toolCalls,
-		ReasoningSteps: trace.ReasoningSteps,
-		FinalAnswer:    trace.FinalAnswer,
-		TotalTokens:    trace.TotalTokens,
-		DurationMs:     trace.DurationMs,
-	}
-}
-
-func (g *ParetoResponseGenerator) convertToPromptCandidate(candidate *models.PathCandidate) *prompt.PathCandidate {
-	if candidate == nil {
-		return nil
-	}
-
-	var promptTrace *prompt.ExecutionTrace
-	if candidate.Trace != nil {
-		promptTrace = g.convertToPromptTrace(candidate.Trace)
-	}
-
-	return &prompt.PathCandidate{
-		ID:                 candidate.ID,
-		RunID:              candidate.RunID,
-		Generation:         candidate.Generation,
-		ParentIDs:          candidate.ParentIDs,
-		StrategyPrompt:     candidate.StrategyPrompt,
-		AccumulatedLessons: candidate.AccumulatedLessons,
-		Trace:              promptTrace,
-		Scores: prompt.PathScores{
-			AnswerQuality: candidate.Scores.AnswerQuality,
-			Efficiency:    candidate.Scores.Efficiency,
-			TokenCost:     candidate.Scores.TokenCost,
-			Robustness:    candidate.Scores.Robustness,
-			Latency:       candidate.Scores.Latency,
-		},
-		CreatedAt: candidate.CreatedAt,
-	}
-}
-
-func (g *ParetoResponseGenerator) convertFromPromptCandidate(candidate *prompt.PathCandidate) *models.PathCandidate {
-	if candidate == nil {
-		return nil
-	}
-
-	var modelTrace *models.ExecutionTrace
-	if candidate.Trace != nil {
-		toolCalls := make([]models.ToolCallRecord, len(candidate.Trace.ToolCalls))
-		for i, tc := range candidate.Trace.ToolCalls {
-			toolCalls[i] = models.ToolCallRecord{
-				ToolName:  tc.ToolName,
-				Arguments: tc.Arguments,
-				Result:    tc.Result,
-				Success:   tc.Success,
-				Error:     tc.Error,
-			}
-		}
-		modelTrace = &models.ExecutionTrace{
-			Query:          candidate.Trace.Query,
-			ToolCalls:      toolCalls,
-			ReasoningSteps: candidate.Trace.ReasoningSteps,
-			FinalAnswer:    candidate.Trace.FinalAnswer,
-			TotalTokens:    candidate.Trace.TotalTokens,
-			DurationMs:     candidate.Trace.DurationMs,
-		}
-	}
-
-	return &models.PathCandidate{
-		ID:                 candidate.ID,
-		RunID:              candidate.RunID,
-		Generation:         candidate.Generation,
-		ParentIDs:          candidate.ParentIDs,
-		StrategyPrompt:     candidate.StrategyPrompt,
-		AccumulatedLessons: candidate.AccumulatedLessons,
-		Trace:              modelTrace,
-		Scores: models.PathScores{
-			AnswerQuality: candidate.Scores.AnswerQuality,
-			Efficiency:    candidate.Scores.Efficiency,
-			TokenCost:     candidate.Scores.TokenCost,
-			Robustness:    candidate.Scores.Robustness,
-			Latency:       candidate.Scores.Latency,
-		},
-		CreatedAt: candidate.CreatedAt,
-	}
 }
 
 // Ensure ParetoResponseGenerator implements the ports interface

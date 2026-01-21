@@ -142,12 +142,9 @@ func runAgentWorker(ctx context.Context) error {
 	mcpRepo := postgres.NewMCPServerRepository(pool)
 	voteRepo := postgres.NewVoteRepository(pool)
 	noteRepo := postgres.NewNoteRepository(pool)
-	optimizationRepo := postgres.NewOptimizationRepository(pool)
 
 	// Initialize ID generator
 	idGen := id.New()
-
-	promptVersionRepo := postgres.NewSystemPromptVersionRepository(pool, idGen)
 
 	// Initialize transaction manager
 	txManager := postgres.NewTransactionManager(pool)
@@ -212,24 +209,6 @@ func runAgentWorker(ctx context.Context) error {
 		)
 		log.Println("Memory service initialized")
 	}
-
-	// Initialize optimization service
-	optimizationConfig := services.DefaultOptimizationConfig()
-	optimizationService := services.NewOptimizationService(
-		optimizationRepo,
-		llmService,
-		idGen,
-		optimizationConfig,
-	)
-	log.Println("Optimization service initialized")
-
-	// Initialize prompt version service
-	// TODO: Wire up promptVersionService to use cases that need it
-	_ = services.NewPromptVersionService(
-		promptVersionRepo,
-		idGen,
-	)
-	log.Println("Prompt version service initialized")
 
 	// Register built-in tools
 	if err := builtin.RegisterAllBuiltinTools(ctx, toolService, memoryRepo, embeddingService); err != nil {
@@ -354,7 +333,6 @@ func runAgentWorker(ctx context.Context) error {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,

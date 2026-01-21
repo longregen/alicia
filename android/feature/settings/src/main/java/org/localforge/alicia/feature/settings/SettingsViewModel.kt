@@ -16,72 +16,34 @@ import org.localforge.alicia.feature.settings.components.ResponseLength
 import org.localforge.alicia.feature.settings.components.ThemeOption
 import javax.inject.Inject
 
-/**
- * Represents a voice option for text-to-speech.
- *
- * @property id Unique identifier for the voice
- * @property name Display name of the voice
- * @property description Human-readable description of the voice characteristics
- */
 data class VoiceOption(
     val id: String,
     val name: String,
     val description: String
 )
 
-/**
- * Application settings data class.
- *
- * @property wakeWord Selected wake word identifier
- * @property wakeWordSensitivity Sensitivity threshold for wake word detection (0.0 to 1.0)
- * @property volumeButtonEnabled Whether volume button activation is enabled
- * @property shakeEnabled Whether shake-to-activate is enabled
- * @property floatingButtonEnabled Whether floating button overlay is enabled
- * @property availableVoices List of available voice options
- * @property selectedVoice Currently selected voice identifier
- * @property speechRate Speech rate multiplier (1.0 is normal speed)
- * @property serverUrl Backend server URL
- * @property isConnected Current connection status to the server
- * @property lastConnectionCheck Timestamp of last connection check
- * @property saveHistory Whether conversation history should be saved
- */
 data class AppSettings(
-    // Activation settings
     val wakeWord: String = "alicia",
     val wakeWordSensitivity: Float = 0.7f,
     val volumeButtonEnabled: Boolean = false,
     val shakeEnabled: Boolean = false,
     val floatingButtonEnabled: Boolean = false,
-
-    // Voice settings
     val availableVoices: List<VoiceOption> = emptyList(),
     val selectedVoice: String = "default",
     val speechRate: Float = 1.0f,
     val audioOutputEnabled: Boolean = true,
-
-    // Response settings
     val responseLength: ResponseLength = ResponseLength.BALANCED,
-
-    // Memory settings
     val autoPinMemories: Boolean = true,
     val confirmDeleteMemories: Boolean = true,
     val showRelevanceScores: Boolean = true,
-
-    // Appearance settings
     val theme: ThemeOption = ThemeOption.SYSTEM,
     val compactMode: Boolean = false,
     val reduceMotion: Boolean = false,
-
-    // Notifications settings
     val soundNotifications: Boolean = true,
     val messagePreviews: Boolean = true,
-
-    // Server settings
     val serverUrl: String = "",
     val isConnected: Boolean = false,
     val lastConnectionCheck: Long = 0,
-
-    // Privacy settings
     val saveHistory: Boolean = true
 )
 
@@ -90,7 +52,6 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val voiceRepository: VoiceRepository,
     private val conversationRepository: ConversationRepository
-    // LiveKitManager is not injected here as voice features are handled by VoiceController
 ) : ViewModel() {
 
     private val _settings = MutableStateFlow(AppSettings())
@@ -100,14 +61,8 @@ class SettingsViewModel @Inject constructor(
         loadSettings()
     }
 
-    /**
-     * Loads settings from repository and combines them into the UI state.
-     * Connection status is intentionally ephemeral - always starts disconnected.
-     * Use testConnection() to verify server connectivity.
-     */
     private fun loadSettings() {
         viewModelScope.launch {
-            // Fetch available voices from repository
             val voicesResult = voiceRepository.getAvailableVoices()
             val availableVoices = voicesResult.getOrNull()?.map { voice ->
                 VoiceOption(
@@ -117,7 +72,6 @@ class SettingsViewModel @Inject constructor(
                 )
             } ?: emptyList()
 
-            // Combine all settings flows
             combine(
                 settingsRepository.wakeWord,
                 settingsRepository.wakeWordSensitivity,
@@ -156,121 +110,57 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Sets the wake word for voice activation.
-     *
-     * @param wakeWord The wake word identifier to set
-     */
     fun setWakeWord(wakeWord: String) {
         viewModelScope.launch {
             settingsRepository.setWakeWord(wakeWord)
         }
     }
 
-    /**
-     * Sets the wake word detection sensitivity.
-     *
-     * @param sensitivity Sensitivity value between 0.0 (least sensitive) and 1.0 (most sensitive)
-     */
     fun setWakeWordSensitivity(sensitivity: Float) {
         viewModelScope.launch {
             settingsRepository.setWakeWordSensitivity(sensitivity)
         }
     }
 
-    /**
-     * Enables or disables volume button activation.
-     *
-     * Note: Accessibility service management should be done at the Activity level
-     * by prompting the user to enable/disable it in Android Settings.
-     *
-     * @param enabled Whether volume button activation should be enabled
-     */
     fun setVolumeButtonEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setVolumeButtonEnabled(enabled)
-            // Note: Accessibility service management should be done at the Activity level
-            // by prompting the user to enable/disable it in Android Settings.
-            // The ViewModel only updates the preference here.
         }
     }
 
-    /**
-     * Enables or disables shake-to-activate.
-     *
-     * Note: Shake detector service lifecycle should be managed by a foreground service
-     * that observes this setting.
-     *
-     * @param enabled Whether shake activation should be enabled
-     */
     fun setShakeEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setShakeEnabled(enabled)
-            // Note: Shake detector service lifecycle should be managed by a foreground service
-            // that observes this setting. The service will start/stop based on this preference.
-            // The ViewModel only updates the preference here.
         }
     }
 
-    /**
-     * Enables or disables the floating button overlay.
-     *
-     * Note: Floating button overlay service should be managed by a foreground service
-     * that observes this setting and requires SYSTEM_ALERT_WINDOW permission.
-     *
-     * @param enabled Whether floating button should be enabled
-     */
     fun setFloatingButtonEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setFloatingButtonEnabled(enabled)
-            // Note: Floating button overlay service should be managed by a foreground service
-            // that observes this setting and requires SYSTEM_ALERT_WINDOW permission.
-            // The service will start/stop based on this preference.
-            // The ViewModel only updates the preference here.
         }
     }
 
-    /**
-     * Sets the voice for text-to-speech in the voice repository.
-     *
-     * @param voiceId The voice identifier to set
-     */
     fun setVoice(voiceId: String) {
         viewModelScope.launch {
             voiceRepository.setVoice(voiceId)
         }
     }
 
-    /**
-     * Sets the speech rate for text-to-speech.
-     *
-     * @param rate Speech rate multiplier (1.0 is normal speed)
-     */
     fun setSpeechRate(rate: Float) {
         viewModelScope.launch {
             settingsRepository.setSpeechRate(rate)
         }
     }
 
-    /**
-     * Sets the backend server URL.
-     *
-     * @param url The server URL to set
-     */
     fun setServerUrl(url: String) {
         viewModelScope.launch {
             settingsRepository.setServerUrl(url)
         }
     }
 
-    /**
-     * Tests the connection to the backend server.
-     * Updates the connection status and timestamp in the UI state.
-     */
     fun testConnection() {
         viewModelScope.launch {
             try {
-                // Test connection by fetching conversations list
                 val result = conversationRepository.syncWithServer()
 
                 val isConnected = result.isSuccess
@@ -292,121 +182,63 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Enables or disables conversation history saving.
-     *
-     * @param enabled Whether conversation history should be saved
-     */
     fun setSaveHistory(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSaveHistory(enabled)
         }
     }
 
-    /**
-     * Deletes all conversation history from the database.
-     */
     fun clearHistory() {
         viewModelScope.launch {
             conversationRepository.deleteAllConversations()
         }
     }
 
-    /**
-     * Enables or disables audio output for voice responses.
-     *
-     * @param enabled Whether audio output should be enabled
-     */
     fun setAudioOutputEnabled(enabled: Boolean) {
         _settings.update { it.copy(audioOutputEnabled = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Sets the response length preference.
-     *
-     * @param length The response length preference
-     */
     fun setResponseLength(length: ResponseLength) {
         _settings.update { it.copy(responseLength = length) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Enables or disables auto-pinning of important memories.
-     *
-     * @param enabled Whether auto-pin should be enabled
-     */
     fun setAutoPinMemories(enabled: Boolean) {
         _settings.update { it.copy(autoPinMemories = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Enables or disables delete confirmation for memories.
-     *
-     * @param enabled Whether confirmation should be required
-     */
     fun setConfirmDeleteMemories(enabled: Boolean) {
         _settings.update { it.copy(confirmDeleteMemories = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Enables or disables relevance score display on memories.
-     *
-     * @param enabled Whether relevance scores should be shown
-     */
     fun setShowRelevanceScores(enabled: Boolean) {
         _settings.update { it.copy(showRelevanceScores = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Sets the app theme.
-     *
-     * @param theme The theme option to use
-     */
     fun setTheme(theme: ThemeOption) {
         _settings.update { it.copy(theme = theme) }
         // TODO: Persist to settings repository and apply theme change
     }
 
-    /**
-     * Enables or disables compact mode.
-     *
-     * @param enabled Whether compact mode should be enabled
-     */
     fun setCompactMode(enabled: Boolean) {
         _settings.update { it.copy(compactMode = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Enables or disables reduced motion for accessibility.
-     *
-     * @param enabled Whether motion should be reduced
-     */
     fun setReduceMotion(enabled: Boolean) {
         _settings.update { it.copy(reduceMotion = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Enables or disables sound notifications.
-     *
-     * @param enabled Whether sound notifications should be enabled
-     */
     fun setSoundNotifications(enabled: Boolean) {
         _settings.update { it.copy(soundNotifications = enabled) }
         // TODO: Persist to settings repository when added
     }
 
-    /**
-     * Enables or disables message previews in notifications.
-     *
-     * @param enabled Whether message previews should be shown
-     */
     fun setMessagePreviews(enabled: Boolean) {
         _settings.update { it.copy(messagePreviews = enabled) }
         // TODO: Persist to settings repository when added

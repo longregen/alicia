@@ -23,9 +23,6 @@ import androidx.compose.ui.unit.dp
 import org.localforge.alicia.core.common.ui.AppIcons
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * Microphone status enum matching web MicrophoneStatus
- */
 enum class MicrophoneStatus {
     Inactive,
     RequestingPermission,
@@ -36,16 +33,6 @@ enum class MicrophoneStatus {
     Error
 }
 
-/**
- * MicrophoneButton - Voice input button with VAD visualization.
- * Matches the web's MicrophoneVAD.tsx component.
- *
- * Features:
- * - Animated expanding rings when speech is detected
- * - Color changes based on status
- * - Loading spinner when initializing
- * - Speech probability visualization
- */
 @Composable
 fun MicrophoneButton(
     microphoneStatus: MicrophoneStatus = MicrophoneStatus.Inactive,
@@ -67,7 +54,6 @@ fun MicrophoneButton(
     val isError = microphoneStatus == MicrophoneStatus.Error
     val isSending = microphoneStatus == MicrophoneStatus.Sending
 
-    // Background color animation
     val backgroundColor by animateColorAsState(
         targetValue = when {
             disabled -> extendedColors.muted
@@ -83,7 +69,6 @@ fun MicrophoneButton(
         label = "mic_bg_color"
     )
 
-    // Icon color animation
     val iconColor by animateColorAsState(
         targetValue = when {
             disabled -> extendedColors.mutedForeground
@@ -98,17 +83,14 @@ fun MicrophoneButton(
         label = "mic_icon_color"
     )
 
-    // Ring color for visualization
     val ringColor = if (isSpeaking) extendedColors.success else extendedColors.accent
 
-    // Scale animation when pressed
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessHigh),
         label = "mic_scale"
     )
 
-    // Pulsing animation for loading state
     val pulseAlpha by rememberInfiniteTransition(label = "pulse").animateFloat(
         initialValue = 0.6f,
         targetValue = 1f,
@@ -119,12 +101,10 @@ fun MicrophoneButton(
         label = "pulse_alpha"
     )
 
-    // Animated rings state
     val rings = remember { mutableStateListOf<RingState>() }
     var frameCount by remember { mutableIntStateOf(0) }
     var lastRingProbability by remember { mutableFloatStateOf(0f) }
 
-    // Update rings animation
     LaunchedEffect(isActive, isSending, speechProbability) {
         if (!isActive || isSending) {
             rings.clear()
@@ -133,7 +113,6 @@ fun MicrophoneButton(
             return@LaunchedEffect
         }
 
-        // Add new ring every ~5 frames when speech detected
         frameCount++
         if (frameCount % 5 == 0 && speechProbability > 0f) {
             val thresholds = listOf(1.0f, 0.98f, 0.95f, 0.90f, 0.75f, 0.50f, 0f)
@@ -152,7 +131,6 @@ fun MicrophoneButton(
         }
     }
 
-    // Animate existing rings
     rings.forEachIndexed { index, ring ->
         val animatedRadius by animateFloatAsState(
             targetValue = ring.radius + 21f,
@@ -168,12 +146,10 @@ fun MicrophoneButton(
         ring.opacity = animatedOpacity
     }
 
-    // Clean up faded rings
     LaunchedEffect(rings.size) {
         rings.removeAll { it.opacity < 0.01f || it.radius > 21f }
     }
 
-    // Content description for accessibility
     val contentDesc = when {
         disabled -> "Microphone disabled"
         isError -> "Microphone error"
@@ -200,7 +176,6 @@ fun MicrophoneButton(
                 onClick = onClick
             )
             .drawBehind {
-                // Draw expanding rings
                 rings.forEach { ring ->
                     drawCircle(
                         color = ringColor.copy(alpha = ring.opacity),
@@ -214,7 +189,6 @@ fun MicrophoneButton(
     ) {
         when {
             isLoading -> {
-                // Loading spinner
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     color = extendedColors.accent,
@@ -222,7 +196,6 @@ fun MicrophoneButton(
                 )
             }
             isSending -> {
-                // Sending indicator (up arrow bouncing)
                 val bounce by rememberInfiniteTransition(label = "bounce").animateFloat(
                     initialValue = 0f,
                     targetValue = -4f,
@@ -242,7 +215,6 @@ fun MicrophoneButton(
                 )
             }
             else -> {
-                // Microphone icon
                 Icon(
                     imageVector = AppIcons.Mic,
                     contentDescription = null,

@@ -1,9 +1,5 @@
 package org.localforge.alicia.core.domain.model
 
-/**
- * Domain model for a user note attached to messages, tool uses, or reasoning steps.
- * Matches the web frontend's note functionality.
- */
 data class Note(
     val id: String,
     val targetId: String,
@@ -15,9 +11,6 @@ data class Note(
     val updatedAt: Long
 )
 
-/**
- * Target types for notes
- */
 enum class NoteTargetType(val value: String) {
     MESSAGE("message"),
     TOOL_USE("tool_use"),
@@ -30,9 +23,6 @@ enum class NoteTargetType(val value: String) {
     }
 }
 
-/**
- * Categories for notes - matches web frontend
- */
 enum class NoteCategory(val value: String) {
     IMPROVEMENT("improvement"),
     CORRECTION("correction"),

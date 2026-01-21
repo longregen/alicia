@@ -10,10 +10,6 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-/**
- * Detects silence in audio streams to determine when user has stopped speaking.
- * Uses RMS (Root Mean Square) energy calculation to detect audio activity.
- */
 class SilenceDetector(
     private val silenceThresholdMs: Long = DEFAULT_SILENCE_THRESHOLD_MS,
     private val energyThreshold: Float = DEFAULT_ENERGY_THRESHOLD,
@@ -25,11 +21,6 @@ class SilenceDetector(
     private var lastAudioActivityTime = System.currentTimeMillis()
     private var isCurrentlySilent = false
 
-    /**
-     * Process audio data and detect silence.
-     *
-     * @param audioData PCM audio data (16-bit samples)
-     */
     fun processAudio(audioData: ByteArray) {
         val energy = calculateRMSEnergy(audioData)
 
@@ -39,7 +30,6 @@ class SilenceDetector(
             lastAudioActivityTime = System.currentTimeMillis()
             isCurrentlySilent = false
         } else {
-            // Check if silence duration exceeds threshold
             val silenceDuration = System.currentTimeMillis() - lastAudioActivityTime
 
             if (silenceDuration > silenceThresholdMs && !isCurrentlySilent) {
@@ -50,11 +40,8 @@ class SilenceDetector(
         }
     }
 
-    /**
-     * Start monitoring for silence.
-     */
     fun start() {
-        stop() // Stop any existing monitoring
+        stop()
 
         lastAudioActivityTime = System.currentTimeMillis()
         isCurrentlySilent = false
@@ -75,9 +62,6 @@ class SilenceDetector(
         Timber.d("Silence detection started")
     }
 
-    /**
-     * Stop monitoring for silence.
-     */
     fun stop() {
         monitorJob?.cancel()
         monitorJob = null
@@ -85,38 +69,24 @@ class SilenceDetector(
         Timber.d("Silence detection stopped")
     }
 
-    /**
-     * Reset the silence timer.
-     * Call this when you know there's audio activity.
-     */
     fun reset() {
         lastAudioActivityTime = System.currentTimeMillis()
         isCurrentlySilent = false
     }
 
-
-    /**
-     * Calculate RMS (Root Mean Square) energy of audio samples.
-     * This represents the "loudness" or energy level of the audio.
-     *
-     * @param audioData PCM audio data as byte array (16-bit little-endian samples)
-     * @return RMS energy value
-     */
     private fun calculateRMSEnergy(audioData: ByteArray): Float {
         if (audioData.isEmpty()) {
             return 0f
         }
 
         var sum = 0.0
-        val sampleCount = audioData.size / 2 // 16-bit = 2 bytes per sample
+        val sampleCount = audioData.size / 2
 
-        // Convert byte array to 16-bit samples and calculate sum of squares
         for (i in 0 until sampleCount) {
             val sample = ((audioData[i * 2 + 1].toInt() shl 8) or (audioData[i * 2].toInt() and 0xFF)).toShort()
             sum += (sample * sample).toDouble()
         }
 
-        // Calculate RMS
         val meanSquare = sum / sampleCount
         val rms = sqrt(meanSquare).toFloat()
 
@@ -124,14 +94,8 @@ class SilenceDetector(
     }
 
     companion object {
-        // Default silence threshold: 1.5 seconds
         private const val DEFAULT_SILENCE_THRESHOLD_MS = 1500L
-
-        // Default energy threshold (tune this based on testing)
-        // Higher values = less sensitive (requires louder audio to be considered "non-silent")
         private const val DEFAULT_ENERGY_THRESHOLD = 500f
-
-        // How often to check for silence
         private const val CHECK_INTERVAL_MS = 200L
     }
 }

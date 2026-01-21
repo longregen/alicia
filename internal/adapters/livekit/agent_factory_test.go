@@ -21,7 +21,6 @@ func TestNewAgentFactory(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -40,7 +39,6 @@ func TestNewAgentFactory(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,
@@ -80,10 +78,6 @@ func TestNewAgentFactory(t *testing.T) {
 		t.Error("expected memoryService to be set")
 	}
 
-	if factory.optimizationService != optimizationService {
-		t.Error("expected optimizationService to be set")
-	}
-
 	if factory.asrService == nil {
 		t.Error("expected asrService to be set")
 	}
@@ -109,7 +103,6 @@ func TestCreateAgent(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -128,7 +121,6 @@ func TestCreateAgent(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,
@@ -214,7 +206,6 @@ func TestCreateAgent_WithoutVoiceServices(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -231,7 +222,6 @@ func TestCreateAgent_WithoutVoiceServices(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,
@@ -299,7 +289,6 @@ func TestCreateAgent_InvalidConfig(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -318,7 +307,6 @@ func TestCreateAgent_InvalidConfig(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,
@@ -367,7 +355,6 @@ func TestCreateAgentWithCallbacks(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -386,7 +373,6 @@ func TestCreateAgentWithCallbacks(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,
@@ -460,7 +446,6 @@ func TestCreateAgentWithCallbacks_NilWrapper(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -479,7 +464,6 @@ func TestCreateAgentWithCallbacks_NilWrapper(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,
@@ -543,7 +527,6 @@ func TestAgentFactory_IntegrationWithAllComponents(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	handleToolUseCase := &mockHandleToolUseCase{}
 	generateResponseUseCase := &mockGenerateResponseUseCase{}
 	processUserMessageUseCase := &mockProcessUserMessageUseCase{}
@@ -562,7 +545,6 @@ func TestAgentFactory_IntegrationWithAllComponents(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		handleToolUseCase,
 		generateResponseUseCase,
 		processUserMessageUseCase,

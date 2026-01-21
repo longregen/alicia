@@ -18,7 +18,6 @@ func TestNewMessageRouter(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	asrService := &mockASRService{}
 	ttsService := &mockTTSService{}
@@ -63,7 +62,6 @@ func TestNewMessageRouter(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		asrService,
 		ttsService,
@@ -114,7 +112,6 @@ func TestNewMessageRouter_WithoutVoiceServices(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -155,7 +152,6 @@ func TestNewMessageRouter_WithoutVoiceServices(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		nil, // No ASR
 		nil, // No TTS
@@ -190,7 +186,6 @@ func TestOnDataReceived(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -231,7 +226,6 @@ func TestOnDataReceived(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		nil, // No ASR for this test
 		nil, // No TTS for this test
@@ -280,7 +274,6 @@ func TestOnDataReceived_InvalidData(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -321,7 +314,6 @@ func TestOnDataReceived_InvalidData(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		nil,
 		nil,
@@ -357,7 +349,6 @@ func TestOnDataReceived_WithStanzaID(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -398,7 +389,6 @@ func TestOnDataReceived_WithStanzaID(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		nil,
 		nil,
@@ -447,7 +437,6 @@ func TestOnAudioReceived_WithoutVoicePipeline(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -500,7 +489,6 @@ func TestOnAudioReceived_WithoutVoicePipeline(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		asrService,
 		nil, // No TTS, so no voice pipeline
@@ -547,7 +535,6 @@ func TestOnParticipantConnected(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -588,7 +575,6 @@ func TestOnParticipantConnected(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		nil,
 		nil,
@@ -624,7 +610,6 @@ func TestOnParticipantDisconnected(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -665,7 +650,6 @@ func TestOnParticipantDisconnected(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		nil,
 		nil,
@@ -701,7 +685,6 @@ func TestCleanup(t *testing.T) {
 	voteRepo := newMockVoteRepository()
 	noteRepo := newMockNoteRepository()
 	memoryService := newMockMemoryService()
-	optimizationService := newMockOptimizationService()
 	conversationID := "conv_test1"
 	idGenerator := newMockIDGenerator()
 
@@ -742,7 +725,6 @@ func TestCleanup(t *testing.T) {
 		voteRepo,
 		noteRepo,
 		memoryService,
-		optimizationService,
 		conversationID,
 		&mockASRService{},
 		&mockTTSService{},

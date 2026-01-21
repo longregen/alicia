@@ -50,9 +50,6 @@ export type {
   MemoryConfirmation,
   ServerInfo,
   SessionStats,
-  DimensionPreference,
-  EliteSelect,
-  EliteOptions,
   ConnectionStatus,
   MCPServerStatus,
 } from './protocol';

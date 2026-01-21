@@ -13,9 +13,6 @@ import org.localforge.alicia.core.network.api.AliciaApiService
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Implementation of MCPRepository that fetches MCP servers and tools from the API.
- */
 @Singleton
 class MCPRepositoryImpl @Inject constructor(
     private val apiService: AliciaApiService

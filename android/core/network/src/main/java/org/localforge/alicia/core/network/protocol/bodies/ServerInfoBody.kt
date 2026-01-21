@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * Connection status
- */
 enum class ProtocolConnectionStatus(val value: String) {
     CONNECTED("connected"),
     CONNECTING("connecting"),
@@ -14,25 +11,16 @@ enum class ProtocolConnectionStatus(val value: String) {
     }
 }
 
-/**
- * Connection info
- */
 data class ConnectionInfoBody(
     val status: ProtocolConnectionStatus,
     val latency: Long
 )
 
-/**
- * Model info
- */
 data class ModelInfoBody(
     val name: String,
     val provider: String
 )
 
-/**
- * MCP server status
- */
 enum class ProtocolMCPServerStatus(val value: String) {
     CONNECTED("connected"),
     DISCONNECTED("disconnected"),
@@ -43,26 +31,17 @@ enum class ProtocolMCPServerStatus(val value: String) {
     }
 }
 
-/**
- * MCP server info
- */
 data class MCPServerInfoBody(
     val name: String,
     val status: ProtocolMCPServerStatus
 )
 
-/**
- * Server info body (Type 26)
- */
 data class ServerInfoBody(
     val connection: ConnectionInfoBody,
     val model: ModelInfoBody,
     val mcpServers: List<MCPServerInfoBody>
 )
 
-/**
- * Session stats body (Type 27)
- */
 data class SessionStatsBody(
     val messageCount: Int,
     val toolCallCount: Int,
@@ -70,9 +49,6 @@ data class SessionStatsBody(
     val sessionDuration: Long
 )
 
-/**
- * Conversation update body (Type 28)
- */
 data class ConversationUpdateBody(
     val conversationId: String,
     val title: String? = null,

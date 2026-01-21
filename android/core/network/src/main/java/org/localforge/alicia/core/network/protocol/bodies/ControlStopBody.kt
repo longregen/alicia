@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * ControlStop (Type 10) halts the assistant's current action
- */
 data class ControlStopBody(
     val conversationId: String,
     val targetId: String? = null,

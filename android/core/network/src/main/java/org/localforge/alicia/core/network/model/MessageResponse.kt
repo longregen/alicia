@@ -3,14 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Response model for message data from the API
- *
- * @property sequenceNumber The position of this message in the conversation sequence (0-based).
- * @property previousId The ID of the previous message in the sequence. Typically null for
- *                      the first message in a conversation. When null, this message starts
- *                      a new sequence chain.
- */
 @JsonClass(generateAdapter = true)
 data class MessageResponse(
     @Json(name = "id")
@@ -38,9 +30,6 @@ data class MessageResponse(
     val updatedAt: String
 )
 
-/**
- * List response for messages
- */
 @JsonClass(generateAdapter = true)
 data class MessageListResponse(
     @Json(name = "messages")
@@ -50,19 +39,12 @@ data class MessageListResponse(
     val total: Int
 )
 
-/**
- * Request model for sending a message
- */
 @JsonClass(generateAdapter = true)
 data class SendMessageRequest(
     @Json(name = "contents")
     val contents: String
 )
 
-/**
- * Request model for switching conversation branch.
- * Used with POST /conversations/{id}/switch-branch
- */
 @JsonClass(generateAdapter = true)
 data class SwitchBranchRequest(
     @Json(name = "tip_message_id")

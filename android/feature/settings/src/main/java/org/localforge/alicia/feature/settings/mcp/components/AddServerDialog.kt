@@ -65,7 +65,6 @@ fun AddServerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Server Name
                 OutlinedTextField(
                     value = name,
                     onValueChange = {
@@ -80,7 +79,6 @@ fun AddServerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Transport Type
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = "Transport Type *",
@@ -107,7 +105,6 @@ fun AddServerDialog(
                     }
                 }
 
-                // Command
                 OutlinedTextField(
                     value = command,
                     onValueChange = {
@@ -122,7 +119,6 @@ fun AddServerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Arguments
                 OutlinedTextField(
                     value = argsText,
                     onValueChange = { argsText = it },
@@ -131,7 +127,6 @@ fun AddServerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Environment Variables
                 OutlinedTextField(
                     value = envText,
                     onValueChange = { newValue ->
@@ -161,7 +156,6 @@ fun AddServerDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    // Validate inputs
                     var hasError = false
 
                     if (name.isBlank()) {
@@ -179,7 +173,6 @@ fun AddServerDialog(
 
                     if (hasError) return@TextButton
 
-                    // Parse args
                     val args = if (argsText.isNotBlank()) {
                         argsText.split(ARG_SEPARATOR)
                             .map { it.trim() }
@@ -188,7 +181,6 @@ fun AddServerDialog(
                         emptyList()
                     }
 
-                    // Parse env
                     val (env, _) = validateEnvLines(envText)
                     val envMap = env.takeIf { it.isNotEmpty() }
 

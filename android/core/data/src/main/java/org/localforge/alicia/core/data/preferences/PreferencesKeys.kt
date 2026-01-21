@@ -4,9 +4,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 
-/**
- * DataStore preference keys for Alicia app settings.
- */
 object PreferencesKeys {
     // Wake word settings
     val WAKE_WORD = stringPreferencesKey("wake_word")
@@ -43,7 +40,6 @@ object PreferencesKeys {
     val FLOATING_BUTTON_AUTO_START = booleanPreferencesKey("floating_button_auto_start")
     val WAKE_WORD_AUTO_START = booleanPreferencesKey("wake_word_auto_start")
 
-    // Default values
     object Defaults {
         const val WAKE_WORD = "alicia"
         const val WAKE_WORD_SENSITIVITY = 0.7f
@@ -52,32 +48,16 @@ object PreferencesKeys {
         const val FLOATING_BUTTON_ENABLED = false
         const val SELECTED_VOICE = "af_sarah"
         const val SPEECH_RATE = 1.0f
-
-        /**
-         * Default server URL.
-         *
-         * IMPORTANT: This is an empty string by default, requiring users to configure
-         * their server URL before the app can connect. The localhost default was removed
-         * as it only works in development and should not ship in production builds.
-         *
-         * For development: Set to "http://localhost:8080" or "http://10.0.2.2:8080" (Android emulator)
-         * For production: Users must configure their actual server URL in settings
-         */
+        // Empty by default - users must configure their server URL in settings
         const val SERVER_URL = ""
         const val SAVE_HISTORY = true
         const val AUTO_START_ENABLED = true
         const val FLOATING_BUTTON_AUTO_START = false
         const val WAKE_WORD_AUTO_START = true
-
-        // Appearance defaults
-        const val THEME = "system" // "light", "dark", "system"
+        const val THEME = "system"
         const val COMPACT_MODE = false
         const val REDUCE_MOTION = false
-
-        // Audio defaults
         const val AUDIO_OUTPUT_ENABLED = true
-
-        // Response defaults
-        const val RESPONSE_LENGTH = "balanced" // "concise", "balanced", "detailed"
+        const val RESPONSE_LENGTH = "balanced"
     }
 }

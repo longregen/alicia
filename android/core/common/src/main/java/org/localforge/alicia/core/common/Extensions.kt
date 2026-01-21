@@ -8,29 +8,14 @@ import android.widget.Toast
 import androidx.annotation.RequiresPermission
 import androidx.annotation.StringRes
 
-/**
- * Extension functions for common Android operations
- */
-
-/**
- * Show a short toast message
- */
 fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
     Toast.makeText(this, message, duration).show()
 }
 
-/**
- * Show a short toast message from string resource
- */
 fun Context.showToast(@StringRes messageRes: Int, duration: Int = Toast.LENGTH_SHORT) {
     Toast.makeText(this, messageRes, duration).show()
 }
 
-/**
- * Vibrate the device for a short duration
- * @param durationMs Duration in milliseconds (default: 50ms)
- * @param amplitude Vibration amplitude (default: default amplitude)
- */
 @RequiresPermission(Manifest.permission.VIBRATE)
 fun Context.vibrate(durationMs: Long = 50, amplitude: Int = VibrationEffect.DEFAULT_AMPLITUDE) {
     val vibrator = getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator ?: return
@@ -41,14 +26,10 @@ fun Context.vibrate(durationMs: Long = 50, amplitude: Int = VibrationEffect.DEFA
         val effect = VibrationEffect.createOneShot(durationMs, amplitude)
         vibrator.vibrate(effect)
     } catch (e: Exception) {
-        // Silently fail - vibration is not critical
+        // Vibration is not critical - silent failure is acceptable
     }
 }
 
-/**
- * Vibrate with a pattern (plays once, does not repeat)
- * @param pattern Array of alternating durations in milliseconds of off/on (e.g., [0, 50, 100, 50])
- */
 @RequiresPermission(Manifest.permission.VIBRATE)
 fun Context.vibratePattern(pattern: LongArray) {
     val vibrator = getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator ?: return
@@ -59,17 +40,11 @@ fun Context.vibratePattern(pattern: LongArray) {
         val effect = VibrationEffect.createWaveform(pattern, -1)
         vibrator.vibrate(effect)
     } catch (e: Exception) {
-        // Silently fail
+        // Vibration is not critical - silent failure is acceptable
     }
 }
 
-/**
- * Check if a service is running
- *
- * Note: ActivityManager.getRunningServices() is deprecated as of API 26 (Android 8.0) with no
- * replacement. However, it still works reliably for checking services within the same application
- * (verified up to Android 14).
- */
+// ActivityManager.getRunningServices() is deprecated but still works for same-app services
 fun Context.isServiceRunning(serviceClass: Class<*>): Boolean {
     return try {
         val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -81,41 +56,26 @@ fun Context.isServiceRunning(serviceClass: Class<*>): Boolean {
     }
 }
 
-/**
- * Get screen width in pixels
- */
 fun Context.getScreenWidth(): Int {
     val windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
     val metrics = windowManager.currentWindowMetrics
     return metrics.bounds.width()
 }
 
-/**
- * Get screen height in pixels
- */
 fun Context.getScreenHeight(): Int {
     val windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
     val metrics = windowManager.currentWindowMetrics
     return metrics.bounds.height()
 }
 
-/**
- * Convert dp to pixels
- */
 fun Context.dpToPx(dp: Float): Int {
     return (dp * resources.displayMetrics.density).toInt()
 }
 
-/**
- * Convert pixels to dp
- */
 fun Context.pxToDp(px: Int): Float {
     return px / resources.displayMetrics.density
 }
 
-/**
- * Execute block and return result, catching exceptions
- */
 inline fun <T> tryOrNull(block: () -> T): T? {
     return try {
         block()
@@ -124,9 +84,6 @@ inline fun <T> tryOrNull(block: () -> T): T? {
     }
 }
 
-/**
- * Execute block and return result or default value on exception
- */
 inline fun <T> tryOrDefault(default: T, block: () -> T): T {
     return try {
         block()
@@ -135,9 +92,6 @@ inline fun <T> tryOrDefault(default: T, block: () -> T): T {
     }
 }
 
-/**
- * Extension to check if a string is a valid URL
- */
 fun String.isValidUrl(): Boolean {
     return try {
         val url = java.net.URL(this)
@@ -148,9 +102,6 @@ fun String.isValidUrl(): Boolean {
     }
 }
 
-/**
- * Format milliseconds to human-readable duration
- */
 fun Long.formatDuration(): String {
     val seconds = this / 1000
     val minutes = seconds / 60
@@ -163,16 +114,10 @@ fun Long.formatDuration(): String {
     }
 }
 
-/**
- * Check if the current time is between two timestamps
- */
 fun Long.isBetween(start: Long, end: Long): Boolean {
     return this in start..end
 }
 
-/**
- * Safe intent extra retrieval
- */
 inline fun <reified T> Intent.getSafeExtra(key: String, default: T): T {
     return try {
         when (T::class) {

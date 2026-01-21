@@ -15,16 +15,6 @@ import java.util.concurrent.TimeoutException
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Orchestrates the synchronization of messages between the local database and the server.
- * Manages the WebSocket connection, processes incoming messages, and ensures pending messages are synced.
- *
- * Note on message type handling:
- * - USER_MESSAGE: Sent from client to server, acknowledged via ACK
- * - ASSISTANT_MESSAGE/SENTENCE/START_ANSWER: Real-time handling in VoiceController,
- *   SyncEngine currently logs but does not persist (TODO for history sync)
- * - ACKNOWLEDGEMENT: Confirms message delivery, updates local sync status
- */
 @Singleton
 class SyncEngine @Inject constructor(
     private val syncWebSocket: SyncWebSocket,
@@ -45,15 +35,9 @@ class SyncEngine @Inject constructor(
     private val pendingAcks = ConcurrentHashMap<Int, CompletableDeferred<AckResult>>()
 
     companion object {
-        private const val ACK_TIMEOUT_MS = 5000L // 5 second timeout for acknowledgements
+        private const val ACK_TIMEOUT_MS = 5000L
     }
 
-    /**
-     * Start synchronization for a conversation.
-     * @param conversationId ID of the conversation to sync
-     * @param serverUrl WebSocket server URL
-     * @param token Authentication token
-     */
     suspend fun startSync(conversationId: String, serverUrl: String, token: String) {
         if (_syncState.value is SyncState.Syncing) {
             Timber.w("Sync already in progress")
@@ -75,9 +59,6 @@ class SyncEngine @Inject constructor(
         Timber.d("Started sync for conversation: $conversationId")
     }
 
-    /**
-     * Stop synchronization.
-     */
     suspend fun stopSync() {
         Timber.d("Stopping sync")
 
@@ -97,10 +78,6 @@ class SyncEngine @Inject constructor(
         _syncState.value = SyncState.Idle
     }
 
-    /**
-     * Sync all pending messages immediately.
-     * @return Result indicating success or failure with details
-     */
     suspend fun syncNow(): Result<SyncResult> {
         return try {
             if (!syncWebSocket.isConnected()) {
@@ -156,17 +133,10 @@ class SyncEngine @Inject constructor(
         }
     }
 
-    /**
-     * Get the count of pending messages as a Flow.
-     * @return Flow of pending message count
-     */
     fun getPendingCount(): Flow<Int> {
         return syncQueue.getPendingCountFlow()
     }
 
-    /**
-     * Get the current sync state as a Flow.
-     */
     fun getSyncStateFlow(): StateFlow<SyncState> = syncState
 
     private fun startMessageProcessing() {
@@ -181,7 +151,6 @@ class SyncEngine @Inject constructor(
     private fun startPendingSync() {
         syncJob?.cancel()
         syncJob = scope.launch {
-            // Monitor WebSocket connection state
             syncWebSocket.connectionState.collect { state ->
                 when (state) {
                     is WebSocketState.Connected -> {
@@ -196,7 +165,7 @@ class SyncEngine @Inject constructor(
                         Timber.d("WebSocket disconnected")
                         _syncState.value = SyncState.Idle
                     }
-                    else -> { /* Connecting state - no action needed */ }
+                    else -> {}
                 }
             }
         }
@@ -211,7 +180,7 @@ class SyncEngine @Inject constructor(
 
             for (queueEntity in pending) {
                 if (queueEntity.conversationId != conversationId) {
-                    continue // Skip messages from other conversations
+                    continue
                 }
 
                 try {
@@ -222,9 +191,7 @@ class SyncEngine @Inject constructor(
                         syncQueue.incrementRetryCount(queueEntity.localId)
                         Timber.w("Failed to send message: ${queueEntity.localId}")
                     }
-                    // Note: Actual sync confirmation happens when we receive ACK from server
 
-                    // Add small delay between messages to avoid overwhelming the server
                     delay(50)
                 } catch (e: Exception) {
                     Timber.e(e, "Error syncing message: ${queueEntity.localId}")
@@ -245,18 +212,12 @@ class SyncEngine @Inject constructor(
                     handleAcknowledgement(envelope)
                 }
                 MessageType.ASSISTANT_MESSAGE -> {
-                    // TODO: Implement persistence of complete assistant messages.
-                    // Currently, real-time streaming is handled by VoiceController.
-                    // SyncEngine should persist these for history sync scenarios.
-                    Timber.d("Received ASSISTANT_MESSAGE (not yet persisted): conversationId=${envelope.conversationId}")
+                    Timber.d("Received ASSISTANT_MESSAGE: conversationId=${envelope.conversationId}")
                 }
                 MessageType.ASSISTANT_SENTENCE -> {
-                    // Streaming sentences are handled in real-time by VoiceController.
-                    // SyncEngine does not need to persist individual sentences.
                     Timber.v("Received ASSISTANT_SENTENCE: conversationId=${envelope.conversationId}")
                 }
                 MessageType.START_ANSWER -> {
-                    // Start of streaming response - handled by VoiceController for real-time display.
                     Timber.v("Received START_ANSWER: conversationId=${envelope.conversationId}")
                 }
                 MessageType.ERROR_MESSAGE -> {
@@ -283,7 +244,6 @@ class SyncEngine @Inject constructor(
             val deferred = pendingAcks.remove(stanzaId)
 
             if (deferred != null) {
-                // Complete the waiting coroutine
                 if (body.success) {
                     deferred.complete(AckResult(success = true, error = null))
                     Timber.d("Acknowledgement received for stanzaId=$stanzaId")
@@ -292,7 +252,6 @@ class SyncEngine @Inject constructor(
                     Timber.w("Received negative acknowledgement for stanzaId=$stanzaId")
                 }
             } else {
-                // No one is waiting for this ACK - handle it the old way for background sync
                 if (body.success) {
                     val localId = envelope.meta?.get("localId") as? String
                     if (localId != null) {
@@ -319,13 +278,6 @@ class SyncEngine @Inject constructor(
         }
     }
 
-    /**
-     * Wait for acknowledgement of a sent message with timeout.
-     * @param stanzaId The stanza ID to wait for
-     * @param localId The local message ID for logging
-     * @return AckResult indicating success or failure
-     * @throws TimeoutException if acknowledgement not received within timeout
-     */
     private suspend fun waitForAcknowledgement(stanzaId: Int, localId: String): AckResult {
         val deferred = CompletableDeferred<AckResult>()
         pendingAcks[stanzaId] = deferred
@@ -341,17 +293,10 @@ class SyncEngine @Inject constructor(
         }
     }
 
-    /**
-     * Get the next stanza ID for outgoing messages.
-     * Client messages use positive, incrementing IDs.
-     */
     fun getNextStanzaId(): Int {
         return ++stanzaIdCounter
     }
 
-    /**
-     * Clean up resources when engine is no longer needed.
-     */
     fun shutdown() {
         scope.cancel()
         runBlocking {
@@ -360,18 +305,12 @@ class SyncEngine @Inject constructor(
     }
 }
 
-/**
- * Represents the current state of synchronization.
- */
 sealed class SyncState {
     object Idle : SyncState()
     data class Syncing(val conversationId: String) : SyncState()
     data class Error(val error: Throwable) : SyncState()
 }
 
-/**
- * Result of a sync operation.
- */
 data class SyncResult(
     val successCount: Int,
     val failureCount: Int
@@ -380,9 +319,6 @@ data class SyncResult(
     val isFullSuccess: Boolean get() = failureCount == 0
 }
 
-/**
- * Result of an acknowledgement from the server.
- */
 private data class AckResult(
     val success: Boolean,
     val error: String?

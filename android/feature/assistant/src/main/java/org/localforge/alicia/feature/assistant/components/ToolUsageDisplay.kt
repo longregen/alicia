@@ -19,16 +19,6 @@ import androidx.compose.ui.unit.sp
 import org.localforge.alicia.core.domain.model.ToolUsage
 import com.google.gson.GsonBuilder
 
-/**
- * Displays tool usage information with collapsible parameter and result details.
- * Matches web's ToolUseCard.tsx component.
- *
- * Features:
- * - Tool name with emoji icon
- * - Execution status badge
- * - Expandable parameter/result sections
- * - Voting controls
- */
 @Composable
 fun ToolUsageDisplay(
     toolUsages: List<ToolUsage>,
@@ -56,9 +46,6 @@ fun ToolUsageDisplay(
     }
 }
 
-/**
- * Get emoji icon for tool based on name, matching web's toolIcons.
- */
 private fun getToolIcon(toolName: String): String {
     val name = toolName.lowercase()
     return when {
@@ -73,9 +60,6 @@ private fun getToolIcon(toolName: String): String {
     }
 }
 
-/**
- * Get display-friendly name for tool, matching web's toolDisplayNames.
- */
 private fun getToolDisplayName(toolName: String): String {
     return when (toolName) {
         "web_read" -> "Read Web Page"
@@ -132,7 +116,6 @@ private fun ToolUsageItem(
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -146,7 +129,6 @@ private fun ToolUsageItem(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    // Tool emoji icon
                     Text(
                         text = toolIcon,
                         fontSize = 18.sp
@@ -186,7 +168,6 @@ private fun ToolUsageItem(
                 }
             }
 
-            // Body
             AnimatedVisibility(
                 visible = expanded,
                 enter = expandVertically(),
@@ -204,7 +185,6 @@ private fun ToolUsageItem(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
 
-                    // Parameters section
                     Text(
                         text = "Parameters",
                         style = MaterialTheme.typography.labelMedium,
@@ -225,7 +205,6 @@ private fun ToolUsageItem(
                         )
                     }
 
-                    // Result section
                     if (hasResult) {
                         Text(
                             text = if (isSuccess) "Result" else "Error",
@@ -268,7 +247,6 @@ private fun ToolUsageItem(
                         }
                     }
 
-                    // Voting controls
                     if (onVote != null) {
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),

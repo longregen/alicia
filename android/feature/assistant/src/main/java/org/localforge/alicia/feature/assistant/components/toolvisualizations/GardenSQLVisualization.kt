@@ -19,10 +19,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Visualization for garden_execute_sql tool results.
- * Displays SQL query results with pagination.
- */
 @Composable
 fun GardenSQLVisualization(
     result: Map<String, Any?>?,

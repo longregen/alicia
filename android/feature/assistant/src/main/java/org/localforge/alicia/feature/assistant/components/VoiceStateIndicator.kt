@@ -38,7 +38,6 @@ fun VoiceStateIndicator(
         modifier = modifier.size(120.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Outer pulse rings when listening
         if (state == VoiceState.LISTENING) {
             Box(
                 modifier = Modifier
@@ -50,7 +49,6 @@ fun VoiceStateIndicator(
             )
         }
 
-        // Main indicator circle
         Box(
             modifier = Modifier
                 .size(80.dp)
@@ -88,7 +86,6 @@ fun VoiceStateIndicator(
             )
         }
 
-        // Sound wave animation when speaking
         if (state == VoiceState.SPEAKING) {
             SoundWaveAnimation(modifier = Modifier.size(120.dp))
         }

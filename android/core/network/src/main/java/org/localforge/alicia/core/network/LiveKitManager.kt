@@ -23,9 +23,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages LiveKit connections and handles real-time communication
- */
 @Singleton
 class LiveKitManager @Inject constructor(
     private val context: Context,
@@ -36,17 +33,12 @@ class LiveKitManager @Inject constructor(
     private var room: Room? = null
     private var localAudioTrack: LocalAudioTrack? = null
 
-    // Connection state
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    // Callbacks
     private var dataReceivedCallback: ((Envelope) -> Unit)? = null
     private var audioOutputEnabledCallback: (() -> Boolean)? = null
 
-    /**
-     * Connection states - matches web frontend's connection state model
-     */
     sealed class ConnectionState {
         object Disconnected : ConnectionState()
         object Connecting : ConnectionState()
@@ -55,27 +47,17 @@ class LiveKitManager @Inject constructor(
         data class Failed(val error: String) : ConnectionState()
     }
 
-    // Track last seen stanza ID for message replay on reconnection
     private var lastSeenStanzaId: String? = null
 
-    // Callback for when reconnection occurs (to send Configuration message)
     private var onReconnectedCallback: (() -> Unit)? = null
 
-    /**
-     * Connect to a LiveKit room
-     *
-     * @param url LiveKit server URL
-     * @param token Authentication token
-     */
     suspend fun connect(url: String, token: String) {
         try {
             _connectionState.value = ConnectionState.Connecting
 
-            // Create room instance
             val newRoom = LiveKit.create(appContext = context)
             room = newRoom
 
-            // Set up event collection in background
             scope.launch {
                 newRoom.events.collect { event ->
                     when (event) {
@@ -103,9 +85,7 @@ class LiveKitManager @Inject constructor(
                         is RoomEvent.Reconnected -> {
                             Timber.i("LiveKit: Reconnected to room")
                             _connectionState.value = ConnectionState.Connected
-                            // Re-publish audio tracks after reconnection (matching web behavior)
                             setupAudioTracks()
-                            // Notify callback to send Configuration message with lastSeenStanzaId
                             onReconnectedCallback?.invoke()
                         }
 
@@ -117,10 +97,8 @@ class LiveKitManager @Inject constructor(
                         is RoomEvent.TrackSubscribed -> {
                             Timber.d("LiveKit: Track subscribed: ${event.track.name}")
                             if (event.track is AudioTrack) {
-                                // Check if audio output is enabled before playing
                                 val shouldPlayAudio = audioOutputEnabledCallback?.invoke() ?: true
                                 if (shouldPlayAudio) {
-                                    // Start audio playback for agent's voice
                                     val audioTrack = event.track as AudioTrack
                                     audioTrack.start()
                                     Timber.d("LiveKit: Started audio playback from ${event.participant.identity}")
@@ -135,23 +113,20 @@ class LiveKitManager @Inject constructor(
                             scope.launch {
                                 try {
                                     val envelope = protocolHandler.decode(event.data)
-                                    // Track last seen stanza ID for message replay on reconnection
                                     envelope.stanzaId?.let { lastSeenStanzaId = it }
                                     dataReceivedCallback?.invoke(envelope)
                                 } catch (e: Exception) {
                                     Timber.e(e, "Failed to decode protocol message")
+                                    throw e
                                 }
                             }
                         }
 
-                        else -> {
-                            // Ignore other events
-                        }
+                        else -> {}
                     }
                 }
             }
 
-            // Connect to the room - this suspends until connection is established
             newRoom.connect(url, token)
 
             Timber.i("LiveKit: Connected to room ${room?.name}")
@@ -165,9 +140,6 @@ class LiveKitManager @Inject constructor(
         }
     }
 
-    /**
-     * Set up local audio tracks for publishing
-     */
     private fun setupAudioTracks() {
         scope.launch {
             try {
@@ -177,7 +149,6 @@ class LiveKitManager @Inject constructor(
                     autoGainControl = true
                 )
 
-                // Create and publish local audio track
                 room?.let { r ->
                     localAudioTrack = r.localParticipant.createAudioTrack("microphone", audioOptions)
                     localAudioTrack?.let { track ->
@@ -187,13 +158,11 @@ class LiveKitManager @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to setup audio tracks")
+                throw e
             }
         }
     }
 
-    /**
-     * Disconnect from the current room
-     */
     fun disconnect() {
         try {
             localAudioTrack?.stop()
@@ -206,20 +175,14 @@ class LiveKitManager @Inject constructor(
             Timber.i("LiveKit: Disconnected")
         } catch (e: Exception) {
             Timber.e(e, "Error during disconnect")
+            throw e
         }
     }
 
-    /**
-     * Send a protocol message to the room
-     * Uses reliable data channel (matching web's reliable: true)
-     *
-     * @param envelope Protocol envelope to send
-     */
     fun sendData(envelope: Envelope) {
         scope.launch {
             try {
                 val data = protocolHandler.encode(envelope)
-                // Use reliable data channel (matching web's { reliable: true })
                 room?.localParticipant?.publishData(
                     data,
                     io.livekit.android.room.participant.DataPublishReliability.RELIABLE
@@ -227,58 +190,27 @@ class LiveKitManager @Inject constructor(
                 Timber.d("LiveKit: Sent data: ${envelope.type}")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to send data")
+                throw e
             }
         }
     }
 
-    /**
-     * Set callback for when data messages are received
-     *
-     * @param callback Function to invoke when a protocol envelope is received via LiveKit data channel
-     */
     fun onDataReceived(callback: (Envelope) -> Unit) {
         dataReceivedCallback = callback
     }
 
-    /**
-     * Set callback for when reconnection occurs.
-     * Caller should send a Configuration message with lastSeenStanzaId to trigger message replay.
-     *
-     * @param callback Function to invoke after successful reconnection
-     */
     fun onReconnected(callback: () -> Unit) {
         onReconnectedCallback = callback
     }
 
-    /**
-     * Set callback to check if audio output is enabled.
-     * Called before playing remote audio tracks. If not set, defaults to true (always play).
-     *
-     * @param callback Function that returns true if audio output should be played
-     */
     fun setAudioOutputEnabledCallback(callback: () -> Boolean) {
         audioOutputEnabledCallback = callback
     }
 
-    /**
-     * Get the last seen stanza ID for message replay on reconnection.
-     * This should be sent in the Configuration message after reconnection.
-     *
-     * @return The last seen stanza ID, or null if no messages received yet
-     */
     fun getLastSeenStanzaId(): String? {
         return lastSeenStanzaId
     }
 
-    /**
-     * Mute or unmute the local microphone.
-     *
-     * When muted, audio data stops being transmitted to the server and remote
-     * participants are notified via TrackMutedEvent. The track remains active
-     * and can be unmuted without reinitialization.
-     *
-     * @param muted true to mute (stops transmission), false to unmute (resumes transmission)
-     */
     suspend fun setMicrophoneMuted(muted: Boolean) {
         room?.localParticipant?.let { participant ->
             participant.setMicrophoneEnabled(!muted)
@@ -288,10 +220,6 @@ class LiveKitManager @Inject constructor(
         }
     }
 
-    /**
-     * Map connection errors to user-friendly messages.
-     * Matches web frontend's error message patterns for consistency.
-     */
     private fun mapConnectionError(error: Throwable): String {
         val message = error.message ?: "Unknown error"
         return when {
@@ -314,29 +242,14 @@ class LiveKitManager @Inject constructor(
         }
     }
 
-    /**
-     * Check if currently connected
-     *
-     * @return true if connection state is Connected, false for Disconnected/Connecting/Failed states
-     */
     fun isConnected(): Boolean {
         return _connectionState.value is ConnectionState.Connected
     }
 
-    /**
-     * Get current room name
-     *
-     * @return The name of the currently connected room, or null if not connected
-     */
     fun getCurrentRoomName(): String? {
         return room?.name
     }
 
-    /**
-     * Get current participant ID
-     *
-     * @return The identity of the local participant, or null if not connected
-     */
     fun getCurrentParticipantId(): String? {
         return room?.localParticipant?.identity?.value
     }

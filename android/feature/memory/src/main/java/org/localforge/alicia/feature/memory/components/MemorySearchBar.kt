@@ -12,10 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.localforge.alicia.core.domain.model.MemoryCategory
 
-/**
- * Search bar with category filter dropdown.
- * Matches the web frontend's MemorySearch component.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemorySearchBar(
@@ -32,7 +28,6 @@ fun MemorySearchBar(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Search field
         OutlinedTextField(
             value = searchQuery,
             onValueChange = onSearchQueryChange,
@@ -59,7 +54,6 @@ fun MemorySearchBar(
             shape = RoundedCornerShape(8.dp)
         )
 
-        // Category filter
         ExposedDropdownMenuBox(
             expanded = categoryExpanded,
             onExpandedChange = { categoryExpanded = it }

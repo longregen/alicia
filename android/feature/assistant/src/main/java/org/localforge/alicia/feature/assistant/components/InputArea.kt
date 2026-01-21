@@ -15,18 +15,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * InputArea - Unified input area matching the web's InputArea.tsx.
- *
- * Layout: [MicrophoneButton] [TextField] [SendButton]
- *
- * Features:
- * - Voice input button with VAD visualization
- * - Text input with rounded corners
- * - Send button with paper airplane icon
- * - Autofocus when conversation changes
- * - Enter key to send
- */
 @Composable
 fun InputArea(
     textInput: String,
@@ -45,14 +33,12 @@ fun InputArea(
     val extendedColors = AliciaTheme.extendedColors
     val focusRequester = remember { FocusRequester() }
 
-    // Autofocus when conversation changes
     LaunchedEffect(conversationId) {
         if (conversationId != null) {
+            // Focus request might fail if component not yet laid out
             try {
                 focusRequester.requestFocus()
-            } catch (_: Exception) {
-                // Focus request might fail if component not yet laid out
-            }
+            } catch (_: Exception) { }
         }
     }
 
@@ -67,7 +53,6 @@ fun InputArea(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Voice input button
         MicrophoneButton(
             microphoneStatus = microphoneStatus,
             isSpeaking = isSpeaking,
@@ -76,7 +61,6 @@ fun InputArea(
             disabled = disabled
         )
 
-        // Text input field
         OutlinedTextField(
             value = textInput,
             onValueChange = onTextInputChange,
@@ -112,7 +96,6 @@ fun InputArea(
             )
         )
 
-        // Send button
         InputSendButton(
             onSend = onSend,
             canSend = canSend,

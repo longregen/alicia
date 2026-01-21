@@ -1,11 +1,8 @@
 package org.localforge.alicia.core.network.protocol.bodies
 
-/**
- * AudioChunk (Type 4) represents raw audio data segment
- */
 data class AudioChunkBody(
     val conversationId: String,
-    val format: String, // e.g., "audio/opus"
+    val format: String,
     val sequence: Int,
     val durationMs: Int,
     val trackSid: String? = null,

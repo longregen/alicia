@@ -41,7 +41,6 @@ fun SettingsScreen(
                 .padding(paddingValues),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            // Activation Settings
             item {
                 SettingsSection(title = "Activation") {
                     WakeWordSelector(
@@ -80,7 +79,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Voice Settings
             item {
                 SettingsSection(title = "Voice") {
                     VoiceSelector(
@@ -107,7 +105,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Response Settings
             item {
                 SettingsSection(title = "Response") {
                     ResponseLengthSelector(
@@ -124,7 +121,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Memory Settings
             item {
                 SettingsSection(title = "Memory") {
                     SwitchSetting(
@@ -150,7 +146,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Appearance Settings
             item {
                 SettingsSection(title = "Appearance") {
                     ThemeSelector(
@@ -174,7 +169,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Notifications Settings
             item {
                 SettingsSection(title = "Notifications") {
                     SwitchSetting(
@@ -193,7 +187,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Server Settings
             item {
                 SettingsSection(title = "Server") {
                     TextFieldSetting(
@@ -218,7 +211,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Privacy Settings
             item {
                 SettingsSection(title = "Privacy") {
                     SwitchSetting(
@@ -238,7 +230,6 @@ fun SettingsScreen(
                 }
             }
 
-            // About
             item {
                 SettingsSection(title = "About") {
                     // TODO: Read version from BuildConfig.VERSION_NAME when build configuration is set up

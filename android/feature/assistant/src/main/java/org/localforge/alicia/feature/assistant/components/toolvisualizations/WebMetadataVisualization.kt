@@ -16,10 +16,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Visualization for web_extract_metadata tool results.
- * Displays Open Graph, Twitter Card, and other metadata.
- */
 @Composable
 fun WebMetadataVisualization(
     result: Map<String, Any?>?,

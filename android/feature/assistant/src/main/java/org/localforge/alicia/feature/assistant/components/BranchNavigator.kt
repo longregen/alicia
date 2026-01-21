@@ -19,17 +19,6 @@ import org.localforge.alicia.core.common.ui.AppIcons
 import org.localforge.alicia.feature.assistant.BranchDirection
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * BranchNavigator component showing "< 1/3 >" style navigation.
- * Matches the web frontend's BranchNavigator.tsx
- *
- * Only renders when there are multiple branches for a message.
- *
- * @param currentIndex Zero-based index of current branch
- * @param totalBranches Total number of available branches
- * @param onNavigate Callback when user navigates (prev or next)
- * @param modifier Modifier for the component
- */
 @Composable
 fun BranchNavigator(
     currentIndex: Int,
@@ -37,7 +26,6 @@ fun BranchNavigator(
     onNavigate: (direction: BranchDirection) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Don't render if there's only one branch or none
     if (totalBranches <= 1) return
 
     val extendedColors = AliciaTheme.extendedColors
@@ -51,7 +39,6 @@ fun BranchNavigator(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Previous button
         Box(
             modifier = Modifier
                 .size(24.dp)
@@ -74,7 +61,6 @@ fun BranchNavigator(
             )
         }
 
-        // Index display
         Text(
             text = "$displayIndex/$totalBranches",
             style = MaterialTheme.typography.bodySmall,
@@ -85,7 +71,6 @@ fun BranchNavigator(
             modifier = Modifier.widthIn(min = 40.dp)
         )
 
-        // Next button
         Box(
             modifier = Modifier
                 .size(24.dp)
