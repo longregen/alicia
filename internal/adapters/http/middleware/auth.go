@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -39,6 +40,7 @@ func Auth(next http.Handler) http.Handler {
 		// Validate user ID format (alphanumeric, hyphens, underscores only)
 		// This prevents injection attacks
 		if !isValidUserID(userID) {
+			log.Printf("HTTP 400: Invalid user ID format: %q (path=%s)", userID, r.URL.Path)
 			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
 			return
 		}

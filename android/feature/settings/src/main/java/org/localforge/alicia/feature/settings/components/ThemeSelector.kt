@@ -8,20 +8,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/**
- * Theme options matching the web frontend
- */
 enum class ThemeOption(val displayName: String) {
     LIGHT("Light"),
     DARK("Dark"),
     SYSTEM("System")
 }
 
-/**
- * Theme selector component matching the web frontend's Settings.tsx
- *
- * Displays a dropdown for selecting app theme.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeSelector(

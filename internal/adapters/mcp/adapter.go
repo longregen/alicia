@@ -25,12 +25,44 @@ type Adapter struct {
 
 // NewAdapter creates a new MCP adapter
 func NewAdapter(ctx context.Context, toolService ports.ToolService, mcpRepo ports.MCPServerRepository, idGen ports.IDGenerator) *Adapter {
-	return &Adapter{
+	adapter := &Adapter{
 		manager:     NewManager(ctx),
 		toolService: toolService,
 		mcpRepo:     mcpRepo,
 		idGen:       idGen,
 		serverTools: make(map[string][]string),
+	}
+
+	// Set up connection callback to handle executor registration/unregistration
+	adapter.manager.SetConnectionCallback(adapter.onConnectionChange)
+
+	return adapter
+}
+
+// onConnectionChange handles MCP server connection state changes.
+// When a server disconnects, it unregisters its tool executors so they won't be
+// offered to the LLM during response generation.
+// When a server reconnects, it re-discovers and re-registers its tools.
+func (a *Adapter) onConnectionChange(serverName string, connected bool) {
+	if connected {
+		log.Printf("MCP server %s connected, re-registering tools", serverName)
+		// On reconnection, re-discover and register tools
+		client, err := a.manager.GetClient(serverName)
+		if err != nil {
+			log.Printf("Warning: Failed to get client for reconnected server %s: %v", serverName, err)
+			return
+		}
+		if err := a.discoverAndRegisterTools(context.Background(), serverName, client); err != nil {
+			log.Printf("Warning: Failed to re-register tools for server %s: %v", serverName, err)
+		}
+	} else {
+		log.Printf("MCP server %s disconnected, unregistering tool executors", serverName)
+		// On disconnection, unregister executors for all tools from this server
+		if toolNames, exists := a.serverTools[serverName]; exists {
+			for _, toolName := range toolNames {
+				a.toolService.UnregisterExecutor(toolName)
+			}
+		}
 	}
 }
 

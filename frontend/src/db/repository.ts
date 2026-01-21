@@ -7,14 +7,15 @@ function rowToMessage(row: unknown[]): Message {
     id: row[0] as string,
     conversation_id: row[1] as string,
     sequence_number: row[2] as number,
-    role: row[3] as 'user' | 'assistant' | 'system',
-    contents: row[4] as string,
-    local_id: row[5] as string | undefined,
-    server_id: row[6] as string | undefined,
-    sync_status: row[7] as 'pending' | 'synced' | 'conflict' | undefined,
-    retry_count: row[8] as number | undefined,
-    created_at: row[9] as string,
-    updated_at: row[10] as string,
+    previous_id: row[3] as string | undefined,
+    role: row[4] as 'user' | 'assistant' | 'system',
+    contents: row[5] as string,
+    local_id: row[6] as string | undefined,
+    server_id: row[7] as string | undefined,
+    sync_status: row[8] as 'pending' | 'synced' | 'conflict' | undefined,
+    retry_count: row[9] as number | undefined,
+    created_at: row[10] as string,
+    updated_at: row[11] as string,
   };
 }
 
@@ -36,7 +37,7 @@ export const messageRepository = {
   findByConversation(conversationId: string): Message[] {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE conversation_id = ? ORDER BY sequence_number ASC',
+      'SELECT id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE conversation_id = ? ORDER BY sequence_number ASC',
       [conversationId]
     );
 
@@ -48,7 +49,7 @@ export const messageRepository = {
   findById(id: string): Message | null {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE id = ?',
+      'SELECT id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE id = ?',
       [id]
     );
 
@@ -60,7 +61,7 @@ export const messageRepository = {
   findByLocalId(localId: string): Message | null {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE local_id = ?',
+      'SELECT id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE local_id = ?',
       [localId]
     );
 
@@ -72,7 +73,7 @@ export const messageRepository = {
   findByServerId(serverId: string): Message | null {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE server_id = ?',
+      'SELECT id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE server_id = ?',
       [serverId]
     );
 
@@ -84,11 +85,12 @@ export const messageRepository = {
   insert(message: Message): void {
     const db = getDatabase();
     db.run(
-      'INSERT INTO messages (id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO messages (id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         message.id,
         message.conversation_id,
         message.sequence_number,
+        message.previous_id || null,
         message.role,
         message.contents,
         message.local_id || null,
@@ -114,6 +116,10 @@ export const messageRepository = {
     if (updates.sequence_number !== undefined) {
       setClauses.push('sequence_number = ?');
       values.push(updates.sequence_number);
+    }
+    if (updates.previous_id !== undefined) {
+      setClauses.push('previous_id = ?');
+      values.push(updates.previous_id);
     }
     if (updates.sync_status !== undefined) {
       setClauses.push('sync_status = ?');
@@ -157,7 +163,7 @@ export const messageRepository = {
   getPending(conversationId: string): Message[] {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE sync_status = ? AND conversation_id = ?',
+      'SELECT id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE sync_status = ? AND conversation_id = ?',
       ['pending', conversationId]
     );
 
@@ -219,11 +225,12 @@ export const messageRepository = {
     // Insert with the new ID and any updates
     const updated = { ...existing, ...updates, id: newId };
     db.run(
-      'INSERT INTO messages (id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO messages (id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         updated.id,
         updated.conversation_id,
         updated.sequence_number,
+        updated.previous_id || null,
         updated.role,
         updated.contents,
         updated.local_id || null,
@@ -241,7 +248,7 @@ export const messageRepository = {
   getRetryable(conversationId: string, maxRetries: number = 3): Message[] {
     const db = getDatabase();
     const results = db.exec(
-      'SELECT id, conversation_id, sequence_number, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE sync_status = ? AND conversation_id = ? AND (retry_count IS NULL OR retry_count < ?) ORDER BY created_at ASC',
+      'SELECT id, conversation_id, sequence_number, previous_id, role, contents, local_id, server_id, sync_status, retry_count, created_at, updated_at FROM messages WHERE sync_status = ? AND conversation_id = ? AND (retry_count IS NULL OR retry_count < ?) ORDER BY created_at ASC',
       ['pending', conversationId, maxRetries]
     );
 

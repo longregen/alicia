@@ -53,6 +53,7 @@ func TestNewAgentFactory(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	if factory == nil {
@@ -140,6 +141,7 @@ func TestCreateAgent(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	// Create a conversation for testing
@@ -242,6 +244,7 @@ func TestCreateAgent_WithoutVoiceServices(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	conversationID := "conv_test_no_voice"
@@ -328,6 +331,7 @@ func TestCreateAgent_InvalidConfig(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	conversationID := "conv_test_invalid"
@@ -395,6 +399,7 @@ func TestCreateAgentWithCallbacks(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	conversationID := "conv_test_callbacks"
@@ -487,6 +492,7 @@ func TestCreateAgentWithCallbacks_NilWrapper(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	conversationID := "conv_test_nil_wrapper"
@@ -569,6 +575,7 @@ func TestAgentFactory_IntegrationWithAllComponents(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	conversationID := "conv_test_integration"

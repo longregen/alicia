@@ -3,9 +3,6 @@ package org.localforge.alicia.core.data.mapper
 import org.localforge.alicia.core.network.model.TokenResponse as NetworkTokenResponse
 import org.localforge.alicia.core.domain.model.TokenResponse as DomainTokenResponse
 
-/**
- * Extension function to convert network TokenResponse to domain TokenResponse
- */
 fun NetworkTokenResponse.toDomain(): DomainTokenResponse {
     return DomainTokenResponse(
         token = this.token,
@@ -15,9 +12,6 @@ fun NetworkTokenResponse.toDomain(): DomainTokenResponse {
     )
 }
 
-/**
- * Extension function to convert domain TokenResponse to network TokenResponse
- */
 fun DomainTokenResponse.toNetwork(): NetworkTokenResponse {
     return NetworkTokenResponse(
         token = this.token,

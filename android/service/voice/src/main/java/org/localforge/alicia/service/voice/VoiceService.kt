@@ -30,10 +30,6 @@ import org.localforge.alicia.core.common.vibrate
 import timber.log.Timber
 import javax.inject.Inject
 
-/**
- * Foreground service that manages the voice assistant lifecycle.
- * Handles wake word detection, LiveKit connection, audio I/O, and state management.
- */
 @AndroidEntryPoint
 class VoiceService : Service() {
 
@@ -71,7 +67,6 @@ class VoiceService : Service() {
 
         createNotificationChannel()
 
-        // Register notification action receiver
         val filter = IntentFilter().apply {
             addAction(ACTION_STOP)
             addAction(ACTION_MUTE)
@@ -79,10 +74,8 @@ class VoiceService : Service() {
         }
         registerReceiver(notificationActionReceiver, filter, RECEIVER_NOT_EXPORTED)
 
-        // Start as foreground service
         startForeground(NOTIFICATION_ID, createNotification(VoiceState.Idle))
 
-        // Observe voice controller state
         serviceScope.launch {
             voiceController.currentState.collect { newState ->
                 _state.value = newState
@@ -90,8 +83,7 @@ class VoiceService : Service() {
             }
         }
 
-        // Start wake word detection only if RECORD_AUDIO permission is granted.
-        // Permission must be requested by the UI before starting service.
+        // Permission must be requested by the UI before starting service
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.RECORD_AUDIO
@@ -121,9 +113,8 @@ class VoiceService : Service() {
 
         try {
             unregisterReceiver(notificationActionReceiver)
-        } catch (e: IllegalArgumentException) {
-            // Receiver was not registered or already unregistered
-            Timber.d("Receiver not registered or already unregistered")
+        } catch (_: IllegalArgumentException) {
+            // Expected if receiver was never registered or already unregistered
         }
 
         serviceScope.launch {
@@ -134,7 +125,6 @@ class VoiceService : Service() {
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun activateVoiceAssistant() {
-        // Check RECORD_AUDIO permission before activating
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.RECORD_AUDIO
@@ -180,8 +170,8 @@ class VoiceService : Service() {
     private fun performVibration(durationMs: Long) {
         try {
             vibrate(durationMs)
-        } catch (e: SecurityException) {
-            Timber.w("Vibration permission not granted")
+        } catch (_: SecurityException) {
+            // Vibration is non-essential - continue without it
         }
     }
 
@@ -258,13 +248,11 @@ class VoiceService : Service() {
     }
 
     private fun updateNotification(state: VoiceState) {
-        // Check POST_NOTIFICATIONS permission
         if (ContextCompat.checkSelfPermission(
                 this,
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // Permission not granted, skip notification update
             return
         }
         notificationManager.notify(NOTIFICATION_ID, createNotification(state))
@@ -280,52 +268,14 @@ class VoiceService : Service() {
     }
 }
 
-/**
- * Sealed class representing the various states of the voice assistant.
- */
 sealed class VoiceState {
-    /**
-     * Service is idle, not doing anything.
-     */
     object Idle : VoiceState()
-
-    /**
-     * Actively listening for the wake word.
-     */
     object ListeningForWakeWord : VoiceState()
-
-    /**
-     * Wake word was detected, preparing to listen.
-     */
     object Activated : VoiceState()
-
-    /**
-     * Actively listening to user input (microphone open).
-     */
     object Listening : VoiceState()
-
-    /**
-     * Processing user input (waiting for AI response).
-     */
     object Processing : VoiceState()
-
-    /**
-     * Playing back AI response audio.
-     */
     object Speaking : VoiceState()
-
-    /**
-     * Error state - something went wrong.
-     */
     object Error : VoiceState()
-
-    /**
-     * Connecting to the server.
-     */
     object Connecting : VoiceState()
-
-    /**
-     * Disconnected from the server.
-     */
     object Disconnected : VoiceState()
 }

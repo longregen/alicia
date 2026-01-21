@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/longregen/alicia/internal/domain/models"
@@ -169,7 +170,7 @@ type paretoExecutionContext struct {
 // Execute generates a response using the Pareto search evolutionary approach.
 // This is the main entry point for response generation.
 func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResponseInput) (*ParetoResponseOutput, error) {
-	log.Printf("[ParetoResponseGenerator] Execute called for conversation=%s, userMessage=%s", input.ConversationID, input.UserMessageID)
+	log.Printf("[ParetoResponseGenerator] Execute called for conversation=%s, userMessage=%s, previousID=%s", input.ConversationID, input.UserMessageID, input.PreviousID)
 
 	if input == nil {
 		return nil, fmt.Errorf("input cannot be nil")
@@ -270,6 +271,7 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 	if input.PreviousID != "" {
 		message.SetPreviousMessage(input.PreviousID)
 	}
+	log.Printf("[ParetoResponseGenerator] Creating assistant message: id=%s, previousID=%s (input.PreviousID=%s)", message.ID, message.PreviousID, input.PreviousID)
 
 	if err := g.messageRepo.Create(ctx, message); err != nil {
 		return nil, fmt.Errorf("failed to create message: %w", err)
@@ -283,6 +285,16 @@ func (g *ParetoResponseGenerator) Execute(ctx context.Context, input *ParetoResp
 	// Notify generation started
 	if input.Notifier != nil {
 		input.Notifier.NotifyGenerationStarted(message.ID, input.PreviousID, input.ConversationID)
+	}
+
+	// Generate and send thinking summary
+	if input.Notifier != nil {
+		go func() {
+			summary := g.generateThinkingSummary(ctx, userMessage.Contents, tools, relevantMemories)
+			if summary != "" {
+				input.Notifier.NotifyThinkingSummary(message.ID, input.ConversationID, summary)
+			}
+		}()
 	}
 
 	// Build the query from user message and context
@@ -459,6 +471,66 @@ func (g *ParetoResponseGenerator) buildQueryWithContext(
 	sb.WriteString(userQuery)
 
 	return sb.String()
+}
+
+// generateThinkingSummary generates a brief summary of what the agent is about to do.
+// It uses a fast LLM call to create a one-liner description for the user.
+func (g *ParetoResponseGenerator) generateThinkingSummary(ctx context.Context, userQuery string, tools []*models.Tool, memories []*models.Memory) string {
+	// Build a list of available tool names
+	var toolNames []string
+	for _, t := range tools {
+		if t != nil {
+			toolNames = append(toolNames, t.Name)
+		}
+	}
+
+	// Build memory context hint
+	memoryHint := ""
+	if len(memories) > 0 {
+		memoryHint = fmt.Sprintf(" I have %d relevant memories to consider.", len(memories))
+	}
+
+	toolHint := ""
+	if len(toolNames) > 0 {
+		toolHint = fmt.Sprintf(" Available tools: %s.", strings.Join(toolNames, ", "))
+	}
+
+	prompt := fmt.Sprintf(`Given this user question, write a single short sentence (max 15 words) describing what you're about to do to answer it. Be specific and action-oriented. Don't use "I will" - just describe the action.
+
+User question: %s
+%s%s
+
+Response (one short sentence):`, userQuery, memoryHint, toolHint)
+
+	// Use a short timeout for thinking summary - it should be fast
+	summaryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Use Chat with a single user message
+	messages := []ports.LLMMessage{
+		{Role: "user", Content: prompt},
+	}
+
+	response, err := g.llmService.Chat(summaryCtx, messages)
+	if err != nil {
+		log.Printf("[ParetoResponseGenerator] Failed to generate thinking summary: %v", err)
+		return ""
+	}
+
+	if response == nil || response.Content == "" {
+		return ""
+	}
+
+	// Clean up the response - remove quotes, trim whitespace
+	summary := strings.TrimSpace(response.Content)
+	summary = strings.Trim(summary, "\"'")
+
+	// Limit length
+	if len(summary) > 100 {
+		summary = summary[:97] + "..."
+	}
+
+	return summary
 }
 
 // runParetoSearch executes the GEPA evolutionary loop to find the best response.
@@ -705,6 +777,7 @@ func (g *ParetoResponseGenerator) runParetoSearch(
 }
 
 // parallelResult holds the aggregated result from parallel branch execution.
+// Uses atomic counters for lock-free budget tracking.
 type parallelResult struct {
 	toolCallsUsed int
 	llmCallsUsed  int
@@ -722,6 +795,7 @@ type branchResult struct {
 }
 
 // processBranchesParallel processes multiple branches concurrently.
+// Uses atomic counters and batched archive updates for reduced lock contention.
 func (g *ParetoResponseGenerator) processBranchesParallel(
 	ctx context.Context,
 	query string,
@@ -735,12 +809,10 @@ func (g *ParetoResponseGenerator) processBranchesParallel(
 ) parallelResult {
 	log.Printf("[ParallelBranches] Starting parallel processing of %d candidates", len(candidates))
 
-	result := parallelResult{
-		toolCallsUsed: initialToolCalls,
-		llmCallsUsed:  initialLLMCalls,
-		bestPath:      currentBest,
-		earlyExit:     false,
-	}
+	// Use atomic counters for lock-free budget tracking
+	var toolCallsUsed int64 = int64(initialToolCalls)
+	var llmCallsUsed int64 = int64(initialLLMCalls)
+	var stopEarly int32 // atomic bool: 0 = false, 1 = true
 
 	maxParallel := execCtx.config.MaxParallelBranches
 	if maxParallel <= 0 {
@@ -753,17 +825,15 @@ func (g *ParetoResponseGenerator) processBranchesParallel(
 
 	sem := make(chan struct{}, maxParallel)
 	resultsChan := make(chan branchResult, len(candidates))
-	var mu sync.Mutex
 	var wg sync.WaitGroup
-	var stopEarly bool
 
 	for _, candidate := range candidates {
-		mu.Lock()
-		if stopEarly || result.toolCallsUsed >= execCtx.config.MaxToolCalls || result.llmCallsUsed >= execCtx.config.MaxLLMCalls {
-			mu.Unlock()
+		// Check budget using atomic loads (lock-free)
+		if atomic.LoadInt32(&stopEarly) == 1 ||
+			atomic.LoadInt64(&toolCallsUsed) >= int64(execCtx.config.MaxToolCalls) ||
+			atomic.LoadInt64(&llmCallsUsed) >= int64(execCtx.config.MaxLLMCalls) {
 			break
 		}
-		mu.Unlock()
 
 		select {
 		case <-ctx.Done():
@@ -784,12 +854,10 @@ func (g *ParetoResponseGenerator) processBranchesParallel(
 				return
 			}
 
-			mu.Lock()
-			if stopEarly {
-				mu.Unlock()
+			// Check early exit flag (lock-free)
+			if atomic.LoadInt32(&stopEarly) == 1 {
 				return
 			}
-			mu.Unlock()
 
 			candidateFeedback := candidate.Feedback
 			if candidateFeedback == "" {
@@ -836,41 +904,56 @@ func (g *ParetoResponseGenerator) processBranchesParallel(
 		close(resultsChan)
 	}()
 
+	// Collect results with minimal locking
+	var completedBranches []*models.PathCandidate
+	bestPath := currentBest
+	earlyExit := false
 	completedCount := 0
 	successCount := 0
+
 	for brResult := range resultsChan {
 		completedCount++
-		mu.Lock()
-		result.llmCallsUsed += brResult.llmCalls
-		result.toolCallsUsed += brResult.toolCalls
+
+		// Update atomic counters (lock-free)
+		atomic.AddInt64(&llmCallsUsed, int64(brResult.llmCalls))
+		atomic.AddInt64(&toolCallsUsed, int64(brResult.toolCalls))
 
 		if brResult.success && brResult.mutated != nil {
 			successCount++
-			execCtx.paretoArchive.Add(brResult.mutated)
+			completedBranches = append(completedBranches, brResult.mutated)
 			log.Printf("[ParallelBranches] Branch completed successfully: id=%s score=%.3f",
 				brResult.mutated.ID, brResult.mutated.Scores.AnswerQuality)
 
-			if brResult.mutated.Scores.AnswerQuality > result.bestPath.Scores.AnswerQuality {
+			if brResult.mutated.Scores.AnswerQuality > bestPath.Scores.AnswerQuality {
 				log.Printf("[ParallelBranches] NEW BEST PATH: %.3f > %.3f",
-					brResult.mutated.Scores.AnswerQuality, result.bestPath.Scores.AnswerQuality)
-				result.bestPath = brResult.mutated
+					brResult.mutated.Scores.AnswerQuality, bestPath.Scores.AnswerQuality)
+				bestPath = brResult.mutated
 			}
 
 			if brResult.targetMet {
 				log.Printf("[ParallelBranches] Target score met! Triggering early exit")
-				result.earlyExit = true
-				stopEarly = true
+				earlyExit = true
+				atomic.StoreInt32(&stopEarly, 1)
 			}
 		} else {
 			log.Printf("[ParallelBranches] Branch failed or produced no result")
 		}
-		mu.Unlock()
+	}
+
+	// Batch archive update (single pass, archive handles its own locking)
+	for _, candidate := range completedBranches {
+		execCtx.paretoArchive.Add(candidate)
 	}
 
 	log.Printf("[ParallelBranches] Complete: %d/%d successful, bestScore=%.3f, earlyExit=%v",
-		successCount, completedCount, result.bestPath.Scores.AnswerQuality, result.earlyExit)
+		successCount, completedCount, bestPath.Scores.AnswerQuality, earlyExit)
 
-	return result
+	return parallelResult{
+		toolCallsUsed: int(atomic.LoadInt64(&toolCallsUsed)),
+		llmCallsUsed:  int(atomic.LoadInt64(&llmCallsUsed)),
+		bestPath:      bestPath,
+		earlyExit:     earlyExit,
+	}
 }
 
 // executePath runs the agent with the candidate's strategy and captures the execution trace.
@@ -1012,53 +1095,26 @@ func (g *ParetoResponseGenerator) executePathWithToolLoop(
 			break
 		}
 
-		// Execute each tool call
-		log.Printf("[ToolLoop] Executing %d tool calls...", len(response.ToolCalls))
-		for tcIdx, tc := range response.ToolCalls {
-			log.Printf("[ToolLoop]   Tool[%d]: %s", tcIdx, tc.Name)
-			toolRecord := models.ToolCallRecord{
-				ToolName:  tc.Name,
-				Arguments: tc.Arguments,
-				Success:   false,
-				Result:    nil,
-				Error:     "",
-			}
+		// Execute tool calls in PARALLEL for better performance
+		log.Printf("[ToolLoop] Executing %d tool calls in parallel...", len(response.ToolCalls))
+		toolRecords := g.executeToolCallsParallel(ctx, response.ToolCalls, execCtx, input)
 
-			// Notify tool start
-			if input.Notifier != nil {
-				input.Notifier.NotifyToolUseStart(tc.ID, "", input.ConversationID, tc.Name, tc.Arguments)
-			}
-
-			// Execute tool
-			result, execErr := execCtx.toolRunner.RunTool(ctx, tc.Name, tc.Arguments)
-
-			if execErr != nil {
-				log.Printf("[ToolLoop]   Tool[%d] %s FAILED: %v", tcIdx, tc.Name, execErr)
-				toolRecord.Success = false
-				toolRecord.Error = execErr.Error()
-				currentMessages = append(currentMessages, ports.LLMMessage{
-					Role:    "tool",
-					Content: fmt.Sprintf("Error executing %s: %s", tc.Name, execErr.Error()),
-				})
-				if input.Notifier != nil {
-					input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, false, nil, execErr.Error())
-				}
-			} else {
-				log.Printf("[ToolLoop]   Tool[%d] %s SUCCESS", tcIdx, tc.Name)
-				toolRecord.Success = true
-				toolRecord.Result = result
-				resultContent := fmt.Sprintf("%v", result)
+		// Append results to messages (maintain order for LLM context)
+		for i, record := range toolRecords {
+			if record.Success {
+				resultContent := fmt.Sprintf("%v", record.Result)
 				currentMessages = append(currentMessages, ports.LLMMessage{
 					Role:    "tool",
 					Content: resultContent,
 				})
-				if input.Notifier != nil {
-					input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, true, result, "")
-				}
+			} else {
+				currentMessages = append(currentMessages, ports.LLMMessage{
+					Role:    "tool",
+					Content: fmt.Sprintf("Error executing %s: %s", response.ToolCalls[i].Name, record.Error),
+				})
 			}
-
-			allToolCalls = append(allToolCalls, toolRecord)
 		}
+		allToolCalls = append(allToolCalls, toolRecords...)
 
 		// If last iteration, use current response as answer
 		if iteration == execCtx.config.MaxToolLoopIterations-1 {
@@ -1082,6 +1138,107 @@ func (g *ParetoResponseGenerator) executePathWithToolLoop(
 		TotalTokens:    totalTokens + g.estimateTokens(agentPrompt, ""),
 		DurationMs:     durationMs,
 	}, nil
+}
+
+// executeToolCallsParallel executes multiple tool calls concurrently.
+// Results are returned in the same order as the input tool calls.
+func (g *ParetoResponseGenerator) executeToolCallsParallel(
+	ctx context.Context,
+	toolCalls []*ports.LLMToolCall,
+	execCtx *paretoExecutionContext,
+	input *ParetoResponseInput,
+) []models.ToolCallRecord {
+	if len(toolCalls) == 0 {
+		return nil
+	}
+
+	// For single tool call, skip goroutine overhead
+	if len(toolCalls) == 1 {
+		tc := toolCalls[0]
+		record := g.executeSingleToolWithNotify(ctx, tc, execCtx, input, nil)
+		return []models.ToolCallRecord{record}
+	}
+
+	results := make([]models.ToolCallRecord, len(toolCalls))
+	var wg sync.WaitGroup
+	var notifyMu sync.Mutex // Protect notifier calls
+
+	for i, tc := range toolCalls {
+		wg.Add(1)
+		go func(idx int, call *ports.LLMToolCall) {
+			defer wg.Done()
+			results[idx] = g.executeSingleToolWithNotify(ctx, call, execCtx, input, &notifyMu)
+		}(i, tc)
+	}
+
+	wg.Wait()
+	return results
+}
+
+// executeSingleToolWithNotify executes a single tool call and returns the record.
+// The notifyMu mutex protects notifier calls when running in parallel (can be nil for sequential).
+func (g *ParetoResponseGenerator) executeSingleToolWithNotify(
+	ctx context.Context,
+	tc *ports.LLMToolCall,
+	execCtx *paretoExecutionContext,
+	input *ParetoResponseInput,
+	notifyMu *sync.Mutex,
+) models.ToolCallRecord {
+	toolRecord := models.ToolCallRecord{
+		ToolName:  tc.Name,
+		Arguments: tc.Arguments,
+		Success:   false,
+		Result:    nil,
+		Error:     "",
+	}
+
+	// Notify tool start (protected if running in parallel)
+	if input.Notifier != nil {
+		if notifyMu != nil {
+			notifyMu.Lock()
+		}
+		input.Notifier.NotifyToolUseStart(tc.ID, "", input.ConversationID, tc.Name, tc.Arguments)
+		if notifyMu != nil {
+			notifyMu.Unlock()
+		}
+	}
+
+	// Execute tool (this is the parallel part)
+	if execCtx.toolRunner == nil {
+		toolRecord.Error = "tool runner not available"
+		return toolRecord
+	}
+	result, execErr := execCtx.toolRunner.RunTool(ctx, tc.Name, tc.Arguments)
+
+	if execErr != nil {
+		log.Printf("[ToolExec] %s FAILED: %v", tc.Name, execErr)
+		toolRecord.Success = false
+		toolRecord.Error = execErr.Error()
+		if input.Notifier != nil {
+			if notifyMu != nil {
+				notifyMu.Lock()
+			}
+			input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, false, nil, execErr.Error())
+			if notifyMu != nil {
+				notifyMu.Unlock()
+			}
+		}
+	} else {
+		log.Printf("[ToolExec] %s SUCCESS", tc.Name)
+		toolRecord.Success = true
+		toolRecord.Result = result
+		if input.Notifier != nil {
+			if notifyMu != nil {
+				notifyMu.Lock()
+			}
+			input.Notifier.NotifyToolUseComplete(tc.ID, tc.ID, input.ConversationID, true, result, "")
+			if notifyMu != nil {
+				notifyMu.Unlock()
+			}
+		}
+	}
+
+	return toolRecord
 }
 
 // buildAgentPrompt constructs the full prompt for agent execution.

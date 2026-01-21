@@ -67,7 +67,8 @@ fun MessageBubble(
     onVote: ((String, Boolean) -> Unit)? = null,  // (messageId, isUpvote) -> Unit
     onToolVote: ((String, Boolean) -> Unit)? = null,  // (toolUseId, isUpvote) -> Unit
     onCopy: ((String) -> Unit)? = null,  // (content) -> Unit
-    onBranchNavigate: ((String, BranchDirection) -> Unit)? = null  // (messageId, direction) -> Unit
+    onBranchNavigate: ((String, BranchDirection) -> Unit)? = null,  // (messageId, direction) -> Unit
+    onNotes: ((String) -> Unit)? = null  // (messageId) -> Unit - opens notes panel
 ) {
     val isUser = message.role == MessageRole.USER
     var isEditing by remember { mutableStateOf(false) }
@@ -189,6 +190,9 @@ fun MessageBubble(
                     } else null,
                     onDownvote = if (!isUser && onVote != null) {
                         { onVote.invoke(message.id, false) }
+                    } else null,
+                    onNotes = if (onNotes != null) {
+                        { onNotes.invoke(message.id) }
                     } else null
                 )
             }
@@ -212,7 +216,7 @@ fun MessageBubble(
 }
 
 /**
- * Action buttons for messages (edit, copy, vote).
+ * Action buttons for messages (edit, copy, vote, notes).
  */
 @Composable
 private fun MessageActions(
@@ -220,7 +224,8 @@ private fun MessageActions(
     onEdit: (() -> Unit)?,
     onCopy: () -> Unit,
     onUpvote: (() -> Unit)?,
-    onDownvote: (() -> Unit)?
+    onDownvote: (() -> Unit)?,
+    onNotes: (() -> Unit)?
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -253,6 +258,21 @@ private fun MessageActions(
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        // Notes button
+        onNotes?.let {
+            IconButton(
+                onClick = it,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = AppIcons.Note,
+                    contentDescription = "Notes",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         // Vote buttons (assistant messages only)

@@ -4,7 +4,7 @@ import AudioAddon from '../atoms/AudioAddon';
 import { useConversationStore, selectSentences } from '../../stores/conversationStore';
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
-import { sendControlVariation } from '../../adapters/protocolAdapter';
+import { api } from '../../services/api';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
 import type { MessageId } from '../../types/streaming';
 import type { MessageAddon, AudioState } from '../../types/components';
@@ -71,15 +71,22 @@ const UserMessage: React.FC<UserMessageProps> = ({ messageId, className = '' }) 
     setAudioStates(newStates);
   }, [message, currentlyPlayingId, isPlaying, sentencesWithAudio]);
 
-  // Handle message edit - sends to backend for new agent response
-  const handleEditMessage = useCallback((editedMessageId: MessageId, newContent: string) => {
-    if (currentConversationId) {
-      sendControlVariation(currentConversationId, editedMessageId, 'edit', newContent);
-    }
-  }, [currentConversationId]);
-
   // Get the refresh action from conversation store
   const requestMessagesRefresh = useConversationStore((state) => state.requestMessagesRefresh);
+
+  // Handle message edit - calls REST API which triggers agent response generation
+  const handleEditMessage = useCallback(async (editedMessageId: MessageId, newContent: string) => {
+    if (currentConversationId) {
+      try {
+        await api.editUserMessage(currentConversationId, editedMessageId, newContent);
+        // The backend creates a new sibling message and updates the conversation tip.
+        // Refresh messages to get the updated message list with proper branch structure.
+        requestMessagesRefresh();
+      } catch (error) {
+        console.error('Failed to edit user message:', error);
+      }
+    }
+  }, [currentConversationId, requestMessagesRefresh]);
 
   // Handle branch switch - reloads messages after backend updates the conversation tip
   const handleBranchSwitch = useCallback(() => {

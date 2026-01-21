@@ -1,6 +1,40 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { api } from './api';
 
+/**
+ * Helper to verify fetch was called with expected arguments.
+ * Handles Headers objects which can't be directly compared with toHaveBeenCalledWith.
+ */
+function expectFetchCalledWith(
+  mockFetch: ReturnType<typeof vi.fn>,
+  url: string,
+  options?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }
+) {
+  expect(mockFetch).toHaveBeenCalled();
+  const [calledUrl, calledOptions] = mockFetch.mock.calls[0];
+  expect(calledUrl).toBe(url);
+
+  if (options?.method) {
+    expect(calledOptions.method).toBe(options.method);
+  }
+  if (options?.body) {
+    expect(calledOptions.body).toBe(options.body);
+  }
+  if (options?.headers) {
+    const headers = calledOptions.headers as Headers;
+    for (const [key, value] of Object.entries(options.headers)) {
+      expect(headers.get(key)).toBe(value);
+    }
+  }
+  // Always verify X-User-ID header is present (auth header)
+  const headers = calledOptions.headers as Headers;
+  expect(headers.get('X-User-ID')).toMatch(/^user_device_\d+_[a-z0-9]+$/);
+}
+
 describe('api service', () => {
   const mockFetch = vi.fn();
 
@@ -31,7 +65,7 @@ describe('api service', () => {
 
       const result = await api.createConversation({ title: 'Test Conversation' });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations', {
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Test Conversation' }),
@@ -80,7 +114,7 @@ describe('api service', () => {
 
       const result = await api.getConversations();
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations', undefined);
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations');
       expect(result).toEqual(mockConversations);
     });
 
@@ -125,7 +159,7 @@ describe('api service', () => {
 
       const result = await api.getConversation('conv-123');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations/conv-123', undefined);
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations/conv-123');
       expect(result).toEqual(mockConversation);
     });
 
@@ -148,7 +182,7 @@ describe('api service', () => {
 
       await api.deleteConversation('conv-123');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations/conv-123', {
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations/conv-123', {
         method: 'DELETE',
       });
     });
@@ -185,7 +219,7 @@ describe('api service', () => {
         title: 'Updated Title',
       });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations/conv-123', {
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations/conv-123', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Updated Title' }),
@@ -224,7 +258,7 @@ describe('api service', () => {
 
       const result = await api.getMessages('conv-123');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations/conv-123/messages', undefined);
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations/conv-123/messages');
       expect(result).toEqual(mockMessages);
     });
 
@@ -261,7 +295,7 @@ describe('api service', () => {
         contents: 'Hello, assistant!',
       });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations/conv-123/messages', {
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations/conv-123/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: 'Hello, assistant!' }),
@@ -281,13 +315,12 @@ describe('api service', () => {
 
       const result = await api.getLiveKitToken('conv-123', 'Test User');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/conversations/conv-123/token', {
+      expectFetchCalledWith(mockFetch, '/api/v1/conversations/conv-123/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: expect.stringContaining('Test User'),
       });
 
-      // Verify the participant_id is generated
+      // Verify the body contains expected values
       const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(callBody.participant_id).toMatch(/^user_device_\d+_[a-z0-9]+$/);
       expect(callBody.participant_name).toBe('Test User');
@@ -348,7 +381,7 @@ describe('api service', () => {
 
       const result = await api.getConfig();
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/v1/config', undefined);
+      expectFetchCalledWith(mockFetch, '/api/v1/config');
       expect(result).toEqual(mockConfig);
     });
 

@@ -68,12 +68,6 @@ fun ConnectionStatusSetting(
     }
 }
 
-/**
- * Formats a Unix timestamp into a human-readable date and time string.
- *
- * @param timestamp Unix timestamp in milliseconds
- * @return Formatted string in "MMM d, HH:mm" format (e.g., "Dec 24, 15:30")
- */
 private fun formatTimestamp(timestamp: Long): String {
     return SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(timestamp))
 }

@@ -15,7 +15,6 @@ func TestCodec_EncodeDecode_UserMessage(t *testing.T) {
 		PreviousID:     "msg_122",
 		ConversationID: "conv_abc",
 		Content:        "Hello, Alicia!",
-		Timestamp:      1234567890,
 	}
 
 	env := protocol.NewEnvelope(1, "conv_abc", protocol.TypeUserMessage, msg)
@@ -65,10 +64,6 @@ func TestCodec_EncodeDecode_UserMessage(t *testing.T) {
 	if userMsg.PreviousID != "msg_122" {
 		t.Errorf("expected PreviousID 'msg_122', got %s", userMsg.PreviousID)
 	}
-
-	if userMsg.Timestamp != 1234567890 {
-		t.Errorf("expected Timestamp 1234567890, got %d", userMsg.Timestamp)
-	}
 }
 
 // TestCodec_EncodeDecode_AssistantMessage tests AssistantMessage with all fields
@@ -80,7 +75,6 @@ func TestCodec_EncodeDecode_AssistantMessage(t *testing.T) {
 		PreviousID:     "msg_123",
 		ConversationID: "conv_abc",
 		Content:        "I'm here to help!",
-		Timestamp:      1234567891,
 	}
 
 	env := protocol.NewEnvelope(-1, "conv_abc", protocol.TypeAssistantMessage, msg)

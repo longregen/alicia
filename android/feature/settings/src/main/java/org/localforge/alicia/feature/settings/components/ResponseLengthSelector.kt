@@ -16,20 +16,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.localforge.alicia.ui.theme.AliciaTheme
 
-/**
- * Response length options matching the web frontend
- */
 enum class ResponseLength(val displayName: String, val description: String) {
     CONCISE("Concise", "Short, direct answers without elaboration."),
     BALANCED("Balanced", "Clear explanations with relevant details."),
     DETAILED("Detailed", "Comprehensive responses with examples and context.")
 }
 
-/**
- * Response length selector component matching the web frontend's Settings.tsx
- *
- * Displays three buttons for selecting response length preference.
- */
 @Composable
 fun ResponseLengthSelector(
     selectedLength: ResponseLength,

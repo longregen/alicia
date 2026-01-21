@@ -4,7 +4,17 @@ import { createMessageId } from '../types/streaming';
 
 // Mock fetch for API calls
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+vi.stubGlobal('fetch', mockFetch);
+
+// Mock setTipMessageId for the dynamically imported conversationStore
+const mockSetTipMessageId = vi.fn();
+vi.mock('./conversationStore', () => ({
+  useConversationStore: {
+    getState: () => ({
+      setTipMessageId: mockSetTipMessageId,
+    }),
+  },
+}));
 
 describe('BranchStore', () => {
   beforeEach(() => {
@@ -13,6 +23,7 @@ describe('BranchStore', () => {
       branchStates: new Map(),
     });
     mockFetch.mockReset();
+    mockSetTipMessageId.mockReset();
   });
 
   afterEach(() => {

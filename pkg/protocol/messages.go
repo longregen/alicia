@@ -376,6 +376,15 @@ type ResponseGenerationRequest struct {
 	Timestamp       int64  `msgpack:"timestamp" json:"timestamp"`
 }
 
+// ThinkingSummary (Type 34) represents a summary of what the agent is about to do
+type ThinkingSummary struct {
+	ID             string `msgpack:"id" json:"id"`
+	MessageID      string `msgpack:"messageId" json:"messageId"`
+	ConversationID string `msgpack:"conversationId" json:"conversationId"`
+	Content        string `msgpack:"content" json:"content"`
+	Timestamp      int64  `msgpack:"timestamp" json:"timestamp"`
+}
+
 // SiblingInfo contains information about a sibling message in a branch
 type SiblingInfo struct {
 	ID        string `msgpack:"id" json:"id"`

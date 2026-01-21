@@ -3,9 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Network model for MCP server configuration request.
- */
 @JsonClass(generateAdapter = true)
 data class MCPServerConfigRequest(
     @Json(name = "name")
@@ -24,9 +21,6 @@ data class MCPServerConfigRequest(
     val env: Map<String, String>? = null
 )
 
-/**
- * Network model for MCP server response.
- */
 @JsonClass(generateAdapter = true)
 data class MCPServerResponse(
     @Json(name = "name")
@@ -54,18 +48,12 @@ data class MCPServerResponse(
     val error: String? = null
 )
 
-/**
- * Network model for MCP servers list response.
- */
 @JsonClass(generateAdapter = true)
 data class MCPServersResponse(
     @Json(name = "servers")
     val servers: List<MCPServerResponse>
 )
 
-/**
- * Network model for MCP tool response.
- */
 @JsonClass(generateAdapter = true)
 data class MCPToolResponse(
     @Json(name = "name")
@@ -78,9 +66,6 @@ data class MCPToolResponse(
     val inputSchema: Map<String, Any>? = null
 )
 
-/**
- * Network model for MCP tools list response.
- */
 @JsonClass(generateAdapter = true)
 data class MCPToolsResponse(
     @Json(name = "tools")

@@ -37,6 +37,26 @@ func (n *WSNotifier) NotifyGenerationStarted(messageID, previousID, conversation
 	}
 }
 
+// NotifyThinkingSummary sends a ThinkingSummary message with what the agent is about to do
+func (n *WSNotifier) NotifyThinkingSummary(messageID, conversationID string, summary string) {
+	if n.client == nil || !n.client.IsConnected() {
+		return
+	}
+
+	thinkingSummary := &protocol.ThinkingSummary{
+		ID:             messageID + "_thinking",
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		Content:        summary,
+		Timestamp:      time.Now().UnixMilli(),
+	}
+
+	envelope := protocol.NewEnvelope(0, conversationID, protocol.TypeThinkingSummary, thinkingSummary)
+	if err := n.client.SendEnvelope(envelope); err != nil {
+		log.Printf("WSNotifier: Failed to send ThinkingSummary: %v", err)
+	}
+}
+
 // NotifyMemoryRetrieved sends a MemoryTrace message
 func (n *WSNotifier) NotifyMemoryRetrieved(messageID, conversationID string, memoryID string, content string, relevance float32) {
 	if n.client == nil || !n.client.IsConnected() {

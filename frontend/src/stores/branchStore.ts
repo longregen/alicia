@@ -3,6 +3,17 @@ import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import type { MessageId } from '../types/streaming';
 import type { Message } from '../types/models';
+import { createMessageId } from '../types/streaming';
+import { getDeviceId } from '../utils/deviceId';
+
+// Lazy import to avoid circular dependency
+let conversationStoreModule: typeof import('./conversationStore') | null = null;
+async function getConversationStore() {
+  if (!conversationStoreModule) {
+    conversationStoreModule = await import('./conversationStore');
+  }
+  return conversationStoreModule.useConversationStore;
+}
 
 // Enable Immer MapSet plugin for Map/Set support in stores
 enableMapSet();
@@ -79,6 +90,67 @@ interface BranchState {
 }
 
 /**
+ * Get the user ID for API authentication.
+ */
+function getUserId(): string {
+  return `user_${getDeviceId()}`;
+}
+
+/**
+ * Find the newest leaf descendant of a message.
+ * When switching branches, we want to show the full branch down to its newest leaf,
+ * not just stop at the sibling message.
+ */
+async function findNewestLeafDescendant(messageId: string): Promise<string> {
+  const conversationStore = await getConversationStore();
+  const messages = conversationStore.getState().messages;
+  const messageArray = Object.values(messages);
+
+  // Build a map of parent -> children
+  const childrenOf = new Map<string, typeof messageArray>();
+  for (const msg of messageArray) {
+    if (msg.previousId) {
+      const children = childrenOf.get(msg.previousId) || [];
+      children.push(msg);
+      childrenOf.set(msg.previousId, children);
+    }
+  }
+
+  // BFS to find all descendants
+  const descendants = new Map<string, (typeof messageArray)[0]>();
+  const queue = [messageId];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const children = childrenOf.get(current) || [];
+    for (const child of children) {
+      descendants.set(child.id, child);
+      queue.push(child.id);
+    }
+  }
+
+  // Find all leaves (messages with no children)
+  const leaves: (typeof messageArray)[0][] = [];
+  for (const [id, msg] of descendants) {
+    if (!childrenOf.has(id) || childrenOf.get(id)!.length === 0) {
+      leaves.push(msg);
+    }
+  }
+
+  // If no descendants, the message itself is the leaf
+  if (leaves.length === 0) {
+    return messageId;
+  }
+
+  // Return the newest leaf (by createdAt)
+  const newest = leaves.reduce((a, b) =>
+    a.createdAt.getTime() > b.createdAt.getTime() ? a : b
+  );
+
+  return newest.id;
+}
+
+/**
  * Fetch siblings for a message from the backend.
  */
 async function fetchSiblingsFromBackend(
@@ -86,7 +158,10 @@ async function fetchSiblingsFromBackend(
   messageId: string
 ): Promise<SiblingMessage[]> {
   const response = await fetch(
-    `${API_BASE}/conversations/${conversationId}/messages/${messageId}/siblings`
+    `${API_BASE}/conversations/${conversationId}/messages/${messageId}/siblings`,
+    {
+      headers: { 'X-User-ID': getUserId() },
+    }
   );
 
   if (!response.ok) {
@@ -107,17 +182,21 @@ async function fetchSiblingsFromBackend(
 
 /**
  * Switch the conversation tip to a different branch.
+ * Returns the new tip_message_id from the updated conversation.
  */
 async function switchBranchOnBackend(
   conversationId: string,
   tipMessageId: string
-): Promise<void> {
+): Promise<string | null> {
   const response = await fetch(
     `${API_BASE}/conversations/${conversationId}/switch-branch`,
     {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipMessageId }),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': getUserId(),
+      },
+      body: JSON.stringify({ tip_message_id: tipMessageId }),
     }
   );
 
@@ -125,6 +204,10 @@ async function switchBranchOnBackend(
     const text = await response.text();
     throw new Error(text || `Failed to switch branch: ${response.status}`);
   }
+
+  // Backend returns the updated conversation with the new tip_message_id
+  const conversation = await response.json();
+  return conversation.tip_message_id || null;
 }
 
 /**
@@ -217,8 +300,14 @@ export const useBranchStore = create<BranchState>()(
       });
 
       try {
-        // Call backend to switch the conversation tip
-        await switchBranchOnBackend(conversationId, targetSibling.id);
+        // Find the newest leaf descendant of the target sibling
+        // This ensures we show the full branch, not just up to the switch point
+        const leafTipId = await findNewestLeafDescendant(targetSibling.id);
+        console.log('[branchStore] Found leaf tip:', leafTipId, 'for sibling:', targetSibling.id);
+
+        // Call backend to switch the conversation tip to the leaf
+        console.log('[branchStore] Switching branch, calling backend with leaf tip:', leafTipId);
+        await switchBranchOnBackend(conversationId, leafTipId);
 
         // Update local state with new index
         set((s) => {
@@ -229,8 +318,15 @@ export const useBranchStore = create<BranchState>()(
           }
         });
 
+        // Update tip message ID in conversation store to trigger branch filtering
+        console.log('[branchStore] Setting tipMessageId to:', leafTipId);
+        const conversationStore = await getConversationStore();
+        conversationStore.getState().setTipMessageId(createMessageId(leafTipId));
+        console.log('[branchStore] tipMessageId set successfully');
+
         return targetSibling;
       } catch (err) {
+        console.error('[branchStore] Error switching branch:', err);
         const errorMessage = err instanceof Error ? err.message : 'Failed to switch branch';
         set((s) => {
           const existing = s.branchStates.get(messageId);
@@ -277,8 +373,12 @@ export const useBranchStore = create<BranchState>()(
       });
 
       try {
-        // Call backend to switch the conversation tip
-        await switchBranchOnBackend(conversationId, targetMessageId);
+        // Find the newest leaf descendant of the target message
+        // This ensures we show the full branch, not just up to the switch point
+        const leafTipId = await findNewestLeafDescendant(targetMessageId);
+
+        // Call backend to switch the conversation tip to the leaf
+        await switchBranchOnBackend(conversationId, leafTipId);
 
         // Update local state with new index
         set((s) => {
@@ -288,6 +388,10 @@ export const useBranchStore = create<BranchState>()(
             existing.loading = false;
           }
         });
+
+        // Update tip message ID in conversation store to trigger branch filtering
+        const conversationStore = await getConversationStore();
+        conversationStore.getState().setTipMessageId(createMessageId(leafTipId));
 
         return targetSibling;
       } catch (err) {

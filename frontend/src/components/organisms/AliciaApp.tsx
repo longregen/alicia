@@ -8,7 +8,8 @@ import { useConversations } from '../../hooks/useConversations';
 import { useConversationStore } from '../../stores/conversationStore';
 import { createConversationId } from '../../types/streaming';
 import type { VoiceState } from '../atoms/VoiceVisualizer';
-import { sendControlStop, sendControlVariation } from '../../adapters/protocolAdapter';
+import { sendControlStop } from '../../adapters/protocolAdapter';
+import { api } from '../../services/api';
 import type { AppView } from '../../App';
 
 /**
@@ -118,7 +119,7 @@ export function AliciaApp() {
     sendControlStop(activeConversationId, 'all');
   };
 
-  const handleRegenerateResponse = () => {
+  const handleRegenerateResponse = async () => {
     if (!activeConversationId) {
       console.warn('Cannot regenerate: no active conversation');
       return;
@@ -138,8 +139,12 @@ export function AliciaApp() {
     // Get the last assistant message
     const lastAssistantMessage = messages[messages.length - 1];
 
-    // Send regenerate request
-    sendControlVariation(activeConversationId, lastAssistantMessage.id, 'regenerate');
+    // Call REST API to regenerate - this will trigger agent response via WebSocket
+    try {
+      await api.regenerateResponse(activeConversationId, lastAssistantMessage.id);
+    } catch (error) {
+      console.error('Failed to regenerate response:', error);
+    }
   };
 
   const handlePanelChange = (panel: 'memory' | 'server' | 'settings') => {
@@ -200,9 +205,7 @@ export function AliciaApp() {
         )}
 
         {activePanel === 'settings' && (
-          <Settings
-            conversationId={activeConversationId}
-          />
+          <Settings />
         )}
       </main>
     </div>

@@ -9,6 +9,7 @@ import org.localforge.alicia.core.data.mapper.*
 import org.localforge.alicia.core.database.dao.ConversationDao
 import org.localforge.alicia.core.database.dao.MessageDao
 import org.localforge.alicia.core.domain.model.Conversation
+import org.localforge.alicia.core.domain.model.ConversationStatus
 import org.localforge.alicia.core.domain.model.Message
 import org.localforge.alicia.core.domain.model.MessageRole
 import org.localforge.alicia.core.domain.model.SyncStatus
@@ -133,6 +134,64 @@ class ConversationRepositoryImpl @Inject constructor(
             )
 
             conversationDao.updateConversation(updated)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun archiveConversation(conversationId: String): Result<Unit> {
+        return try {
+            val conversation = conversationDao.getConversationByIdSuspend(conversationId)
+                ?: return Result.failure(IllegalArgumentException("Conversation not found"))
+
+            // Sync to server first (matching web frontend behavior)
+            try {
+                apiService.updateConversation(
+                    conversationId,
+                    UpdateConversationRequest(status = ConversationStatus.ARCHIVED.value)
+                )
+            } catch (e: Exception) {
+                // Network errors are expected in offline-first mode; log and proceed with local update
+                logger.w("Failed to archive conversation $conversationId on server, proceeding with local update", e)
+            }
+
+            // Update local database
+            val updated = conversation.copy(
+                status = ConversationStatus.ARCHIVED.value,
+                updatedAt = System.currentTimeMillis()
+            )
+            conversationDao.updateConversation(updated)
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun unarchiveConversation(conversationId: String): Result<Unit> {
+        return try {
+            val conversation = conversationDao.getConversationByIdSuspend(conversationId)
+                ?: return Result.failure(IllegalArgumentException("Conversation not found"))
+
+            // Sync to server first (matching web frontend behavior)
+            try {
+                apiService.updateConversation(
+                    conversationId,
+                    UpdateConversationRequest(status = ConversationStatus.ACTIVE.value)
+                )
+            } catch (e: Exception) {
+                // Network errors are expected in offline-first mode; log and proceed with local update
+                logger.w("Failed to unarchive conversation $conversationId on server, proceeding with local update", e)
+            }
+
+            // Update local database
+            val updated = conversation.copy(
+                status = ConversationStatus.ACTIVE.value,
+                updatedAt = System.currentTimeMillis()
+            )
+            conversationDao.updateConversation(updated)
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

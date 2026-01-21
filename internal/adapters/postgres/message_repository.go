@@ -29,9 +29,10 @@ func (r *MessageRepository) Create(ctx context.Context, message *models.Message)
 	query := `
 		INSERT INTO alicia_messages (
 			id, conversation_id, sequence_number, previous_id, message_role, contents,
-			local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at
+			local_id, server_id, sync_status, synced_at, completion_status,
+			user_edited, user_edited_at, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 		)`
 
 	_, err := r.conn(ctx).Exec(ctx, query,
@@ -46,6 +47,8 @@ func (r *MessageRepository) Create(ctx context.Context, message *models.Message)
 		message.SyncStatus,
 		nullTime(message.SyncedAt),
 		message.CompletionStatus,
+		message.UserEdited,
+		nullTime(message.UserEditedAt),
 		message.CreatedAt,
 		message.UpdatedAt,
 	)
@@ -59,7 +62,7 @@ func (r *MessageRepository) GetByID(ctx context.Context, id string) (*models.Mes
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE id = $1 AND deleted_at IS NULL`
 
@@ -79,7 +82,9 @@ func (r *MessageRepository) Update(ctx context.Context, message *models.Message)
 			sync_status = $6,
 			synced_at = $7,
 			completion_status = $8,
-			updated_at = $9
+			user_edited = $9,
+			user_edited_at = $10,
+			updated_at = $11
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	_, err := r.conn(ctx).Exec(ctx, query,
@@ -91,6 +96,8 @@ func (r *MessageRepository) Update(ctx context.Context, message *models.Message)
 		message.SyncStatus,
 		nullTime(message.SyncedAt),
 		message.CompletionStatus,
+		message.UserEdited,
+		nullTime(message.UserEditedAt),
 		message.UpdatedAt,
 	)
 
@@ -116,7 +123,7 @@ func (r *MessageRepository) GetByConversation(ctx context.Context, conversationI
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE conversation_id = $1 AND deleted_at IS NULL
 		ORDER BY sequence_number ASC`
@@ -136,7 +143,7 @@ func (r *MessageRepository) GetLatestByConversation(ctx context.Context, convers
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE conversation_id = $1 AND deleted_at IS NULL
 		ORDER BY sequence_number DESC
@@ -237,7 +244,7 @@ func (r *MessageRepository) GetAfterSequence(ctx context.Context, conversationID
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE conversation_id = $1 AND sequence_number > $2 AND deleted_at IS NULL
 		ORDER BY sequence_number ASC`
@@ -258,7 +265,7 @@ func (r *MessageRepository) GetPendingSync(ctx context.Context, conversationID s
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE conversation_id = $1
 		  AND sync_status = 'pending'
@@ -281,7 +288,7 @@ func (r *MessageRepository) GetByLocalID(ctx context.Context, localID string) (*
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE local_id = $1 AND deleted_at IS NULL`
 
@@ -291,7 +298,7 @@ func (r *MessageRepository) GetByLocalID(ctx context.Context, localID string) (*
 func (r *MessageRepository) scanMessage(row pgx.Row) (*models.Message, error) {
 	var m models.Message
 	var previousID, localID, serverID sql.NullString
-	var syncedAt sql.NullTime
+	var syncedAt, userEditedAt sql.NullTime
 
 	err := row.Scan(
 		&m.ID,
@@ -305,6 +312,8 @@ func (r *MessageRepository) scanMessage(row pgx.Row) (*models.Message, error) {
 		&m.SyncStatus,
 		&syncedAt,
 		&m.CompletionStatus,
+		&m.UserEdited,
+		&userEditedAt,
 		&m.CreatedAt,
 		&m.UpdatedAt,
 		&m.DeletedAt,
@@ -324,6 +333,7 @@ func (r *MessageRepository) scanMessage(row pgx.Row) (*models.Message, error) {
 	m.LocalID = getString(localID)
 	m.ServerID = getString(serverID)
 	m.SyncedAt = getTimePtr(syncedAt)
+	m.UserEditedAt = getTimePtr(userEditedAt)
 
 	return &m, nil
 }
@@ -334,7 +344,7 @@ func (r *MessageRepository) scanMessages(rows pgx.Rows) ([]*models.Message, erro
 	for rows.Next() {
 		var m models.Message
 		var previousID, localID, serverID sql.NullString
-		var syncedAt sql.NullTime
+		var syncedAt, userEditedAt sql.NullTime
 
 		err := rows.Scan(
 			&m.ID,
@@ -348,6 +358,8 @@ func (r *MessageRepository) scanMessages(rows pgx.Rows) ([]*models.Message, erro
 			&m.SyncStatus,
 			&syncedAt,
 			&m.CompletionStatus,
+			&m.UserEdited,
+			&userEditedAt,
 			&m.CreatedAt,
 			&m.UpdatedAt,
 			&m.DeletedAt,
@@ -361,6 +373,7 @@ func (r *MessageRepository) scanMessages(rows pgx.Rows) ([]*models.Message, erro
 		m.LocalID = getString(localID)
 		m.ServerID = getString(serverID)
 		m.SyncedAt = getTimePtr(syncedAt)
+		m.UserEditedAt = getTimePtr(userEditedAt)
 
 		messages = append(messages, &m)
 	}
@@ -375,7 +388,7 @@ func (r *MessageRepository) GetIncompleteOlderThan(ctx context.Context, olderTha
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE completion_status IN ('pending', 'streaming', 'failed')
 		  AND created_at < $1
@@ -398,7 +411,7 @@ func (r *MessageRepository) GetIncompleteByConversation(ctx context.Context, con
 
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE conversation_id = $1
 		  AND completion_status IN ('pending', 'streaming', 'failed')
@@ -425,7 +438,7 @@ func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID st
 		WITH RECURSIVE message_chain AS (
 			-- Base case: start with the tip message
 			SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-			       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at,
+			       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at,
 			       1 as depth
 			FROM alicia_messages
 			WHERE id = $1 AND deleted_at IS NULL
@@ -434,14 +447,14 @@ func (r *MessageRepository) GetChainFromTip(ctx context.Context, tipMessageID st
 
 			-- Recursive case: follow previous_id backwards
 			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
-			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.created_at, m.updated_at, m.deleted_at,
+			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.user_edited, m.user_edited_at, m.created_at, m.updated_at, m.deleted_at,
 			       mc.depth + 1
 			FROM alicia_messages m
 			INNER JOIN message_chain mc ON m.id = mc.previous_id
 			WHERE m.deleted_at IS NULL
 		)
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM message_chain
 		ORDER BY depth DESC`
 
@@ -463,14 +476,14 @@ func (r *MessageRepository) GetChainFromTipWithSiblings(ctx context.Context, tip
 
 	// This query:
 	// 1. Walks backwards from tip via previous_id (message_chain CTE)
-	// 2. Collects all unique previous_ids from the chain (chain_parents CTE)
+	// 2. Collects all unique previous_ids from the chain, including NULL for root-level messages
 	// 3. Finds all siblings: messages sharing the same previous_id but not in the chain
 	// 4. Returns the union, ordered by sequence_number then created_at
 	query := `
 		WITH RECURSIVE message_chain AS (
 			-- Base case: start with the tip message
 			SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-			       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+			       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 			FROM alicia_messages
 			WHERE id = $1 AND deleted_at IS NULL
 
@@ -478,27 +491,38 @@ func (r *MessageRepository) GetChainFromTipWithSiblings(ctx context.Context, tip
 
 			-- Recursive case: follow previous_id backwards
 			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
-			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.created_at, m.updated_at, m.deleted_at
+			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.user_edited, m.user_edited_at, m.created_at, m.updated_at, m.deleted_at
 			FROM alicia_messages m
 			INNER JOIN message_chain mc ON m.id = mc.previous_id
 			WHERE m.deleted_at IS NULL
 		),
-		-- Get all unique previous_ids from the chain (these are the branch points)
+		-- Check if any message in the chain has NULL previous_id (root-level)
+		has_root_message AS (
+			SELECT EXISTS(SELECT 1 FROM message_chain WHERE previous_id IS NULL) AS has_null
+		),
+		-- Get all unique non-NULL previous_ids from the chain (these are the branch points)
 		chain_parents AS (
 			SELECT DISTINCT previous_id FROM message_chain WHERE previous_id IS NOT NULL
 		),
 		-- Get all siblings: messages that share the same previous_id as chain messages but aren't in the chain
+		-- This includes root-level siblings (previous_id IS NULL) if any chain message is root-level
 		siblings AS (
 			SELECT m.id, m.conversation_id, m.sequence_number, m.previous_id, m.message_role, m.contents,
-			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.created_at, m.updated_at, m.deleted_at
+			       m.local_id, m.server_id, m.sync_status, m.synced_at, m.completion_status, m.user_edited, m.user_edited_at, m.created_at, m.updated_at, m.deleted_at
 			FROM alicia_messages m
-			WHERE m.previous_id IN (SELECT previous_id FROM chain_parents)
+			WHERE m.conversation_id = (SELECT conversation_id FROM message_chain LIMIT 1)
+			  AND (
+				-- Match siblings with non-NULL previous_id
+				m.previous_id IN (SELECT previous_id FROM chain_parents)
+				-- OR match root-level siblings if chain has a root message
+				OR (m.previous_id IS NULL AND (SELECT has_null FROM has_root_message))
+			)
 			  AND m.id NOT IN (SELECT id FROM message_chain)
 			  AND m.deleted_at IS NULL
 		)
 		-- Combine chain messages and siblings, ordered by position then creation time
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM (
 			SELECT * FROM message_chain
 			UNION ALL
@@ -536,7 +560,7 @@ func (r *MessageRepository) GetSiblings(ctx context.Context, messageID string) (
 	// Get all messages with the same previous_id
 	query := `
 		SELECT id, conversation_id, sequence_number, previous_id, message_role, contents,
-		       local_id, server_id, sync_status, synced_at, completion_status, created_at, updated_at, deleted_at
+		       local_id, server_id, sync_status, synced_at, completion_status, user_edited, user_edited_at, created_at, updated_at, deleted_at
 		FROM alicia_messages
 		WHERE previous_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at ASC`

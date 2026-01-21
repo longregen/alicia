@@ -75,6 +75,7 @@ func TestNewMessageRouter(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	if router == nil {
@@ -166,6 +167,7 @@ func TestNewMessageRouter_WithoutVoiceServices(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	if router == nil {
@@ -241,6 +243,7 @@ func TestOnDataReceived(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	// Create a valid configuration message
@@ -330,6 +333,7 @@ func TestOnDataReceived_InvalidData(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	// Send invalid data
@@ -406,6 +410,7 @@ func TestOnDataReceived_WithStanzaID(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	// Create message with stanza ID
@@ -507,6 +512,7 @@ func TestOnAudioReceived_WithoutVoicePipeline(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	// Should not have voice pipeline
@@ -594,6 +600,7 @@ func TestOnParticipantConnected(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	participant := &ports.LiveKitParticipant{
@@ -670,6 +677,7 @@ func TestOnParticipantDisconnected(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	participant := &ports.LiveKitParticipant{
@@ -746,6 +754,7 @@ func TestCleanup(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	// Voice pipeline should exist

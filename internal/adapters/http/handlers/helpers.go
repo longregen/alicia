@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -21,6 +22,10 @@ func respondJSON(w http.ResponseWriter, data interface{}, status int) {
 
 // respondError writes an error JSON response
 func respondError(w http.ResponseWriter, errorType string, message string, status int) {
+	// Log 4xx client errors for debugging
+	if status >= 400 && status < 500 {
+		log.Printf("HTTP %d: type=%s message=%s", status, errorType, message)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(dto.NewErrorResponse(errorType, message, status))

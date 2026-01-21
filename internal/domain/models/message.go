@@ -58,6 +58,10 @@ type Message struct {
 	// Streaming completion tracking
 	CompletionStatus CompletionStatus `json:"completion_status,omitempty"` // Tracks streaming state
 
+	// User edit tracking (for assistant messages edited by user - valuable training data)
+	UserEdited   bool       `json:"user_edited,omitempty"`    // True if user edited this assistant message
+	UserEditedAt *time.Time `json:"user_edited_at,omitempty"` // When the user edited the message
+
 	// Related entities (loaded separately)
 	Sentences      []*Sentence      `json:"sentences,omitempty"`
 	Audio          *Audio           `json:"audio,omitempty"`
@@ -201,4 +205,17 @@ func (m *Message) SoftDelete() {
 // IsDeleted returns true if the message has been soft deleted
 func (m *Message) IsDeleted() bool {
 	return m.DeletedAt != nil
+}
+
+// MarkAsUserEdited marks the message as edited by a user (for training data)
+func (m *Message) MarkAsUserEdited() {
+	now := time.Now().UTC()
+	m.UserEdited = true
+	m.UserEditedAt = &now
+	m.UpdatedAt = now
+}
+
+// IsUserEdited returns true if the message was edited by a user
+func (m *Message) IsUserEdited() bool {
+	return m.UserEdited
 }

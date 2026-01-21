@@ -256,6 +256,7 @@ func (d *DefaultMessageDispatcher) generateResponseAsync(
 			PreviousID:       processOutput.Message.ID,
 			Notifier:         notifier,
 		}
+		log.Printf("[generateResponseAsync] Calling generateResponseUseCase with PreviousID=%s", input.PreviousID)
 
 		// Register the generation for cancellation with the correct ID
 		d.generationManager.RegisterGeneration(assistantMsgID, cancel)
@@ -2103,11 +2104,13 @@ func (d *DefaultMessageDispatcher) handleGenerateForUserMessage(ctx context.Cont
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
+			PreviousID:      req.MessageID, // Link assistant response to the user message
 			EnableTools:     req.EnableTools,
 			EnableReasoning: req.EnableReasoning,
 			EnableStreaming: req.EnableStreaming,
 			Notifier:        d.protocolHandler.(ports.GenerationNotifier),
 		}
+		log.Printf("[handleGenerateForUserMessage] Calling generateResponseUseCase with PreviousID=%s", input.PreviousID)
 
 		output, err := d.generateResponseUseCase.Execute(genCtx, input)
 		if err != nil {
@@ -2279,6 +2282,7 @@ func (d *DefaultMessageDispatcher) handleGenerateForEditedMessage(ctx context.Co
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
+			PreviousID:      req.MessageID, // Link assistant response to the edited user message
 			EnableTools:     req.EnableTools,
 			EnableReasoning: req.EnableReasoning,
 			EnableStreaming: req.EnableStreaming,

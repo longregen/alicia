@@ -15,9 +15,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * UI state for MCP settings screen.
- */
 data class MCPSettingsUiState(
     val servers: List<MCPServer> = emptyList(),
     val tools: List<MCPTool> = emptyList(),
@@ -26,9 +23,6 @@ data class MCPSettingsUiState(
     val successMessage: String? = null
 )
 
-/**
- * ViewModel for MCP settings screen.
- */
 @HiltViewModel
 class MCPSettingsViewModel @Inject constructor(
     private val mcpRepository: MCPRepository
@@ -43,9 +37,6 @@ class MCPSettingsViewModel @Inject constructor(
         loadTools()
     }
 
-    /**
-     * Load all MCP servers from the repository.
-     */
     fun loadServers() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -71,9 +62,6 @@ class MCPSettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Load all MCP tools from the repository.
-     */
     private fun loadTools() {
         viewModelScope.launch {
             mcpRepository.getTools()
@@ -81,15 +69,12 @@ class MCPSettingsViewModel @Inject constructor(
                     _uiState.update { it.copy(tools = tools) }
                 }
                 .onFailure { error ->
-                    // Tools loading failure is non-critical, just log it
+                    // Non-critical: tools are optional enhancement, log and continue
                     logger.w("Failed to load MCP tools: ${error.message}", error)
                 }
         }
     }
 
-    /**
-     * Add a new MCP server.
-     */
     fun addServer(config: MCPServerConfig) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -102,7 +87,6 @@ class MCPSettingsViewModel @Inject constructor(
                             successMessage = "Server '${newServer.name}' added successfully"
                         )
                     }
-                    // Reload servers and tools to get updated state
                     loadServers()
                     loadTools()
                 }
@@ -117,16 +101,12 @@ class MCPSettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Delete an MCP server by name.
-     */
     fun deleteServer(name: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(error = null) }
 
             mcpRepository.deleteServer(name)
                 .onSuccess {
-                    // Reload servers and tools to get updated state
                     loadServers()
                     loadTools()
 
@@ -146,9 +126,6 @@ class MCPSettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Clear success message after it has been shown.
-     */
     fun clearSuccessMessage() {
         _uiState.update { it.copy(successMessage = null) }
     }

@@ -2,9 +2,6 @@ package org.localforge.alicia.core.domain.model
 
 import org.localforge.alicia.core.common.Logger
 
-/**
- * Domain model representing MCP transport types.
- */
 enum class MCPTransport {
     STDIO,
     SSE;
@@ -32,9 +29,6 @@ enum class MCPTransport {
     }
 }
 
-/**
- * Domain model representing MCP server status.
- */
 enum class MCPServerStatus {
     CONNECTED,
     DISCONNECTED,
@@ -57,9 +51,6 @@ enum class MCPServerStatus {
     }
 }
 
-/**
- * Domain model for MCP server configuration.
- */
 data class MCPServerConfig(
     val name: String,
     val transport: MCPTransport,
@@ -68,9 +59,6 @@ data class MCPServerConfig(
     val env: Map<String, String>? = null
 )
 
-/**
- * Domain model representing an MCP server with status.
- */
 data class MCPServer(
     val name: String,
     val transport: MCPTransport,
@@ -82,9 +70,6 @@ data class MCPServer(
     val error: String? = null
 )
 
-/**
- * Domain model representing an MCP tool.
- */
 data class MCPTool(
     val name: String,
     val description: String? = null,

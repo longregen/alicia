@@ -12,29 +12,15 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages the queue of messages pending synchronization with the server.
- * Provides reliable message delivery by persisting messages until they're confirmed synced.
- */
 @Singleton
 class SyncQueue @Inject constructor(
     private val syncQueueDao: SyncQueueDao,
     private val protocolHandler: ProtocolHandler
 ) {
-    /**
-     * Enqueue a message for synchronization.
-     * @param message Message entity to be synced
-     * @param stanzaId Stanza ID for the protocol envelope
-     */
     suspend fun enqueue(message: MessageEntity, stanzaId: Int) {
         try {
-            // Create envelope from message
             val envelope = createEnvelopeFromMessage(message, stanzaId)
-
-            // Encode envelope to bytes
             val data = protocolHandler.encode(envelope)
-
-            // Create sync queue entity
             val queueEntity = SyncQueueEntity(
                 localId = message.localId ?: message.id,
                 type = "message",
@@ -43,8 +29,6 @@ class SyncQueue @Inject constructor(
                 retryCount = 0,
                 createdAt = System.currentTimeMillis()
             )
-
-            // Insert into queue
             syncQueueDao.insert(queueEntity)
             Timber.d("Enqueued message for sync: localId=${queueEntity.localId}")
         } catch (e: Exception) {
@@ -53,11 +37,6 @@ class SyncQueue @Inject constructor(
         }
     }
 
-    /**
-     * Enqueue a raw envelope for synchronization.
-     * @param envelope Protocol envelope to be synced
-     * @param localId Local identifier for tracking
-     */
     suspend fun enqueueEnvelope(envelope: Envelope, localId: String) {
         try {
             val data = protocolHandler.encode(envelope)

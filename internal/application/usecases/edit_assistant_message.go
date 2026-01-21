@@ -3,7 +3,6 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/longregen/alicia/internal/domain/models"
 	"github.com/longregen/alicia/internal/ports"
@@ -34,9 +33,9 @@ func (uc *EditAssistantMessage) Execute(ctx context.Context, input *ports.EditAs
 		return nil, fmt.Errorf("cannot edit message: expected assistant role, got %s", message.Role)
 	}
 
-	// 3. Update content and UpdatedAt
+	// 3. Update content and mark as user-edited (valuable training data)
 	message.Contents = input.NewContent
-	message.UpdatedAt = time.Now().UTC()
+	message.MarkAsUserEdited()
 
 	// 4. Save to repository
 	if err := uc.messageRepo.Update(ctx, message); err != nil {

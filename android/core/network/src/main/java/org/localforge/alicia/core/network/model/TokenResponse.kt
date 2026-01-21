@@ -3,9 +3,6 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Request model for generating a LiveKit token
- */
 @JsonClass(generateAdapter = true)
 data class GenerateTokenRequest(
     @Json(name = "participant_id")
@@ -15,12 +12,6 @@ data class GenerateTokenRequest(
     val participantName: String? = null
 )
 
-/**
- * Response model for LiveKit token
- *
- * @property expiresAt Token expiration timestamp in epoch milliseconds (Unix time * 1000).
- *                     Use System.currentTimeMillis() for comparison.
- */
 @JsonClass(generateAdapter = true)
 data class TokenResponse(
     @Json(name = "token")

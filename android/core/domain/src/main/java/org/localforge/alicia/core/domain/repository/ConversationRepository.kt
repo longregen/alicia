@@ -49,6 +49,20 @@ interface ConversationRepository {
     suspend fun updateConversationTitle(conversationId: String, title: String): Result<Unit>
 
     /**
+     * Archive a conversation.
+     * @param conversationId Conversation ID
+     * @return Result indicating success or failure
+     */
+    suspend fun archiveConversation(conversationId: String): Result<Unit>
+
+    /**
+     * Unarchive a conversation (set status back to active).
+     * @param conversationId Conversation ID
+     * @return Result indicating success or failure
+     */
+    suspend fun unarchiveConversation(conversationId: String): Result<Unit>
+
+    /**
      * Delete a conversation and all its messages.
      * @param conversationId Conversation ID to delete
      * @return Result indicating success or failure

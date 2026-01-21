@@ -134,6 +134,9 @@ export interface ConversationStoreState {
   // Conversation context
   currentConversationId: ConversationId | null;
 
+  // Tip message ID - tracks which branch is currently active in the conversation tree
+  tipMessageId: MessageId | null;
+
   // Refresh request counter - incremented when messages need to be reloaded (e.g., branch switch)
   refreshRequestCounter: number;
 }

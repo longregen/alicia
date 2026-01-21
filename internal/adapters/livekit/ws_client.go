@@ -10,6 +10,9 @@ import (
 	"github.com/longregen/alicia/internal/adapters/http/dto"
 	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/vmihailenco/msgpack/v5"
+
+	// Import encoding package for msgpack extension type registration
+	_ "github.com/longregen/alicia/internal/adapters/http/encoding"
 )
 
 // WSClientConfig contains configuration for the WebSocket client
@@ -328,16 +331,49 @@ func (c *WSClient) handleMessage(envelope *protocol.Envelope) {
 
 	case protocol.TypeResponseGenerationRequest:
 		// Decode body as ResponseGenerationRequest
-		bodyBytes, err := msgpack.Marshal(envelope.Body)
-		if err != nil {
-			log.Printf("WSClient: Failed to encode body for ResponseGenerationRequest: %v", err)
-			return
-		}
+		// First try direct type assertion (when body is already the correct type)
+		req, ok := envelope.Body.(*protocol.ResponseGenerationRequest)
+		if !ok {
+			// Fall back to extracting fields from map (when decoded from msgpack as interface{})
+			bodyMap, isMap := envelope.Body.(map[string]interface{})
+			if !isMap {
+				log.Printf("WSClient: Invalid ResponseGenerationRequest body type: %T", envelope.Body)
+				return
+			}
 
-		var req protocol.ResponseGenerationRequest
-		if err := msgpack.Unmarshal(bodyBytes, &req); err != nil {
-			log.Printf("WSClient: Failed to decode ResponseGenerationRequest: %v", err)
-			return
+			req = &protocol.ResponseGenerationRequest{}
+			if id, ok := bodyMap["id"].(string); ok {
+				req.ID = id
+			}
+			if messageID, ok := bodyMap["messageId"].(string); ok {
+				req.MessageID = messageID
+			}
+			if conversationID, ok := bodyMap["conversationId"].(string); ok {
+				req.ConversationID = conversationID
+			}
+			if requestType, ok := bodyMap["requestType"].(string); ok {
+				req.RequestType = requestType
+			}
+			if enableTools, ok := bodyMap["enableTools"].(bool); ok {
+				req.EnableTools = enableTools
+			}
+			if enableReasoning, ok := bodyMap["enableReasoning"].(bool); ok {
+				req.EnableReasoning = enableReasoning
+			}
+			if enableStreaming, ok := bodyMap["enableStreaming"].(bool); ok {
+				req.EnableStreaming = enableStreaming
+			}
+			if previousID, ok := bodyMap["previousId"].(string); ok {
+				req.PreviousID = previousID
+			}
+			// Handle timestamp - can be int64, uint64, or float64 depending on msgpack decoding
+			if ts, ok := bodyMap["timestamp"].(int64); ok {
+				req.Timestamp = ts
+			} else if ts, ok := bodyMap["timestamp"].(uint64); ok {
+				req.Timestamp = int64(ts)
+			} else if ts, ok := bodyMap["timestamp"].(float64); ok {
+				req.Timestamp = int64(ts)
+			}
 		}
 
 		log.Printf("WSClient: Received ResponseGenerationRequest (type: %s, messageID: %s, conversationID: %s)",
@@ -345,7 +381,7 @@ func (c *WSClient) handleMessage(envelope *protocol.Envelope) {
 
 		if c.callbacks != nil {
 			go func() {
-				if err := c.callbacks.OnResponseGenerationRequest(c.ctx, &req); err != nil {
+				if err := c.callbacks.OnResponseGenerationRequest(c.ctx, req); err != nil {
 					log.Printf("WSClient: Error handling ResponseGenerationRequest: %v", err)
 				}
 			}()

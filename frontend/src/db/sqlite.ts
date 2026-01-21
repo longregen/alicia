@@ -28,6 +28,7 @@ export async function initDatabase(): Promise<Database> {
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
       sequence_number INTEGER NOT NULL,
+      previous_id TEXT,
       role TEXT NOT NULL,
       contents TEXT NOT NULL DEFAULT '',
       local_id TEXT,

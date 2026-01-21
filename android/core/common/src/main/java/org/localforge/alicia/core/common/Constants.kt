@@ -1,11 +1,7 @@
 package org.localforge.alicia.core.common
 
-/**
- * Application-wide constants
- */
 object Constants {
 
-    // Intent Actions
     object Actions {
         const val ACTION_ACTIVATE = "org.localforge.alicia.ACTION_ACTIVATE_ASSISTANT"
         const val ACTION_START_WAKE_WORD = "org.localforge.alicia.ACTION_START_WAKE_WORD"
@@ -14,14 +10,12 @@ object Constants {
         const val ACTION_STOP_FLOATING_BUTTON = "org.localforge.alicia.service.hotkey.ACTION_STOP_FLOATING_BUTTON"
     }
 
-    // Notification IDs
     object Notifications {
         const val VOICE_SERVICE_ID = 1001
         const val FLOATING_BUTTON_ID = 2001
         const val HOTKEY_SERVICE_ID = 3001
     }
 
-    // Notification Channels
     object Channels {
         const val VOICE_SERVICE = "alicia_voice_service"
         const val FLOATING_BUTTON = "alicia_floating_button"
@@ -29,41 +23,33 @@ object Constants {
         const val GENERAL = "alicia_general"
     }
 
-    // Preferences Keys
     object Preferences {
-        // Hotkey Settings
         const val HOTKEY_VOLUME_UP_ENABLED = "hotkey_volume_up_enabled"
         const val HOTKEY_VOLUME_DOWN_ENABLED = "hotkey_volume_down_enabled"
         const val HOTKEY_POWER_BUTTON_ENABLED = "hotkey_power_button_enabled"
         const val HOTKEY_SHAKE_ENABLED = "hotkey_shake_enabled"
         const val HOTKEY_TAP_COUNT = "hotkey_tap_count"
 
-        // Service Settings
         const val AUTO_START_ENABLED = "auto_start_enabled"
         const val FLOATING_BUTTON_ENABLED = "floating_button_enabled"
         const val FLOATING_BUTTON_AUTO_START = "floating_button_auto_start"
         const val WAKE_WORD_ENABLED = "wake_word_enabled"
         const val WAKE_WORD_AUTO_START = "wake_word_auto_start"
 
-        // Voice Settings
         const val WAKE_WORD_SELECTION = "wake_word_selection"
         const val WAKE_WORD_SENSITIVITY = "wake_word_sensitivity"
         const val SPEECH_RATE = "speech_rate"
         const val SELECTED_VOICE = "selected_voice"
 
-        // Server Settings
         const val SERVER_URL = "server_url"
         const val LIVEKIT_URL = "livekit_url"
 
-        // Privacy Settings
         const val SAVE_CONVERSATION_HISTORY = "save_conversation_history"
 
-        // First Run
         const val IS_FIRST_RUN = "is_first_run"
         const val ONBOARDING_COMPLETED = "onboarding_completed"
     }
 
-    // Default Values
     object Defaults {
         const val WAKE_WORD_SENSITIVITY = 0.7f
         const val SPEECH_RATE = 1.0f
@@ -73,7 +59,6 @@ object Constants {
         const val SAVE_CONVERSATION_HISTORY = true
     }
 
-    // Timing Constants
     object Timing {
         const val VOLUME_TAP_INTERVAL_MS = 500L
         const val POWER_LONG_PRESS_MS = 1000L
@@ -83,7 +68,6 @@ object Constants {
         const val LONG_PRESS_THRESHOLD_MS = 500L
     }
 
-    // Wake Words
     object WakeWords {
         const val ALICIA = "alicia"
         const val HEY_ALICIA = "hey_alicia"
@@ -91,7 +75,6 @@ object Constants {
         const val COMPUTER = "computer"
     }
 
-    // Error Codes
     object ErrorCodes {
         const val PERMISSION_DENIED = 1001
         const val SERVICE_UNAVAILABLE = 1002
@@ -101,7 +84,6 @@ object Constants {
         const val OVERLAY_PERMISSION_DENIED = 1006
     }
 
-    // Log Tags
     object Tags {
         const val HOTKEY = "HotkeyService"
         const val VOICE = "VoiceService"

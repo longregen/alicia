@@ -26,6 +26,7 @@ type ConversationResponse struct {
 	Status          string                          `json:"status" msgpack:"status"`
 	LiveKitRoomName string                          `json:"livekit_room_name,omitempty" msgpack:"liveKitRoomName,omitempty"`
 	Preferences     *models.ConversationPreferences `json:"preferences,omitempty" msgpack:"preferences,omitempty"`
+	TipMessageID    *string                         `json:"tip_message_id,omitempty" msgpack:"tipMessageId,omitempty"`
 	CreatedAt       time.Time                       `json:"created_at" msgpack:"createdAt"`
 	UpdatedAt       time.Time                       `json:"updated_at" msgpack:"updatedAt"`
 }
@@ -47,6 +48,7 @@ func (r *ConversationResponse) FromModel(conv *models.Conversation) *Conversatio
 		Status:          string(conv.Status),
 		LiveKitRoomName: conv.LiveKitRoomName,
 		Preferences:     conv.Preferences,
+		TipMessageID:    conv.TipMessageID,
 		CreatedAt:       conv.CreatedAt,
 		UpdatedAt:       conv.UpdatedAt,
 	}

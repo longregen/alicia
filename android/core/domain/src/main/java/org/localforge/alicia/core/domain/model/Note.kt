@@ -31,13 +31,13 @@ enum class NoteTargetType(val value: String) {
 }
 
 /**
- * Categories for notes
+ * Categories for notes - matches web frontend
  */
 enum class NoteCategory(val value: String) {
-    GENERAL("general"),
+    IMPROVEMENT("improvement"),
     CORRECTION("correction"),
-    INSIGHT("insight"),
-    QUESTION("question");
+    CONTEXT("context"),
+    GENERAL("general");
 
     companion object {
         fun fromString(value: String?): NoteCategory {

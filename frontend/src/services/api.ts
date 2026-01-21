@@ -24,9 +24,24 @@ const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
   : '/api/v1';
 
+/**
+ * Get the user ID for API authentication.
+ * Uses the persistent device ID to identify the user.
+ */
+function getUserId(): string {
+  return `user_${getDeviceId()}`;
+}
+
 async function fetchWithErrorHandling(url: string, options?: RequestInit): Promise<Response> {
   try {
-    return await fetch(url, options);
+    // Merge auth header with any existing headers
+    const headers = new Headers(options?.headers);
+    headers.set('X-User-ID', getUserId());
+
+    return await fetch(url, {
+      ...options,
+      headers,
+    });
   } catch (err) {
     if (err instanceof TypeError && err.message.includes('fetch')) {
       throw new Error('Network error: Unable to connect to the server. Please check your connection.');
@@ -105,6 +120,38 @@ export const api = {
       body: JSON.stringify(data),
     });
     return handleResponse<Message>(response);
+  },
+
+  async editUserMessage(conversationId: string, messageId: string, contents: string): Promise<EditMessageResponse> {
+    // Note: conversationId is kept for API consistency but the route only uses messageId
+    void conversationId;
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}/edit-user`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents }),
+    });
+    return handleResponse<EditMessageResponse>(response);
+  },
+
+  async editAssistantMessage(conversationId: string, messageId: string, contents: string): Promise<EditMessageResponse> {
+    // Note: conversationId is kept for API consistency but the route only uses messageId
+    void conversationId;
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents }),
+    });
+    return handleResponse<EditMessageResponse>(response);
+  },
+
+  async regenerateResponse(conversationId: string, messageId: string): Promise<RegenerateResponse> {
+    // Note: conversationId is kept for API consistency but the route only uses messageId
+    void conversationId;
+    const response = await fetchWithErrorHandling(`${API_BASE}/messages/${messageId}/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse<RegenerateResponse>(response);
   },
 
   // LiveKit
@@ -502,37 +549,6 @@ export const api = {
     return handleResponse<SessionStatsResponse>(response);
   },
 
-  // Optimization
-  async listOptimizationRuns(params?: Record<string, string>): Promise<OptimizationRun[]> {
-    const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations${queryString}`);
-    return handleResponse<OptimizationRun[]>(response);
-  },
-
-  async getOptimizationRun(runId: string): Promise<OptimizationRun> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations/${runId}`);
-    return handleResponse<OptimizationRun>(response);
-  },
-
-  async getOptimizationCandidates(runId: string): Promise<OptimizationCandidate[]> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations/${runId}/candidates`);
-    const data = await handleResponse<{ candidates: OptimizationCandidate[] }>(response);
-    return data.candidates || [];
-  },
-
-  async getOptimizationBestCandidate(runId: string): Promise<OptimizationCandidate> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations/${runId}/best`);
-    return handleResponse<OptimizationCandidate>(response);
-  },
-
-  async createOptimizationRun(data: CreateOptimizationRequest): Promise<OptimizationRun> {
-    const response = await fetchWithErrorHandling(`${API_BASE}/optimizations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return handleResponse<OptimizationRun>(response);
-  },
 };
 
 // Feedback types
@@ -633,36 +649,14 @@ export interface MemoryListResponse {
   total: number;
 }
 
-// Optimization types
-export interface CreateOptimizationRequest {
-  name: string;
-  prompt_type: string;
-  baseline_prompt?: string;
+// Message edit types
+export interface EditMessageResponse {
+  updated_message: Message;
+  assistant_message?: Message;
+  deleted_count?: number;
 }
 
-export interface OptimizationRun {
-  id: string;
-  name: string;
-  prompt_type: string;
-  status: string;
-  best_score: number;
-  iterations: number;
-  max_iterations: number;
-  config?: Record<string, unknown>;
-  created_at: string;
-  completed_at?: string;
-  // Additional fields that may be present in detailed responses
-  dimension_weights?: Record<string, number>;
-  best_dim_scores?: Record<string, number>;
-}
-
-export interface OptimizationCandidate {
-  id: string;
-  iteration: number;
-  prompt_text: string;
-  score: number;
-  dimension_scores?: Record<string, number>;
-  evaluation_count: number;
-  success_count: number;
-  created_at: string;
+export interface RegenerateResponse {
+  deleted_message_id: string;
+  new_message?: Message;
 }

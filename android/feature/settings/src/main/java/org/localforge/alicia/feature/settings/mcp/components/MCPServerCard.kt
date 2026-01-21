@@ -34,7 +34,6 @@ fun MCPServerCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -61,7 +60,6 @@ fun MCPServerCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Server details
             ServerDetailRow(label = "Transport", value = server.transport.toApiString())
             ServerDetailRow(label = "Command", value = server.command)
 
@@ -78,7 +76,6 @@ fun MCPServerCard(
                 )
             }
 
-            // Tools section
             if (tools.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider()

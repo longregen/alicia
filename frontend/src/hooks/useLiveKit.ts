@@ -25,14 +25,12 @@ import {
   MemoryConfirmation,
   ServerInfo,
   SessionStats,
-  EliteOptions,
 } from '../types/protocol';
 import { useMessageContext } from '../contexts/MessageContext';
 import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
 import { useFeedbackStore, VotableType, VoteType } from '../stores/feedbackStore';
 import { useServerInfoStore } from '../stores/serverInfoStore';
-import { useDimensionStore } from '../stores/dimensionStore';
 import { setMessageSender, handleProtocolMessage } from '../adapters/protocolAdapter';
 
 export interface LiveKitMessage {
@@ -432,18 +430,6 @@ export function useLiveKit(conversationId: string | null): UseLiveKitReturn {
           });
           break;
         }
-
-        // Dimension optimization message types (29-31)
-        case MessageType.EliteOptions: {
-          // Server broadcasts available elite solutions from Pareto archive
-          const eliteOptions = envelope.body as EliteOptions;
-          const dimensionStore = useDimensionStore.getState();
-          dimensionStore.updateElites(eliteOptions.elites, eliteOptions.currentEliteId);
-          break;
-        }
-
-        // Note: DimensionPreference (29) and EliteSelect (30) are client -> server only
-        // The server doesn't send these back; instead it responds with EliteOptions (31)
       }
     } catch (err) {
       console.error('Failed to decode message:', err);

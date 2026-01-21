@@ -11,10 +11,6 @@ import org.localforge.alicia.core.database.entity.ConversationEntity
 import org.localforge.alicia.core.database.entity.MessageEntity
 import org.localforge.alicia.core.database.entity.SyncQueueEntity
 
-/**
- * Room database for the Alicia voice assistant.
- * Stores conversations and messages locally for offline access and caching.
- */
 @Database(
     entities = [
         ConversationEntity::class,
@@ -27,19 +23,10 @@ import org.localforge.alicia.core.database.entity.SyncQueueEntity
 @TypeConverters(Converters::class)
 abstract class AliciaDatabase : RoomDatabase() {
 
-    /**
-     * DAO for conversation operations.
-     */
     abstract fun conversationDao(): ConversationDao
 
-    /**
-     * DAO for message operations.
-     */
     abstract fun messageDao(): MessageDao
 
-    /**
-     * DAO for sync queue operations.
-     */
     abstract fun syncQueueDao(): SyncQueueDao
 
     companion object {

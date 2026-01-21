@@ -78,6 +78,7 @@ func (uc *SendMessage) Execute(ctx context.Context, input *ports.SendMessageInpu
 		EnableStreaming:  input.EnableStreaming,
 		PreviousID:       processOutput.Message.ID,
 	}
+	log.Printf("[SendMessage] Calling generateResponse with PreviousID=%s (userMessageID=%s)", generateInput.PreviousID, processOutput.Message.ID)
 
 	generateOutput, err := uc.generateResponse.Execute(ctx, generateInput)
 	if err != nil {

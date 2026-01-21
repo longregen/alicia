@@ -5,7 +5,7 @@ import { useConversationStore, selectSentences } from '../../stores/conversation
 import { useAudioManager } from '../../hooks/useAudioManager';
 import { useAudioStore } from '../../stores/audioStore';
 import { useFeedback } from '../../hooks/useFeedback';
-import { sendControlVariation } from '../../adapters/protocolAdapter';
+import { api } from '../../services/api';
 import { MESSAGE_TYPES, MESSAGE_STATES, AUDIO_STATES } from '../../mockData';
 import type { MessageId } from '../../types/streaming';
 import type { MessageAddon, ToolData, AudioState } from '../../types/components';
@@ -97,15 +97,22 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
     setAudioStates(newStates);
   }, [message, currentlyPlayingId, isPlaying, sentencesWithAudio]);
 
-  // Handle message edit - sends to backend for new agent response
-  const handleEditMessage = useCallback((editedMessageId: MessageId, newContent: string) => {
-    if (currentConversationId) {
-      sendControlVariation(currentConversationId, editedMessageId, 'edit', newContent);
-    }
-  }, [currentConversationId]);
-
   // Get the refresh action from conversation store
   const requestMessagesRefresh = useConversationStore((state) => state.requestMessagesRefresh);
+
+  // Handle message edit - calls REST API to update assistant message content
+  const handleEditMessage = useCallback(async (editedMessageId: MessageId, newContent: string) => {
+    if (currentConversationId) {
+      try {
+        await api.editAssistantMessage(currentConversationId, editedMessageId, newContent);
+        // The backend will update the message in place
+        // A refresh may be needed to see the updated content
+        requestMessagesRefresh();
+      } catch (error) {
+        console.error('Failed to edit assistant message:', error);
+      }
+    }
+  }, [currentConversationId, requestMessagesRefresh]);
 
   // Handle branch switch - reloads messages after backend updates the conversation tip
   const handleBranchSwitch = useCallback(() => {
@@ -114,6 +121,20 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
     // Request a refresh which will be handled by App.tsx
     requestMessagesRefresh();
   }, [requestMessagesRefresh]);
+
+  // Handle retry (regenerate) - calls REST API to regenerate the assistant response
+  const handleRetry = useCallback(async (retryMessageId: MessageId) => {
+    if (currentConversationId) {
+      try {
+        await api.regenerateResponse(currentConversationId, retryMessageId);
+        // The backend will delete the old message and create a new one
+        // A refresh is needed to see the new message
+        requestMessagesRefresh();
+      } catch (error) {
+        console.error('Failed to regenerate response:', error);
+      }
+    }
+  }, [currentConversationId, requestMessagesRefresh]);
 
   // Early return after all hooks
   if (!message) {
@@ -228,6 +249,7 @@ const AssistantMessage: React.FC<AssistantMessageProps> = ({ messageId, classNam
         conversationId={currentConversationId || undefined}
         onEditMessage={handleEditMessage}
         onBranchSwitch={handleBranchSwitch}
+        onRetry={handleRetry}
         syncStatus={message.sync_status}
       />
     </div>

@@ -171,6 +171,15 @@ func (m *mockToolService) RegisterExecutor(name string, executor func(context.Co
 	return nil
 }
 
+func (m *mockToolService) UnregisterExecutor(name string) {
+	delete(m.executors, name)
+}
+
+func (m *mockToolService) HasExecutor(name string) bool {
+	_, ok := m.executors[name]
+	return ok
+}
+
 func (m *mockToolService) ExecuteTool(ctx context.Context, name string, arguments map[string]any) (any, error) {
 	executor, ok := m.executors[name]
 	if !ok {

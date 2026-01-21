@@ -3,19 +3,14 @@ package org.localforge.alicia.core.data.mapper
 import org.localforge.alicia.core.common.parseTimestamp
 import org.localforge.alicia.core.database.entity.ConversationEntity
 import org.localforge.alicia.core.domain.model.Conversation
+import org.localforge.alicia.core.domain.model.ConversationStatus
 import org.localforge.alicia.core.network.model.ConversationResponse
 
-/**
- * Mapper for converting between Conversation domain model and data layer entities/responses.
- */
-
-/**
- * Convert ConversationEntity to Conversation domain model.
- */
 fun ConversationEntity.toDomain(): Conversation {
     return Conversation(
         id = id,
         title = title,
+        status = ConversationStatus.fromString(status),
         createdAt = createdAt,
         updatedAt = updatedAt,
         syncedAt = syncedAt,
@@ -23,13 +18,11 @@ fun ConversationEntity.toDomain(): Conversation {
     )
 }
 
-/**
- * Convert Conversation domain model to ConversationEntity.
- */
 fun Conversation.toEntity(): ConversationEntity {
     return ConversationEntity(
         id = id,
         title = title,
+        status = status.value,
         createdAt = createdAt,
         updatedAt = updatedAt,
         syncedAt = syncedAt,
@@ -37,13 +30,11 @@ fun Conversation.toEntity(): ConversationEntity {
     )
 }
 
-/**
- * Convert ConversationResponse to Conversation domain model.
- */
 fun ConversationResponse.toDomain(): Conversation {
     return Conversation(
         id = id,
         title = title,
+        status = ConversationStatus.fromString(status),
         createdAt = parseTimestamp(createdAt),
         updatedAt = parseTimestamp(updatedAt),
         syncedAt = System.currentTimeMillis(),
@@ -51,13 +42,11 @@ fun ConversationResponse.toDomain(): Conversation {
     )
 }
 
-/**
- * Convert ConversationResponse to ConversationEntity.
- */
 fun ConversationResponse.toEntity(): ConversationEntity {
     return ConversationEntity(
         id = id,
         title = title,
+        status = status,
         createdAt = parseTimestamp(createdAt),
         updatedAt = parseTimestamp(updatedAt),
         syncedAt = System.currentTimeMillis(),
@@ -65,23 +54,14 @@ fun ConversationResponse.toEntity(): ConversationEntity {
     )
 }
 
-/**
- * Convert list of ConversationEntities to list of Conversation domain models.
- */
 fun List<ConversationEntity>.toDomain(): List<Conversation> {
     return map { it.toDomain() }
 }
 
-/**
- * Convert list of ConversationResponses to list of Conversation domain models.
- */
 fun List<ConversationResponse>.toDomainFromResponse(): List<Conversation> {
     return map { it.toDomain() }
 }
 
-/**
- * Convert list of ConversationResponses to list of ConversationEntities.
- */
 fun List<ConversationResponse>.toEntities(): List<ConversationEntity> {
     return map { it.toEntity() }
 }

@@ -14,12 +14,9 @@ import {
   handleMemoryConfirmation,
   handleServerInfo,
   handleSessionStats,
-  handleEliteOptions,
   sendFeedback,
   sendUserNote,
   sendMemoryAction,
-  sendDimensionPreference,
-  sendEliteSelect,
   setMessageSender,
   resetAdapterState,
 } from './protocolAdapter';
@@ -39,12 +36,9 @@ import {
   MemoryConfirmation,
   ServerInfo,
   SessionStats,
-  EliteOptions,
   Feedback,
   UserNote,
   MemoryAction,
-  DimensionPreference,
-  EliteSelect,
 } from '../types/protocol';
 import {
   NormalizedMessage,
@@ -187,15 +181,6 @@ vi.mock('../stores/serverInfoStore', () => ({
   },
 }));
 
-// Mock useDimensionStore
-vi.mock('../stores/dimensionStore', () => ({
-  useDimensionStore: {
-    getState: vi.fn(() => ({
-      updateElites: vi.fn(),
-    })),
-  },
-}));
-
 // Mock messageRepository
 vi.mock('../db/repository', () => ({
   messageRepository: {
@@ -206,7 +191,6 @@ vi.mock('../db/repository', () => ({
 import { useConversationStore } from '../stores/conversationStore';
 import { useFeedbackStore } from '../stores/feedbackStore';
 import { useServerInfoStore } from '../stores/serverInfoStore';
-import { useDimensionStore } from '../stores/dimensionStore';
 
 describe('protocolAdapter', () => {
   let mockStore: ReturnType<typeof createMockStore>;
@@ -1578,46 +1562,6 @@ describe('protocolAdapter', () => {
     });
   });
 
-  describe('handleEliteOptions', () => {
-    it('updates dimension store with elite solutions', () => {
-      const mockUpdateElites = vi.fn();
-
-      vi.mocked(useDimensionStore.getState).mockReturnValue({
-        updateElites: mockUpdateElites,
-      } as any);
-
-      const eliteOptions: EliteOptions = {
-        conversationId: 'conv-001',
-        elites: [
-          {
-            id: 'elite-001',
-            label: 'High Accuracy',
-            scores: {
-              successRate: 0.95,
-              quality: 0.88,
-              efficiency: 0.72,
-              robustness: 0.85,
-              generalization: 0.78,
-              diversity: 0.60,
-              innovation: 0.55,
-            },
-            description: 'Best for complex questions',
-            bestFor: 'Complex questions requiring precise answers',
-          },
-        ],
-        currentEliteId: 'elite-001',
-        timestamp: Date.now(),
-      };
-
-      handleEliteOptions(eliteOptions);
-
-      expect(mockUpdateElites).toHaveBeenCalledWith(
-        eliteOptions.elites,
-        'elite-001'
-      );
-    });
-  });
-
   // ==========================================================================
   // Send Methods
   // ==========================================================================
@@ -1753,103 +1697,6 @@ describe('protocolAdapter', () => {
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         'Cannot send memory action: no message sender available'
-      );
-
-      consoleWarnSpy.mockRestore();
-    });
-  });
-
-  describe('sendDimensionPreference', () => {
-    it('sends dimension preference envelope when sender is available', () => {
-      const mockSender = vi.fn();
-      setMessageSender(mockSender);
-
-      const pref: DimensionPreference = {
-        conversationId: 'conv-001',
-        weights: {
-          successRate: 0.4,
-          quality: 0.25,
-          efficiency: 0.1,
-          robustness: 0.1,
-          generalization: 0.1,
-          diversity: 0.03,
-          innovation: 0.02,
-        },
-        preset: 'accuracy',
-        timestamp: Date.now(),
-      };
-
-      sendDimensionPreference(pref);
-
-      expect(mockSender).toHaveBeenCalledTimes(1);
-      const envelope = mockSender.mock.calls[0][0];
-      expect(envelope.type).toBe(MessageType.DimensionPreference);
-      expect(envelope.conversationId).toBe('conv-001');
-      expect(envelope.body).toBe(pref);
-    });
-
-    it('warns when no sender is available', () => {
-      setMessageSender(null as any);
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const pref: DimensionPreference = {
-        conversationId: 'conv-001',
-        weights: {
-          successRate: 0.25,
-          quality: 0.2,
-          efficiency: 0.15,
-          robustness: 0.15,
-          generalization: 0.1,
-          diversity: 0.1,
-          innovation: 0.05,
-        },
-        timestamp: Date.now(),
-      };
-
-      sendDimensionPreference(pref);
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Cannot send dimension preference: no message sender available'
-      );
-
-      consoleWarnSpy.mockRestore();
-    });
-  });
-
-  describe('sendEliteSelect', () => {
-    it('sends elite select envelope when sender is available', () => {
-      const mockSender = vi.fn();
-      setMessageSender(mockSender);
-
-      const select: EliteSelect = {
-        conversationId: 'conv-001',
-        eliteId: 'elite-001',
-        timestamp: Date.now(),
-      };
-
-      sendEliteSelect(select);
-
-      expect(mockSender).toHaveBeenCalledTimes(1);
-      const envelope = mockSender.mock.calls[0][0];
-      expect(envelope.type).toBe(MessageType.EliteSelect);
-      expect(envelope.conversationId).toBe('conv-001');
-      expect(envelope.body).toBe(select);
-    });
-
-    it('warns when no sender is available', () => {
-      setMessageSender(null as any);
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const select: EliteSelect = {
-        conversationId: 'conv-001',
-        eliteId: 'elite-002',
-        timestamp: Date.now(),
-      };
-
-      sendEliteSelect(select);
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Cannot send elite select: no message sender available'
       );
 
       consoleWarnSpy.mockRestore();

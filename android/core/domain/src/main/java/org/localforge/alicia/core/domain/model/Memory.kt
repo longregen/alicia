@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.domain.model
 
-/**
- * Memory category types matching the web frontend.
- */
 enum class MemoryCategory {
     PREFERENCE,
     FACT,
@@ -24,23 +21,6 @@ enum class MemoryCategory {
     fun toApiString(): String = name.lowercase()
 }
 
-/**
- * Domain model for a memory entry.
- *
- * Memories are persistent knowledge items that the assistant can use
- * to provide more personalized and context-aware responses.
- *
- * @property id Unique identifier for the memory
- * @property content The memory content text
- * @property category Category for organizing memories
- * @property tags Optional tags for the memory
- * @property importance Importance score (0.0 to 1.0)
- * @property pinned Whether the memory is pinned/prioritized
- * @property archived Whether the memory is archived
- * @property createdAt Timestamp when the memory was created
- * @property updatedAt Timestamp when the memory was last updated
- * @property usageCount Number of times this memory has been used
- */
 data class Memory(
     val id: String,
     val content: String,
@@ -53,9 +33,6 @@ data class Memory(
     val updatedAt: Long,
     val usageCount: Int = 0
 ) {
-    /**
-     * Display name for the category
-     */
     val categoryDisplayName: String
         get() = when (category) {
             MemoryCategory.PREFERENCE -> "Preference"

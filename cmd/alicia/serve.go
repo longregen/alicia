@@ -140,9 +140,6 @@ func runServer(ctx context.Context) error {
 	noteRepo := postgres.NewNoteRepository(pool)
 	voteRepo := postgres.NewVoteRepository(pool)
 	sessionStatsRepo := postgres.NewSessionStatsRepository(pool)
-	optimizationRepo := postgres.NewOptimizationRepository(pool)
-	trainingExampleRepo := postgres.NewTrainingExampleRepository(pool, idGen)
-	promptVersionRepo := postgres.NewSystemPromptVersionRepository(pool, idGen)
 
 	// Initialize transaction manager
 	txManager := postgres.NewTransactionManager(pool)
@@ -186,38 +183,6 @@ func runServer(ctx context.Context) error {
 	// Create WebSocket broadcaster (shared between server and use cases)
 	wsBroadcaster := handlers.NewWebSocketBroadcaster()
 	log.Println("WebSocket broadcaster initialized")
-
-	// Initialize optimization progress publisher with WebSocket broadcaster
-	progressPublisher := services.NewOptimizationProgressPublisher(wsBroadcaster)
-	log.Println("Optimization progress publisher initialized")
-
-	// Initialize optimization service with WebSocket broadcaster
-	optimizationService := services.NewOptimizationService(
-		optimizationRepo,
-		llmService,
-		idGen,
-		services.DefaultOptimizationConfig(),
-	).WithBroadcaster(wsBroadcaster)
-	log.Println("Optimization service initialized")
-
-	// Initialize prompt version service
-	promptVersionService := services.NewPromptVersionService(
-		promptVersionRepo,
-		idGen,
-	)
-	log.Println("Prompt version service initialized")
-
-	// Initialize training set builder service
-	trainingBuilderConfig := services.DefaultTrainingSetBuilderConfig()
-	trainingBuilderService := services.NewTrainingSetBuilderService(
-		voteRepo,
-		trainingExampleRepo,
-		toolRepo,
-		memoryRepo,
-		idGen,
-		trainingBuilderConfig,
-	)
-	log.Println("Training set builder service initialized")
 
 	// Register built-in tools
 	if err := builtin.RegisterAllBuiltinTools(ctx, toolService, memoryRepo, embeddingClient); err != nil {
@@ -357,17 +322,6 @@ func runServer(ctx context.Context) error {
 	editAssistantMessageUC := usecases.NewEditAssistantMessage(messageRepo)
 	log.Println("EditAssistantMessage use case initialized")
 
-	// Create RunOptimization use case
-	runOptimizationUC := usecases.NewRunOptimization(
-		optimizationService,
-		progressPublisher,
-		wsBroadcaster,
-		llmService,
-		idGen,
-		optimizationRepo,
-	)
-	log.Println("RunOptimization use case initialized")
-
 	// Create ExtractMemories use case (needed by MemorizeFromUpvote)
 	var extractMemoriesUC *usecases.ExtractMemories
 	if memoryService != nil {
@@ -398,10 +352,6 @@ func runServer(ctx context.Context) error {
 		voteRepo,
 		sessionStatsRepo,
 		memoryService,
-		optimizationService,
-		optimizationRepo,
-		trainingBuilderService,
-		promptVersionService,
 		liveKitService,
 		idGen,
 		pool,
@@ -417,7 +367,6 @@ func runServer(ctx context.Context) error {
 		continueResponseUC,
 		editUserMessageUC,
 		editAssistantMessageUC,
-		runOptimizationUC,
 		memorizeFromUpvoteUC,
 		processUserMessageUC,
 		wsBroadcaster,

@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/longregen/alicia/internal/ports"
 )
@@ -28,6 +29,7 @@ func (a *ParetoGenerateResponseAdapter) Execute(ctx context.Context, input *port
 	}
 
 	// Convert from GenerateResponseInput to ParetoResponseInput
+	log.Printf("[ParetoGenerateResponseAdapter] Converting input: PreviousID=%s", input.PreviousID)
 	paretoInput := &ParetoResponseInput{
 		ConversationID:  input.ConversationID,
 		UserMessageID:   input.UserMessageID,

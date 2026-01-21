@@ -1,12 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { MCPSettings } from './MCPSettings';
-import { PivotModeSelector } from './molecules/PivotModeSelector/PivotModeSelector';
-import { EliteSolutionSelector } from './molecules/EliteSolutionSelector/EliteSolutionSelector';
-import { GEPAControls } from './organisms/GEPAControls';
-import { PIVOT_PRESETS, type PresetId } from '../stores/dimensionStore';
-import { sendDimensionPreference, sendEliteSelect } from '../adapters/protocolAdapter';
-import type { DimensionWeights } from '../types/protocol';
 import { Card, CardHeader, CardTitle, CardContent } from './atoms/Card';
 import { Switch } from './atoms/Switch';
 import { Slider } from './atoms/Slider';
@@ -19,11 +13,10 @@ import { cls } from '../utils/cls';
 import { useTheme } from '../hooks/useTheme';
 
 interface SettingsProps {
-  conversationId?: string | null;
   defaultTab?: SettingsTab;
 }
 
-export type SettingsTab = 'mcp' | 'optimization' | 'preferences';
+export type SettingsTab = 'mcp' | 'preferences';
 
 // Default preference values
 const DEFAULT_PREFERENCES = {
@@ -33,7 +26,7 @@ const DEFAULT_PREFERENCES = {
   responseLength: 'balanced' as const,
 };
 
-export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) {
+export function Settings({ defaultTab = 'mcp' }: SettingsProps) {
   const [, navigate] = useLocation();
   // Use defaultTab from URL (passed as prop from router)
   const activeTab = defaultTab;
@@ -46,41 +39,6 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
   const [voiceSpeed, setVoiceSpeed] = useState(DEFAULT_PREFERENCES.voiceSpeed);
   const { theme, setTheme } = useTheme();
   const [responseLength, setResponseLength] = useState<'concise' | 'balanced' | 'detailed'>(DEFAULT_PREFERENCES.responseLength);
-
-  // Handle dimension preference changes - send to server via WebSocket
-  const handlePresetChange = useCallback((presetId: PresetId) => {
-    if (!conversationId) return;
-    const preset = PIVOT_PRESETS.find(p => p.id === presetId);
-    if (!preset) return;
-
-    sendDimensionPreference({
-      conversationId,
-      weights: preset.weights,
-      preset: presetId,
-      timestamp: Date.now(),
-    });
-  }, [conversationId]);
-
-  const handleWeightsChange = useCallback((weights: DimensionWeights) => {
-    if (!conversationId) return;
-
-    sendDimensionPreference({
-      conversationId,
-      weights,
-      timestamp: Date.now(),
-    });
-  }, [conversationId]);
-
-  // Handle elite selection - send to server via WebSocket
-  const handleSelectElite = useCallback((eliteId: string) => {
-    if (!conversationId) return;
-
-    sendEliteSelect({
-      conversationId,
-      eliteId,
-      timestamp: Date.now(),
-    });
-  }, [conversationId]);
 
   return (
     <div className="layout-stack h-full bg-background">
@@ -99,12 +57,6 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
             MCP
           </button>
           <button
-            className={`tab whitespace-nowrap ${activeTab === 'optimization' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('optimization')}
-          >
-            Optimization
-          </button>
-          <button
             className={`tab whitespace-nowrap ${activeTab === 'preferences' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('preferences')}
           >
@@ -117,34 +69,6 @@ export function Settings({ conversationId, defaultTab = 'mcp' }: SettingsProps) 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mb-8 last:mb-0">
           {activeTab === 'mcp' && <MCPSettings />}
-          {activeTab === 'optimization' && (
-            <div className="space-y-8">
-              <section>
-                <h2 className="text-lg font-semibold mb-4">Response Preferences</h2>
-                <PivotModeSelector
-                  onPresetChange={handlePresetChange}
-                  onWeightsChange={handleWeightsChange}
-                  disabled={!conversationId}
-                />
-                <div className="mt-6">
-                  <EliteSolutionSelector
-                    onSelectElite={handleSelectElite}
-                    disabled={!conversationId}
-                  />
-                </div>
-                {!conversationId && (
-                  <div className="text-center p-5 text-muted mt-4">
-                    Select a conversation to sync optimization preferences with the server
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <h2 className="text-lg font-semibold mb-4">Prompt Optimization (GEPA)</h2>
-                <GEPAControls conversationId={conversationId} />
-              </section>
-            </div>
-          )}
           {activeTab === 'preferences' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Voice & Audio Card */}

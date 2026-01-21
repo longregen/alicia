@@ -14,7 +14,6 @@ import { useMemoryStore } from '../stores/memoryStore';
 import { useNotesStore } from '../stores/notesStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useAudioStore } from '../stores/audioStore';
-import { useDimensionStore } from '../stores/dimensionStore';
 import { useServerInfoStore } from '../stores/serverInfoStore';
 
 // Make React.act available globally for @testing-library/react
@@ -42,7 +41,6 @@ afterEach(() => {
   useNotesStore.getState().clearNotes();
   useConnectionStore.getState().clearConnection();
   useAudioStore.getState().clearAudioStore();
-  useDimensionStore.getState().resetToBalanced();
   useServerInfoStore.getState().resetServerInfo();
 });
 

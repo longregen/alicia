@@ -5,6 +5,20 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
+ * Status of a conversation (matches web frontend)
+ */
+enum class ConversationStatus(val value: String) {
+    ACTIVE("active"),
+    ARCHIVED("archived");
+
+    companion object {
+        fun fromString(value: String?): ConversationStatus {
+            return entries.find { it.value == value } ?: ACTIVE
+        }
+    }
+}
+
+/**
  * Domain model for a conversation with the voice assistant.
  */
 data class Conversation(
@@ -18,6 +32,11 @@ data class Conversation(
      * Can be generated from first message or user-provided.
      */
     val title: String? = null,
+
+    /**
+     * Status of the conversation (active or archived).
+     */
+    val status: ConversationStatus = ConversationStatus.ACTIVE,
 
     /**
      * Timestamp when the conversation was created (milliseconds since epoch).

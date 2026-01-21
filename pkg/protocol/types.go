@@ -70,6 +70,8 @@ const (
 	TypeOptimizationProgress MessageType = 32
 	// TypeResponseGenerationRequest (33) - Request for agent to generate response
 	TypeResponseGenerationRequest MessageType = 33
+	// TypeThinkingSummary (34) - Summary of what the agent is about to do
+	TypeThinkingSummary MessageType = 34
 	// TypeSubscribe (40) - Client subscribes to a conversation
 	TypeSubscribe MessageType = 40
 	// TypeUnsubscribe (41) - Client unsubscribes from a conversation
@@ -149,6 +151,8 @@ func (t MessageType) String() string {
 		return "OptimizationProgress"
 	case TypeResponseGenerationRequest:
 		return "ResponseGenerationRequest"
+	case TypeThinkingSummary:
+		return "ThinkingSummary"
 	case TypeSubscribe:
 		return "Subscribe"
 	case TypeUnsubscribe:

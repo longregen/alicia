@@ -174,6 +174,8 @@ type ToolService interface {
 	RegisterTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error)
 	EnsureTool(ctx context.Context, name, description string, schema map[string]any) (*models.Tool, error) // Idempotent: returns existing or creates new
 	RegisterExecutor(name string, executor func(ctx context.Context, arguments map[string]any) (any, error)) error
+	UnregisterExecutor(name string)        // Removes executor when backend (e.g., MCP server) becomes unavailable
+	HasExecutor(name string) bool          // Checks if a tool has a registered executor
 	GetByID(ctx context.Context, id string) (*models.Tool, error)
 	GetByName(ctx context.Context, name string) (*models.Tool, error)
 	Update(ctx context.Context, tool *models.Tool) error
@@ -251,9 +253,6 @@ type ConversationBroadcaster interface {
 	BroadcastConversationUpdate(conversation *models.Conversation)
 }
 
-// Note: OptimizationProgressBroadcaster, OptimizationProgressUpdate, OptimizationProgressEvent,
-// and OptimizationProgressPublisher are defined in optimization.go
-
 // GenerationNotifier receives notifications about response generation progress.
 // Implementations can use these notifications to stream updates to clients in real-time.
 // All methods are optional - implementations may choose which events to handle.
@@ -262,6 +261,10 @@ type GenerationNotifier interface {
 	// NotifyGenerationStarted is called when response generation begins.
 	// Corresponds to protocol.StartAnswer (Type 13).
 	NotifyGenerationStarted(messageID, previousID, conversationID string)
+
+	// NotifyThinkingSummary is called to send a summary of what the agent is about to do.
+	// Corresponds to protocol.ThinkingSummary (Type 34).
+	NotifyThinkingSummary(messageID, conversationID string, summary string)
 
 	// NotifyMemoryRetrieved is called for each memory found during retrieval.
 	// Corresponds to protocol.MemoryTrace (Type 14).

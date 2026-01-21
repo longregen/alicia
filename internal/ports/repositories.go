@@ -255,37 +255,6 @@ type SessionStatsRepository interface {
 	GetByConversation(ctx context.Context, conversationID string) (*models.SessionStats, error)
 }
 
-// ListOptimizationRunsOptions contains options for listing optimization runs
-type ListOptimizationRunsOptions struct {
-	Status string // Optional filter by status: "running", "completed", "failed"
-	Limit  int    // Maximum number of runs to return (default: 50)
-	Offset int    // Number of runs to skip for pagination (default: 0)
-}
-
-// PromptOptimizationRepository handles DSPy/GEPA prompt optimization persistence
-type PromptOptimizationRepository interface {
-	CreateRun(ctx context.Context, run *models.OptimizationRun) error
-	GetRun(ctx context.Context, id string) (*models.OptimizationRun, error)
-	UpdateRun(ctx context.Context, run *models.OptimizationRun) error
-	ListRuns(ctx context.Context, opts ListOptimizationRunsOptions) ([]*models.OptimizationRun, error)
-	SaveCandidate(ctx context.Context, runID string, candidate *models.PromptCandidate) error
-	GetCandidates(ctx context.Context, runID string) ([]*models.PromptCandidate, error)
-	GetBestCandidate(ctx context.Context, runID string) (*models.PromptCandidate, error)
-	SaveEvaluation(ctx context.Context, eval *models.PromptEvaluation) error
-	GetEvaluations(ctx context.Context, candidateID string) ([]*models.PromptEvaluation, error)
-}
-
-// TrainingExampleRepository manages GEPA training examples
-type TrainingExampleRepository interface {
-	Create(ctx context.Context, example *models.TrainingExample) error
-	GetByID(ctx context.Context, id string) (*models.TrainingExample, error)
-	ListByTaskType(ctx context.Context, taskType string, limit, offset int) ([]*models.TrainingExample, error)
-	CountByTaskType(ctx context.Context, taskType string) (int, error)
-	CountPositiveByTaskType(ctx context.Context, taskType string) (int, error)
-	Delete(ctx context.Context, id string) error
-	DeleteByVoteID(ctx context.Context, voteID string) error
-}
-
 // SystemPromptVersionRepository manages system prompt versions
 type SystemPromptVersionRepository interface {
 	Create(ctx context.Context, version *models.SystemPromptVersion) error

@@ -82,20 +82,25 @@ func TestVoiceConversationFlow(t *testing.T) {
 	})
 	txManager := postgres.NewTransactionManager(db.Pool)
 
-	// Setup use cases
-	generateResponse := usecases.NewGenerateResponse(
+	// Setup use cases - using Pareto-based response generation
+	paretoGenerator := usecases.NewParetoResponseGenerator(
+		mockLLM,
+		nil, // reflectionLLM - will use mockLLM
 		messageRepo,
+		conversationRepo,
+		toolRepo,
 		sentenceRepo,
 		toolUseRepo,
-		toolRepo,
 		reasoningStepRepo,
-		conversationRepo,
-		mockLLM,
+		memoryUsageRepo,
 		toolService,
 		memoryService,
 		idGen,
 		txManager,
+		nil, // broadcaster
+		nil, // config - will use defaults
 	)
+	generateResponse := usecases.NewParetoGenerateResponseAdapter(paretoGenerator)
 
 	synthesizeSpeech := usecases.NewSynthesizeSpeech(audioRepo, sentenceRepo, mockTTS, idGen)
 	streamAudioResponse := usecases.NewStreamAudioResponse(mockTTS, synthesizeSpeech)
@@ -521,19 +526,24 @@ func TestVoiceConversationFlow_StreamingMode(t *testing.T) {
 	})
 	txManager := postgres.NewTransactionManager(db.Pool)
 
-	generateResponse := usecases.NewGenerateResponse(
+	paretoGenerator := usecases.NewParetoResponseGenerator(
+		mockLLM,
+		nil, // reflectionLLM - will use mockLLM
 		messageRepo,
+		conversationRepo,
+		toolRepo,
 		sentenceRepo,
 		toolUseRepo,
-		toolRepo,
 		reasoningStepRepo,
-		conversationRepo,
-		mockLLM,
+		memoryUsageRepo,
 		toolService,
 		memoryService,
 		idGen,
 		txManager,
+		nil, // broadcaster
+		nil, // config - will use defaults
 	)
+	generateResponse := usecases.NewParetoGenerateResponseAdapter(paretoGenerator)
 
 	synthesizeSpeech := usecases.NewSynthesizeSpeech(audioRepo, sentenceRepo, mockTTS, idGen)
 	streamAudioResponse := usecases.NewStreamAudioResponse(mockTTS, synthesizeSpeech)

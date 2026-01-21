@@ -4,10 +4,6 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/**
- * Room entity for storing pending sync operations.
- * This queue ensures messages are reliably synced to the server even when offline.
- */
 @Entity(
     tableName = "sync_queue",
     indices = [
@@ -16,35 +12,12 @@ import androidx.room.PrimaryKey
     ]
 )
 data class SyncQueueEntity(
-    /**
-     * Local identifier for this sync operation (matches message localId).
-     */
     @PrimaryKey
     val localId: String,
-
-    /**
-     * Type of sync operation (e.g., "message", "control", etc.).
-     */
     val type: String,
-
-    /**
-     * Serialized data payload (MessagePack encoded envelope).
-     */
     val data: ByteArray,
-
-    /**
-     * ID of the conversation this operation belongs to.
-     */
     val conversationId: String,
-
-    /**
-     * Number of retry attempts made for this operation.
-     */
     val retryCount: Int = 0,
-
-    /**
-     * Timestamp when this operation was created (milliseconds since epoch).
-     */
     val createdAt: Long = System.currentTimeMillis()
 ) {
     override fun equals(other: Any?): Boolean {

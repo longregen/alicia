@@ -220,35 +220,4 @@ class BranchStore @Inject constructor() {
         _branchStates.update { it - messageId }
     }
 
-    // ========== Legacy compatibility methods ==========
-    // These methods are kept for backward compatibility but are deprecated.
-    // Use the server-synced methods above instead.
-
-    /**
-     * @deprecated Use updateSiblingsFromServer instead.
-     * Initialize a branch for a message - now a no-op, siblings come from server.
-     */
-    @Deprecated("Use updateSiblingsFromServer instead", ReplaceWith("updateSiblingsFromServer(messageId, siblings, messageId)"))
-    fun initializeBranch(messageId: String, content: String) {
-        // No-op - siblings are fetched from server, not initialized locally
-    }
-
-    /**
-     * @deprecated Branches are created server-side via edit/regenerate operations.
-     * Local branch creation is no longer supported.
-     */
-    @Deprecated("Branches are created server-side via edit/regenerate operations")
-    fun createBranch(messageId: String, content: String) {
-        // No-op - branches are created server-side
-    }
-
-    /**
-     * @deprecated Use peekNavigationTarget + API call + setActiveSibling instead.
-     * Direct local navigation is no longer supported.
-     */
-    @Deprecated("Use peekNavigationTarget and setActiveSibling with API calls")
-    fun navigateToBranch(messageId: String, direction: BranchDirection): SiblingMessage? {
-        // Return the target but don't update state - caller should use API
-        return peekNavigationTarget(messageId, direction)
-    }
 }

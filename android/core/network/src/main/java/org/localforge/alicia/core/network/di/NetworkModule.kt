@@ -19,31 +19,18 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
-/**
- * Qualifier for the base URL
- */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class ApiBaseUrl
 
-/**
- * Qualifier for the LiveKit URL
- */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class LiveKitUrl
 
-/**
- * Hilt module for network dependencies
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    /**
-     * Provide the API base URL
-     * This can be overridden by application configuration
-     */
     @Provides
     @Singleton
     @ApiBaseUrl
@@ -51,10 +38,6 @@ object NetworkModule {
         return BuildConfig.API_BASE_URL
     }
 
-    /**
-     * Provide the LiveKit server URL
-     * This can be overridden by application configuration
-     */
     @Provides
     @Singleton
     @LiveKitUrl
@@ -62,18 +45,12 @@ object NetworkModule {
         return BuildConfig.LIVEKIT_URL
     }
 
-    /**
-     * Provide Moshi JSON converter
-     */
     @Provides
     @Singleton
     fun provideMoshi(): Moshi {
         return Moshi.Builder().build()
     }
 
-    /**
-     * Provide OkHttpClient with logging interceptor
-     */
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
@@ -93,9 +70,6 @@ object NetworkModule {
             .build()
     }
 
-    /**
-     * Provide Retrofit instance
-     */
     @Provides
     @Singleton
     fun provideRetrofit(
@@ -110,27 +84,18 @@ object NetworkModule {
             .build()
     }
 
-    /**
-     * Provide AliciaApiService
-     */
     @Provides
     @Singleton
     fun provideAliciaApiService(retrofit: Retrofit): AliciaApiService {
         return retrofit.create(AliciaApiService::class.java)
     }
 
-    /**
-     * Provide ProtocolHandler for protocol message encoding/decoding
-     */
     @Provides
     @Singleton
     fun provideProtocolHandler(): ProtocolHandler {
         return ProtocolHandler()
     }
 
-    /**
-     * Provide LiveKitManager
-     */
     @Provides
     @Singleton
     fun provideLiveKitManager(

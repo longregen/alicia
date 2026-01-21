@@ -76,11 +76,11 @@ object NoteTargetType {
 }
 
 /**
- * Note categories
+ * Note categories - matches web frontend
  */
 object NoteCategory {
-    const val GENERAL = "general"
+    const val IMPROVEMENT = "improvement"
     const val CORRECTION = "correction"
-    const val INSIGHT = "insight"
-    const val QUESTION = "question"
+    const val CONTEXT = "context"
+    const val GENERAL = "general"
 }

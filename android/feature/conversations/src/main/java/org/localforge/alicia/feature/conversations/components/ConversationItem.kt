@@ -13,7 +13,6 @@ import org.localforge.alicia.feature.conversations.Conversation
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Time interval constants for timestamp formatting
 private const val MILLIS_PER_SECOND = 1000L
 private const val MILLIS_PER_MINUTE = 60 * MILLIS_PER_SECOND
 private const val MILLIS_PER_HOUR = 60 * MILLIS_PER_MINUTE
@@ -25,6 +24,9 @@ fun ConversationItem(
     conversation: Conversation,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit,
+    onArchiveClick: () -> Unit,
+    onUnarchiveClick: () -> Unit,
+    onRenameClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -42,17 +44,34 @@ fun ConversationItem(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                // Title, or default 'Conversation' if not set
-                Text(
-                    text = conversation.title ?: "Conversation",
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = conversation.title ?: "Conversation",
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (conversation.isArchived) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = "Archived",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Last message preview
                 if (conversation.lastMessage != null) {
                     Text(
                         text = conversation.lastMessage,
@@ -65,7 +84,6 @@ fun ConversationItem(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Metadata row
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -82,7 +100,24 @@ fun ConversationItem(
                 }
             }
 
-            // Delete button
+            IconButton(onClick = onRenameClick) {
+                Icon(
+                    imageVector = AppIcons.Edit,
+                    contentDescription = "Rename",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            IconButton(
+                onClick = if (conversation.isArchived) onUnarchiveClick else onArchiveClick
+            ) {
+                Icon(
+                    imageVector = if (conversation.isArchived) AppIcons.Unarchive else AppIcons.Archive,
+                    contentDescription = if (conversation.isArchived) "Unarchive" else "Archive",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             IconButton(onClick = onDeleteClick) {
                 Icon(
                     imageVector = AppIcons.Delete,
@@ -94,34 +129,15 @@ fun ConversationItem(
     }
 }
 
-/**
- * Date formatter for timestamps older than a week.
- * Uses ThreadLocal as a defensive measure since SimpleDateFormat is not thread-safe,
- * though Compose recomposition typically occurs on the main thread.
- */
+// SimpleDateFormat is not thread-safe, so we use ThreadLocal as a defensive measure
 private val dateFormatter = ThreadLocal.withInitial {
     SimpleDateFormat("MMM d", Locale.getDefault())
 }
 
-/**
- * Formats a timestamp into a human-readable relative time string.
- *
- * The formatting follows these rules based on the time difference:
- * - Future timestamps: "Just now"
- * - Less than 1 minute: "Just now"
- * - Less than 1 hour: "Xm ago" (e.g., "5m ago")
- * - Less than 1 day: "Xh ago" (e.g., "3h ago")
- * - Less than 1 week: "Xd ago" (e.g., "2d ago")
- * - 1 week or more: Formatted as "MMM d" (e.g., "Jan 15")
- *
- * @param timestamp Unix timestamp in milliseconds to format
- * @return Human-readable relative time string
- */
 private fun formatTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
 
-    // Handle future timestamps (clock skew or invalid data)
     if (diff < 0) {
         return "Just now"
     }

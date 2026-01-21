@@ -29,6 +29,7 @@ const createMockStore = () => {
     memoryTraces: {} as Record<string, MemoryTrace>,
     currentStreamingMessageId: null as MessageId | null,
     currentConversationId: null as ConversationId | null,
+    tipMessageId: null as MessageId | null,
 
     addMessage: vi.fn((message: NormalizedMessage) => {
       store.messages[message.id] = message;
@@ -89,6 +90,10 @@ const createMockStore = () => {
 
     setCurrentConversationId: vi.fn((id: ConversationId | null) => {
       store.currentConversationId = id;
+    }),
+
+    setTipMessageId: vi.fn((id: MessageId | null) => {
+      store.tipMessageId = id;
     }),
 
     clearConversation: vi.fn(),

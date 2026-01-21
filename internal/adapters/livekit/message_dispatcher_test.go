@@ -51,6 +51,7 @@ func TestNewDefaultMessageDispatcher(t *testing.T) {
 		nil, // continueResponseUseCase
 		nil, // editUserMessageUseCase
 		nil, // editAssistantMessageUseCase
+		nil, // synthesizeSpeechUseCase
 	)
 
 	if dispatcher == nil {

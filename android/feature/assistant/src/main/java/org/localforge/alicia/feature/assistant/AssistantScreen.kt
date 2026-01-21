@@ -15,22 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.localforge.alicia.feature.assistant.components.*
 import org.localforge.alicia.core.common.ui.AppIcons
+import org.localforge.alicia.core.domain.model.NoteTargetType
 
-/**
- * Main assistant screen that provides both voice and text interaction with the AI assistant.
- *
- * This composable displays:
- * - Conversation history with message bubbles
- * - Protocol messages (errors, reasoning steps, tool usages, memory traces, commentaries)
- * - Voice state indicator and manual activation button (in voice mode)
- * - Text input field with send button (in text mode)
- * - Response controls for stopping/regenerating responses
- *
- * @param conversationId Optional ID of a specific conversation to load. If null, loads the most recent conversation.
- * @param viewModel The ViewModel managing assistant state and interactions.
- * @param onNavigateToConversations Callback invoked when navigating to conversation history.
- * @param onNavigateToSettings Callback invoked when navigating to settings.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssistantScreen(
@@ -40,7 +26,6 @@ fun AssistantScreen(
     onNavigateToSettings: () -> Unit = {},
     onOpenDrawer: () -> Unit = {}
 ) {
-    // Load specific conversation if provided
     LaunchedEffect(conversationId) {
         conversationId?.let {
             viewModel.loadSpecificConversation(it)
@@ -54,15 +39,18 @@ fun AssistantScreen(
     val isSendingMessage by viewModel.isSendingMessage.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
 
-    // Protocol messages
     val errors by viewModel.errors.collectAsState()
     val reasoningSteps by viewModel.reasoningSteps.collectAsState()
     val toolUsages by viewModel.toolUsages.collectAsState()
     val memoryTraces by viewModel.memoryTraces.collectAsState()
     val commentaries by viewModel.commentaries.collectAsState()
 
-    // Branch states for message versioning
     val branchStates by viewModel.branchStates.collectAsState()
+
+    val messageNotes by viewModel.messageNotes.collectAsState()
+    val showNotesForMessage by viewModel.showNotesForMessage.collectAsState()
+    val notesLoading by viewModel.notesLoading.collectAsState()
+    val notesError by viewModel.notesError.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -117,7 +105,6 @@ fun AssistantScreen(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Conversation history
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
@@ -127,7 +114,6 @@ fun AssistantScreen(
                     reverseLayout = true,
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    // Protocol messages at top (when reversed, they appear at bottom)
                     item {
                         ProtocolDisplay(
                             errors = errors,
@@ -141,9 +127,6 @@ fun AssistantScreen(
 
                     items(messages.reversed()) { message ->
                         val isLatest = message == messages.lastOrNull()
-
-                        // Note: Siblings are now fetched from server automatically in ViewModel
-                        // when messages are loaded, so no initialization is needed here
 
                         MessageBubble(
                             message = message,
@@ -166,12 +149,14 @@ fun AssistantScreen(
                             },
                             onBranchNavigate = { messageId, direction ->
                                 viewModel.navigateBranch(messageId, direction)
+                            },
+                            onNotes = { messageId ->
+                                viewModel.openNotesForMessage(messageId)
                             }
                         )
                     }
                 }
 
-                // Response controls (stop/regenerate) - shown in both modes
                 ResponseControls(
                     isGenerating = isGenerating,
                     hasMessages = messages.isNotEmpty(),
@@ -179,10 +164,8 @@ fun AssistantScreen(
                     onRegenerate = { viewModel.regenerateResponse() }
                 )
 
-                // Input area - conditional based on mode
                 when (inputMode) {
                     InputMode.Voice -> {
-                        // Current transcription overlay
                         if (currentTranscription.isNotEmpty()) {
                             TranscriptionOverlay(
                                 text = currentTranscription,
@@ -191,13 +174,11 @@ fun AssistantScreen(
                             )
                         }
 
-                        // Voice state indicator with animation
                         VoiceStateIndicator(
                             state = voiceState,
                             modifier = Modifier.padding(24.dp)
                         )
 
-                        // Manual activation button
                         AssistantButton(
                             state = voiceState,
                             onClick = { viewModel.toggleListening() },
@@ -206,7 +187,6 @@ fun AssistantScreen(
                         )
                     }
                     InputMode.Text -> {
-                        // Text input area matching web's InputArea.tsx layout
                         InputArea(
                             textInput = textInput,
                             onTextInputChange = { viewModel.updateTextInput(it) },
@@ -222,10 +202,38 @@ fun AssistantScreen(
         }
     }
 
-    // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(0)
+        }
+    }
+
+    if (showNotesForMessage != null) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.closeNotes() },
+            sheetState = sheetState
+        ) {
+            showNotesForMessage?.let { messageId ->
+                UserNotesPanel(
+                    targetType = NoteTargetType.MESSAGE,
+                    targetId = messageId,
+                    notes = messageNotes[messageId] ?: emptyList(),
+                    isLoading = notesLoading.contains(messageId),
+                    error = notesError,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    onAddNote = { content, category ->
+                        viewModel.addMessageNote(messageId, content, category)
+                    },
+                    onUpdateNote = { noteId, content ->
+                        viewModel.updateNote(noteId, messageId, content)
+                    },
+                    onDeleteNote = { noteId ->
+                        viewModel.deleteNote(noteId, messageId)
+                    }
+                )
+            }
         }
     }
 }

@@ -49,6 +49,26 @@ func (n *ProtocolNotifier) NotifyGenerationStarted(messageID, previousID, conver
 	}
 }
 
+// NotifyThinkingSummary sends a ThinkingSummary message with what the agent is about to do
+func (n *ProtocolNotifier) NotifyThinkingSummary(messageID, conversationID string, summary string) {
+	thinkingSummary := &protocol.ThinkingSummary{
+		ID:             n.idGenerator.GenerateMessageID(),
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		Content:        summary,
+	}
+
+	envelope := &protocol.Envelope{
+		ConversationID: conversationID,
+		Type:           protocol.TypeThinkingSummary,
+		Body:           thinkingSummary,
+	}
+
+	if err := n.protocolHandler.SendEnvelope(n.ctx, envelope); err != nil {
+		log.Printf("Failed to send ThinkingSummary: %v", err)
+	}
+}
+
 // NotifyMemoryRetrieved sends a MemoryTrace message for each retrieved memory
 func (n *ProtocolNotifier) NotifyMemoryRetrieved(messageID, conversationID string, memoryID string, content string, relevance float32) {
 	memoryTrace := &protocol.MemoryTrace{

@@ -38,11 +38,8 @@ export enum MessageType {
   SessionStats = 27,
   // Conversation metadata update
   ConversationUpdate = 28,
-  // Dimension optimization message types
-  DimensionPreference = 29,
-  EliteSelect = 30,
-  EliteOptions = 31,
-  OptimizationProgress = 32,
+  // Thinking summary message type
+  ThinkingSummary = 34,
   // Subscription message types (multiplexed WebSocket)
   Subscribe = 40,
   Unsubscribe = 41,
@@ -338,65 +335,12 @@ export interface ConversationUpdate {
   updatedAt: string;
 }
 
-// Dimension optimization types (Types 29-31)
-
-export interface DimensionWeights {
-  successRate: number;
-  quality: number;
-  efficiency: number;
-  robustness: number;
-  generalization: number;
-  diversity: number;
-  innovation: number;
-}
-
-export interface DimensionScores {
-  successRate: number;
-  quality: number;
-  efficiency: number;
-  robustness: number;
-  generalization: number;
-  diversity: number;
-  innovation: number;
-}
-
-export interface DimensionPreference {
-  conversationId: string;
-  weights: DimensionWeights;
-  preset?: 'accuracy' | 'speed' | 'reliable' | 'creative' | 'balanced';
-  timestamp: number;
-}
-
-export interface EliteSelect {
-  conversationId: string;
-  eliteId: string;
-  timestamp: number;
-}
-
-export interface EliteSummary {
+// ThinkingSummary (Type 34) - summary of what the agent is about to do
+export interface ThinkingSummary {
   id: string;
-  label: string;
-  scores: DimensionScores;
-  description: string;
-  bestFor: string;
-}
-
-export interface EliteOptions {
+  messageId: string;
   conversationId: string;
-  elites: EliteSummary[];
-  currentEliteId: string;
-  timestamp: number;
-}
-
-export interface OptimizationProgress {
-  runId: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  iteration: number;
-  maxIterations: number;
-  currentScore: number;
-  bestScore: number;
-  dimensionScores?: Record<string, number>;
-  message?: string;
+  content: string;
   timestamp: number;
 }
 

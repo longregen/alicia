@@ -37,11 +37,12 @@ interface ConversationStoreActions {
   // Streaming state actions
   setCurrentStreamingMessageId: (id: MessageId | null) => void;
   setCurrentConversationId: (id: ConversationId | null) => void;
+  setTipMessageId: (id: MessageId | null) => void;
 
   // Bulk operations
   clearConversation: () => void;
-  loadConversation: (conversationId: ConversationId, messages: NormalizedMessage[]) => void;
-  mergeMessages: (conversationId: ConversationId, messages: NormalizedMessage[]) => void;
+  loadConversation: (conversationId: ConversationId, messages: NormalizedMessage[], tipMessageId?: MessageId) => void;
+  mergeMessages: (conversationId: ConversationId, messages: NormalizedMessage[], tipMessageId?: MessageId) => void;
 
   // Refresh request - used by branch switching to trigger message reload
   requestMessagesRefresh: () => void;
@@ -62,6 +63,7 @@ const initialState: ConversationStoreState = {
   memoryTraces: {},
   currentStreamingMessageId: null,
   currentConversationId: null,
+  tipMessageId: null,
   refreshRequestCounter: 0,
 };
 
@@ -177,23 +179,33 @@ export const useConversationStore = create<ConversationStore>()(
         state.currentConversationId = id;
       }),
 
+    setTipMessageId: (id) =>
+      set((state) => {
+        state.tipMessageId = id;
+      }),
+
     // Bulk operations
     clearConversation: () =>
       set((state) => {
         Object.assign(state, initialState);
       }),
 
-    loadConversation: (conversationId, messages) =>
+    loadConversation: (conversationId, messages, tipMessageId) =>
       set((state) => {
         state.currentConversationId = conversationId;
+        state.tipMessageId = tipMessageId ?? null;
         state.messages = {};
         messages.forEach((msg) => {
           state.messages[msg.id] = msg;
         });
       }),
 
-    mergeMessages: (conversationId, messages) =>
+    mergeMessages: (conversationId, messages, tipMessageId) =>
       set((state) => {
+        // Update tip message ID if provided
+        if (tipMessageId !== undefined) {
+          state.tipMessageId = tipMessageId ?? null;
+        }
         // Get the set of message IDs that should exist
         const newMessageIds = new Set(messages.map((m) => m.id));
 

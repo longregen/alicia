@@ -6,10 +6,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/longregen/alicia/internal/ports"
 	"github.com/longregen/alicia/internal/prompt"
+	"golang.org/x/sync/errgroup"
 )
 
 // PathEvaluator evaluates execution paths across multiple dimensions for GEPA Path Search.
@@ -23,6 +25,7 @@ func NewPathEvaluator(llm ports.LLMService) *PathEvaluator {
 }
 
 // Evaluate scores a path across 5 Pareto dimensions and returns feedback for mutation.
+// LLM evaluation calls are run in parallel for improved performance.
 func (e *PathEvaluator) Evaluate(ctx context.Context, query string, trace *prompt.ExecutionTrace) (prompt.PathScores, string, error) {
 	if trace == nil {
 		return prompt.PathScores{}, "", fmt.Errorf("trace cannot be nil")
@@ -37,57 +40,112 @@ func (e *PathEvaluator) Evaluate(ctx context.Context, query string, trace *promp
 
 	// ──────────────────────────────────────────────────────────────────
 	// STAGE 2: LLM evaluation (only for promising candidates)
+	// Runs 4 LLM calls in PARALLEL for better performance
 	// ──────────────────────────────────────────────────────────────────
 	if heuristicScore >= 0.4 {
-		// 2a. Answer quality (holistic)
-		answerQuality, err := e.llmJudgeAnswerQuality(ctx, query, trace)
-		if err != nil {
-			// Fall back to heuristic on LLM error
+		var (
+			mu               sync.Mutex
+			answerQuality    float64
+			answerQualityErr error
+			hallucinated     bool
+			hallucinationErr error
+			specificityMult  float64
+			specificityErr   error
+			robustness       float64
+			robustnessErr    error
+		)
+
+		g, gCtx := errgroup.WithContext(ctx)
+
+		// 2a. Answer quality (holistic) - parallel
+		g.Go(func() error {
+			q, err := e.llmJudgeAnswerQuality(gCtx, query, trace)
+			mu.Lock()
+			answerQuality = q
+			answerQualityErr = err
+			mu.Unlock()
+			return nil // Don't fail the group on LLM errors
+		})
+
+		// 2b. Hallucination check - parallel
+		g.Go(func() error {
+			h, err := e.llmCheckHallucinations(gCtx, trace)
+			mu.Lock()
+			hallucinated = h
+			hallucinationErr = err
+			mu.Unlock()
+			return nil
+		})
+
+		// 2c. Specificity check - parallel
+		g.Go(func() error {
+			s, err := e.llmJudgeSpecificity(gCtx, query, trace)
+			mu.Lock()
+			specificityMult = s
+			specificityErr = err
+			mu.Unlock()
+			return nil
+		})
+
+		// 2d. Robustness evaluation - parallel
+		g.Go(func() error {
+			r, err := e.evaluateRobustness(gCtx, trace)
+			mu.Lock()
+			robustness = r
+			robustnessErr = err
+			mu.Unlock()
+			return nil
+		})
+
+		// Wait for all evaluations to complete
+		_ = g.Wait()
+
+		// Merge results
+		if answerQualityErr != nil {
 			scores.AnswerQuality = heuristicScore
 		} else {
 			scores.AnswerQuality = answerQuality
 		}
 
-		// 2b. Hallucination check (CRITICAL - heavily penalize)
-		hallucinated, err := e.llmCheckHallucinations(ctx, trace)
-		if err == nil && hallucinated {
+		if hallucinationErr == nil && hallucinated {
 			scores.AnswerQuality *= 0.3 // Heavy penalty for hallucinations
 		}
 
-		// 2c. Specificity check (context-dependent)
-		specificityMultiplier, err := e.llmJudgeSpecificity(ctx, query, trace)
-		if err == nil {
-			scores.AnswerQuality *= specificityMultiplier
+		if specificityErr == nil {
+			scores.AnswerQuality *= specificityMult
 		}
+
+		if robustnessErr != nil {
+			// Fall back to simple heuristic
+			failedCalls := countFailedToolCalls(trace)
+			if failedCalls == 0 {
+				robustness = 1.0
+			} else {
+				robustness = maxFloat(0.0, 1.0-float64(failedCalls)*0.2)
+			}
+		}
+		scores.Robustness = robustness
 	} else {
 		scores.AnswerQuality = heuristicScore
+		// Still compute robustness heuristically for low-quality candidates
+		failedCalls := countFailedToolCalls(trace)
+		if failedCalls == 0 {
+			scores.Robustness = 1.0
+		} else {
+			scores.Robustness = maxFloat(0.0, 1.0-float64(failedCalls)*0.2)
+		}
 	}
 
 	// ──────────────────────────────────────────────────────────────────
-	// DIMENSION: Efficiency (heuristic)
+	// DIMENSION: Efficiency (heuristic - fast, no LLM)
 	// ──────────────────────────────────────────────────────────────────
 	toolCallCount := float64(len(trace.ToolCalls))
 	scores.Efficiency = 1.0 - minFloat(1.0, toolCallCount/10.0)
 
 	// ──────────────────────────────────────────────────────────────────
-	// DIMENSION: Token cost (heuristic)
+	// DIMENSION: Token cost (heuristic - fast, no LLM)
 	// ──────────────────────────────────────────────────────────────────
 	scores.TokenCost = 1.0 - minFloat(1.0, float64(trace.TotalTokens)/10000.0)
-
-	// ──────────────────────────────────────────────────────────────────
-	// DIMENSION: Robustness (errors + self-correction)
-	// ──────────────────────────────────────────────────────────────────
-	robustness, err := e.evaluateRobustness(ctx, trace)
-	if err != nil {
-		// Fall back to simple heuristic
-		failedCalls := countFailedToolCalls(trace)
-		if failedCalls == 0 {
-			robustness = 1.0
-		} else {
-			robustness = maxFloat(0.0, 1.0-float64(failedCalls)*0.2)
-		}
-	}
-	scores.Robustness = robustness
 
 	// ──────────────────────────────────────────────────────────────────
 	// DIMENSION: Latency (inverted: fast = high score)

@@ -13,24 +13,10 @@ import org.localforge.alicia.core.common.Logger
 import org.localforge.alicia.core.domain.model.MCPServerConfig
 import org.localforge.alicia.core.domain.model.MCPTransport
 
-/**
- * Character used to separate multiple command arguments in the input field.
- */
 private const val ARG_SEPARATOR = ","
-
-/**
- * Character used to separate environment variable key-value pairs.
- */
 private const val ENV_SEPARATOR = "="
-
-/**
- * Maximum number of parts when splitting an environment variable (key=value).
- */
 private const val ENV_PARTS_LIMIT = 2
 
-/**
- * Validates environment variable lines and returns valid entries and warnings for invalid lines.
- */
 private fun validateEnvLines(envText: String): Pair<Map<String, String>, List<String>> {
     if (envText.isBlank()) return emptyMap<String, String>() to emptyList()
 

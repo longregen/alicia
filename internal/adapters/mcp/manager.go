@@ -21,12 +21,16 @@ type ServerConfig struct {
 	ReconnectDelay time.Duration `json:"reconnect_delay,omitempty"`
 }
 
+// ConnectionCallback is called when a server's connection status changes
+type ConnectionCallback func(serverName string, connected bool)
+
 // Manager manages multiple MCP server connections
 type Manager struct {
-	servers map[string]*ManagedClient
-	mu      sync.RWMutex
-	ctx     context.Context
-	cancel  context.CancelFunc
+	servers            map[string]*ManagedClient
+	mu                 sync.RWMutex
+	ctx                context.Context
+	cancel             context.CancelFunc
+	connectionCallback ConnectionCallback
 }
 
 // ManagedClient wraps a client with reconnection logic
@@ -38,6 +42,7 @@ type ManagedClient struct {
 	connected    bool
 	reconnecting bool
 	stopCh       chan struct{}
+	manager      *Manager // Reference to parent manager for callbacks
 }
 
 // NewManager creates a new MCP manager
@@ -50,18 +55,38 @@ func NewManager(ctx context.Context) *Manager {
 	}
 }
 
+// SetConnectionCallback sets a callback that will be called when server connection status changes.
+// The callback receives the server name and the new connection status (true = connected, false = disconnected).
+func (m *Manager) SetConnectionCallback(callback ConnectionCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.connectionCallback = callback
+}
+
+// notifyConnectionChange calls the connection callback if set
+func (m *Manager) notifyConnectionChange(serverName string, connected bool) {
+	m.mu.RLock()
+	callback := m.connectionCallback
+	m.mu.RUnlock()
+
+	if callback != nil {
+		callback(serverName, connected)
+	}
+}
+
 // AddServer adds and connects to an MCP server
 func (m *Manager) AddServer(config *ServerConfig) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if _, exists := m.servers[config.Name]; exists {
+		m.mu.Unlock()
 		return fmt.Errorf("server %s already exists", config.Name)
 	}
 
 	managed := &ManagedClient{
-		config: config,
-		stopCh: make(chan struct{}),
+		config:  config,
+		stopCh:  make(chan struct{}),
+		manager: m, // Set reference to parent manager for callbacks
 	}
 
 	// Set default reconnect delay
@@ -71,13 +96,20 @@ func (m *Manager) AddServer(config *ServerConfig) error {
 
 	// Initial connection
 	if err := managed.connect(m.ctx); err != nil {
+		m.mu.Unlock()
 		return fmt.Errorf("failed to connect to server %s: %w", config.Name, err)
 	}
 
 	m.servers[config.Name] = managed
+	autoReconnect := config.AutoReconnect
+	serverName := config.Name
+	m.mu.Unlock()
+
+	// Notify that server is now connected (must be called outside the lock to avoid deadlock)
+	m.notifyConnectionChange(serverName, true)
 
 	// Start reconnection monitor if enabled
-	if config.AutoReconnect {
+	if autoReconnect {
 		go managed.monitorConnection(m.ctx)
 	}
 
@@ -149,11 +181,17 @@ func (m *Manager) GetServerStatus(name string) (bool, error) {
 func (m *Manager) Close() error {
 	m.cancel()
 
+	// Collect all managed clients under lock, then close them outside the lock
+	// to avoid deadlock (close() calls notifyConnectionChange which needs the lock)
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	clients := make([]*ManagedClient, 0, len(m.servers))
+	for _, managed := range m.servers {
+		clients = append(clients, managed)
+	}
+	m.mu.Unlock()
 
 	var lastErr error
-	for _, managed := range m.servers {
+	for _, managed := range clients {
 		if err := managed.close(); err != nil {
 			lastErr = err
 		}
@@ -217,8 +255,7 @@ func (mc *ManagedClient) close() error {
 	close(mc.stopCh)
 
 	mc.mu.Lock()
-	defer mc.mu.Unlock()
-
+	wasConnected := mc.connected
 	mc.connected = false
 
 	var err error
@@ -229,6 +266,12 @@ func (mc *ManagedClient) close() error {
 
 	if mc.transport != nil {
 		mc.transport = nil
+	}
+	mc.mu.Unlock()
+
+	// Notify about disconnection if we were previously connected
+	if wasConnected && mc.manager != nil {
+		mc.manager.notifyConnectionChange(mc.config.Name, false)
 	}
 
 	return err
@@ -315,6 +358,11 @@ func (mc *ManagedClient) reconnect(ctx context.Context) {
 			}
 
 			log.Printf("Successfully reconnected to MCP server: %s after %d attempts", mc.config.Name, attempts)
+
+			// Notify about successful reconnection
+			if mc.manager != nil {
+				mc.manager.notifyConnectionChange(mc.config.Name, true)
+			}
 			return
 		}
 	}

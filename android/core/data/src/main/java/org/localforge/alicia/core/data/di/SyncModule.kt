@@ -8,9 +8,6 @@ import org.localforge.alicia.core.data.sync.SyncManager
 import org.localforge.alicia.core.domain.repository.ConversationRepository
 import javax.inject.Singleton
 
-/**
- * Dagger Hilt module for sync-related dependencies.
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object SyncModule {

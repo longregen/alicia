@@ -10,10 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/**
- * Available wake word options for voice activation.
- * Each pair consists of (id, display name).
- */
 private val WAKE_WORDS = listOf(
     "alicia" to "Alicia",
     "hey_alicia" to "Hey Alicia",

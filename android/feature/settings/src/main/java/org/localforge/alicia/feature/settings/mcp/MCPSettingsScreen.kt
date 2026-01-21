@@ -99,7 +99,6 @@ fun MCPSettingsScreen(
                     ) {
                         items(
                             items = uiState.servers,
-                            // Note: Using server.name as key assumes server names are unique
                             key = { it.name }
                         ) { server ->
                             MCPServerCard(
@@ -114,7 +113,6 @@ fun MCPSettingsScreen(
                 }
             }
 
-            // Clear success message after delay
             uiState.successMessage?.let { message ->
                 LaunchedEffect(message) {
                     kotlinx.coroutines.delay(3000)

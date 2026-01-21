@@ -111,6 +111,20 @@ func (s *ToolService) RegisterExecutor(name string, executor func(ctx context.Co
 	return nil
 }
 
+// UnregisterExecutor removes the executor for a tool.
+// This should be called when a tool's backend (e.g., MCP server) becomes unavailable.
+// The tool will still exist in the database but won't be returned by ListAvailable().
+func (s *ToolService) UnregisterExecutor(name string) {
+	delete(s.executors, name)
+	log.Printf("Unregistered executor for tool: %s", name)
+}
+
+// HasExecutor checks if a tool has a registered executor.
+func (s *ToolService) HasExecutor(name string) bool {
+	_, exists := s.executors[name]
+	return exists
+}
+
 func (s *ToolService) GetByID(ctx context.Context, id string) (*models.Tool, error) {
 	if id == "" {
 		return nil, domain.NewDomainError(domain.ErrInvalidID, "tool ID cannot be empty")
@@ -232,6 +246,8 @@ func (s *ToolService) ListAll(ctx context.Context) ([]*models.Tool, error) {
 
 // ListAvailable returns enabled tools that have registered executors.
 // This ensures tools passed to the LLM can actually be executed.
+// Tools without executors (e.g., MCP tools whose servers are disconnected) are filtered out
+// and a warning is logged for visibility.
 func (s *ToolService) ListAvailable(ctx context.Context) ([]*models.Tool, error) {
 	tools, err := s.toolRepo.ListEnabled(ctx)
 	if err != nil {
@@ -240,10 +256,20 @@ func (s *ToolService) ListAvailable(ctx context.Context) ([]*models.Tool, error)
 
 	// Filter to only include tools with registered executors
 	available := make([]*models.Tool, 0, len(tools))
+	var unavailableTools []string
 	for _, tool := range tools {
 		if _, hasExecutor := s.executors[tool.Name]; hasExecutor {
 			available = append(available, tool)
+		} else {
+			unavailableTools = append(unavailableTools, tool.Name)
 		}
+	}
+
+	// Log warning for tools that are enabled but unavailable (missing executors)
+	// This typically indicates MCP servers that failed to connect
+	if len(unavailableTools) > 0 {
+		log.Printf("WARNING: %d enabled tool(s) filtered due to missing executors (MCP server may be disconnected): %v",
+			len(unavailableTools), unavailableTools)
 	}
 
 	return available, nil

@@ -15,7 +15,6 @@ import (
 	"github.com/longregen/alicia/internal/adapters/http/middleware"
 	"github.com/longregen/alicia/internal/adapters/mcp"
 	"github.com/longregen/alicia/internal/adapters/speech"
-	"github.com/longregen/alicia/internal/application/services"
 	"github.com/longregen/alicia/internal/application/usecases"
 	"github.com/longregen/alicia/internal/config"
 	"github.com/longregen/alicia/internal/llm"
@@ -24,40 +23,35 @@ import (
 )
 
 type Server struct {
-	config                     *config.Config
-	router                     *chi.Mux
-	httpServer                 *http.Server
-	conversationRepo           ports.ConversationRepository
-	messageRepo                ports.MessageRepository
-	toolUseRepo                ports.ToolUseRepository
-	memoryUsageRepo            ports.MemoryUsageRepository
-	noteRepo                   ports.NoteRepository
-	voteRepo                   ports.VoteRepository
-	sessionStatsRepo           ports.SessionStatsRepository
-	memoryService              ports.MemoryService
-	optimizationService        ports.OptimizationServiceFull
-	optimizationRepo           ports.PromptOptimizationRepository
-	trainingBuilderService     *services.TrainingSetBuilderService
-	promptVersionService       *services.PromptVersionService
-	liveKitService             ports.LiveKitService
-	idGen                      ports.IDGenerator
-	db                         *pgxpool.Pool
-	llmClient                  *llm.Client
-	asrAdapter                 *speech.ASRAdapter
-	ttsAdapter                 *speech.TTSAdapter
-	embeddingClient            *embedding.Client
-	mcpAdapter                 *mcp.Adapter
-	generateResponseUseCase    ports.GenerateResponseUseCase
-	sendMessageUseCase         ports.SendMessageUseCase
-	syncMessagesUseCase        ports.SyncMessagesUseCase
-	regenerateResponseUseCase  ports.RegenerateResponseUseCase
-	continueResponseUseCase    ports.ContinueResponseUseCase
+	config                      *config.Config
+	router                      *chi.Mux
+	httpServer                  *http.Server
+	conversationRepo            ports.ConversationRepository
+	messageRepo                 ports.MessageRepository
+	toolUseRepo                 ports.ToolUseRepository
+	memoryUsageRepo             ports.MemoryUsageRepository
+	noteRepo                    ports.NoteRepository
+	voteRepo                    ports.VoteRepository
+	sessionStatsRepo            ports.SessionStatsRepository
+	memoryService               ports.MemoryService
+	liveKitService              ports.LiveKitService
+	idGen                       ports.IDGenerator
+	db                          *pgxpool.Pool
+	llmClient                   *llm.Client
+	asrAdapter                  *speech.ASRAdapter
+	ttsAdapter                  *speech.TTSAdapter
+	embeddingClient             *embedding.Client
+	mcpAdapter                  *mcp.Adapter
+	generateResponseUseCase     ports.GenerateResponseUseCase
+	sendMessageUseCase          ports.SendMessageUseCase
+	syncMessagesUseCase         ports.SyncMessagesUseCase
+	regenerateResponseUseCase   ports.RegenerateResponseUseCase
+	continueResponseUseCase     ports.ContinueResponseUseCase
 	editUserMessageUseCase      ports.EditUserMessageUseCase
-	editAssistantMessageUseCase  ports.EditAssistantMessageUseCase
-	runOptimizationUseCase       ports.RunOptimizationUseCase
-	memorizeFromUpvoteUseCase    *usecases.MemorizeFromUpvote
-	processUserMessageUseCase    ports.ProcessUserMessageUseCase
-	wsBroadcaster                *handlers.WebSocketBroadcaster
+	editAssistantMessageUseCase ports.EditAssistantMessageUseCase
+	memorizeFromUpvoteUseCase   *usecases.MemorizeFromUpvote
+	processUserMessageUseCase   ports.ProcessUserMessageUseCase
+	wsBroadcaster               *handlers.WebSocketBroadcaster
 }
 
 func NewServer(
@@ -70,10 +64,6 @@ func NewServer(
 	voteRepo ports.VoteRepository,
 	sessionStatsRepo ports.SessionStatsRepository,
 	memoryService ports.MemoryService,
-	optimizationService ports.OptimizationServiceFull,
-	optimizationRepo ports.PromptOptimizationRepository,
-	trainingBuilderService *services.TrainingSetBuilderService,
-	promptVersionService *services.PromptVersionService,
 	liveKitService ports.LiveKitService,
 	idGen ports.IDGenerator,
 	db *pgxpool.Pool,
@@ -89,7 +79,6 @@ func NewServer(
 	continueResponseUseCase ports.ContinueResponseUseCase,
 	editUserMessageUseCase ports.EditUserMessageUseCase,
 	editAssistantMessageUseCase ports.EditAssistantMessageUseCase,
-	runOptimizationUseCase ports.RunOptimizationUseCase,
 	memorizeFromUpvoteUseCase *usecases.MemorizeFromUpvote,
 	processUserMessageUseCase ports.ProcessUserMessageUseCase,
 	wsBroadcaster *handlers.WebSocketBroadcaster,
@@ -104,10 +93,6 @@ func NewServer(
 		voteRepo:                    voteRepo,
 		sessionStatsRepo:            sessionStatsRepo,
 		memoryService:               memoryService,
-		optimizationService:         optimizationService,
-		optimizationRepo:            optimizationRepo,
-		trainingBuilderService:      trainingBuilderService,
-		promptVersionService:        promptVersionService,
 		liveKitService:              liveKitService,
 		idGen:                       idGen,
 		db:                          db,
@@ -123,10 +108,9 @@ func NewServer(
 		continueResponseUseCase:     continueResponseUseCase,
 		editUserMessageUseCase:      editUserMessageUseCase,
 		editAssistantMessageUseCase: editAssistantMessageUseCase,
-		runOptimizationUseCase:       runOptimizationUseCase,
-		memorizeFromUpvoteUseCase:    memorizeFromUpvoteUseCase,
-		processUserMessageUseCase:    processUserMessageUseCase,
-		wsBroadcaster:                wsBroadcaster,
+		memorizeFromUpvoteUseCase:   memorizeFromUpvoteUseCase,
+		processUserMessageUseCase:   processUserMessageUseCase,
+		wsBroadcaster:               wsBroadcaster,
 	}
 
 	s.setupRouter()
@@ -294,55 +278,6 @@ func (s *Server) setupRouter() {
 		r.Get("/server/info", serverInfoHandler.GetServerInfo)
 		r.Get("/server/stats", serverInfoHandler.GetGlobalStats)
 		r.Get("/conversations/{id}/stats", serverInfoHandler.GetSessionStats)
-
-		// Optimization endpoints (only if optimization service is available)
-		if s.optimizationService != nil {
-			optHandler := handlers.NewOptimizationHandler(s.optimizationService, s.runOptimizationUseCase)
-			r.Post("/optimizations", optHandler.CreateOptimization)
-			r.Get("/optimizations", optHandler.ListOptimizations)
-			r.Get("/optimizations/{id}", optHandler.GetOptimization)
-			r.Get("/optimizations/{id}/candidates", optHandler.GetCandidates)
-			r.Get("/optimizations/{id}/best", optHandler.GetBestCandidate)
-			r.Get("/optimizations/{id}/program", optHandler.GetOptimizedProgram)
-			r.Get("/optimizations/candidates/{id}/evaluations", optHandler.GetEvaluations)
-
-			// Feedback integration endpoints
-			feedbackHandler := handlers.NewFeedbackHandler(s.voteRepo, s.optimizationService)
-			r.Post("/feedback", feedbackHandler.SubmitFeedback)
-			r.Get("/feedback/dimensions", feedbackHandler.GetDimensionWeights)
-			r.Put("/feedback/dimensions", feedbackHandler.UpdateDimensionWeights)
-
-			// Deployment endpoints (Phase 6)
-			deploymentService := services.NewDeploymentService(s.optimizationRepo, s.idGen)
-			deploymentHandler := handlers.NewDeploymentHandler(deploymentService)
-			r.Post("/deployments", deploymentHandler.DeployPrompt)
-			r.Get("/deployments/{prompt_type}/active", deploymentHandler.GetActiveDeployment)
-			r.Get("/deployments/{prompt_type}/history", deploymentHandler.ListDeploymentHistory)
-			r.Delete("/deployments/{run_id}", deploymentHandler.RollbackDeployment)
-		}
-
-		// Training and prompt version endpoints (Phase 8)
-		if s.trainingBuilderService != nil && s.optimizationService != nil && s.promptVersionService != nil {
-			// Type assert optimizationService to concrete type for TrainingHandler
-			optService, ok := s.optimizationService.(*services.OptimizationService)
-			if ok {
-				trainingHandler := handlers.NewTrainingHandler(
-					s.trainingBuilderService,
-					optService,
-					s.promptVersionService,
-				)
-
-				r.Route("/training", func(r chi.Router) {
-					r.Get("/stats", trainingHandler.GetTrainingStats)
-					r.Post("/optimize", trainingHandler.RunOptimization)
-				})
-
-				r.Route("/prompts", func(r chi.Router) {
-					r.Get("/versions", trainingHandler.ListPromptVersions)
-					r.Post("/versions/{id}/activate", trainingHandler.ActivatePromptVersion)
-				})
-			}
-		}
 	})
 
 	// Serve frontend static files if configured (no auth required)

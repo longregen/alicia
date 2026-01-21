@@ -30,7 +30,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 
 			// Set other CORS headers (these are safe without credentials)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, X-User-ID")
 			w.Header().Set("Access-Control-Expose-Headers", "Link")
 			w.Header().Set("Access-Control-Max-Age", "300")
 

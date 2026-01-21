@@ -13,6 +13,7 @@ import { MessageProvider } from './contexts/MessageContext';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { useConversationStore } from './stores/conversationStore';
+import { createMessageId } from './types/streaming';
 import Toast from './components/atoms/Toast';
 import { Z_INDEX } from './constants/zIndex';
 
@@ -20,7 +21,7 @@ import { Z_INDEX } from './constants/zIndex';
 export type AppView = 'chat' | 'memory' | 'server' | 'settings';
 
 // Valid settings tabs for validation
-const VALID_SETTINGS_TABS: SettingsTab[] = ['mcp', 'optimization', 'preferences'];
+const VALID_SETTINGS_TABS: SettingsTab[] = ['mcp', 'preferences'];
 
 function isValidSettingsTab(tab: string): tab is SettingsTab {
   return VALID_SETTINGS_TABS.includes(tab as SettingsTab);
@@ -36,7 +37,7 @@ function useActiveView(): AppView {
 }
 
 // Settings page wrapper that validates tab parameter
-function SettingsPage({ conversationId }: { conversationId: string | null }) {
+function SettingsPage() {
   const [match, params] = useRoute('/settings/:tab');
 
   if (match && params?.tab) {
@@ -45,10 +46,10 @@ function SettingsPage({ conversationId }: { conversationId: string | null }) {
     if (!isValidSettingsTab(params.tab)) {
       return <Redirect to="/settings/mcp" />;
     }
-    return <Settings conversationId={conversationId} defaultTab={tab} />;
+    return <Settings defaultTab={tab} />;
   }
 
-  return <Settings conversationId={conversationId} defaultTab="mcp" />;
+  return <Settings defaultTab="mcp" />;
 }
 
 // 404 Page component
@@ -118,6 +119,7 @@ function AppContent() {
   // Listen for refresh requests from branch switching
   const refreshRequestCounter = useConversationStore((state) => state.refreshRequestCounter);
   const prevRefreshCounter = useRef(refreshRequestCounter);
+  const setTipMessageId = useConversationStore((state) => state.setTipMessageId);
 
   useEffect(() => {
     // Only refetch if counter changed (skip initial mount)
@@ -126,6 +128,21 @@ function AppContent() {
     }
     prevRefreshCounter.current = refreshRequestCounter;
   }, [refreshRequestCounter, refetchMessages]);
+
+  // Set tip message ID when conversation changes
+  // This ensures the correct branch is displayed when loading a conversation
+  useEffect(() => {
+    if (selectedConversationId && conversationsHasFetched) {
+      const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+      console.log('[App] Setting tipMessageId:', selectedConversation?.tip_message_id, 'for conversation:', selectedConversationId);
+      if (selectedConversation?.tip_message_id) {
+        setTipMessageId(createMessageId(selectedConversation.tip_message_id));
+      } else {
+        // Clear tip message ID if conversation doesn't have one (will use fallback in buildActiveBranch)
+        setTipMessageId(null);
+      }
+    }
+  }, [selectedConversationId, conversations, conversationsHasFetched, setTipMessageId]);
 
   const handleNewConversation = useCallback(async () => {
     // Generate a default title - backend requires a non-empty title
@@ -331,7 +348,7 @@ function AppContent() {
           </Route>
           {/* Settings with tab parameter - validated by SettingsPage */}
           <Route path="/settings/:tab">
-            <SettingsPage conversationId={selectedConversationId} />
+            <SettingsPage />
           </Route>
           <Route path="/chat/:conversationId">
             {selectedConversationId ? (

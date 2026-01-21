@@ -20,7 +20,7 @@ import {
 import { SyncRequest, SyncResponse, MessageResponse, messageResponseToMessage } from '../types/sync';
 import { Message } from '../types/models';
 import { messageRepository } from '../db/repository';
-import { handleProtocolMessage, handleConnectionLost } from '../adapters/protocolAdapter';
+import { handleProtocolMessage, handleConnectionLost, setMessageSender } from '../adapters/protocolAdapter';
 import { useConnectionStore, ConnectionStatus } from '../stores/connectionStore';
 
 interface PendingSubscription {
@@ -453,6 +453,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.EliteOptions:
       case MessageType.OptimizationProgress:
       case MessageType.BranchUpdate:
+      case MessageType.ThinkingSummary:
         handleProtocolMessage(envelope);
         break;
 
@@ -490,6 +491,15 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         setStoreError(null);
         reconnectAttemptsRef.current = 0;
 
+        // Wire up the protocolAdapter's message sender to use this WebSocket
+        setMessageSender((envelope: Envelope) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(pack(envelope));
+          } else {
+            console.warn('WebSocket not open, cannot send message');
+          }
+        });
+
         // Re-subscribe to all previously active conversations using the ref
         activeSubscriptionsRef.current.forEach((convId) => {
           const subscribeEnvelope: Envelope = {
@@ -505,6 +515,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       ws.onclose = () => {
         console.log('Multiplexed WebSocket disconnected');
         handleConnectionLost();
+        setMessageSender(null); // Clear the message sender when disconnected
         setIsConnected(false);
         wsRef.current = null;
 

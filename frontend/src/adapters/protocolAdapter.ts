@@ -16,14 +16,9 @@ import {
   MemoryConfirmation,
   ServerInfo,
   SessionStats,
-  EliteOptions,
-  OptimizationProgress,
-  DimensionScores,
   Feedback,
   UserNote,
   MemoryAction,
-  DimensionPreference,
-  EliteSelect,
   ControlStop,
   ControlVariation,
   StopType,
@@ -31,6 +26,7 @@ import {
   BranchUpdate,
   ConversationUpdate,
   Commentary,
+  ThinkingSummary,
 } from '../types/protocol';
 import {
   NormalizedMessage,
@@ -53,8 +49,6 @@ import { audioManager } from '../utils/audioManager';
 import { useAudioStore } from '../stores/audioStore';
 import { useFeedbackStore, type VotableType } from '../stores/feedbackStore';
 import { useServerInfoStore, type ConnectionStatus, type MCPServerStatus } from '../stores/serverInfoStore';
-import { useDimensionStore } from '../stores/dimensionStore';
-import { useOptimizationProgressStore } from '../stores/optimizationProgressStore';
 import { useBranchStore } from '../stores/branchStore';
 import { messageRepository } from '../db/repository';
 
@@ -187,14 +181,6 @@ export function handleProtocolMessage(envelope: Envelope): void {
       handleSessionStats(envelope.body as SessionStats);
       break;
 
-    case MessageType.EliteOptions:
-      handleEliteOptions(envelope.body as EliteOptions);
-      break;
-
-    case MessageType.OptimizationProgress:
-      handleOptimizationProgress(envelope.body as OptimizationProgress);
-      break;
-
     case MessageType.BranchUpdate:
       handleBranchUpdate(envelope.body as BranchUpdate);
       break;
@@ -213,6 +199,10 @@ export function handleProtocolMessage(envelope: Envelope): void {
 
     case MessageType.Commentary:
       handleCommentary(envelope.body as Commentary, store);
+      break;
+
+    case MessageType.ThinkingSummary:
+      handleThinkingSummary(envelope.body as ThinkingSummary, store);
       break;
 
     default:
@@ -741,36 +731,6 @@ export function handleSessionStats(msg: SessionStats): void {
 }
 
 /**
- * Handle EliteOptions: Update dimension store with available elite solutions
- */
-export function handleEliteOptions(msg: EliteOptions): void {
-  const dimensionStore = useDimensionStore.getState();
-
-  dimensionStore.updateElites(msg.elites, msg.currentEliteId);
-}
-
-/**
- * Handle OptimizationProgress: Update optimization progress store with run status
- */
-export function handleOptimizationProgress(msg: OptimizationProgress): void {
-  const optimizationStore = useOptimizationProgressStore.getState();
-
-  // Map protocol message to store format
-  // Note: dimensionScores needs type assertion as protocol uses Record<string, number>
-  // but store uses the more specific DimensionScores type
-  optimizationStore.updateProgress(msg.runId, {
-    runId: msg.runId,
-    status: msg.status,
-    iteration: msg.iteration,
-    maxIterations: msg.maxIterations,
-    currentScore: msg.currentScore,
-    bestScore: msg.bestScore,
-    dimensionScores: msg.dimensionScores as DimensionScores | undefined,
-    errorMessage: msg.message,
-  });
-}
-
-/**
  * Handle BranchUpdate: Update branch store when a new sibling branch is created.
  * This is sent by the backend when an edit operation creates a new sibling message.
  */
@@ -942,6 +902,32 @@ export function handleCommentary(
 }
 
 /**
+ * Handle ThinkingSummary: Process summary of what the agent is about to do.
+ * This is displayed in the "thinking" bubble to give the user context.
+ */
+export function handleThinkingSummary(
+  msg: ThinkingSummary,
+  store: ReturnType<typeof useConversationStore.getState>
+): void {
+  const messageId = createMessageId(msg.messageId);
+  const message = store.messages[messageId];
+
+  if (!message) {
+    console.warn('ThinkingSummary received for unknown message:', msg.messageId);
+    return;
+  }
+
+  // Wrap thinking summary in <thinking-summary> tags for UI parsing
+  // This should be displayed as the detail text in the thinking bubble
+  const thinkingBlock = `<thinking-summary data-id="${msg.id}">${msg.content}</thinking-summary>`;
+
+  // Prepend to message content (thinking summary comes before other content)
+  message.content = message.content
+    ? `${thinkingBlock} ${message.content}`
+    : thinkingBlock;
+}
+
+/**
  * Clean up a specific conversation's context
  */
 export function cleanupConversationContext(conversationId: string): void {
@@ -1078,44 +1064,6 @@ export function sendMemoryAction(action: MemoryAction): void {
     conversationId: '', // Memory actions don't have conversation context at envelope level
     type: MessageType.MemoryAction,
     body: action,
-  };
-
-  messageSender(envelope);
-}
-
-/**
- * Send a dimension preference to the server
- */
-export function sendDimensionPreference(pref: DimensionPreference): void {
-  if (!messageSender) {
-    console.warn('Cannot send dimension preference: no message sender available');
-    return;
-  }
-
-  const envelope: Envelope = {
-    stanzaId: generateStanzaId(),
-    conversationId: pref.conversationId,
-    type: MessageType.DimensionPreference,
-    body: pref,
-  };
-
-  messageSender(envelope);
-}
-
-/**
- * Send an elite selection to the server
- */
-export function sendEliteSelect(select: EliteSelect): void {
-  if (!messageSender) {
-    console.warn('Cannot send elite select: no message sender available');
-    return;
-  }
-
-  const envelope: Envelope = {
-    stanzaId: generateStanzaId(),
-    conversationId: select.conversationId,
-    type: MessageType.EliteSelect,
-    body: select,
   };
 
   messageSender(envelope);

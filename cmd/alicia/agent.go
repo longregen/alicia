@@ -528,6 +528,7 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
+			PreviousID:      req.MessageID, // Link assistant response to user message for tree structure
 			EnableTools:     req.EnableTools,
 			EnableReasoning: req.EnableReasoning,
 			EnableStreaming: req.EnableStreaming,
@@ -600,6 +601,7 @@ func (c *wsAgentCallbacks) OnResponseGenerationRequest(ctx context.Context, req 
 		input := &ports.GenerateResponseInput{
 			ConversationID:  req.ConversationID,
 			UserMessageID:   req.MessageID,
+			PreviousID:      req.MessageID, // Link assistant response to edited user message for tree structure
 			EnableTools:     req.EnableTools,
 			EnableReasoning: req.EnableReasoning,
 			EnableStreaming: req.EnableStreaming,

@@ -1,8 +1,5 @@
 package org.localforge.alicia.core.domain.model
 
-/**
- * Connection status for the server.
- */
 enum class ConnectionStatus {
     CONNECTED,
     CONNECTING,
@@ -30,9 +27,6 @@ enum class ConnectionStatus {
         }
 }
 
-/**
- * Connection quality based on latency.
- */
 enum class ConnectionQuality {
     EXCELLENT,
     GOOD,
@@ -55,22 +49,16 @@ enum class ConnectionQuality {
         get() = name.lowercase().replaceFirstChar { it.uppercase() }
 }
 
-/**
- * Model information.
- */
 data class ModelInfo(
     val name: String,
     val provider: String
 )
 
-/**
- * Session statistics.
- */
 data class SessionStats(
     val messageCount: Int = 0,
     val toolCallCount: Int = 0,
     val memoriesUsed: Int = 0,
-    val sessionDuration: Long = 0 // in seconds
+    val sessionDuration: Long = 0
 ) {
     val formattedDuration: String
         get() {
@@ -88,9 +76,6 @@ data class SessionStats(
         }
 }
 
-/**
- * Complete server info state.
- */
 data class ServerInfo(
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val latency: Long = 0,

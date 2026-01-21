@@ -45,6 +45,7 @@ export interface Conversation {
   status: ConversationStatus;
   livekit_room_name?: string;
   preferences?: ConversationPreferences;
+  tip_message_id?: string;
   last_client_stanza_id: number;
   last_server_stanza_id: number;
   created_at: string;

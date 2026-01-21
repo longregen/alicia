@@ -28,6 +28,12 @@ func (m *mockToolService) RegisterExecutor(name string, executor func(context.Co
 	return nil
 }
 
+func (m *mockToolService) UnregisterExecutor(name string) {}
+
+func (m *mockToolService) HasExecutor(name string) bool {
+	return false
+}
+
 func (m *mockToolService) GetByID(ctx context.Context, id string) (*models.Tool, error) {
 	return nil, nil
 }

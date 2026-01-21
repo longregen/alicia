@@ -104,6 +104,7 @@ Make sure the continuation flows naturally from what came before.`, existingCont
 	paretoInput := &ParetoResponseInput{
 		ConversationID:  conversation.ID,
 		UserMessageID:   userMessage.ID,
+		PreviousID:      targetMessage.ID, // Link continuation to the assistant message being continued
 		EnableTools:     input.EnableTools,
 		EnableReasoning: input.EnableReasoning,
 		EnableStreaming: input.EnableStreaming,

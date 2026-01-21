@@ -12,6 +12,9 @@ import (
 	"github.com/longregen/alicia/internal/ports"
 	"github.com/longregen/alicia/pkg/protocol"
 	"github.com/vmihailenco/msgpack/v5"
+
+	// Import encoding package for msgpack extension type registration
+	_ "github.com/longregen/alicia/internal/adapters/http/encoding"
 )
 
 // MultiplexedWSHandler handles WebSocket connections that can subscribe to multiple conversations

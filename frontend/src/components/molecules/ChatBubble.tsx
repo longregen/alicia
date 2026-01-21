@@ -143,6 +143,8 @@ export interface ChatBubbleProps extends BaseComponentProps {
   onBranchSwitch?: (targetMessageId: string) => void;
   /** Callback when user clicks "Continue from here" on an assistant message */
   onContinueFromHere?: (messageId: MessageId) => void;
+  /** Callback when user clicks "Retry" to regenerate an assistant message */
+  onRetry?: (messageId: MessageId) => void;
   /** Sync status for offline sync support */
   syncStatus?: SyncStatus;
   /** Server version content for conflict resolution */
@@ -165,6 +167,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   onEditMessage,
   onBranchSwitch,
   onContinueFromHere,
+  onRetry,
   syncStatus,
   serverContent,
   conflictDetails,
@@ -217,13 +220,23 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   }, [effectiveContent, streamingText, state, typingIndex]);
 
   /**
-   * Process content to extract and render reasoning blocks as React elements.
+   * Process content to extract and render reasoning/thinking blocks as React elements.
    * Returns safe React nodes.
    * Reasoning blocks are sorted by sequence number when multiple exist.
+   * Thinking summary blocks are rendered at the top as a subtle header.
    */
   const processContent = (text: string): React.ReactNode => {
+    // Match thinking-summary tags
+    const thinkingSummaryPattern = /<thinking-summary([^>]*)>([\s\S]*?)<\/thinking-summary>/g;
     // Match reasoning tags with optional data-sequence and data-id attributes
     const reasoningPattern = /<reasoning([^>]*)>([\s\S]*?)<\/reasoning>/g;
+
+    interface ThinkingSummaryData {
+      content: string;
+      id?: string;
+      startIndex: number;
+      endIndex: number;
+    }
 
     interface ReasoningBlockData {
       sequence: number;
@@ -233,10 +246,24 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       endIndex: number;
     }
 
+    const thinkingSummaries: ThinkingSummaryData[] = [];
     const reasoningBlocks: ReasoningBlockData[] = [];
     let match: RegExpExecArray | null;
 
-    // First pass: collect all reasoning blocks with their positions, sequences, and ids
+    // First pass: collect thinking summaries
+    while ((match = thinkingSummaryPattern.exec(text)) !== null) {
+      const attrsStr = match[1];
+      const idMatch = /data-id="([^"]+)"/.exec(attrsStr);
+      const id = idMatch ? idMatch[1] : undefined;
+      thinkingSummaries.push({
+        content: match[2],
+        id,
+        startIndex: match.index,
+        endIndex: thinkingSummaryPattern.lastIndex,
+      });
+    }
+
+    // Second pass: collect all reasoning blocks with their positions, sequences, and ids
     while ((match = reasoningPattern.exec(text)) !== null) {
       const attrsStr = match[1];
       const sequenceMatch = /data-sequence="(\d+)"/.exec(attrsStr);
@@ -252,22 +279,43 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       });
     }
 
-    // If no reasoning blocks, return text as-is
-    if (reasoningBlocks.length === 0) {
+    // If no special blocks, return text as-is
+    if (reasoningBlocks.length === 0 && thinkingSummaries.length === 0) {
       return text;
     }
 
     // Sort reasoning blocks by sequence number
     reasoningBlocks.sort((a, b) => a.sequence - b.sequence);
 
-    // Build the output with text segments and sorted reasoning blocks
+    // Build the output with text segments and sorted blocks
     const parts: React.ReactNode[] = [];
     let keyIndex = 0;
 
-    // Find the first text segment before any reasoning block
-    const firstBlockStart = Math.min(...reasoningBlocks.map(b => b.startIndex));
-    if (firstBlockStart > 0) {
-      parts.push(<span key={`text-${keyIndex++}`}>{text.slice(0, firstBlockStart)}</span>);
+    // Render thinking summaries at the top as a subtle header
+    for (const summary of thinkingSummaries) {
+      parts.push(
+        <div key={`thinking-summary-${keyIndex++}`} className="text-xs text-muted italic mb-2 pb-2 border-b border-muted/30">
+          <span className="text-accent font-medium">Thinking:</span> {summary.content}
+        </div>
+      );
+    }
+
+    // Find all block positions for text extraction
+    const allBlocks = [
+      ...thinkingSummaries.map(b => ({ startIndex: b.startIndex, endIndex: b.endIndex })),
+      ...reasoningBlocks.map(b => ({ startIndex: b.startIndex, endIndex: b.endIndex })),
+    ].sort((a, b) => a.startIndex - b.startIndex);
+
+    // Extract text segments between blocks
+    let currentPos = 0;
+    for (const block of allBlocks) {
+      if (block.startIndex > currentPos) {
+        const textSegment = text.slice(currentPos, block.startIndex).trim();
+        if (textSegment) {
+          parts.push(<span key={`text-${keyIndex++}`}>{textSegment}</span>);
+        }
+      }
+      currentPos = block.endIndex;
     }
 
     // Render all reasoning blocks in sequence order
@@ -277,10 +325,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       );
     }
 
-    // Find text after the last reasoning block
-    const lastBlockEnd = Math.max(...reasoningBlocks.map(b => b.endIndex));
-    if (lastBlockEnd < text.length) {
-      parts.push(<span key={`text-${keyIndex++}`}>{text.slice(lastBlockEnd)}</span>);
+    // Add remaining text after last block
+    if (currentPos < text.length) {
+      const remainingText = text.slice(currentPos).trim();
+      if (remainingText) {
+        parts.push(<span key={`text-${keyIndex++}`}>{remainingText}</span>);
+      }
     }
 
     return parts;
@@ -455,6 +505,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </Button>
+              {type === MESSAGE_TYPES.ASSISTANT && messageId && onRetry && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onRetry(messageId)}
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  aria-label="Retry (regenerate response)"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </Button>
+              )}
               {type === MESSAGE_TYPES.ASSISTANT && messageId && onContinueFromHere && (
                 <Button
                   variant="ghost"

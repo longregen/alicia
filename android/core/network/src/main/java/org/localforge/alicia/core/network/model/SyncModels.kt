@@ -3,18 +3,12 @@ package org.localforge.alicia.core.network.model
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/**
- * Request model for syncing messages with the server.
- */
 @JsonClass(generateAdapter = true)
 data class SyncMessagesRequest(
     @Json(name = "messages")
     val messages: List<SyncMessageItem>
 )
 
-/**
- * Individual message item for sync request.
- */
 @JsonClass(generateAdapter = true)
 data class SyncMessageItem(
     @Json(name = "local_id")
@@ -39,9 +33,6 @@ data class SyncMessageItem(
     val updatedAt: String? = null
 )
 
-/**
- * Response model for sync operation.
- */
 @JsonClass(generateAdapter = true)
 data class SyncMessagesResponse(
     @Json(name = "synced_messages")
@@ -51,9 +42,6 @@ data class SyncMessagesResponse(
     val syncedAt: String
 )
 
-/**
- * Result for a single synced message.
- */
 @JsonClass(generateAdapter = true)
 data class SyncedMessageResult(
     @Json(name = "local_id")
@@ -72,9 +60,6 @@ data class SyncedMessageResult(
     val conflict: ConflictDetails? = null
 )
 
-/**
- * Details about a sync conflict.
- */
 @JsonClass(generateAdapter = true)
 data class ConflictDetails(
     @Json(name = "reason")
@@ -91,9 +76,6 @@ data class ConflictDetails(
     }
 }
 
-/**
- * Response model for sync status.
- */
 @JsonClass(generateAdapter = true)
 data class SyncStatusResponse(
     @Json(name = "conversation_id")

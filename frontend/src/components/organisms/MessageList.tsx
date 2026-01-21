@@ -22,51 +22,66 @@ export interface MessageListProps {
 }
 
 /**
- * Build the active branch by finding the tip message (leaf with no children)
- * and walking backwards via previousId to the root.
+ * Build the active branch by walking backwards from the tip message via previousId to the root.
  *
- * When there are multiple branches (siblings), this selects the branch
- * ending with the most recently created leaf message.
+ * When tipMessageId is provided (from the conversation's tip_message_id), it uses that
+ * as the authoritative tip. This ensures the correct branch is displayed when navigating
+ * between siblings.
+ *
+ * When tipMessageId is not provided, falls back to finding the most recently created
+ * leaf message (for backwards compatibility with older conversations).
  *
  * If no messages have previousId links (legacy conversations or simple chats),
  * falls back to showing all messages sorted by timestamp.
  */
-function buildActiveBranch(messages: NormalizedMessage[]): NormalizedMessage[] {
+function buildActiveBranch(messages: NormalizedMessage[], tipMessageId: MessageId | null): NormalizedMessage[] {
   if (messages.length === 0) return [];
 
   // Check if any message has a previousId link - this indicates branch structure
   const hasBranchStructure = messages.some(m => m.previousId);
+  console.log('[buildActiveBranch] hasBranchStructure:', hasBranchStructure, 'messages with previousId:', messages.filter(m => m.previousId).map(m => ({ id: m.id, previousId: m.previousId })));
 
   if (!hasBranchStructure) {
     // No branch structure - fall back to timestamp sorting for all messages
+    console.log('[buildActiveBranch] No branch structure, returning all messages sorted by timestamp');
     return [...messages].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   // Build a map for quick lookup by ID
   const messageById = new Map(messages.map(m => [m.id, m]));
 
-  // Build a set of all previousIds to find leaf messages (messages with no children)
-  const hasChildren = new Set<string>();
-  for (const msg of messages) {
-    if (msg.previousId) {
-      hasChildren.add(msg.previousId);
+  // Determine the tip message
+  let tip: NormalizedMessage | undefined;
+
+  if (tipMessageId) {
+    // Use the authoritative tip from the conversation
+    tip = messageById.get(tipMessageId);
+  }
+
+  if (!tip) {
+    // Fallback: find the most recently created leaf message
+    // Build a set of all previousIds to find leaf messages (messages with no children)
+    const hasChildren = new Set<string>();
+    for (const msg of messages) {
+      if (msg.previousId) {
+        hasChildren.add(msg.previousId);
+      }
     }
+
+    // Find all leaf messages (no other message points to them as previousId)
+    const leafMessages = messages.filter(m => !hasChildren.has(m.id));
+
+    if (leafMessages.length === 0) {
+      // No leaf found - this shouldn't happen in a valid conversation tree
+      // Fall back to showing all messages sorted by creation time
+      return [...messages].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    }
+
+    // Select the tip: the most recently created leaf message
+    tip = leafMessages.reduce((latest, msg) =>
+      msg.createdAt.getTime() > latest.createdAt.getTime() ? msg : latest
+    );
   }
-
-  // Find all leaf messages (no other message points to them as previousId)
-  const leafMessages = messages.filter(m => !hasChildren.has(m.id));
-
-  if (leafMessages.length === 0) {
-    // No leaf found - this shouldn't happen in a valid conversation tree
-    // Fall back to showing all messages sorted by creation time
-    return [...messages].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  }
-
-  // Select the tip: the most recently created leaf message
-  // This ensures we show the active branch (the one the user is currently on)
-  const tip = leafMessages.reduce((latest, msg) =>
-    msg.createdAt.getTime() > latest.createdAt.getTime() ? msg : latest
-  );
 
   // Walk from tip to root via previousId to build the active branch
   const activeBranch: NormalizedMessage[] = [];
@@ -84,10 +99,11 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
   const messagesMap = useConversationStore(selectMessages);
   const currentStreamingMessageId = useConversationStore((state) => state.currentStreamingMessageId);
   const currentConversationId = useConversationStore((state) => state.currentConversationId);
+  const tipMessageId = useConversationStore((state) => state.tipMessageId);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   // Memoize messages filtered to the active branch
-  // The active branch is determined by finding the tip (most recent leaf message)
+  // The active branch is determined by the tipMessageId (from conversation's tip_message_id)
   // and walking backwards via previousId to the root
   const messages = useMemo(() => {
     // Filter messages by current conversation ID
@@ -95,9 +111,12 @@ const MessageList: React.FC<MessageListProps> = ({ className = '' }) => {
       (msg) => !currentConversationId || msg.conversationId === currentConversationId
     );
 
-    // Build and return only the active branch
-    return buildActiveBranch(messageArray);
-  }, [messagesMap, currentConversationId]);
+    console.log('[MessageList] Building active branch with tipMessageId:', tipMessageId, 'from', messageArray.length, 'messages');
+    // Build and return only the active branch using the authoritative tip
+    const result = buildActiveBranch(messageArray, tipMessageId);
+    console.log('[MessageList] Active branch has', result.length, 'messages:', result.map(m => m.id));
+    return result;
+  }, [messagesMap, currentConversationId, tipMessageId]);
 
   // Calculate total items including streaming message
   const totalItems = messages.length + (currentStreamingMessageId ? 1 : 0);

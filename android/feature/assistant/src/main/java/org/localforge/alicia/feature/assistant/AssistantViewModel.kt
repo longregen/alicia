@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import org.localforge.alicia.core.domain.model.MessageRole
 import org.localforge.alicia.core.domain.repository.ConversationRepository
+import org.localforge.alicia.core.domain.repository.NotesRepository
 import org.localforge.alicia.core.domain.repository.VotingRepository
 import org.localforge.alicia.core.domain.model.*
 import org.localforge.alicia.service.voice.VoiceController
@@ -33,7 +34,8 @@ class AssistantViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val voiceController: VoiceController,
     private val branchStore: BranchStore,
-    private val votingRepository: VotingRepository
+    private val votingRepository: VotingRepository,
+    private val notesRepository: NotesRepository
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<org.localforge.alicia.core.domain.model.Message>>(emptyList())
@@ -407,15 +409,6 @@ class AssistantViewModel @Inject constructor(
     }
 
     /**
-     * @deprecated No longer used - siblings are fetched from server automatically.
-     * Initialize branches for a message.
-     */
-    @Deprecated("Siblings are fetched from server automatically")
-    fun initializeBranch(messageId: String, content: String) {
-        // No-op - siblings are fetched from server, not initialized locally
-    }
-
-    /**
      * Submits feedback (vote) for an assistant message.
      * Uses the VotingRepository to send the vote to the backend.
      * @param messageId The ID of the message to vote on
@@ -448,6 +441,131 @@ class AssistantViewModel @Inject constructor(
                 android.util.Log.e("AssistantViewModel", "Failed to vote on tool use: ${e.message}")
             }
         }
+    }
+
+    // ========== Notes Functionality ==========
+
+    private val _messageNotes = MutableStateFlow<Map<String, List<Note>>>(emptyMap())
+    val messageNotes: StateFlow<Map<String, List<Note>>> = _messageNotes.asStateFlow()
+
+    private val _notesLoading = MutableStateFlow<Set<String>>(emptySet())
+    val notesLoading: StateFlow<Set<String>> = _notesLoading.asStateFlow()
+
+    private val _notesError = MutableStateFlow<String?>(null)
+    val notesError: StateFlow<String?> = _notesError.asStateFlow()
+
+    private val _showNotesForMessage = MutableStateFlow<String?>(null)
+    val showNotesForMessage: StateFlow<String?> = _showNotesForMessage.asStateFlow()
+
+    /**
+     * Opens the notes panel for a specific message.
+     * Loads the notes if not already loaded.
+     */
+    fun openNotesForMessage(messageId: String) {
+        _showNotesForMessage.value = messageId
+        loadNotesForMessage(messageId)
+    }
+
+    /**
+     * Closes the notes panel.
+     */
+    fun closeNotes() {
+        _showNotesForMessage.value = null
+    }
+
+    /**
+     * Loads notes for a specific message from the backend.
+     */
+    fun loadNotesForMessage(messageId: String) {
+        viewModelScope.launch {
+            _notesLoading.value = _notesLoading.value + messageId
+            _notesError.value = null
+
+            notesRepository.getMessageNotes(messageId)
+                .onSuccess { notes ->
+                    _messageNotes.value = _messageNotes.value + (messageId to notes)
+                }
+                .onFailure { e ->
+                    _notesError.value = e.message ?: "Failed to load notes"
+                }
+
+            _notesLoading.value = _notesLoading.value - messageId
+        }
+    }
+
+    /**
+     * Adds a new note to a message.
+     */
+    fun addMessageNote(messageId: String, content: String, category: NoteCategory) {
+        viewModelScope.launch {
+            _notesLoading.value = _notesLoading.value + messageId
+            _notesError.value = null
+
+            notesRepository.createMessageNote(messageId, content, category)
+                .onSuccess { note ->
+                    // Add the new note to the local state
+                    val currentNotes = _messageNotes.value[messageId] ?: emptyList()
+                    _messageNotes.value = _messageNotes.value + (messageId to (currentNotes + note))
+                }
+                .onFailure { e ->
+                    _notesError.value = e.message ?: "Failed to add note"
+                }
+
+            _notesLoading.value = _notesLoading.value - messageId
+        }
+    }
+
+    /**
+     * Updates an existing note.
+     */
+    fun updateNote(noteId: String, messageId: String, content: String) {
+        viewModelScope.launch {
+            _notesLoading.value = _notesLoading.value + messageId
+            _notesError.value = null
+
+            notesRepository.updateNote(noteId, content)
+                .onSuccess { updatedNote ->
+                    // Update the note in local state
+                    val currentNotes = _messageNotes.value[messageId] ?: emptyList()
+                    val updatedNotes = currentNotes.map { if (it.id == noteId) updatedNote else it }
+                    _messageNotes.value = _messageNotes.value + (messageId to updatedNotes)
+                }
+                .onFailure { e ->
+                    _notesError.value = e.message ?: "Failed to update note"
+                }
+
+            _notesLoading.value = _notesLoading.value - messageId
+        }
+    }
+
+    /**
+     * Deletes a note.
+     */
+    fun deleteNote(noteId: String, messageId: String) {
+        viewModelScope.launch {
+            _notesLoading.value = _notesLoading.value + messageId
+            _notesError.value = null
+
+            notesRepository.deleteNote(noteId)
+                .onSuccess {
+                    // Remove the note from local state
+                    val currentNotes = _messageNotes.value[messageId] ?: emptyList()
+                    val updatedNotes = currentNotes.filter { it.id != noteId }
+                    _messageNotes.value = _messageNotes.value + (messageId to updatedNotes)
+                }
+                .onFailure { e ->
+                    _notesError.value = e.message ?: "Failed to delete note"
+                }
+
+            _notesLoading.value = _notesLoading.value - messageId
+        }
+    }
+
+    /**
+     * Clears any notes error message.
+     */
+    fun clearNotesError() {
+        _notesError.value = null
     }
 
     override fun onCleared() {

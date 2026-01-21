@@ -7,10 +7,6 @@ import org.localforge.alicia.core.domain.model.MessageRole
 import org.localforge.alicia.core.domain.model.SyncStatus
 import org.localforge.alicia.core.network.model.MessageResponse
 
-/**
- * Mapper for converting between Message domain model and data layer entities/responses.
- */
-
 fun MessageEntity.toDomain(): Message {
     return Message(
         id = id,
@@ -85,23 +81,14 @@ fun MessageResponse.toEntity(): MessageEntity {
     )
 }
 
-/**
- * Convert list of MessageEntities to list of Message domain models.
- */
 fun List<MessageEntity>.toDomain(): List<Message> {
     return map { it.toDomain() }
 }
 
-/**
- * Convert list of MessageResponses to list of Message domain models.
- */
 fun List<MessageResponse>.toDomainFromResponse(): List<Message> {
     return map { it.toDomain() }
 }
 
-/**
- * Convert list of MessageResponses to list of MessageEntities.
- */
 fun List<MessageResponse>.toEntities(): List<MessageEntity> {
     return map { it.toEntity() }
 }

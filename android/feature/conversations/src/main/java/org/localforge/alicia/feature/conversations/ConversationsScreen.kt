@@ -12,17 +12,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.localforge.alicia.feature.conversations.components.ConversationItem
 
-/**
- * Screen displaying the user's conversation history.
- *
- * Shows a list of all conversations with options to view individual conversations,
- * delete specific conversations, or clear all history. Sorting is handled by the
- * repository layer (most recently updated first).
- *
- * @param viewModel ViewModel managing conversation data and operations
- * @param onNavigateBack Callback invoked when the user navigates back
- * @param onConversationClick Callback invoked when a conversation is clicked, receives conversation ID
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
@@ -33,6 +22,9 @@ fun ConversationsScreen(
     val conversations by viewModel.conversations.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var conversationToDelete by remember { mutableStateOf<Conversation?>(null) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var conversationToRename by remember { mutableStateOf<Conversation?>(null) }
+    var renameText by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -63,7 +55,6 @@ fun ConversationsScreen(
                 .padding(paddingValues)
         ) {
             if (conversations.isEmpty()) {
-                // Empty state
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -96,6 +87,17 @@ fun ConversationsScreen(
                             onDeleteClick = {
                                 conversationToDelete = conversation
                                 showDeleteDialog = true
+                            },
+                            onArchiveClick = {
+                                viewModel.archiveConversation(conversation.id)
+                            },
+                            onUnarchiveClick = {
+                                viewModel.unarchiveConversation(conversation.id)
+                            },
+                            onRenameClick = {
+                                conversationToRename = conversation
+                                renameText = conversation.title ?: ""
+                                showRenameDialog = true
                             }
                         )
                     }
@@ -104,7 +106,6 @@ fun ConversationsScreen(
         }
     }
 
-    // Delete confirmation dialog
     if (showDeleteDialog && conversationToDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -123,6 +124,54 @@ fun ConversationsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRenameDialog && conversationToRename != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showRenameDialog = false
+                conversationToRename = null
+                renameText = ""
+            },
+            title = { Text("Rename Conversation") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        conversationToRename?.let {
+                            if (renameText.isNotBlank()) {
+                                viewModel.renameConversation(it.id, renameText.trim())
+                            }
+                        }
+                        showRenameDialog = false
+                        conversationToRename = null
+                        renameText = ""
+                    },
+                    enabled = renameText.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRenameDialog = false
+                        conversationToRename = null
+                        renameText = ""
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
