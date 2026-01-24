@@ -128,7 +128,7 @@ func getContinuePrompt() string {
 	return "Please continue your previous response."
 }
 
-func getTitlePrompt(userMsg, assistantMsg string) string {
+func getTitlePrompt(userMsg, assistantMsg string) PromptResult {
 	client := getLangfuseClient()
 
 	vars := map[string]string{"user_message": userMsg}
@@ -141,7 +141,11 @@ func getTitlePrompt(userMsg, assistantMsg string) string {
 		if err != nil {
 			slog.Warn("failed to fetch title prompt from langfuse, using default", "error", err)
 		} else {
-			return prompt.Compile(vars)
+			return PromptResult{
+				Text:    prompt.Compile(vars),
+				Name:    prompt.Name,
+				Version: prompt.Version,
+			}
 		}
 	}
 
@@ -151,7 +155,7 @@ func getTitlePrompt(userMsg, assistantMsg string) string {
 		text += "\nAssistant response: " + assistantMsg
 	}
 	text += "\n\nRespond with ONLY the title, no quotes or explanation."
-	return text
+	return PromptResult{Text: text}
 }
 
 func generateTitle(ctx context.Context, llm *LLMClient, userMsg, assistantMsg string) (string, error) {
@@ -160,8 +164,12 @@ func generateTitle(ctx context.Context, llm *LLMClient, userMsg, assistantMsg st
 		langfuse.TruncateString(assistantMsg, 500, "..."),
 	)
 
-	msgs := []LLMMessage{{Role: "user", Content: prompt}}
-	resp, err := llm.ChatWithOptions(ctx, msgs, nil, ChatOptions{GenerationName: "agent.generate_title"})
+	msgs := []LLMMessage{{Role: "user", Content: prompt.Text}}
+	resp, err := llm.ChatWithOptions(ctx, msgs, nil, ChatOptions{
+		GenerationName: "agent.generate_title",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +185,7 @@ func generateTitle(ctx context.Context, llm *LLMClient, userMsg, assistantMsg st
 func maybeUpdateTitle(ctx context.Context, deps AgentDeps, convID, userMsg, assistantMsg string) {
 	currentTitle, err := GetConversationTitle(ctx, deps.DB, convID)
 	if err != nil {
-		slog.Error("failed to get conversation title", "conversation_id", convID, "error", err)
+		slog.ErrorContext(ctx, "failed to get conversation title", "conversation_id", convID, "error", err)
 		return
 	}
 
@@ -187,17 +195,17 @@ func maybeUpdateTitle(ctx context.Context, deps AgentDeps, convID, userMsg, assi
 
 	title, err := generateTitle(ctx, deps.LLM, userMsg, assistantMsg)
 	if err != nil {
-		slog.Error("failed to generate title", "conversation_id", convID, "error", err)
+		slog.ErrorContext(ctx, "failed to generate title", "conversation_id", convID, "error", err)
 		return
 	}
 
 	if err := UpdateConversationTitle(ctx, deps.DB, convID, title); err != nil {
-		slog.Error("failed to update title", "conversation_id", convID, "error", err)
+		slog.ErrorContext(ctx, "failed to update title", "conversation_id", convID, "error", err)
 		return
 	}
 
 	deps.Notifier.SendTitleUpdate(ctx, title)
-	slog.Info("updated conversation title", "conversation_id", convID, "title", title)
+	slog.InfoContext(ctx, "updated conversation title", "conversation_id", convID, "title", title)
 }
 
 type AgentDeps struct {
@@ -262,7 +270,7 @@ func HandleRegenerate(ctx context.Context, req ResponseGenerationRequest, deps A
 		return fmt.Errorf("create message: %w", err)
 	}
 	if err := UpdateConversationTip(ctx, deps.DB, convID, newMsgID); err != nil {
-		slog.Error("failed to update conversation tip", "error", err)
+		slog.ErrorContext(ctx, "failed to update conversation tip", "error", err)
 	}
 
 	cfg := GenerateConfig{
@@ -346,7 +354,7 @@ func setupResponseMessage(ctx context.Context, convID, userMsgID, previousID str
 		return "", "", err
 	}
 	if err := UpdateConversationTip(ctx, deps.DB, convID, msgID); err != nil {
-		slog.Error("failed to update conversation tip", "error", err)
+		slog.ErrorContext(ctx, "failed to update conversation tip", "error", err)
 	}
 	return msgID, userMsg.Content, nil
 }
@@ -396,7 +404,7 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 		var toolsErr error
 		tools, toolsErr = LoadTools(ctx, deps.DB)
 		if toolsErr != nil {
-			slog.Error("failed to load tools", "error", toolsErr)
+			slog.ErrorContext(ctx, "failed to load tools", "error", toolsErr)
 		}
 		if deps.MCP != nil {
 			tools = append(tools, deps.MCP.Tools()...)
@@ -431,7 +439,7 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 	}
 
 	deps.Notifier.SendComplete(ctx, msg.ID, fullContent)
-	slog.Info("response complete", "message_id", msg.ID, "content_length", len(fullContent))
+	slog.InfoContext(ctx, "response complete", "message_id", msg.ID, "content_length", len(fullContent))
 	return nil
 }
 
@@ -455,18 +463,18 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 	messages, err := LoadConversationFull(setupCtx, deps.DB, convID)
 	if err != nil {
-		slog.Error("failed to load conversation", "conversation_id", convID, "error", err)
+		slog.ErrorContext(setupCtx, "failed to load conversation", "conversation_id", convID, "error", err)
 	}
 
 	var memories []Memory
 	embedding, err := deps.LLM.Embed(setupCtx, userQuery)
 	if err != nil {
-		slog.Error("failed to generate embedding for memory search", "error", err)
+		slog.ErrorContext(setupCtx, "failed to generate embedding for memory search", "error", err)
 	} else if embedding != nil {
 		userPrefs := deps.Prefs.Get(deps.UserID)
 		memories, err = SearchMemories(setupCtx, deps.DB, embedding, 0.7, userPrefs.MemoryRetrievalCount)
 		if err != nil {
-			slog.Error("failed to search memories", "error", err)
+			slog.ErrorContext(setupCtx, "failed to search memories", "error", err)
 		} else {
 			for _, m := range memories {
 				RecordMemoryUse(setupCtx, deps.DB, NewMemoryUseID(), m.ID, msgID, convID, m.Similarity)
@@ -480,7 +488,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 		userPrefs := deps.Prefs.Get(deps.UserID)
 		notes, err = SearchNotes(setupCtx, deps.DB, deps.UserID, embedding, userPrefs.NotesSimilarityThreshold, userPrefs.NotesMaxCount)
 		if err != nil {
-			slog.Error("failed to search notes", "error", err)
+			slog.ErrorContext(setupCtx, "failed to search notes", "error", err)
 		}
 	}
 
@@ -489,7 +497,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 		var toolsErr error
 		tools, toolsErr = LoadTools(setupCtx, deps.DB)
 		if toolsErr != nil {
-			slog.Error("failed to load tools", "error", toolsErr)
+			slog.ErrorContext(setupCtx, "failed to load tools", "error", toolsErr)
 		}
 		if deps.MCP != nil {
 			tools = append(tools, deps.MCP.Tools()...)
@@ -565,7 +573,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 		if systemPrompt.Name != "" {
 			traceID := span.SpanContext().TraceID().String()
 			genID := llmSpan.SpanContext().SpanID().String()
-			go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, systemPrompt, resp.Content, llmStart, llmEnd)
+			go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:tool_loop", "llm.chat", systemPrompt, resp.Content, llmStart, llmEnd)
 		}
 
 		if len(resp.ToolCalls) == 0 {
@@ -645,7 +653,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 	}
 
 	deps.Notifier.SendComplete(ctx, msgID, finalContent)
-	slog.Info("response complete", "message_id", msgID, "content_length", len(finalContent))
+	slog.InfoContext(ctx, "response complete", "message_id", msgID, "content_length", len(finalContent))
 
 	// Detached context with timeout: title update must complete even if client disconnects
 	titleCtx, titleCancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -712,7 +720,7 @@ func buildLLMMessages(history []Message, newMemories []Memory, notes []Note, too
 	return msgs, systemPrompt
 }
 
-func sendGenerationToLangfuse(traceID, genID, convID, userID, model string, prompt PromptResult, output string, start, end time.Time) {
+func sendGenerationToLangfuse(traceID, genID, convID, userID, model, traceName, generationName string, prompt PromptResult, output string, start, end time.Time) {
 	client := getLangfuseClient()
 	if client == nil {
 		return
@@ -723,7 +731,7 @@ func sendGenerationToLangfuse(traceID, genID, convID, userID, model string, prom
 
 	if err := client.CreateTrace(ctx, langfuse.TraceParams{
 		ID:        traceID,
-		Name:      "agent:tool_loop",
+		Name:      traceName,
 		SessionID: convID,
 		UserID:    userID,
 	}); err != nil {
@@ -733,7 +741,7 @@ func sendGenerationToLangfuse(traceID, genID, convID, userID, model string, prom
 	if err := client.CreateGeneration(ctx, langfuse.GenerationParams{
 		TraceID:       traceID,
 		ID:            genID,
-		Name:          "llm.chat",
+		Name:          generationName,
 		Model:         model,
 		PromptName:    prompt.Name,
 		PromptVersion: prompt.Version,

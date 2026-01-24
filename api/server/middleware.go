@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/longregen/alicia/api/server/handlers"
+	"github.com/longregen/alicia/pkg/otel"
 )
 
 type AuthConfig struct {
@@ -39,6 +40,7 @@ func AuthWithConfig(cfg AuthConfig) func(http.Handler) http.Handler {
 			}
 
 			ctx := handlers.SetUserIDInContext(r.Context(), userID)
+			ctx = otel.WithUserID(ctx, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

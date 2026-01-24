@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/longregen/alicia/pkg/langfuse"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -20,10 +21,12 @@ var (
 type PathMutator struct {
 	llm      *LLMClient
 	langfuse *langfuse.Client
+	convID   string
+	userID   string
 }
 
-func NewPathMutator(llm *LLMClient, lf *langfuse.Client) *PathMutator {
-	return &PathMutator{llm: llm, langfuse: lf}
+func NewPathMutator(llm *LLMClient, lf *langfuse.Client, convID, userID string) *PathMutator {
+	return &PathMutator{llm: llm, langfuse: lf, convID: convID, userID: userID}
 }
 
 const mutationStrategyFallbackPrompt = `Analyze this execution trace and improve the strategy.
@@ -78,26 +81,34 @@ Format your response exactly like this:
 MERGED_STRATEGY:
 Your merged strategy text here...`
 
-func (m *PathMutator) getMutationPrompt(ctx context.Context, vars map[string]string) string {
+func (m *PathMutator) getMutationPrompt(ctx context.Context, vars map[string]string) PromptResult {
 	if m.langfuse != nil {
 		prompt, err := m.langfuse.GetPromptContext(ctx, "alicia/pareto/mutation-strategy", langfuse.WithLabel("production"))
 		if err == nil {
-			return prompt.Compile(vars)
+			return PromptResult{
+				Text:    prompt.Compile(vars),
+				Name:    prompt.Name,
+				Version: prompt.Version,
+			}
 		}
-		slog.Warn("langfuse GetPrompt failed for mutation-strategy, using fallback", "error", err)
+		slog.WarnContext(ctx, "langfuse GetPrompt failed for mutation-strategy, using fallback", "error", err)
 	}
-	return langfuse.CompileTemplate(mutationStrategyFallbackPrompt, vars)
+	return PromptResult{Text: langfuse.CompileTemplate(mutationStrategyFallbackPrompt, vars)}
 }
 
-func (m *PathMutator) getCrossoverPrompt(ctx context.Context, vars map[string]string) string {
+func (m *PathMutator) getCrossoverPrompt(ctx context.Context, vars map[string]string) PromptResult {
 	if m.langfuse != nil {
 		prompt, err := m.langfuse.GetPromptContext(ctx, "alicia/pareto/mutation-crossover", langfuse.WithLabel("production"))
 		if err == nil {
-			return prompt.Compile(vars)
+			return PromptResult{
+				Text:    prompt.Compile(vars),
+				Name:    prompt.Name,
+				Version: prompt.Version,
+			}
 		}
-		slog.Warn("langfuse GetPrompt failed for mutation-crossover, using fallback", "error", err)
+		slog.WarnContext(ctx, "langfuse GetPrompt failed for mutation-crossover, using fallback", "error", err)
 	}
-	return langfuse.CompileTemplate(crossoverFallbackPrompt, vars)
+	return PromptResult{Text: langfuse.CompileTemplate(crossoverFallbackPrompt, vars)}
 }
 
 func (m *PathMutator) MutateStrategy(ctx context.Context, candidate *PathCandidate, trace *ExecutionTrace, feedback string) (*PathCandidate, error) {
@@ -125,9 +136,21 @@ func (m *PathMutator) MutateStrategy(ctx context.Context, candidate *PathCandida
 
 	prompt := m.getMutationPrompt(ctx, promptVars)
 
-	response, err := m.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt}}, nil, ChatOptions{GenerationName: "pareto.mutator"})
+	llmStart := time.Now()
+	response, err := m.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.mutate",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM response for mutation: %w", err)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("mutate-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, m.convID, m.userID, m.llm.model, "agent:pareto", "pareto.mutate", prompt, response.Content, llmStart, llmEnd)
 	}
 
 	newLessons := parseMutationLessons(response.Content)
@@ -174,9 +197,21 @@ func (m *PathMutator) Crossover(ctx context.Context, parent1, parent2 *PathCandi
 
 	prompt := m.getCrossoverPrompt(ctx, promptVars)
 
-	response, err := m.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt}}, nil, ChatOptions{GenerationName: "pareto.mutator"})
+	llmStart := time.Now()
+	response, err := m.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.crossover",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM response for crossover: %w", err)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("crossover-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, m.convID, m.userID, m.llm.model, "agent:pareto", "pareto.crossover", prompt, response.Content, llmStart, llmEnd)
 	}
 
 	mergedStrategy := parseMergedStrategyText(response.Content)

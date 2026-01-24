@@ -189,15 +189,15 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	// Initialize components
 	archive := NewPathParetoArchive(paretoCfg.ArchiveSize)
 	lfClient := getLangfuseClient()
-	evaluator := NewPathEvaluator(deps.LLM, lfClient)
-	mutator := NewPathMutator(deps.LLM, lfClient)
+	evaluator := NewPathEvaluator(deps.LLM, lfClient, convID, deps.UserID)
+	mutator := NewPathMutator(deps.LLM, lfClient, convID, deps.UserID)
 
 	// Extract trace ID from OTel context and store it for Langfuse correlation
 	spanCtx := trace.SpanContextFromContext(ctx)
 	if spanCtx.IsValid() {
 		traceID := spanCtx.TraceID().String()
 		if err := UpdateMessageTraceID(ctx, deps.DB, msgID, traceID); err != nil {
-			slog.Error("failed to store trace_id for message", "message_id", msgID, "error", err)
+			slog.ErrorContext(ctx, "failed to store trace_id for message", "message_id", msgID, "error", err)
 		}
 	}
 
@@ -208,7 +208,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	if err != nil {
 		setupSpan.RecordError(err)
 		setupSpan.End()
-		slog.Error("failed to load conversation history", "conversation_id", convID, "error", err)
+		slog.ErrorContext(setupCtx, "failed to load conversation history", "conversation_id", convID, "error", err)
 		deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 		return fmt.Errorf("load conversation: %w", err)
 	}
@@ -216,12 +216,12 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	var memories []Memory
 	embedding, err := deps.LLM.Embed(setupCtx, userQuery)
 	if err != nil {
-		slog.Error("failed to generate embedding for memory search", "error", err)
+		slog.ErrorContext(setupCtx, "failed to generate embedding for memory search", "error", err)
 	} else if embedding != nil {
 		userPrefs := deps.Prefs.Get(deps.UserID)
 		memories, err = SearchMemories(setupCtx, deps.DB, embedding, 0.7, userPrefs.MemoryRetrievalCount)
 		if err != nil {
-			slog.Error("failed to search memories", "error", err)
+			slog.ErrorContext(setupCtx, "failed to search memories", "error", err)
 		} else {
 			for _, m := range memories {
 				RecordMemoryUse(setupCtx, deps.DB, NewMemoryUseID(), m.ID, msgID, convID, m.Similarity)
@@ -288,7 +288,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			}
 
 			// Add LLM-generated tool activity description
-			if toolDesc := tracker.Describe(genCtx, deps.LLM, userQuery); toolDesc != "" {
+			if toolDesc := tracker.Describe(genCtx, deps.LLM, userQuery, convID, deps.UserID); toolDesc != "" {
 				status += "\n" + toolDesc
 			}
 
@@ -314,11 +314,11 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 						attribute.Int("generation", c.Generation),
 					))
 
-				execTrace, err := executeCandidateWithStrategy(execCtx, c, messages, memories, tools, userQuery, cfg, deps, tracker)
+				execTrace, err := executeCandidateWithStrategy(execCtx, c, messages, memories, tools, userQuery, convID, cfg, deps, tracker)
 				if err != nil {
 					execSpan.RecordError(err)
 					execSpan.End()
-					slog.Error("candidate failed", "candidate_id", c.ID, "error", err)
+					slog.ErrorContext(execCtx, "candidate failed", "candidate_id", c.ID, "error", err)
 					return
 				}
 				c.Trace = execTrace
@@ -340,7 +340,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 				if evalErr != nil {
 					evalSpan.RecordError(evalErr)
 					evalSpan.End()
-					slog.Error("evaluation failed", "candidate_id", c.ID, "error", evalErr)
+					slog.ErrorContext(genCtx, "evaluation failed", "candidate_id", c.ID, "error", evalErr)
 					return
 				}
 				c.Scores = scores
@@ -383,7 +383,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 
 		if archive.Size() == 0 {
 			genSpan.End()
-			slog.Error("all candidates failed in generation", "generation", gen)
+			slog.ErrorContext(genCtx, "all candidates failed in generation", "generation", gen)
 			deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 			return fmt.Errorf("no candidates succeeded in generation %d", gen)
 		}
@@ -401,7 +401,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			progress = 100
 		}
 
-		statusMsg := generateThinkingStatus(genCtx, deps.LLM, userQuery, best.StrategyPrompt, progress)
+		statusMsg := generateThinkingStatus(genCtx, deps.LLM, userQuery, best.StrategyPrompt, convID, deps.UserID, progress)
 		deps.Notifier.SendThinkingWithProgress(genCtx, msgID, statusMsg, progress)
 
 		if bestScore >= float64(paretoCfg.TargetScore) {
@@ -444,7 +444,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 					defer mutationsDone.Add(1)
 					mutated, mutErr := mutator.MutateStrategy(genCtx, p, p.Trace, p.Feedback)
 					if mutErr != nil {
-						slog.Error("mutation failed", "candidate_id", p.ID, "error", mutErr)
+						slog.ErrorContext(genCtx, "mutation failed", "candidate_id", p.ID, "error", mutErr)
 						return
 					}
 					if mutated != nil {
@@ -476,7 +476,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			stopMutProgress()
 
 			if len(seeds) == 0 {
-				slog.Warn("no mutations produced, using parents for next generation")
+				slog.WarnContext(genCtx, "no mutations produced, using parents for next generation")
 				seeds = parents
 			}
 
@@ -490,12 +490,12 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	// Select best result
 	best := archive.GetBestByWeightedSum(weights)
 	if best == nil || best.Trace == nil {
-		slog.Error("pareto exploration produced no results, archive empty or best has nil trace")
+		slog.ErrorContext(ctx, "pareto exploration produced no results, archive empty or best has nil trace")
 		deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 		return fmt.Errorf("no results")
 	}
 
-	slog.Info("pareto exploration complete", "candidate_id", best.ID, "weighted_score", best.Scores.WeightedSum(weights))
+	slog.InfoContext(ctx, "pareto exploration complete", "candidate_id", best.ID, "weighted_score", best.Scores.WeightedSum(weights))
 
 	// Save tool uses from the best trace
 	for _, tc := range best.Trace.ToolCalls {
@@ -513,18 +513,18 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	// Save and notify
 	finalContent := strings.TrimSpace(best.Trace.FinalAnswer)
 	if finalContent == "" {
-		slog.Error("best candidate has empty final answer", "candidate_id", best.ID)
+		slog.ErrorContext(ctx, "best candidate has empty final answer", "candidate_id", best.ID)
 		deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 		return fmt.Errorf("best candidate has empty content")
 	}
 	if err := UpdateMessage(ctx, deps.DB, msgID, finalContent, "completed"); err != nil {
-		slog.Error("failed to update message", "message_id", msgID, "error", err)
+		slog.ErrorContext(ctx, "failed to update message", "message_id", msgID, "error", err)
 		deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 		return err
 	}
 
 	deps.Notifier.SendComplete(ctx, msgID, finalContent)
-	slog.Info("response complete", "message_id", msgID, "content_length", len(finalContent))
+	slog.InfoContext(ctx, "response complete", "message_id", msgID, "content_length", len(finalContent))
 
 	// Update title asynchronously (detached context with timeout to survive client disconnect)
 	titleCtx, titleCancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -541,7 +541,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	return nil
 }
 
-func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate, history []Message, memories []Memory, tools []Tool, userQuery string, cfg GenerateConfig, deps AgentDeps, tracker *toolTracker) (*ExecutionTrace, error) {
+func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate, history []Message, memories []Memory, tools []Tool, userQuery, convID string, cfg GenerateConfig, deps AgentDeps, tracker *toolTracker) (*ExecutionTrace, error) {
 	startTime := time.Now()
 
 	execTrace := &ExecutionTrace{
@@ -550,15 +550,27 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 	}
 
 	// Build messages with strategy injected
-	llmMsgs := buildMessagesWithStrategy(history, memories, tools, candidate.StrategyPrompt, candidate.AccumulatedLessons)
+	llmMsgs, systemPrompt := buildMessagesWithStrategy(history, memories, tools, candidate.StrategyPrompt, candidate.AccumulatedLessons)
 
+	traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
 	totalTokens := 0
 	emptyRetryTemperatures := []float32{0.3, 0.7, 1.0}
 
 	for i := 0; i < cfg.MaxToolIterations; i++ {
-		resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{GenerationName: "pareto.candidate"})
+		llmStart := time.Now()
+		resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
+			GenerationName: "pareto.candidate",
+			PromptName:     systemPrompt.Name,
+			PromptVersion:  systemPrompt.Version,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("LLM chat failed: %w", err)
+		}
+		llmEnd := time.Now()
+
+		if systemPrompt.Name != "" {
+			genID := fmt.Sprintf("%s-iter-%d", candidate.ID, i)
+			go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:pareto", "pareto.candidate", systemPrompt, resp.Content, llmStart, llmEnd)
 		}
 
 		totalTokens += len(resp.Content) / 4
@@ -569,11 +581,22 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
-				slog.Warn("empty response, retrying", "temperature", temp, "attempt", retry+1, "max_attempts", len(emptyRetryTemperatures))
-				resp, err = deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{Temperature: float32Ptr(temp), GenerationName: "pareto.candidate"})
+				slog.WarnContext(ctx, "empty response, retrying", "temperature", temp, "attempt", retry+1, "max_attempts", len(emptyRetryTemperatures))
+				retryStart := time.Now()
+				resp, err = deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
+					Temperature:    float32Ptr(temp),
+					GenerationName: "pareto.candidate",
+					PromptName:     systemPrompt.Name,
+					PromptVersion:  systemPrompt.Version,
+				})
 				if err != nil {
-					slog.Error("retry failed", "attempt", retry+1, "error", err)
+					slog.ErrorContext(ctx, "retry failed", "attempt", retry+1, "error", err)
 					continue
+				}
+				retryEnd := time.Now()
+				if systemPrompt.Name != "" {
+					genID := fmt.Sprintf("%s-iter-%d-retry-%d", candidate.ID, i, retry)
+					go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:pareto", "pareto.candidate", systemPrompt, resp.Content, retryStart, retryEnd)
 				}
 				if strings.TrimSpace(resp.Content) != "" || len(resp.ToolCalls) > 0 {
 					break
@@ -587,7 +610,7 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 		// No tool calls means we have our final answer
 		if len(resp.ToolCalls) == 0 {
 			execTrace.FinalAnswer = resp.Content
-			slog.Info("final answer received", "content_length", len(execTrace.FinalAnswer))
+			slog.InfoContext(ctx, "final answer received", "content_length", len(execTrace.FinalAnswer))
 			break
 		}
 
@@ -631,7 +654,7 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 
 		if i == cfg.MaxToolIterations-1 {
 			execTrace.FinalAnswer = resp.Content
-			slog.Warn("max iterations reached", "content_length", len(execTrace.FinalAnswer))
+			slog.WarnContext(ctx, "max iterations reached", "content_length", len(execTrace.FinalAnswer))
 			if execTrace.FinalAnswer == "" {
 				execTrace.FinalAnswer = "Max tool iterations reached."
 			}
@@ -656,17 +679,29 @@ Progress: {{progress}}%
 
 Be witty, playful, or encouraging. Output ONLY the message, nothing else.`
 
-func generateThinkingStatus(ctx context.Context, llm *LLMClient, question, strategy string, progress float32) string {
+func generateThinkingStatus(ctx context.Context, llm *LLMClient, question, strategy, convID, userID string, progress float32) string {
 	vars := map[string]string{
 		"question": question,
 		"strategy": strategy,
 		"progress": fmt.Sprintf("%.0f", progress),
 	}
-	promptText := getPromptText("alicia/pareto/thinking-status", fallbackThinkingStatusPrompt, vars)
+	prompt := getPrompt("alicia/pareto/thinking-status", fallbackThinkingStatusPrompt, vars)
 
-	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{GenerationName: "pareto.thinking_status"})
+	llmStart := time.Now()
+	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.thinking_status",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return fmt.Sprintf("Exploring... %.0f%%", progress)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("thinking-status-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, convID, userID, llm.model, "agent:pareto", "pareto.thinking_status", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	status := strings.TrimSpace(resp.Content)
@@ -699,7 +734,7 @@ func (t *toolTracker) Record(name string, args map[string]any) {
 
 // Describe generates a natural language one-liner describing current tool activity.
 // Uses an LLM with caching — only regenerates when new calls have been recorded.
-func (t *toolTracker) Describe(ctx context.Context, llm *LLMClient, userQuery string) string {
+func (t *toolTracker) Describe(ctx context.Context, llm *LLMClient, userQuery, convID, userID string) string {
 	t.mu.Lock()
 	count := len(t.calls)
 	if count == 0 {
@@ -715,7 +750,7 @@ func (t *toolTracker) Describe(ctx context.Context, llm *LLMClient, userQuery st
 	copy(calls, t.calls)
 	t.mu.Unlock()
 
-	desc := generateToolDescription(ctx, llm, userQuery, calls)
+	desc := generateToolDescription(ctx, llm, userQuery, convID, userID, calls)
 
 	t.mu.Lock()
 	if len(t.calls) == count {
@@ -753,7 +788,7 @@ Write ONLY a short natural description. Examples:
 - "Running SQL to count orders by customer"
 No quotes, no prefix.`
 
-func generateToolDescription(ctx context.Context, llm *LLMClient, userQuery string, calls []toolCallEntry) string {
+func generateToolDescription(ctx context.Context, llm *LLMClient, userQuery, convID, userID string, calls []toolCallEntry) string {
 	// Build operations list
 	var ops []string
 	for _, c := range calls {
@@ -768,15 +803,27 @@ func generateToolDescription(ctx context.Context, llm *LLMClient, userQuery stri
 		"question":   truncateStr(userQuery, 200),
 		"operations": strings.Join(ops, "\n"),
 	}
-	promptText := getPromptText("alicia/pareto/tool-description", fallbackToolDescPrompt, vars)
+	prompt := getPrompt("alicia/pareto/tool-description", fallbackToolDescPrompt, vars)
 
 	descCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
-	resp, err := llm.ChatWithOptions(descCtx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{GenerationName: "pareto.tool_description"})
+	llmStart := time.Now()
+	resp, err := llm.ChatWithOptions(descCtx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.tool_description",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		// Fallback: simple list format
 		return fallbackToolSummary(calls)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("tool-desc-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, convID, userID, llm.model, "agent:pareto", "pareto.tool_description", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	desc := strings.TrimSpace(resp.Content)
@@ -857,7 +904,7 @@ func startProgressTicker(ctx context.Context, notifier Notifier, msgID string, i
 	}
 }
 
-func buildMessagesWithStrategy(history []Message, memories []Memory, tools []Tool, strategy string, lessons []string) []LLMMessage {
+func buildMessagesWithStrategy(history []Message, memories []Memory, tools []Tool, strategy string, lessons []string) ([]LLMMessage, PromptResult) {
 	var msgs []LLMMessage
 
 	instructions := "## Approach Strategy\n" + strategy
@@ -886,5 +933,5 @@ func buildMessagesWithStrategy(history []Message, memories []Memory, tools []Too
 		}
 	}
 
-	return msgs
+	return msgs, systemPrompt
 }

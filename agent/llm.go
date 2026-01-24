@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/longregen/alicia/pkg/otel"
 	"github.com/longregen/alicia/shared/jsonutil"
@@ -97,9 +97,9 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 			meta["generation_name"] = opts.GenerationName
 		}
 		if opts.PromptName != "" {
-			meta["prompt.name"] = opts.PromptName
+			meta["observation.prompt.name"] = opts.PromptName
 			if opts.PromptVersion > 0 {
-				meta["prompt.version"] = fmt.Sprintf("%d", opts.PromptVersion)
+				meta["observation.prompt.version"] = strconv.Itoa(opts.PromptVersion)
 			}
 		}
 		req.Metadata = meta
@@ -125,12 +125,12 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 	}
 
 	if len(resp.Choices) == 0 {
-		slog.Warn("llm returned 0 choices")
+		slog.WarnContext(ctx, "llm returned 0 choices")
 		return &LLMResponse{}, nil
 	}
 
 	choice := resp.Choices[0]
-	slog.Info("llm response", "content_length", len(choice.Message.Content), "tool_calls", len(choice.Message.ToolCalls), "finish_reason", choice.FinishReason)
+	slog.InfoContext(ctx, "llm response", "content_length", len(choice.Message.Content), "tool_calls", len(choice.Message.ToolCalls), "finish_reason", choice.FinishReason)
 
 	result := &LLMResponse{Content: choice.Message.Content}
 	for _, tc := range choice.Message.ToolCalls {

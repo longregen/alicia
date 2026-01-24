@@ -92,7 +92,7 @@ func ExtractAndSaveMemories(ctx context.Context, convID string, deps AgentDeps) 
 	}
 
 	thresholds := deps.Prefs.GetThresholds(deps.UserID)
-	slog.Info("memory extraction started", "candidates", len(candidates), "user_id", deps.UserID)
+	slog.InfoContext(ctx, "memory extraction started", "candidates", len(candidates), "user_id", deps.UserID)
 
 	for _, candidate := range candidates {
 		if candidate.Content == "" {
@@ -101,7 +101,7 @@ func ExtractAndSaveMemories(ctx context.Context, convID string, deps AgentDeps) 
 
 		preview := langfuse.TruncateString(candidate.Content, 50, "...")
 		scores := evaluateMemory(ctx, deps.LLM, candidate.Content)
-		slog.Info("memory evaluated", "preview", preview, "importance", scores.Importance, "historical", scores.Historical, "personal", scores.Personal, "factual", scores.Factual)
+		slog.InfoContext(ctx, "memory evaluated", "preview", preview, "importance", scores.Importance, "historical", scores.Historical, "personal", scores.Personal, "factual", scores.Factual)
 
 		accepted := scores.Passes(thresholds)
 
@@ -113,26 +113,26 @@ func ExtractAndSaveMemories(ctx context.Context, convID string, deps AgentDeps) 
 
 		embedding, err := deps.LLM.Embed(ctx, candidate.Content)
 		if err != nil {
-			slog.Error("memory embedding failed", "error", err)
+			slog.ErrorContext(ctx, "memory embedding failed", "error", err)
 			continue
 		}
 
 		existing, err := SearchMemories(ctx, deps.DB, embedding, memorySimilarityThreshold, memorySimilarityTopK)
 		if err != nil {
-			slog.Error("memory search failed", "error", err)
+			slog.ErrorContext(ctx, "memory search failed", "error", err)
 			continue
 		}
 
 		action := rerankMemory(ctx, deps.LLM, candidate.Content, existing)
 		if action != "KEEP" {
-			slog.Info("memory discarded", "preview", preview, "action", action)
+			slog.InfoContext(ctx, "memory discarded", "preview", preview, "action", action)
 			continue
 		}
 
 		if err := CreateMemory(ctx, deps.DB, NewMemoryID(), candidate.Content, embedding, scores.NormalizedImportance()); err != nil {
-			slog.Error("memory creation failed", "error", err)
+			slog.ErrorContext(ctx, "memory creation failed", "error", err)
 		} else {
-			slog.Info("memory created", "preview", preview)
+			slog.InfoContext(ctx, "memory created", "preview", preview)
 		}
 	}
 }
@@ -162,16 +162,18 @@ type memoryCandidatesWrapper struct {
 }
 
 func extractMemoryCandidates(ctx context.Context, llm *LLMClient, conversation string) []MemoryCandidate {
-	promptText := getPromptText("alicia/agent/memory-extract", fallbackMemoryExtract,
+	prompt := getPrompt("alicia/agent/memory-extract", fallbackMemoryExtract,
 		map[string]string{"conversation": langfuse.TruncateString(conversation, conversationMaxLength, "...")})
 
-	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{
+	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
 		MaxTokens:      1000,
 		ResponseFormat: memoryExtractResponseFormat,
 		GenerationName: "memory.extract",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
 	})
 	if err != nil {
-		slog.Error("memory extraction failed", "error", err)
+		slog.ErrorContext(ctx, "memory extraction failed", "error", err)
 		return nil
 	}
 
@@ -190,11 +192,11 @@ func extractMemoryCandidates(ctx context.Context, llm *LLMClient, conversation s
 	if err := json.Unmarshal([]byte(content), &candidates); err != nil {
 		start, end := strings.Index(content, "["), strings.LastIndex(content, "]")
 		if start < 0 || end <= start {
-			slog.Warn("memory extraction: no valid JSON in response", "response", content)
+			slog.WarnContext(ctx, "memory extraction: no valid JSON in response", "response", content)
 			return nil
 		}
 		if err := json.Unmarshal([]byte(content[start:end+1]), &candidates); err != nil {
-			slog.Error("memory JSON parse failed", "error", err)
+			slog.ErrorContext(ctx, "memory JSON parse failed", "error", err)
 			return nil
 		}
 	}
@@ -241,7 +243,7 @@ func evalDimension(ctx context.Context, llm *LLMClient, promptName, fallback, co
 		PromptVersion:  prompt.Version,
 	})
 	if err != nil {
-		slog.Error("memory eval failed", "prompt", promptName, "error", err)
+		slog.ErrorContext(ctx, "memory eval failed", "prompt", promptName, "error", err)
 		return 3
 	}
 
@@ -284,10 +286,6 @@ func rerankMemory(ctx context.Context, llm *LLMClient, newMemory string, existin
 	return "KEEP"
 }
 
-func getPromptText(name, fallback string, vars map[string]string) string {
-	return getPrompt(name, fallback, vars).Text
-}
-
 func getPrompt(name, fallback string, vars map[string]string) PromptResult {
 	if client := getLangfuseClient(); client != nil {
 		if prompt, err := client.GetPrompt(name, langfuse.WithLabel("production")); err == nil {
@@ -309,7 +307,7 @@ func sendMemoryScoresToLangfuse(ctx context.Context, scores MemoryScores, accept
 
 	span := trace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
-		slog.Warn("memory evaluation: no valid trace context, skipping langfuse score ingestion")
+		slog.WarnContext(ctx, "memory evaluation: no valid trace context, skipping langfuse score ingestion")
 		return
 	}
 	traceID := span.SpanContext().TraceID().String()
@@ -326,7 +324,7 @@ func sendMemoryScoresToLangfuse(ctx context.Context, scores MemoryScores, accept
 		UserID:    userID,
 		Tags:      []string{"memory"},
 	}); err != nil {
-		slog.Error("failed to create langfuse trace for memory scores", "error", err)
+		slog.ErrorContext(ctx, "failed to create langfuse trace for memory scores", "error", err)
 	}
 
 	acceptedValue := 0.0
@@ -343,9 +341,9 @@ func sendMemoryScoresToLangfuse(ctx context.Context, scores MemoryScores, accept
 	}
 
 	if err := client.CreateScoreBatch(sendCtx, lfScores); err != nil {
-		slog.Error("failed to send memory scores to langfuse", "error", err)
+		slog.ErrorContext(ctx, "failed to send memory scores to langfuse", "error", err)
 	} else {
-		slog.Info("sent memory scores to langfuse", "trace_id", traceID, "session_id", convID, "user_id", userID, "accepted", accepted)
+		slog.InfoContext(ctx, "sent memory scores to langfuse", "trace_id", traceID, "session_id", convID, "user_id", userID, "accepted", accepted)
 	}
 }
 

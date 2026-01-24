@@ -90,7 +90,6 @@ export function useChat(conversationId: string | null) {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const setMessages = useChatStore((s) => s.setMessages);
   const setTipMessageId = useChatStore((s) => s.setTipMessageId);
-  const setOptimisticMessageId = useChatStore((s) => s.setOptimisticMessageId);
   const addMessage = useChatStore((s) => s.addMessage);
 
   const messagesSelector = useMemo(() => selectConversationMessages(convId), [convId]);
@@ -239,7 +238,6 @@ export function useChat(conversationId: string | null) {
 
             addMessage(convId, confirmedMessage);
             setTipMessageId(convId, serverId);
-            setOptimisticMessageId(convId, serverId);
             addSpanEvent('message_confirmed', { 'message.server_id': serverMessage.id });
 
             return true;
@@ -255,7 +253,7 @@ export function useChat(conversationId: string | null) {
         }
       ).catch(() => false); // Convert thrown errors to false return
     },
-    [conversationId, convId, tipMessageId, addMessage, setTipMessageId, setOptimisticMessageId]
+    [conversationId, convId, tipMessageId, addMessage, setTipMessageId]
   );
 
   const switchBranch = useCallback(

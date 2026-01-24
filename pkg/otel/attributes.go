@@ -27,9 +27,9 @@ const (
 	AttrTTSLatencyMs        = "tts.latency_ms"
 	AttrWSMessageType       = "ws.message_type"
 	AttrWSDirection         = "ws.direction"
-	// Langfuse prompt tracking
-	AttrPromptName    = "langfuse.prompt.name"
-	AttrPromptVersion = "langfuse.prompt.version"
+	// Langfuse prompt tracking (must be on generation-level spans)
+	AttrPromptName    = "langfuse.observation.prompt.name"
+	AttrPromptVersion = "langfuse.observation.prompt.version"
 	// Langfuse trace naming
 	AttrTraceName = "langfuse.trace.name"
 	// Alicia response type tag for managed evaluators

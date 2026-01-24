@@ -12,7 +12,7 @@ import (
 
 	"github.com/longregen/alicia/pkg/langfuse"
 
-	"go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,10 +26,12 @@ var (
 type PathEvaluator struct {
 	llm      *LLMClient
 	langfuse *langfuse.Client
+	convID   string
+	userID   string
 }
 
-func NewPathEvaluator(llm *LLMClient, lf *langfuse.Client) *PathEvaluator {
-	return &PathEvaluator{llm: llm, langfuse: lf}
+func NewPathEvaluator(llm *LLMClient, lf *langfuse.Client, convID, userID string) *PathEvaluator {
+	return &PathEvaluator{llm: llm, langfuse: lf, convID: convID, userID: userID}
 }
 
 // Evaluate scores a path across 6 Pareto dimensions (all 1-5 star ratings)
@@ -103,9 +105,9 @@ func (e *PathEvaluator) sendScoresToLangfuse(ctx context.Context, scores PathSco
 		return
 	}
 
-	span := trace.SpanFromContext(ctx)
+	span := oteltrace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
-		slog.Warn("pareto evaluation: no valid trace context, skipping langfuse score ingestion")
+		slog.WarnContext(ctx, "pareto evaluation: no valid trace context, skipping langfuse score ingestion")
 		return
 	}
 	traceID := span.SpanContext().TraceID().String()
@@ -128,9 +130,9 @@ func (e *PathEvaluator) sendScoresToLangfuse(ctx context.Context, scores PathSco
 	defer cancel()
 
 	if err := e.langfuse.CreateScoreBatch(sendCtx, lfScores); err != nil {
-		slog.Error("failed to send pareto scores to langfuse", "error", err)
+		slog.ErrorContext(ctx, "failed to send pareto scores to langfuse", "error", err)
 	} else {
-		slog.Info("sent pareto scores to langfuse", "trace_id", traceID)
+		slog.InfoContext(ctx, "sent pareto scores to langfuse", "trace_id", traceID)
 	}
 }
 
@@ -165,11 +167,23 @@ Output format: STARS: [1-5]`
 		"response": truncateForPrompt(trace.FinalAnswer, 1500),
 	}
 
-	promptText := e.getPromptWithFallback(ctx, "alicia/pareto/eval-effectiveness", fallbackPrompt, vars)
+	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-effectiveness", fallbackPrompt, vars)
 
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{GenerationName: "pareto.evaluator"})
+	llmStart := time.Now()
+	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.eval.effectiveness",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("eval-effectiveness-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.effectiveness", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	return parseStarRating(resp.Content)
@@ -196,11 +210,23 @@ Output format: STARS: [1-5]`
 		"answer":   truncateForPrompt(trace.FinalAnswer, 1500),
 	}
 
-	promptText := e.getPromptWithFallback(ctx, "alicia/pareto/eval-quality", fallbackPrompt, vars)
+	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-quality", fallbackPrompt, vars)
 
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{GenerationName: "pareto.evaluator"})
+	llmStart := time.Now()
+	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.eval.quality",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("eval-quality-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.quality", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	return parseStarRating(resp.Content)
@@ -236,11 +262,23 @@ Output format: STARS: [1-5]`
 		"answer":       truncateForPrompt(trace.FinalAnswer, 1000),
 	}
 
-	promptText := e.getPromptWithFallback(ctx, "alicia/pareto/eval-hallucination", fallbackPrompt, vars)
+	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-hallucination", fallbackPrompt, vars)
 
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{GenerationName: "pareto.evaluator"})
+	llmStart := time.Now()
+	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.eval.hallucination",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("eval-hallucination-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.hallucination", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	return parseStarRating(resp.Content)
@@ -267,11 +305,23 @@ Output format: STARS: [1-5]`
 		"answer":   truncateForPrompt(trace.FinalAnswer, 1000),
 	}
 
-	promptText := e.getPromptWithFallback(ctx, "alicia/pareto/eval-specificity", fallbackPrompt, vars)
+	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-specificity", fallbackPrompt, vars)
 
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: promptText}}, nil, ChatOptions{GenerationName: "pareto.evaluator"})
+	llmStart := time.Now()
+	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+		GenerationName: "pareto.eval.specificity",
+		PromptName:     prompt.Name,
+		PromptVersion:  prompt.Version,
+	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
+	}
+	llmEnd := time.Now()
+
+	if prompt.Name != "" {
+		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("eval-specificity-%d", llmStart.UnixNano())
+		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.specificity", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	return parseStarRating(resp.Content)
@@ -319,17 +369,18 @@ func (e *PathEvaluator) generateFeedback(query string, trace *ExecutionTrace, sc
 	return strings.Join(feedbackParts, " ")
 }
 
-func (e *PathEvaluator) getPromptWithFallback(ctx context.Context, promptName string, fallback string, vars map[string]string) string {
-	if e.langfuse == nil {
-		return langfuse.CompileTemplate(fallback, vars)
+func (e *PathEvaluator) getPromptWithFallback(ctx context.Context, promptName string, fallback string, vars map[string]string) PromptResult {
+	if e.langfuse != nil {
+		prompt, err := e.langfuse.GetPromptContext(ctx, promptName, langfuse.WithLabel("production"))
+		if err == nil {
+			return PromptResult{
+				Text:    prompt.Compile(vars),
+				Name:    prompt.Name,
+				Version: prompt.Version,
+			}
+		}
 	}
-
-	prompt, err := e.langfuse.GetPromptContext(ctx, promptName, langfuse.WithLabel("production"))
-	if err != nil {
-		return langfuse.CompileTemplate(fallback, vars)
-	}
-
-	return prompt.Compile(vars)
+	return PromptResult{Text: langfuse.CompileTemplate(fallback, vars)}
 }
 
 func formatToolOutputs(toolCalls []ToolCallRecord) string {

@@ -11,6 +11,8 @@ require (
 	github.com/longregen/alicia/pkg/langfuse v0.0.0
 	github.com/longregen/alicia/pkg/otel v0.0.0
 	github.com/longregen/alicia/shared v0.0.0
+	github.com/pgvector/pgvector-go v0.3.0
+	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
 )
@@ -52,7 +54,7 @@ require (
 	github.com/matoous/go-nanoid/v2 v2.1.0 // indirect
 	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/nats-io/nats.go v1.48.0 // indirect
-	github.com/nats-io/nkeys v0.4.12 // indirect
+	github.com/nats-io/nkeys v0.4.14 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
 	github.com/pion/dtls/v3 v3.0.10 // indirect
@@ -75,10 +77,9 @@ require (
 	github.com/riandyrn/otelchi v0.12.2 // indirect
 	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/twitchtv/twirp v8.1.3+incompatible // indirect
-	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
-	github.com/zeebo/xxh3 v1.0.2 // indirect
+	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/bridges/otelslog v0.14.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.15.0 // indirect
@@ -101,8 +102,8 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260120221211-b8f7ae30c516 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260122232226-8e98ce8d340d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260122232226-8e98ce8d340d // indirect
 	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

@@ -400,7 +400,8 @@ export const api = {
 
   async listNotes(): Promise<NoteResponse[]> {
     const response = await fetchWithErrorHandling(`${API_BASE}/notes`);
-    return handleResponse<NoteResponse[]>(response);
+    const data = await handleResponse<{ notes: NoteResponse[] }>(response);
+    return data.notes || [];
   },
 
   async getNote(id: string): Promise<NoteResponse> {
