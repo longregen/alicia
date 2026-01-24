@@ -1,0 +1,44 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+livekit-debug.log*
+
+# Dependencies
+node_modules
+public/models/
+public/onnx/
+public/*.wasm
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test coverage
+coverage
+test-output.txt
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+screenshots/
+e2e/__screenshots__/
+
+# Old files
+new-components

@@ -1,0 +1,171 @@
+import { create } from 'zustand';
+import { immer } from 'zustand/middleware/immer';
+
+declare global {
+  interface Window {
+    __E2E_CONNECTION_MOCK__?: ConnectionStoreState;
+  }
+}
+
+export enum ConnectionStatus {
+  Disconnected = 'disconnected',
+  Connecting = 'connecting',
+  Connected = 'connected',
+  Reconnecting = 'reconnecting',
+  Error = 'error',
+}
+
+export interface ParticipantInfo {
+  identity: string;
+  name?: string;
+  isSpeaking: boolean;
+  isMuted: boolean;
+  isLocal: boolean;
+}
+
+interface ConnectionStoreState {
+  status: ConnectionStatus;
+  error: string | null;
+  roomName: string | null;
+  roomSid: string | null;
+  participants: Record<string, ParticipantInfo>;
+  localParticipantId: string | null;
+  connectedAt: Date | null;
+  reconnectAttempts: number;
+}
+
+interface ConnectionStoreActions {
+  setConnectionStatus: (status: ConnectionStatus) => void;
+  setError: (error: string | null) => void;
+  setRoomInfo: (roomName: string, roomSid: string) => void;
+  clearRoomInfo: () => void;
+  addParticipant: (participant: ParticipantInfo) => void;
+  removeParticipant: (identity: string) => void;
+  updateParticipant: (identity: string, update: Partial<ParticipantInfo>) => void;
+  setLocalParticipant: (identity: string) => void;
+  setConnectedAt: (date: Date) => void;
+  incrementReconnectAttempts: () => void;
+  resetReconnectAttempts: () => void;
+  clearConnection: () => void;
+  getParticipant: (identity: string) => ParticipantInfo | undefined;
+  getLocalParticipant: () => ParticipantInfo | undefined;
+}
+
+type ConnectionStore = ConnectionStoreState & ConnectionStoreActions;
+
+const initialState: ConnectionStoreState = {
+  status: ConnectionStatus.Disconnected,
+  error: null,
+  roomName: null,
+  roomSid: null,
+  participants: {},
+  localParticipantId: null,
+  connectedAt: null,
+  reconnectAttempts: 0,
+};
+
+// Check for E2E test mock - this allows e2e tests to set initial connection state
+function getInitialState(): ConnectionStoreState {
+  if (typeof window !== 'undefined' && window.__E2E_CONNECTION_MOCK__) {
+    // Create a fresh copy to avoid read-only property errors
+    const mock = window.__E2E_CONNECTION_MOCK__;
+    return {
+      status: mock.status,
+      error: mock.error,
+      roomName: mock.roomName,
+      roomSid: mock.roomSid,
+      participants: { ...mock.participants },
+      localParticipantId: mock.localParticipantId,
+      connectedAt: mock.connectedAt ? new Date(mock.connectedAt) : null,
+      reconnectAttempts: mock.reconnectAttempts,
+    };
+  }
+  return initialState;
+}
+
+export const useConnectionStore = create<ConnectionStore>()(
+  immer((set, get) => ({
+    ...getInitialState(),
+
+    setConnectionStatus: (status) =>
+      set((state) => {
+        state.status = status;
+        if (status === ConnectionStatus.Connected) {
+          state.error = null;
+        }
+      }),
+
+    setError: (error) =>
+      set((state) => {
+        state.error = error;
+        if (error) {
+          state.status = ConnectionStatus.Error;
+        }
+      }),
+
+    setRoomInfo: (roomName, roomSid) =>
+      set((state) => {
+        state.roomName = roomName;
+        state.roomSid = roomSid;
+      }),
+
+    clearRoomInfo: () =>
+      set((state) => {
+        state.roomName = null;
+        state.roomSid = null;
+      }),
+
+    addParticipant: (participant) =>
+      set((state) => {
+        state.participants[participant.identity] = participant;
+      }),
+
+    removeParticipant: (identity) =>
+      set((state) => {
+        delete state.participants[identity];
+      }),
+
+    updateParticipant: (identity, update) =>
+      set((state) => {
+        if (state.participants[identity]) {
+          Object.assign(state.participants[identity], update);
+        }
+      }),
+
+    setLocalParticipant: (identity) =>
+      set((state) => {
+        state.localParticipantId = identity;
+      }),
+
+    setConnectedAt: (date) =>
+      set((state) => {
+        state.connectedAt = date;
+      }),
+
+    incrementReconnectAttempts: () =>
+      set((state) => {
+        state.reconnectAttempts += 1;
+      }),
+
+    resetReconnectAttempts: () =>
+      set((state) => {
+        state.reconnectAttempts = 0;
+      }),
+
+    clearConnection: () =>
+      set((state) => {
+        Object.assign(state, initialState);
+      }),
+
+    getParticipant: (identity) => {
+      return get().participants[identity];
+    },
+
+    getLocalParticipant: () => {
+      const state = get();
+      return state.localParticipantId
+        ? state.participants[state.localParticipantId]
+        : undefined;
+    },
+  }))
+);

@@ -1,0 +1,8 @@
+<voice-interaction-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.alicia.assistant.service.AliciaInteractionSessionService"
+    android:recognitionService="com.alicia.assistant.service.AliciaRecognitionService"
+    android:settingsActivity="com.alicia.assistant.SettingsActivity"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
+    android:supportsLocalInteraction="true" />

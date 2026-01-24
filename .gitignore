@@ -1,0 +1,64 @@
+bin
+book
+data
+dist
+docs/assets/bin
+docs/assets
+docs/bin
+**/node_modules
+**/dist
+
+# Nix
+.direnv
+.envrc
+result
+result-*
+.nix-*
+.pre-commit-config.yaml
+.aider*
+.env
+
+# Docker
+.env.local
+docker-compose.override.yml.local
+backups/
+
+# Go
+/alicia
+mcp/mcp-deno-calc
+mcp/mcp-garden
+mcp/mcp-web
+mcp/garden/garden
+api/api
+agent/agent
+voice/voice
+mcp/web/mcp-web
+mcp/web/web
+mcp/garden/mcp-garden
+mcp/deno-calc/mcp-deno-calc
+mcp/deno-calc/deno-calc
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+frontend/coverage/
+.postgres/
+
+# Binary files
+*.wasm
+.signoz_token
+
+# Frontend public assets (symlinked from Nix store)
+frontend/public/models/
+frontend/public/onnx/
+frontend/public/js/
+frontend/public/sql-wasm.wasm
+
+# MCP server binaries
+cmd/mcp-garden/mcp-garden
+cmd/mcp-web/mcp-web

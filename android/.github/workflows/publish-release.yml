@@ -1,0 +1,214 @@
+name: Publish Release
+
+on:
+  # Triggers after CI workflow completes on main
+  workflow_run:
+    workflows: ["CI - Build and Test"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  publish-release:
+    name: Build, Sign, Tag, and Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Only run if CI succeeded and commit message starts with "release:"
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_commit.message, 'release:')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Extract version from build.gradle.kts
+        id: version
+        run: |
+          BUILD_GRADLE="app/build.gradle.kts"
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' "$BUILD_GRADLE")
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K\d+' "$BUILD_GRADLE")
+
+          NEW_TAG="v${VERSION_NAME}"
+          echo "Version: $VERSION_NAME (code: $VERSION_CODE)"
+          echo "Tag: $NEW_TAG"
+
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check_tag
+        env:
+          NEW_TAG: ${{ steps.version.outputs.new_tag }}
+        run: |
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists, skipping release"
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $NEW_TAG does not exist, proceeding with release"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure Git
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up JDK 17
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+          gradle-home-cache-cleanup: true
+
+      - name: Grant execute permission for gradlew
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: chmod +x gradlew
+
+      - name: Build debug APKs
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          ./gradlew assembleDebug \
+            --parallel \
+            --build-cache \
+            --no-daemon \
+            --stacktrace
+
+      - name: Build release APKs
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          ./gradlew assembleRelease \
+            --parallel \
+            --build-cache \
+            --no-daemon \
+            --stacktrace
+
+      - name: List generated APKs
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          echo "Generated Debug APKs:"
+          find app/build/outputs/apk/debug -name "*.apk" -exec ls -lh {} \;
+          echo "Generated Release APKs:"
+          find app/build/outputs/apk/release -name "*.apk" -exec ls -lh {} \;
+
+      - name: Decode and setup keystore
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+
+      - name: Sign release APKs
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          cd app/build/outputs/apk/release
+          for apk in *.apk; do
+            echo "Signing $apk..."
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore $GITHUB_WORKSPACE/release.keystore \
+              -storepass "${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+              "$apk" "${{ secrets.RELEASE_KEY_ALIAS }}"
+          done
+          ls -lh
+
+      - name: Rename debug APKs with version
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.new_tag }}"
+          cd app/build/outputs/apk/debug
+          for apk in *.apk; do
+            # Extract architecture from filename (e.g., app-arm64-v8a-debug.apk -> arm64-v8a)
+            ARCH=$(echo "$apk" | sed -E 's/app-(.+)-debug\.apk/\1/')
+            if [ "$ARCH" = "$apk" ]; then
+              # Universal APK without architecture suffix
+              mv "$apk" "Alicia-${VERSION}-DEBUG.apk"
+            else
+              mv "$apk" "Alicia-${VERSION}-DEBUG-${ARCH}.apk"
+            fi
+          done
+          ls -lh
+
+      - name: Rename release APKs with version
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.new_tag }}"
+          cd app/build/outputs/apk/release
+          for apk in *.apk; do
+            # Extract architecture from filename (e.g., app-arm64-v8a-release-unsigned.apk -> arm64-v8a)
+            ARCH=$(echo "$apk" | sed -E 's/app-(.+)-release(-unsigned)?\.apk/\1/')
+            if [ "$ARCH" = "$apk" ]; then
+              # Universal APK without architecture suffix
+              mv "$apk" "Alicia-${VERSION}.apk"
+            else
+              mv "$apk" "Alicia-${VERSION}-${ARCH}.apk"
+            fi
+          done
+          ls -lh
+
+      - name: Collect APKs for release
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        id: collect_apks
+        run: |
+          mkdir -p release-apks
+          cp app/build/outputs/apk/debug/*.apk release-apks/
+          cp app/build/outputs/apk/release/*.apk release-apks/
+          echo "Collected APKs for release:"
+          ls -lh release-apks/
+          # Create file list for release action
+          FILES=$(find release-apks -name "*.apk" -printf "%p\n" | tr '\n' ',' | sed 's/,$//')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        env:
+          NEW_TAG: ${{ steps.version.outputs.new_tag }}
+        run: |
+          git tag -a "$NEW_TAG" -m "Release ${NEW_TAG}
+
+          Workflow: ${{ github.workflow }}
+          Run ID: ${{ github.run_id }}
+          Commit: ${{ github.sha }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          git push origin "$NEW_TAG"
+          echo "Created and pushed tag: $NEW_TAG"
+
+      - name: Create Draft Pre-Release
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.new_tag }}
+          draft: true
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-apks/*.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        if: steps.check_tag.outputs.tag_exists != 'true'
+        env:
+          NEW_TAG: ${{ steps.version.outputs.new_tag }}
+        run: |
+          echo "## Release ${NEW_TAG} Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tag created and pushed" >> $GITHUB_STEP_SUMMARY
+          echo "Draft release created with APKs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next step:** Review and publish the draft release" >> $GITHUB_STEP_SUMMARY

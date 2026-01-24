@@ -1,0 +1,362 @@
+@import "tailwindcss";
+
+/*
+ * Alicia Design System - Tailwind v4
+ * Modern, minimal design with OKLCH colors
+ */
+
+@theme {
+  /* Core color palette - OKLCH (dark mode default) */
+  --background: oklch(0.12 0.005 250);
+  --foreground: oklch(0.95 0 0);
+
+  /* Surface hierarchy */
+  --card: oklch(0.15 0.005 250);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.17 0.005 250);
+  --popover-foreground: oklch(0.95 0 0);
+  --elevated: oklch(0.19 0.005 250);
+
+  /* Interactive colors */
+  --primary: oklch(0.65 0.18 250);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.22 0.005 250);
+  --secondary-foreground: oklch(0.9 0 0);
+  --accent: oklch(0.6 0.15 180);
+  --accent-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.25 0.005 250);
+  --muted-foreground: oklch(0.6 0 0);
+
+  /* Semantic colors */
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.6 0.15 160);
+  --success-foreground: oklch(0.98 0 0);
+  --warning: oklch(0.7 0.15 80);
+  --warning-foreground: oklch(0.15 0 0);
+
+  /* UI elements */
+  --border: oklch(0.25 0.005 250);
+  --input: oklch(0.18 0.005 250);
+  --ring: oklch(0.65 0.18 250);
+  --radius: 0.625rem;
+
+  /* Sidebar */
+  --sidebar: oklch(0.1 0.005 250);
+  --sidebar-foreground: oklch(0.9 0 0);
+  --sidebar-accent: oklch(0.18 0.005 250);
+
+  /* Voice states */
+  --voice-active: oklch(0.6 0.18 160);
+  --voice-listening: oklch(0.65 0.18 250);
+  --voice-processing: oklch(0.7 0.15 80);
+
+  /* Feature-specific colors */
+  --reasoning: oklch(0.6 0.18 300);
+  --tool-use: oklch(0.6 0.16 220);
+  --tool-result: oklch(0.7 0.14 90);
+
+  /* Animations */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-subtle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  --animate-fade-in: fade-in 0.15s ease-out;
+  --animate-slide-up: slide-up 0.2s ease-out;
+  --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
+}
+
+@theme inline {
+  /* Tailwind color mappings */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-elevated: var(--elevated);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-voice-active: var(--voice-active);
+  --color-voice-listening: var(--voice-listening);
+  --color-voice-processing: var(--voice-processing);
+  --color-reasoning: var(--reasoning);
+  --color-tool-use: var(--tool-use);
+  --color-tool-result: var(--tool-result);
+
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.2);
+  --shadow-md: 0 4px 8px oklch(0 0 0 / 0.3);
+  --shadow-lg: 0 8px 16px oklch(0 0 0 / 0.4);
+}
+
+/* Base styles */
+@layer base {
+  html {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  /* Light mode */
+  html:not(.dark) {
+    --background: oklch(0.98 0 0);
+    --foreground: oklch(0.15 0.005 250);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.15 0.005 250);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.15 0.005 250);
+    --elevated: oklch(0.99 0 0);
+    --primary: oklch(0.5 0.2 250);
+    --primary-foreground: oklch(0.98 0 0);
+    --secondary: oklch(0.95 0.005 250);
+    --secondary-foreground: oklch(0.15 0.005 250);
+    --accent: oklch(0.5 0.15 180);
+    --accent-foreground: oklch(0.98 0 0);
+    --muted: oklch(0.93 0.005 250);
+    --muted-foreground: oklch(0.45 0.005 250);
+    --destructive: oklch(0.5 0.2 25);
+    --destructive-foreground: oklch(0.98 0 0);
+    --success: oklch(0.5 0.15 160);
+    --success-foreground: oklch(0.98 0 0);
+    --warning: oklch(0.6 0.15 80);
+    --warning-foreground: oklch(0.15 0 0);
+    --border: oklch(0.9 0.005 250);
+    --input: oklch(0.95 0.005 250);
+    --ring: oklch(0.5 0.2 250);
+    --sidebar: oklch(0.97 0 0);
+    --sidebar-foreground: oklch(0.15 0.005 250);
+    --sidebar-accent: oklch(0.95 0.005 250);
+  }
+
+  /* Minimal scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-muted/50 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted; }
+}
+
+/* Utility classes */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  /* Message bubble utilities */
+  .message-max-width {
+    @apply max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl;
+  }
+
+  /* Semantic text colors */
+  .text-default {
+    @apply text-foreground;
+  }
+  .text-muted {
+    @apply text-muted-foreground;
+  }
+
+  /* Surface backgrounds */
+  .bg-surface {
+    @apply bg-card;
+  }
+  .bg-accent-subtle {
+    @apply bg-primary/15;
+  }
+
+  /* Common layout patterns */
+  .flex-center {
+    @apply flex items-center justify-center;
+  }
+  .flex-between {
+    @apply flex items-center justify-between;
+  }
+  .flex-col-center {
+    @apply flex flex-col items-center;
+  }
+  .stack {
+    @apply flex flex-col;
+  }
+  .stack-2 {
+    @apply flex flex-col gap-2;
+  }
+  .stack-4 {
+    @apply flex flex-col gap-4;
+  }
+  .row {
+    @apply flex items-center;
+  }
+  .row-2 {
+    @apply flex items-center gap-2;
+  }
+  .row-3 {
+    @apply flex items-center gap-3;
+  }
+  .row-4 {
+    @apply flex items-center gap-4;
+  }
+
+  /* Legacy layout aliases (for backward compatibility) */
+  .layout-between { @apply flex items-center justify-between; }
+  .layout-between-gap { @apply flex items-center justify-between gap-2; }
+  .layout-center { @apply flex items-center; }
+  .layout-center-gap { @apply flex items-center gap-2; }
+  .layout-center-gap-4 { @apply flex items-center gap-4; }
+  .layout-stack { @apply flex flex-col; }
+  .layout-stack-gap { @apply flex flex-col gap-2; }
+  .layout-stack-gap-4 { @apply flex flex-col gap-4; }
+  .layout-vcenter { @apply flex flex-col items-center; }
+  .layout-vcenter-gap { @apply flex flex-col items-center gap-4; }
+}
+
+/* Component styles */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+  .btn-ghost {
+    @apply bg-transparent hover:bg-muted text-foreground;
+  }
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  }
+  .btn-icon {
+    @apply p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full px-3 py-2 bg-input rounded-md text-foreground text-sm border-0;
+    @apply placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-ring;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .input-ghost {
+    @apply bg-transparent border border-border focus:border-ring;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-card text-card-foreground rounded-lg;
+  }
+  .card-bordered {
+    @apply border border-border;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-default {
+    @apply bg-muted text-muted-foreground;
+  }
+  .badge-success {
+    @apply bg-success/15 text-success;
+  }
+  .badge-warning {
+    @apply bg-warning/15 text-warning;
+  }
+  .badge-destructive {
+    @apply bg-destructive/15 text-destructive;
+  }
+  .badge-primary {
+    @apply bg-primary/15 text-primary;
+  }
+
+  /* Status indicators */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  .status-success {
+    @apply bg-success;
+  }
+  .status-warning {
+    @apply bg-warning;
+  }
+  .status-error {
+    @apply bg-destructive;
+  }
+  .status-muted {
+    @apply bg-muted-foreground;
+  }
+
+  /* Tabs */
+  .tab {
+    @apply px-4 py-2.5 text-sm font-medium text-muted-foreground cursor-pointer transition-colors;
+    @apply hover:text-foreground;
+    @apply border-b-2 border-transparent;
+  }
+  .tab-active {
+    @apply text-foreground border-primary;
+  }
+
+  /* Panel/Section */
+  .panel {
+    @apply bg-card rounded-lg p-4;
+  }
+  .panel-header {
+    @apply text-sm font-medium text-foreground mb-3;
+  }
+
+  /* Connection status bar */
+  .status-bar {
+    @apply flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium;
+  }
+  .status-bar-success {
+    @apply bg-success/10 text-success border-b border-success/20;
+  }
+  .status-bar-warning {
+    @apply bg-warning/10 text-warning border-b border-warning/20;
+  }
+  .status-bar-error {
+    @apply bg-destructive/10 text-destructive border-b border-destructive/20;
+  }
+}

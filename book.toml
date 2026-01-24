@@ -1,0 +1,13 @@
+[book]
+authors = ["Claude"]
+language = "en"
+multilingual = false
+src = "docs"
+title = "Alicia"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+site-url = "/"
+additional-js = ["docs/bin/assets/mermaid.min.js", "docs/bin/assets/mermaid-init.js"]

@@ -1,0 +1,126 @@
+name: Android Manual Release
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump-version:
+    name: Bump Version and Create PR
+    runs-on: ubuntu-latest
+
+    outputs:
+      new_version_code: ${{ steps.bump.outputs.version_code }}
+      new_version_name: ${{ steps.bump.outputs.version_name }}
+      pr_number: ${{ steps.create-pr.outputs.pull-request-number }}
+      branch_name: ${{ steps.bump.outputs.branch_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Bump version
+        id: bump
+        working-directory: android
+        run: |
+          BUILD_GRADLE="app/build.gradle.kts"
+
+          # Extract current versions
+          CURRENT_VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K\d+' "$BUILD_GRADLE")
+          CURRENT_VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' "$BUILD_GRADLE")
+
+          # Validate version format
+          if ! [[ "$CURRENT_VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Invalid version format '$CURRENT_VERSION_NAME'. Expected X.Y.Z format."
+            exit 1
+          fi
+
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION_NAME"
+
+          # Bump based on type
+          case "${{ github.event.inputs.bump_type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION_CODE=$((CURRENT_VERSION_CODE + 1))
+          NEW_VERSION_NAME="${MAJOR}.${MINOR}.${PATCH}"
+          BRANCH_NAME="release/v${NEW_VERSION_NAME}"
+
+          # Update build.gradle.kts
+          sed -i "s|versionCode = $CURRENT_VERSION_CODE|versionCode = $NEW_VERSION_CODE|" "$BUILD_GRADLE"
+          sed -i "s|versionName = \"$CURRENT_VERSION_NAME\"|versionName = \"$NEW_VERSION_NAME\"|" "$BUILD_GRADLE"
+
+          echo "version_code=$NEW_VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "version_name=$NEW_VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+          echo "Bumped version: $CURRENT_VERSION_NAME ($CURRENT_VERSION_CODE) -> $NEW_VERSION_NAME ($NEW_VERSION_CODE)"
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6.1.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.bump.outputs.branch_name }}
+          base: main
+          commit-message: "release: bump version to ${{ steps.bump.outputs.version_name }} (${{ steps.bump.outputs.version_code }})"
+          title: "release: Alicia Android v${{ steps.bump.outputs.version_name }}"
+          body: |
+            ## Release v${{ steps.bump.outputs.version_name }}
+
+            This PR bumps the Android app version:
+            - Version Name: `${{ steps.bump.outputs.version_name }}`
+            - Version Code: `${{ steps.bump.outputs.version_code }}`
+
+            ### Checklist
+            - [ ] Review version bump
+            - [ ] Verify CI passes
+            - [ ] Merge when ready
+          labels: |
+            release
+            android
+
+      - name: Enable auto-merge
+        if: steps.create-pr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: |
+          gh pr merge "$PR_NUMBER" --auto --squash || echo "Auto-merge not available, PR requires manual merge"
+
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Name | ${{ steps.bump.outputs.version_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Code | ${{ steps.bump.outputs.version_code }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ steps.bump.outputs.branch_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | #${{ steps.create-pr.outputs.pull-request-number }} |" >> $GITHUB_STEP_SUMMARY

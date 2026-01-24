@@ -1,0 +1,382 @@
+import { useState } from 'react';
+import { useLocation } from 'wouter';
+import { MCPSettings } from './MCPSettings';
+import { Card, CardHeader, CardTitle, CardContent } from './atoms/Card';
+import { Switch } from './atoms/Switch';
+import { Slider } from './atoms/Slider';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './atoms/Select';
+import { Kbd, KbdGroup } from './atoms/Kbd';
+import Button from './atoms/Button';
+import { Input } from './atoms/Input';
+import { Label } from './atoms/Label';
+import StarRating from './atoms/StarRating';
+import { usePreferences } from '../hooks/usePreferences';
+import { useSidebarStore } from '../stores/sidebarStore';
+import { getCustomUserId, setUserId } from '../utils/deviceId';
+
+interface SettingsProps {
+  defaultTab?: SettingsTab;
+}
+
+export type SettingsTab = 'mcp' | 'preferences';
+
+export function Settings({ defaultTab = 'mcp' }: SettingsProps) {
+  const [, navigate] = useLocation();
+  const openSidebar = useSidebarStore((state) => state.setOpen);
+
+  const setActiveTab = (tab: SettingsTab) => {
+    navigate(`/settings/${tab}`);
+  };
+
+  const {
+    theme,
+    audio_output_enabled,
+    voice_speed,
+    memory_min_importance,
+    memory_min_historical,
+    memory_min_personal,
+    memory_min_factual,
+    memory_retrieval_count,
+    max_tokens,
+    pareto_target_score,
+    pareto_max_generations,
+    pareto_branches_per_gen,
+    pareto_archive_size,
+    pareto_enable_crossover,
+    confirm_delete_memory,
+    show_relevance_scores,
+    updatePreference,
+  } = usePreferences();
+
+  const [userIdInput, setUserIdInput] = useState(getCustomUserId() || '');
+
+  const handleSaveUserId = () => {
+    setUserId(userIdInput.trim() || null);
+    window.location.reload();
+  };
+
+  return (
+    <div className="layout-stack h-full bg-background">
+      {/* Header */}
+      <div className="p-6 md:px-8 border-b border-border bg-card flex items-center gap-3">
+        <button
+          onClick={() => openSidebar(true)}
+          className="lg:hidden p-2 -ml-2 hover:bg-elevated rounded-md transition-colors"
+          aria-label="Open sidebar"
+        >
+          <svg className="w-6 h-6 text-default" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <h1 className="m-0 text-3xl md:text-[28px] font-semibold text-foreground">Settings</h1>
+      </div>
+
+      {/* Tab navigation */}
+      <div className="bg-card border-b border-border overflow-x-auto">
+        <div className="flex flex-col md:flex-row md:gap-1 md:px-8">
+          <button
+            className={`tab whitespace-nowrap ${defaultTab === 'mcp' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('mcp')}
+          >
+            MCP
+          </button>
+          <button
+            className={`tab whitespace-nowrap ${defaultTab === 'preferences' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('preferences')}
+          >
+            Preferences
+          </button>
+        </div>
+      </div>
+
+      {/* Content area */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="mb-8 last:mb-0">
+          {defaultTab === 'mcp' && <MCPSettings />}
+          {defaultTab === 'preferences' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Account Card - Cross-device sync */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Account</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="user-id">User ID</Label>
+                    <p className="text-xs text-muted">
+                      Set a custom user ID to sync conversations across devices.
+                      Use the same ID on all your devices.
+                    </p>
+                    <Input
+                      id="user-id"
+                      type="text"
+                      value={userIdInput}
+                      onChange={(e) => setUserIdInput(e.target.value)}
+                      placeholder="Enter user ID (e.g., your email)"
+                    />
+                  </div>
+                  <Button onClick={handleSaveUserId} className="w-full">
+                    Save & Reload
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Voice & Audio Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Voice & Audio</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="layout-between">
+                    <Label htmlFor="audio-output">Audio Output</Label>
+                    <Switch
+                      id="audio-output"
+                      checked={audio_output_enabled}
+                      onCheckedChange={(v) => updatePreference('audio_output_enabled', v)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="voice-speed">Voice Speed: {voice_speed.toFixed(1)}x</Label>
+                    <Slider
+                      id="voice-speed"
+                      min={0.5}
+                      max={2.0}
+                      step={0.1}
+                      value={[voice_speed]}
+                      onValueChange={(values) => updatePreference('voice_speed', values[0])}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Memory Thresholds Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Memory Thresholds</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted -mt-2">
+                    Minimum rating required for the agent to create memories of each type.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="layout-between">
+                      <Label>Importance</Label>
+                      <StarRating
+                        rating={memory_min_importance}
+                        onRate={(v) => updatePreference('memory_min_importance', v === 0 ? null : v)}
+                        compact
+                      />
+                    </div>
+                    <div className="layout-between">
+                      <Label>Historical</Label>
+                      <StarRating
+                        rating={memory_min_historical}
+                        onRate={(v) => updatePreference('memory_min_historical', v === 0 ? null : v)}
+                        compact
+                      />
+                    </div>
+                    <div className="layout-between">
+                      <Label>Personal</Label>
+                      <StarRating
+                        rating={memory_min_personal}
+                        onRate={(v) => updatePreference('memory_min_personal', v === 0 ? null : v)}
+                        compact
+                      />
+                    </div>
+                    <div className="layout-between">
+                      <Label>Factual</Label>
+                      <StarRating
+                        rating={memory_min_factual}
+                        onRate={(v) => updatePreference('memory_min_factual', v === 0 ? null : v)}
+                        compact
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Agent Settings Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Agent</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="memory-count">Memories to Retrieve</Label>
+                    <p className="text-xs text-muted">
+                      Number of relevant memories to include in each response.
+                    </p>
+                    <Input
+                      id="memory-count"
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={memory_retrieval_count}
+                      onChange={(e) => updatePreference('memory_retrieval_count', Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="max-tokens">Max Response Tokens</Label>
+                    <p className="text-xs text-muted">
+                      Maximum length of agent responses.
+                    </p>
+                    <Input
+                      id="max-tokens"
+                      type="number"
+                      min={256}
+                      max={16384}
+                      step={256}
+                      value={max_tokens}
+                      onChange={(e) => updatePreference('max_tokens', Math.max(256, Math.min(16384, parseInt(e.target.value) || 256)))}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Pareto Exploration Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pareto Exploration</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-muted -mt-2">
+                    Multi-objective optimization for response quality.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="pareto-target">Target Score: {pareto_target_score.toFixed(1)}</Label>
+                    <Slider
+                      id="pareto-target"
+                      min={0.5}
+                      max={5.0}
+                      step={0.1}
+                      value={[pareto_target_score]}
+                      onValueChange={(values) => updatePreference('pareto_target_score', values[0])}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pareto-generations">Max Generations</Label>
+                    <Input
+                      id="pareto-generations"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={pareto_max_generations}
+                      onChange={(e) => updatePreference('pareto_max_generations', Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pareto-branches">Branches Per Generation</Label>
+                    <Input
+                      id="pareto-branches"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={pareto_branches_per_gen}
+                      onChange={(e) => updatePreference('pareto_branches_per_gen', Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pareto-archive">Archive Size</Label>
+                    <Input
+                      id="pareto-archive"
+                      type="number"
+                      min={10}
+                      max={200}
+                      value={pareto_archive_size}
+                      onChange={(e) => updatePreference('pareto_archive_size', Math.max(10, Math.min(200, parseInt(e.target.value) || 10)))}
+                    />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="pareto-crossover">Enable Crossover</Label>
+                    <Switch
+                      id="pareto-crossover"
+                      checked={pareto_enable_crossover}
+                      onCheckedChange={(v) => updatePreference('pareto_enable_crossover', v)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Memory UI Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Memory UI</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="layout-between">
+                    <Label htmlFor="confirm-delete">Confirm before deleting</Label>
+                    <Switch
+                      id="confirm-delete"
+                      checked={confirm_delete_memory}
+                      onCheckedChange={(v) => updatePreference('confirm_delete_memory', v)}
+                    />
+                  </div>
+                  <div className="layout-between">
+                    <Label htmlFor="show-relevance">Show relevance scores</Label>
+                    <Switch
+                      id="show-relevance"
+                      checked={show_relevance_scores}
+                      onCheckedChange={(v) => updatePreference('show_relevance_scores', v)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Appearance Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="theme-select">Theme</Label>
+                    <Select value={theme} onValueChange={(v) => updatePreference('theme', v as 'light' | 'dark' | 'system')}>
+                      <SelectTrigger id="theme-select">
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Keyboard Shortcuts Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Keyboard Shortcuts</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="layout-between">
+                    <span className="text-sm text-muted">Toggle sidebar</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>B</Kbd>
+                    </KbdGroup>
+                  </div>
+                  <div className="layout-between">
+                    <span className="text-sm text-muted">Search conversations</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>K</Kbd>
+                    </KbdGroup>
+                  </div>
+                  <div className="layout-between">
+                    <span className="text-sm text-muted">Send message</span>
+                    <KbdGroup>
+                      <Kbd>⌘</Kbd>
+                      <Kbd>Enter</Kbd>
+                    </KbdGroup>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

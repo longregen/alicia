@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# Start all Alicia services in a tmux session with 5 panes
+# Layout:
+#   ┌──────────────┬──────────────┐
+#   │              │  Web (25%)   │
+#   │     API      ├──────────────┤
+#   │              │              │
+#   ├──────────────┤              │
+#   │              │   Monitor    │
+#   │    Agent     │    (75%)     │
+#   │              │              │
+#   ├──────────────┤              │
+#   │  Voice (25%) │              │
+#   └──────────────┴──────────────┘
+
+set -e
+
+# Enter nix shell if not already in one
+if [ -z "$IN_NIX_SHELL" ]; then
+    exec nix develop --command "$0" "$@"
+fi
+
+SESSION="alicia"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PGDATA="$PROJECT_DIR/.postgres"
+PGPORT=5555
+
+# --- PostgreSQL Setup ---
+
+if ! pg_isready -h "$PGDATA" -p "$PGPORT" -q 2>/dev/null; then
+    # Initialize if needed
+    if [ ! -d "$PGDATA" ]; then
+        echo "Initializing database..."
+        initdb -D "$PGDATA" --auth=trust --no-locale --encoding=UTF8 --username=postgres >/dev/null
+        echo "host all all 0.0.0.0/0 trust" >> "$PGDATA/pg_hba.conf"
+        echo "host all all ::/0 trust" >> "$PGDATA/pg_hba.conf"
+    fi
+
+    pg_ctl -D "$PGDATA" -l "$PGDATA/postgres.log" -o "-k $PGDATA -p $PGPORT -c listen_addresses='0.0.0.0'" start >/dev/null
+
+    for i in {1..30}; do
+        pg_isready -h "$PGDATA" -p "$PGPORT" -q 2>/dev/null && break
+        sleep 0.5
+    done
+
+    if ! pg_isready -h "$PGDATA" -p "$PGPORT" -q 2>/dev/null; then
+        echo "ERROR: PostgreSQL failed to start (see $PGDATA/postgres.log)"
+        exit 1
+    fi
+fi
+
+echo "PostgreSQL ready."
+
+# --- Database Setup ---
+
+export PGHOST="$PGDATA"
+export PGPORT="$PGPORT"
+export PGUSER="postgres"
+
+# Create database if it doesn't exist
+if ! psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw alicia; then
+    echo "Creating database 'alicia'..."
+    createdb alicia
+fi
+
+# Run all migrations (idempotent)
+for f in "$PROJECT_DIR"/api/migrations/*.sql; do
+    psql -q -d alicia -f "$f" 2>/dev/null || true
+done
+echo "Migrations applied."
+
+# --- Embedding Function Setup ---
+EMBED_URL="" EMBED_MODEL="" EMBED_DIMS=""
+if [ -f "$PROJECT_DIR/agent/.env" ]; then
+    EMBED_URL=$(grep -E '^LLM_URL=' "$PROJECT_DIR/agent/.env" | cut -d= -f2-)
+    EMBED_MODEL=$(grep -E '^EMBEDDING_MODEL=' "$PROJECT_DIR/agent/.env" | cut -d= -f2-)
+    EMBED_DIMS=$(grep -E '^EMBEDDING_DIMENSIONS=' "$PROJECT_DIR/agent/.env" | cut -d= -f2-)
+fi
+EMBED_URL="${EMBED_URL:-http://localhost:8000/v1}"
+EMBED_MODEL="${EMBED_MODEL:-text-embedding-3-small}"
+EMBED_DIMS="${EMBED_DIMS:-1536}"
+
+psql -q -d alicia -c "
+CREATE OR REPLACE FUNCTION query_embedding(
+    input_text TEXT,
+    url TEXT DEFAULT '${EMBED_URL}/embeddings',
+    model TEXT DEFAULT '${EMBED_MODEL}',
+    dims INT DEFAULT ${EMBED_DIMS}
+) RETURNS vector AS \$\$
+DECLARE
+    response http_response;
+    embedding_json jsonb;
+BEGIN
+    SELECT * INTO response FROM http_post(
+        url,
+        json_build_object('input', input_text, 'model', model)::text,
+        'application/json'
+    );
+
+    IF response.status != 200 THEN
+        RAISE EXCEPTION 'Embedding API returned status %: %', response.status, response.content;
+    END IF;
+
+    embedding_json := response.content::jsonb->'data'->0->'embedding';
+    RETURN embedding_json::text::vector(dims);
+END;
+\$\$ LANGUAGE plpgsql;
+"
+echo "query_embedding() configured ($EMBED_MODEL @ $EMBED_URL)"
+
+# --- Build MCP tools & monitor ---
+
+echo "Building MCP tools..."
+(cd "$PROJECT_DIR/mcp" && go build -o mcp-web ./web && go build -o mcp-garden ./garden && go build -o mcp-deno-calc ./deno-calc)
+export PATH="$PROJECT_DIR/mcp:$PATH"
+
+# --- tmux Session ---
+
+echo "Starting services..."
+
+# Kill existing session if it exists
+tmux kill-session -t "$SESSION" 2>/dev/null || true
+
+# Helper to run commands in nix shell
+run_in_nix() {
+    echo "cd $PROJECT_DIR && nix develop --command bash -lc '$1'"
+}
+
+# Create new session in project root
+tmux new-session -d -s "$SESSION" -c "$PROJECT_DIR"
+
+# Split left/right
+tmux split-window -h -t "$SESSION" -c "$PROJECT_DIR"
+
+# --- Left side (currently right pane is selected, go left) ---
+tmux select-pane -t "$SESSION" -L
+
+# Split off Voice at bottom (25% of left)
+tmux split-window -v -t "$SESSION" -p 25 -c "$PROJECT_DIR"
+
+# Go back up, split API/Agent (50/50 of the remaining 75%)
+tmux select-pane -t "$SESSION" -U
+tmux split-window -v -t "$SESSION" -p 50 -c "$PROJECT_DIR"
+
+# --- Right side ---
+tmux select-pane -t "$SESSION" -R
+
+# Split off Monitor at bottom (75% of right, Web keeps 25% on top)
+tmux split-window -v -t "$SESSION" -p 75 -c "$PROJECT_DIR"
+
+# --- Send commands ---
+
+# Top-left: API
+tmux select-pane -t "$SESSION" -L
+tmux select-pane -t "$SESSION" -U
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd api && set -a; source .env 2>/dev/null; set +a; exec go run .')" C-m
+
+# Middle-left: Agent
+tmux select-pane -t "$SESSION" -D
+tmux send-keys -t "$SESSION" "sleep 2; $(run_in_nix "cd agent && set -a; source .env 2>/dev/null; set +a; PATH=$PROJECT_DIR/mcp:\$PATH go run .")" C-m
+
+# Bottom-left: Voice
+tmux select-pane -t "$SESSION" -D
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd voice && set -a; source .env 2>/dev/null; set +a; exec go run .')" C-m
+
+# Top-right: Web
+tmux select-pane -t "$SESSION" -R
+tmux select-pane -t "$SESSION" -U
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd web && npm run dev')" C-m
+
+# Bottom-right: Monitor
+tmux select-pane -t "$SESSION" -D
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd monitor && set -a; source .env 2>/dev/null; set +a; exec go run .')" C-m
+
+# Select monitor pane (bottom-right)
+
+echo "Started Alicia services in tmux session '$SESSION'"
+echo "Attach with: tmux attach -t $SESSION"
+
+# Attach to session
+tmux attach -t "$SESSION"
