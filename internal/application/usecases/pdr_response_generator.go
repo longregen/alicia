@@ -15,13 +15,13 @@ import (
 // DefaultPDRResponseConfig returns sensible defaults for PDR response generation.
 func DefaultPDRResponseConfig() *ports.PDRResponseConfig {
 	return &ports.PDRResponseConfig{
-		Rounds:                 2,     // Two refinement rounds
-		ParallelDrafts:         3,     // Three parallel drafts per round
-		WorkspaceTokenLimit:    1024,  // ~1K tokens for distilled workspace
-		MaxToolLoopIterations:  5,     // Tool loop budget per draft
-		MaxToolCalls:           50,    // Total tool call budget
-		MaxLLMCalls:            30,    // Total LLM call budget
-		ExecutionTimeoutMs:     90000, // 90 seconds
+		Rounds:                  2,     // Two refinement rounds
+		ParallelDrafts:          3,     // Three parallel drafts per round
+		WorkspaceTokenLimit:     1024,  // ~1K tokens for distilled workspace
+		MaxToolLoopIterations:   5,     // Tool loop budget per draft
+		MaxToolCalls:            50,    // Total tool call budget
+		MaxLLMCalls:             30,    // Total LLM call budget
+		ExecutionTimeoutMs:      90000, // 90 seconds
 		EnableParallelExecution: true,
 	}
 }
@@ -52,10 +52,10 @@ type PDRResponseGenerator struct {
 
 // draftResult holds the output of a single parallel draft execution.
 type draftResult struct {
-	answer    string
-	trace     *models.ExecutionTrace
-	err       error
-	draftIdx  int
+	answer   string
+	trace    *models.ExecutionTrace
+	err      error
+	draftIdx int
 }
 
 // NewPDRResponseGenerator creates a new PDR response generator.
@@ -870,7 +870,7 @@ func (g *PDRResponseGenerator) extractAndStoreMemories(ctx context.Context, mess
 		MessageID:        message.ID,
 	})
 	if err != nil {
-		log.Printf("[PDR] warning: failed to extract memories: %v", err)
+		log.Printf("[PDR] WARNING: failed to extract memories: %v", err)
 		return
 	}
 
