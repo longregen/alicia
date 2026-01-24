@@ -470,6 +470,38 @@ type ParetoResponseConfig struct {
 	MaxToolLoopIterations int
 }
 
+// PDRResponseConfig configures the Parallel-Distill-Refine response generation.
+// Based on "Rethinking Thinking Tokens" (arXiv:2510.01123) which decouples
+// sequential budget (latency) from total compute budget through a three-phase cycle:
+// Parallel → Distill → Refine.
+type PDRResponseConfig struct {
+	// Rounds is the number of PDR refinement rounds (R in the paper).
+	// Each round generates parallel drafts, distills them, and refines.
+	Rounds int
+
+	// ParallelDrafts is the number of parallel drafts per round (M_r in the paper).
+	ParallelDrafts int
+
+	// WorkspaceTokenLimit is the maximum tokens for the distilled workspace (κ in the paper).
+	// This bounds the context passed to the refine phase, controlling latency.
+	WorkspaceTokenLimit int
+
+	// MaxToolLoopIterations limits the number of LLM-tool loop iterations per draft.
+	MaxToolLoopIterations int
+
+	// MaxToolCalls limits the total number of tool calls across all drafts (budget).
+	MaxToolCalls int
+
+	// MaxLLMCalls limits the total number of LLM calls across all phases (budget).
+	MaxLLMCalls int
+
+	// ExecutionTimeoutMs is the timeout for the entire PDR execution in milliseconds.
+	ExecutionTimeoutMs int64
+
+	// EnableParallelExecution enables concurrent draft generation within each round.
+	EnableParallelExecution bool
+}
+
 // ParetoResponseOutput contains the result of Pareto-based response generation.
 type ParetoResponseOutput struct {
 	// Message is the created assistant message

@@ -233,29 +233,55 @@ func runServer(ctx context.Context) error {
 		log.Println("LiveKit not configured - voice features unavailable")
 	}
 
-	// Initialize ParetoResponseGenerator - the unified way to generate responses
-	paretoResponseGenerator := usecases.NewParetoResponseGenerator(
-		llmService,
-		llmService, // Use same LLM for reflection (could use a stronger model here)
-		messageRepo,
-		conversationRepo,
-		toolRepo,
-		sentenceRepo,
-		toolUseRepo,
-		reasoningStepRepo,
-		memoryUsageRepo,
-		toolService,
-		memoryService,
-		idGen,
-		txManager,
-		wsBroadcaster,
-		nil, // Use default config
-	)
-	log.Println("ParetoResponseGenerator initialized")
+	// Initialize response generator based on configured strategy
+	var responseGenerator ports.ParetoResponseGenerator
+	switch cfg.ResponseStrategy {
+	case "pdr":
+		responseGenerator = usecases.NewPDRResponseGenerator(
+			llmService,
+			messageRepo,
+			conversationRepo,
+			toolRepo,
+			sentenceRepo,
+			toolUseRepo,
+			reasoningStepRepo,
+			memoryUsageRepo,
+			toolService,
+			memoryService,
+			idGen,
+			txManager,
+			wsBroadcaster,
+			nil, // Use default PDR config
+		)
+		log.Println("PDRResponseGenerator initialized (Parallel-Distill-Refine strategy)")
+	default:
+		responseGenerator = usecases.NewParetoResponseGenerator(
+			llmService,
+			llmService, // Use same LLM for reflection
+			messageRepo,
+			conversationRepo,
+			toolRepo,
+			sentenceRepo,
+			toolUseRepo,
+			reasoningStepRepo,
+			memoryUsageRepo,
+			toolService,
+			memoryService,
+			idGen,
+			txManager,
+			wsBroadcaster,
+			nil, // Use default config
+		)
+		log.Println("ParetoResponseGenerator initialized")
+	}
 
 	// Create adapter for backwards compatibility with GenerateResponseUseCase interface
-	generateResponseUseCase := usecases.NewParetoGenerateResponseAdapter(paretoResponseGenerator)
-	log.Println("GenerateResponse adapter initialized (using Pareto search)")
+	generateResponseUseCase := usecases.NewParetoGenerateResponseAdapter(responseGenerator)
+	strategyName := cfg.ResponseStrategy
+	if strategyName == "" {
+		strategyName = "pareto"
+	}
+	log.Printf("GenerateResponse adapter initialized (strategy=%s)", strategyName)
 
 	// Create ProcessUserMessage use case (needed by SendMessage)
 	processUserMessageUC := usecases.NewProcessUserMessage(
@@ -288,24 +314,24 @@ func runServer(ctx context.Context) error {
 	)
 	log.Println("SyncMessages use case initialized")
 
-	// Create RegenerateResponse use case (using Pareto search)
+	// Create RegenerateResponse use case
 	regenerateResponseUC := usecases.NewParetoRegenerateResponse(
 		messageRepo,
 		conversationRepo,
-		paretoResponseGenerator,
+		responseGenerator,
 		idGen,
 	)
-	log.Println("RegenerateResponse use case initialized (using Pareto search)")
+	log.Println("RegenerateResponse use case initialized")
 
-	// Create ContinueResponse use case (using Pareto search)
+	// Create ContinueResponse use case
 	continueResponseUC := usecases.NewParetoContinueResponse(
 		messageRepo,
 		conversationRepo,
-		paretoResponseGenerator,
+		responseGenerator,
 		idGen,
 		txManager,
 	)
-	log.Println("ContinueResponse use case initialized (using Pareto search)")
+	log.Println("ContinueResponse use case initialized")
 
 	// Create EditUserMessage use case
 	editUserMessageUC := usecases.NewEditUserMessage(

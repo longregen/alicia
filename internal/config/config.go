@@ -12,16 +12,17 @@ import (
 
 // Config holds all configuration for Alicia
 type Config struct {
-	LLM          LLMConfig       `json:"llm"`
-	ReflectionLM LLMConfig       `json:"reflection_llm,omitempty"` // Optional: stronger LLM for GEPA reflection
-	LiveKit      LiveKitConfig   `json:"livekit"`
-	ASR          ASRConfig       `json:"asr"`
-	TTS          TTSConfig       `json:"tts"`
-	Embedding    EmbeddingConfig `json:"embedding"`
-	Database     DatabaseConfig  `json:"database"`
-	Server       ServerConfig    `json:"server"`
-	MCP          MCPConfig       `json:"mcp"`
-	Agent        AgentConfig     `json:"agent"`
+	LLM              LLMConfig       `json:"llm"`
+	ReflectionLM     LLMConfig       `json:"reflection_llm,omitempty"` // Optional: stronger LLM for GEPA reflection
+	LiveKit          LiveKitConfig   `json:"livekit"`
+	ASR              ASRConfig       `json:"asr"`
+	TTS              TTSConfig       `json:"tts"`
+	Embedding        EmbeddingConfig `json:"embedding"`
+	Database         DatabaseConfig  `json:"database"`
+	Server           ServerConfig    `json:"server"`
+	MCP              MCPConfig       `json:"mcp"`
+	Agent            AgentConfig     `json:"agent"`
+	ResponseStrategy string          `json:"response_strategy,omitempty"` // "pareto" (default) or "pdr"
 }
 
 // AgentConfig holds configuration for the agent worker
@@ -286,6 +287,9 @@ func Load() (*Config, error) {
 
 	// Load Agent configuration from environment
 	envString("ALICIA_AGENT_SERVE_URL", &cfg.Agent.ServeURL)
+
+	// Load response strategy from environment ("pareto" or "pdr")
+	envString("ALICIA_RESPONSE_STRATEGY", &cfg.ResponseStrategy)
 
 	// Load MCP configuration from environment
 	// MCP servers are primarily configured via config file, but can be augmented via env
