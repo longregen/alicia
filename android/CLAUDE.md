@@ -1,5 +1,7 @@
 Android voice assistant app that combines on-device wake-word detection with cloud-based speech processing and AI responses. Written in Kotlin using Material Design 3.
 
+ALWAYS build and install with ./build-and-install.sh
+
 The app uses a self-hosted API backend at `https://llm.hjkl.lol` for three AI services:
 - **Whisper** — speech-to-text transcription (`service/VoiceRecognitionManager.kt`)
 - **Qwen 3 8B** — LLM for conversational responses (`service/LlmClient.kt`)
@@ -16,10 +18,6 @@ Voice activity detection (endpoint detection) uses **Silero VAD v5** via ONNX Ru
 | Feature | Files |
 |---------|-------|
 | Voice commands (tap or wake word) | `MainActivity.kt`, `service/VoiceAssistantService.kt`, `service/AliciaInteractionSession.kt`, `service/SileroVadDetector.kt` |
-| App launching ("Open Spotify") | `skills/SkillRouter.kt` |
-| Time/Date queries | `skills/SkillRouter.kt` |
-| Timer/Alarm | `skills/SkillRouter.kt` |
-| Music control | `skills/SkillRouter.kt` |
 | Voice notes (record, transcribe, play, edit, share, delete) | `VoiceNotesActivity.kt`, `NoteDetailActivity.kt`, `service/NoteSaver.kt`, `storage/NoteRepository.kt` |
 | Screen context (reads on-screen text via accessibility + OCR) | `service/ScreenContextManager.kt`, `service/AliciaInteractionSession.kt` |
 | Quick Settings tile | `service/VoiceAssistantTileService.kt` |
@@ -48,7 +46,7 @@ Declared in `app/src/main/AndroidManifest.xml`.
 
 1. **At boot** — `BootReceiver` starts `VoiceAssistantService` as a foreground service for always-on wake word detection (if enabled in settings).
 2. **Wake word detected** — Vosk matches the configured word (default: "alicia") in `VoiceAssistantService.checkForWakeWord()`, then calls `AliciaInteractionService.triggerAssistSession()`.
-3. **During a session** — `AliciaInteractionSession` records audio using VAD-based endpoint detection (auto-stops after 1.5s of silence, 30s max). `VoiceRecognitionManager` sends captured audio to Whisper, `SkillRouter` routes the intent. If no built-in skill matches, the query goes to `LlmClient` (with optional screen context from `ScreenContextManager`). The response is spoken via `TtsManager`.
+3. **During a session** — `AliciaInteractionSession` records audio using VAD-based endpoint detection (auto-stops after 1.5s of silence, 30s max). `VoiceRecognitionManager` sends captured audio to Whisper. The query goes to `LlmClient` (with optional screen context from `ScreenContextManager`). The response is spoken via `TtsManager`.
 4. **TTS playback** — `TtsManager` pauses wake-word detection (`VoiceAssistantService.pauseDetection()`) during audio playback to prevent self-triggering, and resumes it on completion.
 5. **Voice notes** — `NoteSaver` transcribes with word-level timestamps via Whisper verbose mode, `NoteRepository` persists as JSON + audio. `VoiceNotesActivity` provides playback with synchronized word highlighting.
 6. **Error recovery** — `VoiceAssistantService` retries up to 5 times with exponential backoff on recognition failure.
@@ -73,10 +71,6 @@ All data is local to the device. Network traffic is limited to API calls to the 
 - `model/Models.kt` — Data classes: `VoiceNote`, `TimestampedWord`, `VoskModelInfo`, `AppSettings`
 - `model/RecognitionResult.kt` — Sealed class for recognition outcomes (Success/Error)
 - `service/SileroVadDetector.kt` — ONNX Runtime wrapper for Silero VAD v5; detects speech/silence boundaries at 16kHz (512-sample frames, ~31 fps). Speech threshold: 0.5, silence threshold: 0.3 (hysteresis)
-
-## Supported Apps (for "open X" commands)
-
-Spotify, YouTube, Instagram, Twitter, Facebook, Gmail, Chrome, Maps, WhatsApp, Telegram — declared as `<queries>` in `AndroidManifest.xml` and handled in `SkillRouter.kt`.
 
 ## Available Vosk Models
 

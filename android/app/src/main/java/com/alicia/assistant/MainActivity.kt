@@ -85,7 +85,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshSettings()
-        VoiceAssistantService.ensureRunning(this)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            VoiceAssistantService.ensureRunning(this)
+        }
         if (!isListening && !isRecordingNote) {
             binding.statusText.text = getString(R.string.tap_to_speak)
         }
@@ -157,9 +159,9 @@ class MainActivity : ComponentActivity() {
         
         when (requestCode) {
             REQUEST_RECORD_AUDIO -> {
-                if (grantResults.isNotEmpty() && 
+                if (grantResults.isNotEmpty() &&
                     grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "Microphone permission granted", Toast.LENGTH_SHORT).show()
+                    VoiceAssistantService.ensureRunning(this)
                 } else {
                     MaterialAlertDialogBuilder(this)
                         .setTitle("Permission Required")

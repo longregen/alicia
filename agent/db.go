@@ -189,10 +189,10 @@ func CreateMessage(ctx context.Context, pool *pgxpool.Pool, id, convID, role, co
 	return err
 }
 
-func UpdateMessage(ctx context.Context, pool *pgxpool.Pool, messageID, content, status string) error {
+func UpdateMessage(ctx context.Context, pool *pgxpool.Pool, messageID, content, reasoning, status string) error {
 	_, err := pool.Exec(ctx, `
-		UPDATE messages SET content = $2, status = $3 WHERE id = $1
-	`, messageID, content, status)
+		UPDATE messages SET content = $2, reasoning = $3, status = $4 WHERE id = $1
+	`, messageID, content, reasoning, status)
 	return err
 }
 

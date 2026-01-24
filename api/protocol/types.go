@@ -31,7 +31,9 @@ const (
 	TypeVoiceLeaveAck     = protocol.TypeVoiceLeaveAck
 	TypeVoiceStatus       = protocol.TypeVoiceStatus
 	TypeVoiceSpeaking     = protocol.TypeVoiceSpeaking
-	TypePreferencesUpdate = protocol.TypePreferencesUpdate
+	TypePreferencesUpdate          = protocol.TypePreferencesUpdate
+	TypeAssistantToolsRegister     = protocol.TypeAssistantToolsRegister
+	TypeAssistantToolsAck          = protocol.TypeAssistantToolsAck
 )
 
 type (
@@ -60,5 +62,8 @@ type (
 	VoiceLeaveAck      = protocol.VoiceLeaveAck
 	VoiceStatus        = protocol.VoiceStatus
 	VoiceSpeaking      = protocol.VoiceSpeaking
-	PreferencesUpdate  = protocol.PreferencesUpdate
+	PreferencesUpdate          = protocol.PreferencesUpdate
+	AssistantToolsRegister     = protocol.AssistantToolsRegister
+	AssistantTool              = protocol.AssistantTool
+	AssistantToolsAck          = protocol.AssistantToolsAck
 )

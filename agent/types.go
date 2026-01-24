@@ -58,6 +58,7 @@ type LLMToolCall struct {
 
 type LLMResponse struct {
 	Content   string
+	Reasoning string
 	ToolCalls []LLMToolCall
 }
 

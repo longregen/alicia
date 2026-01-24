@@ -433,7 +433,14 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 	}
 
 	fullContent := msg.Content + resp.Content
-	if err := UpdateMessage(ctx, deps.DB, msg.ID, fullContent, "completed"); err != nil {
+	reasoning := msg.Reasoning
+	if resp.Reasoning != "" {
+		if reasoning != "" {
+			reasoning += "\n\n"
+		}
+		reasoning += resp.Reasoning
+	}
+	if err := UpdateMessage(ctx, deps.DB, msg.ID, fullContent, reasoning, "completed"); err != nil {
 		deps.Notifier.SendError(ctx, msg.ID, err)
 		return err
 	}
@@ -531,6 +538,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 	var finalContent string
 	var totalToolCalls int
+	var reasoningParts []string
 
 	for i := 0; i < cfg.MaxToolIterations; i++ {
 		if i > 0 {
@@ -569,6 +577,10 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			attribute.Int("tool_calls", len(resp.ToolCalls)),
 		)
 		llmSpan.End()
+
+		if resp.Reasoning != "" {
+			reasoningParts = append(reasoningParts, resp.Reasoning)
+		}
 
 		if systemPrompt.Name != "" {
 			traceID := span.SpanContext().TraceID().String()
@@ -647,7 +659,8 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 	span.SetAttributes(attribute.Int("total_tool_calls", totalToolCalls))
 
 	finalContent = strings.TrimSpace(finalContent)
-	if err := UpdateMessage(ctx, deps.DB, msgID, finalContent, "completed"); err != nil {
+	reasoning := strings.Join(reasoningParts, "\n\n")
+	if err := UpdateMessage(ctx, deps.DB, msgID, finalContent, reasoning, "completed"); err != nil {
 		deps.Notifier.SendError(ctx, msgID, err)
 		return err
 	}

@@ -132,7 +132,7 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 	choice := resp.Choices[0]
 	slog.InfoContext(ctx, "llm response", "content_length", len(choice.Message.Content), "tool_calls", len(choice.Message.ToolCalls), "finish_reason", choice.FinishReason)
 
-	result := &LLMResponse{Content: choice.Message.Content}
+	result := &LLMResponse{Content: choice.Message.Content, Reasoning: choice.Message.ReasoningContent}
 	for _, tc := range choice.Message.ToolCalls {
 		result.ToolCalls = append(result.ToolCalls, LLMToolCall{
 			ID:        tc.ID,

@@ -116,4 +116,7 @@ dependencies {
 
     // ONNX Runtime for Silero VAD
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.2")
+
+    // MessagePack for WebSocket protocol encoding
+    implementation("org.msgpack:msgpack-core:0.9.8")
 }

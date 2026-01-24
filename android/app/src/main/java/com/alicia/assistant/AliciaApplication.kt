@@ -6,6 +6,9 @@ import android.app.NotificationManager
 import android.util.Log
 import com.alicia.assistant.storage.NoteRepository
 import com.alicia.assistant.storage.PreferencesManager
+import com.alicia.assistant.tools.*
+import com.alicia.assistant.ws.AssistantWebSocket
+import com.alicia.assistant.ws.ToolRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,16 +29,42 @@ class AliciaApplication : Application() {
     private val _modelReady = MutableStateFlow(false)
     val modelReady: StateFlow<Boolean> = _modelReady.asStateFlow()
 
+    private val _extractionDone = MutableStateFlow(false)
+    val extractionDone: StateFlow<Boolean> = _extractionDone.asStateFlow()
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    lateinit var assistantWebSocket: AssistantWebSocket
+        private set
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         extractBundledModelIfNeeded()
+        initAssistantWebSocket()
         applicationScope.launch {
             NoteRepository(this@AliciaApplication)
                 .migrateFromPreferences(PreferencesManager(this@AliciaApplication))
         }
+    }
+
+    private fun initAssistantWebSocket() {
+        val toolRegistry = ToolRegistry().apply {
+            register(GetTimeExecutor())
+            register(GetDateExecutor())
+            register(GetBatteryExecutor(this@AliciaApplication))
+            register(GetLocationExecutor(this@AliciaApplication))
+            register(ReadScreenExecutor())
+            register(GetClipboardExecutor(this@AliciaApplication))
+        }
+
+        assistantWebSocket = AssistantWebSocket(
+            baseUrl = "wss://llm.hjkl.lol/api/v1/ws",
+            agentSecret = "not-needed",
+            toolRegistry = toolRegistry
+        )
+        assistantWebSocket.connect()
+        Log.i(TAG, "Assistant WebSocket initialized with ${toolRegistry.getAll().size} tools")
     }
 
     private fun createNotificationChannel() {
@@ -60,6 +89,7 @@ class AliciaApplication : Application() {
         }
         if (modelDir.exists() && modelDir.listFiles()?.isNotEmpty() == true) {
             _modelReady.value = true
+            _extractionDone.value = true
             return
         }
 
@@ -69,11 +99,18 @@ class AliciaApplication : Application() {
                 marker.createNewFile()
                 copyAssetDir("vosk-models/$BUNDLED_MODEL_ID", modelDir)
                 marker.delete()
-                _modelReady.value = true
-                Log.d(TAG, "Bundled model extracted")
+                if (modelDir.listFiles()?.isNotEmpty() == true) {
+                    _modelReady.value = true
+                    Log.d(TAG, "Bundled model extracted")
+                } else {
+                    Log.w(TAG, "Bundled model not found in assets, must be downloaded via Model Manager")
+                    modelDir.deleteRecursively()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to extract bundled model", e)
                 modelDir.deleteRecursively()
+            } finally {
+                _extractionDone.value = true
             }
         }
     }

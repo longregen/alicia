@@ -57,14 +57,14 @@ class VoiceAssistantService : Service(), RecognitionListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "onStartCommand: starting wake word service (startId=$startId)")
+        startForeground(NOTIFICATION_ID, buildNotification())
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            Log.e(TAG, "onStartCommand: RECORD_AUDIO not granted, cannot start foreground service")
+            Log.e(TAG, "onStartCommand: RECORD_AUDIO not granted, stopping service")
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(NOTIFICATION_ID, buildNotification())
         serviceScope.launch {
             stateMutex.withLock {
                 shutdownNativeResources()
@@ -129,7 +129,7 @@ class VoiceAssistantService : Service(), RecognitionListener {
             if (modelInfo == VoskModelInfo.SMALL_EN_US) {
                 Log.d(TAG, "initWakeWordDetection: waiting for bundled model extraction")
                 val app = application as AliciaApplication
-                withTimeout(30_000) { app.modelReady.first { it } }
+                withTimeout(30_000) { app.extractionDone.first { it } }
             }
 
             if (!modelDir.exists() || modelDir.listFiles()?.isEmpty() != false) {

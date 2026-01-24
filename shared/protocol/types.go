@@ -27,7 +27,9 @@ const (
 	TypeVoiceLeaveAck     MessageType = 54
 	TypeVoiceStatus       MessageType = 55
 	TypeVoiceSpeaking     MessageType = 56
-	TypePreferencesUpdate MessageType = 60
+	TypePreferencesUpdate          MessageType = 60
+	TypeAssistantToolsRegister     MessageType = 70
+	TypeAssistantToolsAck          MessageType = 71
 )
 
 type Error struct {
@@ -126,6 +128,7 @@ type Subscribe struct {
 	AgentMode      bool   `msgpack:"agentMode,omitempty" json:"agentMode,omitempty"`
 	VoiceMode      bool   `msgpack:"voiceMode,omitempty" json:"voiceMode,omitempty"`
 	MonitorMode    bool   `msgpack:"monitorMode,omitempty" json:"monitorMode,omitempty"`
+	AssistantMode  bool   `msgpack:"assistantMode,omitempty" json:"assistantMode,omitempty"`
 }
 
 type Unsubscribe struct {
@@ -224,4 +227,20 @@ type PreferencesUpdate struct {
 	NotesMaxCount            int     `msgpack:"notesMaxCount" json:"notesMaxCount"`
 	ConfirmDeleteMemory      bool    `msgpack:"confirmDeleteMemory" json:"confirmDeleteMemory"`
 	ShowRelevanceScores      bool    `msgpack:"showRelevanceScores" json:"showRelevanceScores"`
+}
+
+type AssistantToolsRegister struct {
+	Tools []AssistantTool `msgpack:"tools" json:"tools"`
+}
+
+type AssistantTool struct {
+	Name        string         `msgpack:"name" json:"name"`
+	Description string         `msgpack:"description" json:"description"`
+	InputSchema map[string]any `msgpack:"inputSchema,omitempty" json:"inputSchema,omitempty"`
+}
+
+type AssistantToolsAck struct {
+	Success   bool   `msgpack:"success" json:"success"`
+	ToolCount int    `msgpack:"toolCount" json:"toolCount"`
+	Error     string `msgpack:"error,omitempty" json:"error,omitempty"`
 }

@@ -128,10 +128,8 @@ class ChatActivity : ComponentActivity() {
 
     private inner class MessageAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-        companion object {
-            private const val TYPE_USER = 0
-            private const val TYPE_ASSISTANT = 1
-        }
+        private val TYPE_USER = 0
+        private val TYPE_ASSISTANT = 1
 
         override fun getItemViewType(position: Int): Int {
             return if (messages[position].role == "user") TYPE_USER else TYPE_ASSISTANT

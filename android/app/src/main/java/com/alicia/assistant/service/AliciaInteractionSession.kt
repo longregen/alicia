@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.util.Log
+import com.alicia.assistant.tools.ReadScreenExecutor
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageButton
@@ -106,6 +107,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         if (contentText.isNotBlank()) parts.add(contentText)
         if (parts.isNotEmpty()) {
             screenContext = parts.joinToString("\n")
+            ReadScreenExecutor.updateScreenContent(screenContext!!)
             Log.d(TAG, "Captured screen context (${screenContext!!.length} chars)")
         }
     }
@@ -121,6 +123,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
                     screenContext?.let { append(it).append("\n") }
                     append(ocrText)
                 }
+                ReadScreenExecutor.updateScreenContent(screenContext!!)
                 Log.d(TAG, "Added OCR context (${ocrText.length} chars)")
             }
         }

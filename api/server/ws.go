@@ -37,6 +37,9 @@ type Hub struct {
 	agentMu      sync.RWMutex
 	voiceConn    *websocket.Conn
 	voiceMu      sync.RWMutex
+	assistantConn  *websocket.Conn
+	assistantMu    sync.RWMutex
+	assistantTools []protocol.AssistantTool
 	monitorConns map[*websocket.Conn]struct{}
 	monitorMu    sync.RWMutex
 	// Enables blocking request/response pattern over async WebSocket for the REST API's sync endpoint
@@ -136,6 +139,47 @@ func (h *Hub) UnsubscribeMonitor(conn *websocket.Conn) {
 	defer h.monitorMu.Unlock()
 	delete(h.monitorConns, conn)
 	slog.Info("ws: monitor disconnected", "total", len(h.monitorConns))
+}
+
+func (h *Hub) SubscribeAssistant(conn *websocket.Conn) {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	h.assistantConn = conn
+	slog.Info("ws: assistant connected")
+}
+
+func (h *Hub) UnsubscribeAssistant(conn *websocket.Conn) {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	if h.assistantConn == conn {
+		h.assistantConn = nil
+		h.assistantTools = nil
+		slog.Info("ws: assistant disconnected")
+	}
+}
+
+func (h *Hub) SetAssistantTools(tools []protocol.AssistantTool) {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	h.assistantTools = tools
+}
+
+func (h *Hub) BroadcastToAssistant(data []byte) {
+	h.broadcastToMonitors(data, "server", "assistant")
+
+	h.assistantMu.RLock()
+	conn := h.assistantConn
+	h.assistantMu.RUnlock()
+
+	if conn == nil {
+		slog.Warn("ws: no assistant connected")
+		return
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
+	if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+		slog.Error("ws: assistant send error", "error", err)
+	}
 }
 
 type monitorFrame struct {
@@ -477,6 +521,7 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var isAgent bool
 	var isVoice bool
 	var isMonitor bool
+	var isAssistant bool
 
 	for {
 		_, data, err := conn.ReadMessage()
@@ -494,6 +539,8 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				src = "agent"
 			} else if isVoice {
 				src = "voice"
+			} else if isAssistant {
+				src = "assistant"
 			}
 			h.hub.broadcastToMonitors(data, src, "server")
 		}
@@ -549,6 +596,15 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					isMonitor = true
 					h.hub.SubscribeMonitor(conn)
 					h.sendSubscribeAck(conn, "", false, true, "")
+				} else if sub.AssistantMode {
+					if !h.verifyAgentAuth(r) {
+						slog.Warn("ws: assistant auth failed")
+						h.sendSubscribeAck(conn, "", false, false, "authentication required")
+						return
+					}
+					isAssistant = true
+					h.hub.SubscribeAssistant(conn)
+					h.sendSubscribeAck(conn, "", false, true, "")
 				} else if sub.ConversationID != "" {
 					h.hub.Subscribe(sub.ConversationID, conn)
 					h.sendSubscribeAck(conn, sub.ConversationID, false, true, "")
@@ -600,6 +656,52 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					h.hub.BroadcastToAgent(data)
 				}
 
+			case protocol.TypeAssistantToolsRegister:
+				if isAssistant {
+					reg, err := protocol.DecodeBody[protocol.AssistantToolsRegister](env)
+					if err != nil {
+						slog.Error("ws: decode assistant tools register error", "error", err)
+						return
+					}
+					h.hub.SetAssistantTools(reg.Tools)
+					ack := protocol.AssistantToolsAck{Success: true, ToolCount: len(reg.Tools)}
+					ackEnv := protocol.NewEnvelope("", protocol.TypeAssistantToolsAck, ack)
+					ackData, err := ackEnv.Encode()
+					if err != nil {
+						slog.Error("ws: encode assistant tools ack error", "error", err)
+						return
+					}
+					conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
+					conn.WriteMessage(websocket.BinaryMessage, ackData)
+					slog.Info("ws: assistant registered tools", "count", len(reg.Tools))
+				}
+
+			case protocol.TypeToolUseResult:
+				if isAssistant {
+					// Route tool results from assistant to monitors (for mcp-assistant bridge)
+					h.hub.broadcastToMonitors(data, "assistant", "monitor")
+				} else if isAgent && env.ConversationID != "" {
+					h.persistAgentMessage(ctx, env)
+					h.hub.BroadcastToConversation(env.ConversationID, data)
+				}
+
+			case protocol.TypeToolUseRequest:
+				if isAgent && env.ConversationID != "" {
+					h.persistAgentMessage(ctx, env)
+					h.hub.BroadcastToConversation(env.ConversationID, data)
+					// Route client-execution tools to the assistant device
+					req, err := protocol.DecodeBody[protocol.ToolUseRequest](env)
+					if err == nil && req.Execution == "client" {
+						h.hub.BroadcastToAssistant(data)
+					}
+				} else if isMonitor {
+					// mcp-assistant bridge sends tool requests via monitor mode
+					req, err := protocol.DecodeBody[protocol.ToolUseRequest](env)
+					if err == nil && req.Execution == "client" {
+						h.hub.BroadcastToAssistant(data)
+					}
+				}
+
 			default:
 				if isAgent && env.ConversationID != "" {
 					slog.Info("ws: agent->user", "type", env.Type, "conversation_id", env.ConversationID)
@@ -614,6 +716,8 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.hub.UnsubscribeAgent(conn)
 	} else if isVoice {
 		h.hub.UnsubscribeVoice(conn)
+	} else if isAssistant {
+		h.hub.UnsubscribeAssistant(conn)
 	} else if isMonitor {
 		h.hub.UnsubscribeMonitor(conn)
 	} else {

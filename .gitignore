@@ -37,6 +37,7 @@ mcp/web/web
 mcp/garden/mcp-garden
 mcp/deno-calc/mcp-deno-calc
 mcp/deno-calc/deno-calc
+mcp/assistant/assistant
 monitor/monitor
 *.exe
 *.exe~

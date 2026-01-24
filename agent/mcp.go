@@ -336,6 +336,19 @@ func NewMCPManager(servers []MCPServerConfig) (*MCPManager, error) {
 				env = append(env, "KAGI_API_KEY="+kagiKey)
 			}
 		}
+		if srv.Name == "assistant" {
+			if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
+				wsURL := strings.Replace(serverURL, "https://", "wss://", 1)
+				wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+				env = append(env, "WS_URL="+wsURL)
+			}
+			if secret := os.Getenv("AGENT_SECRET"); secret != "" {
+				env = append(env, "AGENT_SECRET="+secret)
+			}
+			if otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); otelEndpoint != "" {
+				env = append(env, "OTEL_EXPORTER_OTLP_ENDPOINT="+otelEndpoint)
+			}
+		}
 
 		client, err := NewMCPClient(srv.Command, srv.Args, env)
 		if err != nil {

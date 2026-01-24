@@ -517,8 +517,8 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 		deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 		return fmt.Errorf("best candidate has empty content")
 	}
-	if err := UpdateMessage(ctx, deps.DB, msgID, finalContent, "completed"); err != nil {
-		slog.ErrorContext(ctx, "failed to update message", "message_id", msgID, "error", err)
+	reasoning := strings.Join(best.Trace.ReasoningSteps, "\n\n")
+	if err := UpdateMessage(ctx, deps.DB, msgID, finalContent, reasoning, "completed"); err != nil {
 		deps.Notifier.SendError(ctx, msgID, errGenerationFailed)
 		return err
 	}
@@ -605,6 +605,10 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 			if strings.TrimSpace(resp.Content) == "" && len(resp.ToolCalls) == 0 {
 				return nil, fmt.Errorf("LLM returned empty response after %d retries", len(emptyRetryTemperatures))
 			}
+		}
+
+		if resp.Reasoning != "" {
+			execTrace.ReasoningSteps = append(execTrace.ReasoningSteps, resp.Reasoning)
 		}
 
 		// No tool calls means we have our final answer
