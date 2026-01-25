@@ -410,17 +410,26 @@ class AssistantWebSocket(
                 .put("tool.name", toolName)
                 .build())
             val executor = toolRegistry.get(toolName)
+            val result: Map<String, Any?>
+            val success: Boolean
+            val error: String?
 
-            val (result, success, error) = if (executor != null) {
+            if (executor != null) {
                 try {
                     val value = executor.execute(arguments)
-                    Triple(value, true, null)
+                    result = value
+                    success = true
+                    error = null
                 } catch (e: Exception) {
+                    result = emptyMap()
+                    success = false
+                    error = e.message ?: "Unknown error"
                     AliciaTelemetry.recordError(toolSpan, e)
-                    Triple(emptyMap<String, Any?>(), false, e.message ?: "Unknown error")
                 }
             } else {
-                Triple(emptyMap<String, Any?>(), false, "Unknown tool: $toolName")
+                result = emptyMap()
+                success = false
+                error = "Unknown tool: $toolName"
             }
 
             toolSpan.setAttribute("tool.status", if (success) "success" else "error")

@@ -56,7 +56,7 @@ class ConversationListActivity : ComponentActivity() {
 
     private fun loadConversations() {
         lifecycleScope.launch {
-            AliciaTelemetry.withSpanAsync("conversations.load") { span ->
+            AliciaTelemetry.withSpan("conversations.load") { span ->
                 try {
                     val conversations = repository.listConversations()
                     binding.loadingState.visibility = View.GONE
@@ -81,7 +81,7 @@ class ConversationListActivity : ComponentActivity() {
 
     private fun createNewConversation() {
         lifecycleScope.launch {
-            AliciaTelemetry.withSpanAsync("conversations.create") { span ->
+            AliciaTelemetry.withSpan("conversations.create") { span ->
                 try {
                     val conversation = repository.createConversation(getString(R.string.new_conversation))
                     openConversation(conversation.id, conversation.title)

@@ -156,7 +156,7 @@ class ChatActivity : ComponentActivity() {
 
     private fun loadMessages() {
         lifecycleScope.launch {
-            AliciaTelemetry.withSpanAsync("chat.load_messages", Attributes.builder()
+            AliciaTelemetry.withSpan("chat.load_messages", Attributes.builder()
                 .put("conversation.id", conversationId)
                 .build()
             ) { span ->
@@ -200,7 +200,7 @@ class ChatActivity : ComponentActivity() {
         val ws = webSocket
         if (ws != null && ws.isConnected()) {
             lifecycleScope.launch {
-                AliciaTelemetry.withSpanAsync("chat.send_message_ws", Attributes.builder()
+                AliciaTelemetry.withSpan("chat.send_message_ws", Attributes.builder()
                     .put("conversation.id", conversationId)
                     .put("message.content_length", content.length.toLong())
                     .build()
@@ -224,7 +224,7 @@ class ChatActivity : ComponentActivity() {
 
     private fun sendMessageViaHttp(content: String, tempUserMsg: AliciaApiClient.Message, previousId: String?) {
         lifecycleScope.launch {
-            AliciaTelemetry.withSpanAsync("chat.send_message_http", Attributes.builder()
+            AliciaTelemetry.withSpan("chat.send_message_http", Attributes.builder()
                 .put("conversation.id", conversationId)
                 .put("message.content_length", content.length.toLong())
                 .build()
