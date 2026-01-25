@@ -13,6 +13,11 @@ const vendorVersions: Record<string, string> = {
 };
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@shared': resolve(__dirname, '../shared'),
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -107,6 +112,9 @@ export default defineConfig({
   server: {
     port: 3001,
     allowedHosts: ['alicia.hjkl.lol'],
+    fs: {
+      allow: ['..'],
+    },
     // Disable proxy during e2e tests so Playwright can intercept API calls
     proxy: process.env.PLAYWRIGHT_TEST ? undefined : {
       '/api': {

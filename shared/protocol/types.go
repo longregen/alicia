@@ -30,6 +30,7 @@ const (
 	TypePreferencesUpdate          MessageType = 60
 	TypeAssistantToolsRegister     MessageType = 70
 	TypeAssistantToolsAck          MessageType = 71
+	TypeAssistantHeartbeat         MessageType = 72
 )
 
 type Error struct {
@@ -218,6 +219,7 @@ type PreferencesUpdate struct {
 	MemoryMinFactual         *int    `msgpack:"memoryMinFactual" json:"memoryMinFactual"`
 	MemoryRetrievalCount     int     `msgpack:"memoryRetrievalCount" json:"memoryRetrievalCount"`
 	MaxTokens                int     `msgpack:"maxTokens" json:"maxTokens"`
+	Temperature              float32 `msgpack:"temperature" json:"temperature"`
 	ParetoTargetScore        float32 `msgpack:"paretoTargetScore" json:"paretoTargetScore"`
 	ParetoMaxGenerations     int     `msgpack:"paretoMaxGenerations" json:"paretoMaxGenerations"`
 	ParetoBranchesPerGen     int     `msgpack:"paretoBranchesPerGen" json:"paretoBranchesPerGen"`

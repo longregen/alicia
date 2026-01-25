@@ -14,6 +14,7 @@ import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.databinding.ActivityMainBinding
 import com.alicia.assistant.model.RecognitionResult
+import com.alicia.assistant.service.AliciaApiClient
 import com.alicia.assistant.service.SaveNoteResult
 import com.alicia.assistant.service.SileroVadDetector
 import com.alicia.assistant.service.TtsManager
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private var isListening = false
     private var isRecordingNote = false
     private lateinit var noteVoiceManager: VoiceRecognitionManager
+    private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
     
     companion object {
         private const val REQUEST_RECORD_AUDIO = 1001
@@ -133,10 +135,6 @@ class MainActivity : ComponentActivity() {
 
         binding.notesButton.setOnClickListener {
             startActivity(Intent(this, VoiceNotesActivity::class.java))
-        }
-
-        binding.serverNotesButton.setOnClickListener {
-            startActivity(Intent(this, NotesActivity::class.java))
         }
     }
     
@@ -343,7 +341,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val notesDir = File(filesDir, "voice_notes")
-            val result = saveRecordedNote(tempFile, notesDir, noteVoiceManager, viewModel.noteRepository)
+            val result = saveRecordedNote(tempFile, notesDir, noteVoiceManager, viewModel.noteRepository, apiClient)
             when (result) {
                 is SaveNoteResult.NoSpeechDetected ->
                     Toast.makeText(this@MainActivity, "No speech detected", Toast.LENGTH_SHORT).show()

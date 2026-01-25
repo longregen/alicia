@@ -3,9 +3,16 @@ package main
 import (
 	"sync"
 
+	"github.com/longregen/alicia/shared/config"
+	"github.com/longregen/alicia/shared/preferences"
 	"github.com/longregen/alicia/shared/protocol"
 	"github.com/longregen/alicia/shared/ptr"
 )
+
+// defaultTemperature returns the default temperature from env var or shared default.
+func defaultTemperature() float32 {
+	return float32(config.GetEnvFloat("ALICIA_LLM_TEMPERATURE", float64(preferences.Get().Temperature)))
+}
 
 type UserPreferences struct {
 	MemoryMinImportance      *int
@@ -14,6 +21,7 @@ type UserPreferences struct {
 	MemoryMinFactual         *int
 	MemoryRetrievalCount     int
 	MaxTokens                int
+	Temperature              float32
 	ParetoTargetScore        float32
 	ParetoMaxGenerations     int
 	ParetoBranchesPerGen     int
@@ -24,20 +32,22 @@ type UserPreferences struct {
 }
 
 func DefaultPreferences() UserPreferences {
+	d := preferences.Get()
 	return UserPreferences{
-		MemoryMinImportance:      ptr.To(3),
-		MemoryMinHistorical:      ptr.To(2),
-		MemoryMinPersonal:        ptr.To(2),
-		MemoryMinFactual:         ptr.To(2),
-		MemoryRetrievalCount:     4,
-		MaxTokens:                16384,
-		ParetoTargetScore:        3.0,
-		ParetoMaxGenerations:     7,
-		ParetoBranchesPerGen:     3,
-		ParetoArchiveSize:        50,
-		ParetoEnableCrossover:    true,
-		NotesSimilarityThreshold: 0.7,
-		NotesMaxCount:            3,
+		MemoryMinImportance:      ptr.To(d.MemoryMinImportance),
+		MemoryMinHistorical:      ptr.To(d.MemoryMinHistorical),
+		MemoryMinPersonal:        ptr.To(d.MemoryMinPersonal),
+		MemoryMinFactual:         ptr.To(d.MemoryMinFactual),
+		MemoryRetrievalCount:     d.MemoryRetrievalCount,
+		MaxTokens:                d.MaxTokens,
+		Temperature:              defaultTemperature(),
+		ParetoTargetScore:        d.ParetoTargetScore,
+		ParetoMaxGenerations:     d.ParetoMaxGenerations,
+		ParetoBranchesPerGen:     d.ParetoBranchesPerGen,
+		ParetoArchiveSize:        d.ParetoArchiveSize,
+		ParetoEnableCrossover:    d.ParetoEnableCrossover,
+		NotesSimilarityThreshold: d.NotesSimilarityThreshold,
+		NotesMaxCount:            d.NotesMaxCount,
 	}
 }
 
@@ -73,6 +83,7 @@ func (s *PreferencesStore) Update(update protocol.PreferencesUpdate) {
 		MemoryMinFactual:         update.MemoryMinFactual,
 		MemoryRetrievalCount:     update.MemoryRetrievalCount,
 		MaxTokens:                update.MaxTokens,
+		Temperature:              update.Temperature,
 		ParetoTargetScore:        update.ParetoTargetScore,
 		ParetoMaxGenerations:     update.ParetoMaxGenerations,
 		ParetoBranchesPerGen:     update.ParetoBranchesPerGen,

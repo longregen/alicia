@@ -173,7 +173,8 @@ type UserPreferences struct {
 	MemoryRetrievalCount int `json:"memory_retrieval_count"`
 
 	// Agent
-	MaxTokens int `json:"max_tokens"`
+	MaxTokens   int     `json:"max_tokens"`
+	Temperature float32 `json:"temperature"`
 
 	// Pareto exploration
 	ParetoTargetScore     float32 `json:"pareto_target_score"`

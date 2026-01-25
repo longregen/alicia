@@ -48,7 +48,9 @@ android {
                 "META-INF/*.version",
                 "META-INF/**/LICENSE.txt",
                 "META-INF/LICENSE.txt",
-                "META-INF/NOTICE.txt"
+                "META-INF/NOTICE.txt",
+                "META-INF/DEPENDENCIES",
+                "META-INF/INDEX.LIST"
             )
         }
     }
@@ -84,6 +86,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
 
     // Material Design 3
     implementation("com.google.android.material:material:1.11.0")
@@ -119,4 +122,14 @@ dependencies {
 
     // MessagePack for WebSocket protocol encoding
     implementation("org.msgpack:msgpack-core:0.9.8")
+
+    // OpenTelemetry
+    implementation(platform("io.opentelemetry:opentelemetry-bom:1.44.1"))
+    implementation("io.opentelemetry:opentelemetry-sdk")
+    implementation("io.opentelemetry:opentelemetry-api")
+    implementation("io.opentelemetry:opentelemetry-exporter-otlp") {
+        exclude(group = "io.opentelemetry", module = "opentelemetry-exporter-sender-grpc-managed-channel")
+    }
+    implementation("io.opentelemetry:opentelemetry-exporter-sender-okhttp")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-okhttp-3.0:2.10.0-alpha")
 }

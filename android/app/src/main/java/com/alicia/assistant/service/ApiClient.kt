@@ -1,5 +1,7 @@
 package com.alicia.assistant.service
 
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import io.opentelemetry.instrumentation.okhttp.v3_0.OkHttpTelemetry
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -7,7 +9,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    const val BASE_URL = "https://llm.hjkl.lol"
+    const val BASE_URL = "https://alicia.hjkl.lol"
 
     private const val API_KEY = ""
 
@@ -49,10 +51,19 @@ object ApiClient {
         }
     }
 
-    val client: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(retryInterceptor)
-        .addInterceptor(authInterceptor)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    private val otelInterceptor: Interceptor by lazy {
+        OkHttpTelemetry.builder(AliciaTelemetry.getOpenTelemetry())
+            .build()
+            .newInterceptor()
+    }
+
+    val client: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(retryInterceptor)
+            .addInterceptor(otelInterceptor)
+            .addInterceptor(authInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
 }

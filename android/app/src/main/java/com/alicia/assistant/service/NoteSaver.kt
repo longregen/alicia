@@ -1,9 +1,12 @@
 package com.alicia.assistant.service
 
+import android.util.Log
 import com.alicia.assistant.model.VoiceNote
 import com.alicia.assistant.storage.NoteRepository
 import java.io.File
 import java.util.UUID
+
+private const val TAG = "NoteSaver"
 
 sealed class SaveNoteResult {
     data class Success(val note: VoiceNote) : SaveNoteResult()
@@ -14,7 +17,8 @@ suspend fun saveRecordedNote(
     tempFile: File,
     notesDir: File,
     voiceRecognitionManager: VoiceRecognitionManager,
-    noteRepository: NoteRepository
+    noteRepository: NoteRepository,
+    apiClient: AliciaApiClient
 ): SaveNoteResult {
     val noteId = UUID.randomUUID().toString()
     notesDir.mkdirs()
@@ -41,5 +45,7 @@ suspend fun saveRecordedNote(
         words = transcription?.words ?: emptyList()
     )
     noteRepository.saveNote(note)
+    runCatching { apiClient.createNote(noteId, title, text) }
+        .onFailure { Log.w(TAG, "Failed to sync note to server", it) }
     return SaveNoteResult.Success(note)
 }

@@ -79,6 +79,7 @@ func (h *PreferencesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		MemoryMinFactual         *int     `json:"memory_min_factual"`
 		MemoryRetrievalCount     *int     `json:"memory_retrieval_count"`
 		MaxTokens                *int     `json:"max_tokens"`
+		Temperature              *float32 `json:"temperature"`
 		ParetoTargetScore        *float32 `json:"pareto_target_score"`
 		ParetoMaxGenerations     *int     `json:"pareto_max_generations"`
 		ParetoBranchesPerGen     *int     `json:"pareto_branches_per_gen"`
@@ -113,6 +114,7 @@ func (h *PreferencesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		MemoryMinFactual:         current.MemoryMinFactual,
 		MemoryRetrievalCount:     current.MemoryRetrievalCount,
 		MaxTokens:                current.MaxTokens,
+		Temperature:              current.Temperature,
 		ParetoTargetScore:        current.ParetoTargetScore,
 		ParetoMaxGenerations:     current.ParetoMaxGenerations,
 		ParetoBranchesPerGen:     current.ParetoBranchesPerGen,
@@ -179,6 +181,13 @@ func (h *PreferencesHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		updates.MaxTokens = *req.MaxTokens
+	}
+	if req.Temperature != nil {
+		if *req.Temperature < 0.0 || *req.Temperature > 2.0 {
+			respondError(w, "temperature must be 0.0-2.0", http.StatusBadRequest)
+			return
+		}
+		updates.Temperature = *req.Temperature
 	}
 	if req.ParetoTargetScore != nil {
 		if *req.ParetoTargetScore < 0.5 || *req.ParetoTargetScore > 5.0 {

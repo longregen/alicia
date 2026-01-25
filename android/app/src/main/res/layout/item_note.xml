@@ -24,6 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="16sp"
+            android:textStyle="bold"
             android:textColor="?attr/colorOnSurface"
             android:maxLines="1"
             android:ellipsize="end"/>
@@ -43,7 +44,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="12sp"
-            android:textColor="?attr/colorOutline"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:layout_marginTop="8dp"/>
 
     </LinearLayout>

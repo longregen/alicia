@@ -34,6 +34,7 @@ const (
 	TypePreferencesUpdate          = protocol.TypePreferencesUpdate
 	TypeAssistantToolsRegister     = protocol.TypeAssistantToolsRegister
 	TypeAssistantToolsAck          = protocol.TypeAssistantToolsAck
+	TypeAssistantHeartbeat         = protocol.TypeAssistantHeartbeat
 )
 
 type (

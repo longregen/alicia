@@ -17,11 +17,15 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alicia.assistant.model.RecognitionResult
 import com.alicia.assistant.model.VoiceNote
+import com.alicia.assistant.service.AliciaApiClient
 import com.alicia.assistant.service.SaveNoteResult
 import com.alicia.assistant.service.VoiceAssistantService
 import com.alicia.assistant.service.VoiceRecognitionManager
 import com.alicia.assistant.service.saveRecordedNote
 import com.alicia.assistant.storage.NoteRepository
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Span
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.color.MaterialColors
 import android.content.Intent
@@ -37,6 +41,7 @@ import java.util.*
 
 class VoiceNotesActivity : ComponentActivity() {
 
+    private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
     private lateinit var noteRepository: NoteRepository
     private lateinit var voiceRecognitionManager: VoiceRecognitionManager
     private lateinit var notesRecyclerView: RecyclerView
@@ -52,6 +57,8 @@ class VoiceNotesActivity : ComponentActivity() {
     private var playingNoteId: String? = null
     private var highlightJob: Job? = null
     private var playbackFullText: String? = null
+    private var recordingSpan: Span? = null
+    private var playbackSpan: Span? = null
 
     companion object {
         private const val REQUEST_RECORD_AUDIO = 2001
@@ -67,6 +74,16 @@ class VoiceNotesActivity : ComponentActivity() {
 
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.setNavigationOnClickListener { finish() }
+        toolbar.inflateMenu(R.menu.menu_notes)
+        toolbar.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_add_text_note -> {
+                    createTextNote()
+                    true
+                }
+                else -> false
+            }
+        }
 
         emptyState = findViewById(R.id.emptyState)
         notesRecyclerView = findViewById(R.id.notesRecyclerView)
@@ -108,6 +125,10 @@ class VoiceNotesActivity : ComponentActivity() {
             return
         }
 
+        playbackSpan = AliciaTelemetry.startSpan("note.playback", Attributes.builder()
+            .put("note.id", note.id)
+            .build())
+
         try {
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(audioPath)
@@ -147,6 +168,10 @@ class VoiceNotesActivity : ComponentActivity() {
         playbackFullText = null
         mediaPlayer?.release()
         mediaPlayer = null
+        playbackSpan?.let { span ->
+            span.end()
+            playbackSpan = null
+        }
         val wasPlaying = playingNoteId
         playingNoteId = null
         if (wasPlaying != null) {
@@ -197,6 +222,7 @@ class VoiceNotesActivity : ComponentActivity() {
         }
 
         isRecording = true
+        recordingSpan = AliciaTelemetry.startSpan("note.record")
         recordFab.visibility = View.GONE
         emptyState.visibility = View.GONE
         notesRecyclerView.visibility = View.GONE
@@ -207,6 +233,11 @@ class VoiceNotesActivity : ComponentActivity() {
             if (result is RecognitionResult.Error) {
                 lifecycleScope.launch {
                     isRecording = false
+                    recordingSpan?.let { span ->
+                        AliciaTelemetry.addSpanEvent(span, "recording.error")
+                        span.end()
+                        recordingSpan = null
+                    }
                     recordingOverlay.visibility = View.GONE
                     recordFab.visibility = View.VISIBLE
                     stopRecordButton.isEnabled = true
@@ -225,6 +256,11 @@ class VoiceNotesActivity : ComponentActivity() {
 
         val tempFile = voiceRecognitionManager.stopAndGetFile()
         if (tempFile == null) {
+            recordingSpan?.let { span ->
+                AliciaTelemetry.addSpanEvent(span, "recording.failed_no_file")
+                span.end()
+                recordingSpan = null
+            }
             recordingOverlay.visibility = View.GONE
             recordFab.visibility = View.VISIBLE
             stopRecordButton.isEnabled = true
@@ -235,13 +271,17 @@ class VoiceNotesActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val notesDir = File(filesDir, "voice_notes")
-            val result = saveRecordedNote(tempFile, notesDir, voiceRecognitionManager, noteRepository)
+            val result = saveRecordedNote(tempFile, notesDir, voiceRecognitionManager, noteRepository, apiClient)
             recordingOverlay.visibility = View.GONE
             stopRecordButton.isEnabled = true
             recordFab.visibility = View.VISIBLE
 
             if (result is SaveNoteResult.NoSpeechDetected) {
                 Toast.makeText(this@VoiceNotesActivity, "No speech detected", Toast.LENGTH_SHORT).show()
+            }
+            recordingSpan?.let { span ->
+                span.end()
+                recordingSpan = null
             }
             loadNotes()
         }
@@ -283,6 +323,28 @@ class VoiceNotesActivity : ComponentActivity() {
         startActivity(intent)
     }
 
+    private fun createTextNote() {
+        val noteId = UUID.randomUUID().toString()
+        val note = VoiceNote(
+            id = noteId,
+            title = "",
+            content = "",
+            timestamp = System.currentTimeMillis(),
+            duration = 0,
+            audioPath = null,
+            words = emptyList()
+        )
+        lifecycleScope.launch {
+            noteRepository.saveNote(note)
+            runCatching { apiClient.createNote(noteId, "", "") }
+                .onFailure { Log.w(TAG, "Failed to sync note to server", it) }
+            val intent = Intent(this@VoiceNotesActivity, NoteDetailActivity::class.java).apply {
+                putExtra(NoteDetailActivity.EXTRA_NOTE_ID, noteId)
+            }
+            startActivity(intent)
+        }
+    }
+
     private fun confirmDelete(note: VoiceNote) {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete_note)
@@ -290,10 +352,17 @@ class VoiceNotesActivity : ComponentActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 lifecycleScope.launch {
-                    if (playingNoteId == note.id) stopPlayback()
-                    note.audioPath?.let { File(it).delete() }
-                    noteRepository.deleteNote(note.id)
-                    loadNotes()
+                    AliciaTelemetry.withSpanAsync("note.delete", Attributes.builder()
+                        .put("note.id", note.id)
+                        .build()
+                    ) {
+                        if (playingNoteId == note.id) stopPlayback()
+                        note.audioPath?.let { File(it).delete() }
+                        noteRepository.deleteNote(note.id)
+                        runCatching { apiClient.deleteNote(note.id) }
+                            .onFailure { Log.w(TAG, "Failed to delete note from server", it) }
+                        loadNotes()
+                    }
                 }
             }
             .show()

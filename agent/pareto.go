@@ -556,9 +556,13 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 	totalTokens := 0
 	emptyRetryTemperatures := []float32{0.3, 0.7, 1.0}
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
+	temperature := float32Ptr(userPrefs.Temperature)
+
 	for i := 0; i < cfg.MaxToolIterations; i++ {
 		llmStart := time.Now()
 		resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
+			Temperature:    temperature,
 			GenerationName: "pareto.candidate",
 			PromptName:     systemPrompt.Name,
 			PromptVersion:  systemPrompt.Version,

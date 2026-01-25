@@ -68,6 +68,7 @@ export interface UserPreferencesResponse {
   memory_min_factual: number;
   memory_retrieval_count: number;
   max_tokens: number;
+  temperature: number;
   pareto_target_score: number;
   pareto_max_generations: number;
   pareto_branches_per_gen: number;

@@ -9,7 +9,6 @@
 
 # OkHttp
 -dontwarn okhttp3.**
--dontwarn okio.**
 -keep class okhttp3.** { *; }
 
 # Vosk
@@ -20,3 +19,13 @@
 # JNA
 -keep class net.java.dev.jna.** { *; }
 -dontwarn net.java.dev.jna.**
+
+# OpenTelemetry
+-keep class io.opentelemetry.** { *; }
+-dontwarn io.opentelemetry.**
+-keep class okio.** { *; }
+-dontwarn okio.**
+
+# gRPC
+-keep class io.grpc.** { *; }
+-dontwarn io.grpc.**

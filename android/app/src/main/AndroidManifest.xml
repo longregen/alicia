@@ -70,7 +70,7 @@
         <activity
             android:name=".VoiceNotesActivity"
             android:exported="false"
-            android:label="@string/voice_notes"
+            android:label="@string/notes"
             android:parentActivityName=".MainActivity" />
 
         <activity
@@ -89,18 +89,6 @@
             android:exported="false"
             android:label="@string/chat"
             android:parentActivityName=".ConversationListActivity"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".NotesActivity"
-            android:exported="false"
-            android:label="@string/server_notes"
-            android:parentActivityName=".MainActivity" />
-
-        <activity
-            android:name=".NoteEditorActivity"
-            android:exported="false"
-            android:parentActivityName=".NotesActivity"
             android:windowSoftInputMode="adjustResize" />
 
         <activity

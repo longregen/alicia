@@ -3,7 +3,10 @@ package com.alicia.assistant.service
 import android.content.Context
 import android.media.MediaPlayer
 import android.util.Log
+import com.alicia.assistant.telemetry.AliciaTelemetry
 import com.google.gson.Gson
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Span
 import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -13,6 +16,8 @@ import java.io.File
 class TtsManager(private val context: Context, private val scope: CoroutineScope) {
 
     private var mediaPlayer: MediaPlayer? = null
+    @Volatile
+    private var currentTtsSpan: Span? = null
     private val gson = Gson()
 
     private data class TtsRequest(
@@ -41,6 +46,15 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
 
     fun speak(text: String, speed: Float = 1.5f, onDone: (() -> Unit)? = null) {
         scope.launch {
+            val ttsSpan = AliciaTelemetry.startSpan("tts.synthesize",
+                Attributes.builder()
+                    .put("tts.model", "kokoro")
+                    .put("tts.text_length", text.length.toLong())
+                    .put("tts.voice", "af_heart")
+                    .put("tts.speed", speed.toDouble())
+                    .build()
+            )
+            currentTtsSpan = ttsSpan
             try {
                 val tempFile = withContext(Dispatchers.IO) {
                     val ttsRequest = TtsRequest(
@@ -58,9 +72,16 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
                         .post(requestBody)
                         .build()
 
+                    val apiStartMs = System.currentTimeMillis()
                     ApiClient.client.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
                             val audioData = response.body?.bytes() ?: return@withContext null
+                            AliciaTelemetry.addSpanEvent(ttsSpan, "tts.api_complete",
+                                Attributes.builder()
+                                    .put("tts.audio_bytes", audioData.size.toLong())
+                                    .put("tts.api_duration_ms", System.currentTimeMillis() - apiStartMs)
+                                    .build()
+                            )
                             val file = File.createTempFile("tts_", ".mp3", context.cacheDir)
                             file.writeBytes(audioData)
                             file
@@ -75,11 +96,16 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
                     if (tempFile != null) {
                         playAudio(tempFile, onDone)
                     } else {
+                        ttsSpan.end()
+                        currentTtsSpan = null
                         onDone?.invoke()
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "TTS failed", e)
+                AliciaTelemetry.recordError(ttsSpan, e)
+                ttsSpan.end()
+                currentTtsSpan = null
                 withContext(Dispatchers.Main) { onDone?.invoke() }
             }
         }
@@ -89,14 +115,25 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
         stopPlayback()
         VoiceAssistantService.pauseDetection()
         val player = MediaPlayer()
+        val ttsSpan = currentTtsSpan
         try {
             player.setDataSource(file.absolutePath)
             player.setOnCompletionListener {
+                ttsSpan?.let { span ->
+                    AliciaTelemetry.addSpanEvent(span, "tts.playback_complete")
+                    span.end()
+                    currentTtsSpan = null
+                }
                 VoiceAssistantService.resumeDetection()
                 file.delete()
                 onDone?.invoke()
             }
             player.setOnErrorListener { _, _, _ ->
+                ttsSpan?.let { span ->
+                    AliciaTelemetry.addSpanEvent(span, "tts.playback_error")
+                    span.end()
+                    currentTtsSpan = null
+                }
                 VoiceAssistantService.resumeDetection()
                 file.delete()
                 onDone?.invoke()
@@ -104,8 +141,14 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
             }
             player.prepare()
             player.start()
+            ttsSpan?.let { AliciaTelemetry.addSpanEvent(it, "tts.playback_start") }
             mediaPlayer = player
         } catch (e: Exception) {
+            ttsSpan?.let { span ->
+                AliciaTelemetry.recordError(span, e)
+                span.end()
+                currentTtsSpan = null
+            }
             VoiceAssistantService.resumeDetection()
             player.release()
             file.delete()
@@ -114,6 +157,8 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
     }
 
     fun stopPlayback() {
+        currentTtsSpan?.end()
+        currentTtsSpan = null
         try {
             mediaPlayer?.apply {
                 if (isPlaying) stop()

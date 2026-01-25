@@ -10,7 +10,10 @@ import android.graphics.Color
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.util.Log
+import com.alicia.assistant.telemetry.AliciaTelemetry
 import com.alicia.assistant.tools.ReadScreenExecutor
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Span
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageButton
@@ -20,6 +23,7 @@ import com.alicia.assistant.model.RecognitionResult
 import com.alicia.assistant.skills.SkillRouter
 import com.alicia.assistant.storage.PreferencesManager
 import kotlinx.coroutines.*
+import java.util.UUID
 
 class AliciaInteractionSession(context: Context) : VoiceInteractionSession(context) {
 
@@ -53,6 +57,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
     private var isProcessing = false
     private var processingJob: Job? = null
     private var waveAnimator: AnimatorSet? = null
+    private var sessionSpan: Span? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -90,6 +95,12 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
+        val voiceSessionId = UUID.randomUUID().toString()
+        sessionSpan = AliciaTelemetry.startSpan("voice.interaction_session",
+            Attributes.builder()
+                .put("voice_session.id", voiceSessionId)
+                .build()
+        )
         screenContext = null
         startListening()
     }
@@ -109,6 +120,13 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
             screenContext = parts.joinToString("\n")
             ReadScreenExecutor.updateScreenContent(screenContext!!)
             Log.d(TAG, "Captured screen context (${screenContext!!.length} chars)")
+            sessionSpan?.let {
+                AliciaTelemetry.addSpanEvent(it, "screen_context.captured",
+                    Attributes.builder()
+                        .put("screen_context.length", screenContext!!.length.toLong())
+                        .build()
+                )
+            }
         }
     }
 
@@ -181,11 +199,30 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         transcribedText?.visibility = View.VISIBLE
         statusText?.text = context.getString(R.string.processing)
 
+        sessionSpan?.let {
+            AliciaTelemetry.addSpanEvent(it, "voice.transcription_complete",
+                Attributes.builder()
+                    .put("voice.text", text)
+                    .build()
+            )
+        }
+
         processingJob = sessionScope.launch {
             ocrJob?.join()
             val capturedContext = screenContext
+            sessionSpan?.let {
+                AliciaTelemetry.addSpanEvent(it, "voice.processing_start")
+            }
             val result = withContext(Dispatchers.IO) {
                 skillRouter.processInput(text, capturedContext)
+            }
+
+            sessionSpan?.let {
+                AliciaTelemetry.addSpanEvent(it, "voice.response_received",
+                    Attributes.builder()
+                        .put("voice.response_length", result.response.length.toLong())
+                        .build()
+                )
             }
 
             responseText?.text = result.response
@@ -259,9 +296,13 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
             isListening = false
         }
         ttsManager.stopPlayback()
+        sessionSpan?.end()
+        sessionSpan = null
     }
 
     override fun onDestroy() {
+        sessionSpan?.end()
+        sessionSpan = null
         voiceRecognitionManager.destroy()
         vadDetector.close()
         ttsManager.destroy()

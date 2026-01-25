@@ -6,6 +6,7 @@ import (
 
 	"github.com/longregen/alicia/api/domain"
 	"github.com/longregen/alicia/api/store"
+	"github.com/longregen/alicia/shared/preferences"
 	"github.com/longregen/alicia/shared/ptr"
 )
 
@@ -18,27 +19,29 @@ func NewPreferencesService(s *store.Store) *PreferencesService {
 }
 
 func DefaultPreferences(userID string) *domain.UserPreferences {
+	d := preferences.Get()
 	now := time.Now().UTC()
 	return &domain.UserPreferences{
 		UserID:                   userID,
-		Theme:                    domain.ThemeSystem,
-		AudioOutputEnabled:       false,
-		VoiceSpeed:               1.0,
-		MemoryMinImportance:      ptr.To(3),
-		MemoryMinHistorical:      ptr.To(2),
-		MemoryMinPersonal:        ptr.To(2),
-		MemoryMinFactual:         ptr.To(2),
-		MemoryRetrievalCount:     4,
-		MaxTokens:                16384,
-		ParetoTargetScore:        3.0,
-		ParetoMaxGenerations:     7,
-		ParetoBranchesPerGen:     3,
-		ParetoArchiveSize:        50,
-		ParetoEnableCrossover:    true,
-		NotesSimilarityThreshold: 0.7,
-		NotesMaxCount:            3,
-		ConfirmDeleteMemory:      true,
-		ShowRelevanceScores:      false,
+		Theme:                    d.Theme,
+		AudioOutputEnabled:       d.AudioOutputEnabled,
+		VoiceSpeed:               d.VoiceSpeed,
+		MemoryMinImportance:      ptr.To(d.MemoryMinImportance),
+		MemoryMinHistorical:      ptr.To(d.MemoryMinHistorical),
+		MemoryMinPersonal:        ptr.To(d.MemoryMinPersonal),
+		MemoryMinFactual:         ptr.To(d.MemoryMinFactual),
+		MemoryRetrievalCount:     d.MemoryRetrievalCount,
+		MaxTokens:                d.MaxTokens,
+		Temperature:              d.Temperature,
+		ParetoTargetScore:        d.ParetoTargetScore,
+		ParetoMaxGenerations:     d.ParetoMaxGenerations,
+		ParetoBranchesPerGen:     d.ParetoBranchesPerGen,
+		ParetoArchiveSize:        d.ParetoArchiveSize,
+		ParetoEnableCrossover:    d.ParetoEnableCrossover,
+		NotesSimilarityThreshold: d.NotesSimilarityThreshold,
+		NotesMaxCount:            d.NotesMaxCount,
+		ConfirmDeleteMemory:      d.ConfirmDeleteMemory,
+		ShowRelevanceScores:      d.ShowRelevanceScores,
 		CreatedAt:                now,
 		UpdatedAt:                now,
 	}

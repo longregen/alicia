@@ -422,7 +422,9 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 		)
 	}
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
 	resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
+		Temperature:    float32Ptr(userPrefs.Temperature),
 		GenerationName: "agent.continue_response",
 		PromptName:     systemPrompt.Name,
 		PromptVersion:  systemPrompt.Version,
@@ -540,6 +542,9 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 	var totalToolCalls int
 	var reasoningParts []string
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
+	temperature := float32Ptr(userPrefs.Temperature)
+
 	for i := 0; i < cfg.MaxToolIterations; i++ {
 		if i > 0 {
 			deps.Notifier.SendThinking(ctx, msgID, fmt.Sprintf("Analyzing results (step %d)...", i+1))
@@ -560,6 +565,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 		llmStart := time.Now()
 		resp, err := deps.LLM.ChatWithOptions(llmCtx, llmMsgs, tools, ChatOptions{
+			Temperature:    temperature,
 			GenerationName: "agent.tool_loop",
 			PromptName:     systemPrompt.Name,
 			PromptVersion:  systemPrompt.Version,

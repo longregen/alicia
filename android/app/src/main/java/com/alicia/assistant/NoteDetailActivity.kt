@@ -4,12 +4,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.model.VoiceNote
+import com.alicia.assistant.service.AliciaApiClient
 import com.alicia.assistant.service.VoiceAssistantService
 import com.alicia.assistant.storage.NoteRepository
 import com.google.android.material.appbar.MaterialToolbar
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 
 class NoteDetailActivity : ComponentActivity() {
 
+    private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
     private lateinit var noteRepository: NoteRepository
     private lateinit var titleEdit: EditText
     private lateinit var contentEdit: EditText
@@ -24,6 +27,7 @@ class NoteDetailActivity : ComponentActivity() {
     private var originalNote: VoiceNote? = null
 
     companion object {
+        private const val TAG = "NoteDetailActivity"
         const val EXTRA_NOTE_ID = "note_id"
     }
 
@@ -63,7 +67,7 @@ class NoteDetailActivity : ComponentActivity() {
 
     private fun copyToClipboard() {
         val content = contentEdit.text.toString()
-        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        val clipboard = getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newPlainText("note", content))
         Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
     }
@@ -95,6 +99,8 @@ class NoteDetailActivity : ComponentActivity() {
         val updated = note.copy(title = effectiveTitle, content = newContent)
         lifecycleScope.launch {
             noteRepository.saveNote(updated)
+            runCatching { apiClient.updateNote(note.id, effectiveTitle, newContent) }
+                .onFailure { Log.w(TAG, "Failed to sync note update to server", it) }
         }
     }
 

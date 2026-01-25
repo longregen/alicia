@@ -1,5 +1,7 @@
 package com.alicia.assistant.service
 
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -56,17 +58,24 @@ class AliciaApiClient(
     )
 
     suspend fun createConversation(title: String = "New Chat"): Conversation = withContext(Dispatchers.IO) {
-        val body = JSONObject().apply {
-            put("title", title)
+        AliciaTelemetry.withSpan("api.create_conversation", Attributes.builder()
+            .put("conversation.title", title)
+            .build()
+        ) {
+            val body = JSONObject().apply {
+                put("title", title)
+            }
+            val response = post("/api/v1/conversations", body)
+            parseConversation(response)
         }
-        val response = post("/api/v1/conversations", body)
-        parseConversation(response)
     }
 
     suspend fun listConversations(): List<Conversation> = withContext(Dispatchers.IO) {
-        val response = get("/api/v1/conversations")
-        val conversations = response.optJSONArray("conversations") ?: JSONArray()
-        (0 until conversations.length()).map { parseConversation(conversations.getJSONObject(it)) }
+        AliciaTelemetry.withSpan("api.list_conversations") {
+            val response = get("/api/v1/conversations")
+            val conversations = response.optJSONArray("conversations") ?: JSONArray()
+            (0 until conversations.length()).map { parseConversation(conversations.getJSONObject(it)) }
+        }
     }
 
     suspend fun getConversation(id: String): Conversation = withContext(Dispatchers.IO) {
@@ -75,9 +84,14 @@ class AliciaApiClient(
     }
 
     suspend fun getMessages(conversationId: String): List<Message> = withContext(Dispatchers.IO) {
-        val response = get("/api/v1/conversations/$conversationId/messages")
-        val messages = response.optJSONArray("messages") ?: JSONArray()
-        (0 until messages.length()).map { parseMessage(messages.getJSONObject(it)) }
+        AliciaTelemetry.withSpan("api.get_messages", Attributes.builder()
+            .put("conversation.id", conversationId)
+            .build()
+        ) {
+            val response = get("/api/v1/conversations/$conversationId/messages")
+            val messages = response.optJSONArray("messages") ?: JSONArray()
+            (0 until messages.length()).map { parseMessage(messages.getJSONObject(it)) }
+        }
     }
 
     suspend fun sendMessageSync(
@@ -85,31 +99,41 @@ class AliciaApiClient(
         content: String,
         previousId: String? = null
     ): SyncResponse = withContext(Dispatchers.IO) {
-        val body = JSONObject().apply {
-            put("content", content)
-            put("use_pareto", false)
-            if (previousId != null) {
-                put("previous_id", previousId)
+        AliciaTelemetry.withSpan("api.send_message_sync", Attributes.builder()
+            .put("conversation.id", conversationId)
+            .put("message.content_length", content.length.toLong())
+            .build()
+        ) {
+            val body = JSONObject().apply {
+                put("content", content)
+                put("use_pareto", false)
+                if (previousId != null) {
+                    put("previous_id", previousId)
+                }
             }
-        }
-        val response = post(
-            "/api/v1/conversations/$conversationId/messages?sync=true",
-            body,
-            useSyncClient = true
-        )
+            val response = post(
+                "/api/v1/conversations/$conversationId/messages?sync=true",
+                body,
+                useSyncClient = true
+            )
 
-        SyncResponse(
-            userMessage = parseMessage(response.getJSONObject("user_message")),
-            assistantMessage = parseMessage(response.getJSONObject("assistant_message"))
-        )
+            SyncResponse(
+                userMessage = parseMessage(response.getJSONObject("user_message")),
+                assistantMessage = parseMessage(response.getJSONObject("assistant_message"))
+            )
+        }
     }
 
     suspend fun getPreferences(): JSONObject = withContext(Dispatchers.IO) {
-        get("/api/v1/preferences")
+        AliciaTelemetry.withSpan("api.get_preferences") {
+            get("/api/v1/preferences")
+        }
     }
 
     suspend fun updatePreferences(updates: JSONObject): JSONObject = withContext(Dispatchers.IO) {
-        patch("/api/v1/preferences", updates)
+        AliciaTelemetry.withSpan("api.update_preferences") {
+            patch("/api/v1/preferences", updates)
+        }
     }
 
     private fun get(path: String): JSONObject {
@@ -191,8 +215,6 @@ class AliciaApiClient(
         )
     }
 
-    // --- Notes API ---
-
     data class Note(
         val id: String,
         val title: String,
@@ -202,37 +224,56 @@ class AliciaApiClient(
     )
 
     suspend fun listNotes(): List<Note> = withContext(Dispatchers.IO) {
-        val response = get("/api/v1/notes")
-        val notes = response.optJSONArray("notes") ?: JSONArray()
-        (0 until notes.length()).map { parseNote(notes.getJSONObject(it)) }
+        AliciaTelemetry.withSpan("api.list_notes") {
+            val response = get("/api/v1/notes")
+            val notes = response.optJSONArray("notes") ?: JSONArray()
+            (0 until notes.length()).map { parseNote(notes.getJSONObject(it)) }
+        }
     }
 
     suspend fun getNote(id: String): Note = withContext(Dispatchers.IO) {
-        val response = get("/api/v1/notes/$id")
-        parseNote(response)
+        AliciaTelemetry.withSpan("api.get_note", Attributes.builder()
+            .put("note.id", id)
+            .build()
+        ) {
+            val response = get("/api/v1/notes/$id")
+            parseNote(response)
+        }
     }
 
     suspend fun createNote(id: String, title: String, content: String): Note = withContext(Dispatchers.IO) {
-        val body = JSONObject().apply {
-            put("id", id)
-            put("title", title)
-            put("content", content)
+        AliciaTelemetry.withSpan("api.create_note") {
+            val body = JSONObject().apply {
+                put("id", id)
+                put("title", title)
+                put("content", content)
+            }
+            val response = post("/api/v1/notes", body)
+            parseNote(response)
         }
-        val response = post("/api/v1/notes", body)
-        parseNote(response)
     }
 
     suspend fun updateNote(id: String, title: String, content: String): Note = withContext(Dispatchers.IO) {
-        val body = JSONObject().apply {
-            put("title", title)
-            put("content", content)
+        AliciaTelemetry.withSpan("api.update_note", Attributes.builder()
+            .put("note.id", id)
+            .build()
+        ) {
+            val body = JSONObject().apply {
+                put("title", title)
+                put("content", content)
+            }
+            val response = put("/api/v1/notes/$id", body)
+            parseNote(response)
         }
-        val response = put("/api/v1/notes/$id", body)
-        parseNote(response)
     }
 
     suspend fun deleteNote(id: String): Unit = withContext(Dispatchers.IO) {
-        delete("/api/v1/notes/$id")
+        AliciaTelemetry.withSpan("api.delete_note", Attributes.builder()
+            .put("note.id", id)
+            .build()
+        ) {
+            delete("/api/v1/notes/$id")
+        }
     }
 
     private fun parseNote(json: JSONObject): Note {
@@ -244,8 +285,6 @@ class AliciaApiClient(
             updatedAt = json.optString("updated_at", "")
         )
     }
-
-    // --- HTTP helpers ---
 
     private fun put(path: String, body: JSONObject): JSONObject {
         val requestBody = body.toString().toRequestBody(JSON_MEDIA_TYPE)

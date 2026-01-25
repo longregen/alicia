@@ -19,22 +19,25 @@ import (
 )
 
 const (
-	ToolTimeout       = 30 * time.Second
-	ReconnectDelayMin = 5 * time.Second
-	ReconnectDelayMax = 60 * time.Second
-	AssistantClientID = "__assistant__"
+	ToolTimeout             = 30 * time.Second
+	ReconnectDelayMin       = 5 * time.Second
+	ReconnectDelayMax       = 60 * time.Second
+	AssistantClientID       = "__assistant__"
+	HeartbeatStaleThreshold = 30 * time.Second
 )
 
 type Bridge struct {
-	wsURL    string
-	secret   string
-	conn     *websocket.Conn
-	connMu   sync.Mutex
-	pending  map[string]chan *protocol.ToolUseResult
-	mu       sync.Mutex
-	done     chan struct{}
-	doneOnce sync.Once
-	closed   atomic.Bool
+	wsURL         string
+	secret        string
+	conn          *websocket.Conn
+	connMu        sync.Mutex
+	pending       map[string]chan *protocol.ToolUseResult
+	mu            sync.Mutex
+	done          chan struct{}
+	doneOnce      sync.Once
+	closed        atomic.Bool
+	lastHeartbeat time.Time
+	heartbeatMu   sync.RWMutex
 }
 
 func NewBridge(wsURL, secret string) *Bridge {
@@ -150,6 +153,13 @@ func (b *Bridge) readLoop() {
 			continue
 		}
 
+		if env.Type == protocol.TypeAssistantHeartbeat {
+			b.heartbeatMu.Lock()
+			b.lastHeartbeat = time.Now()
+			b.heartbeatMu.Unlock()
+			continue
+		}
+
 		if env.Type == protocol.TypeToolUseResult {
 			result, err := protocol.DecodeBody[protocol.ToolUseResult](env)
 			if err != nil {
@@ -167,6 +177,9 @@ func (b *Bridge) readLoop() {
 				default:
 				}
 			}
+			b.heartbeatMu.Lock()
+			b.lastHeartbeat = time.Now()
+			b.heartbeatMu.Unlock()
 		}
 	}
 }
@@ -204,7 +217,22 @@ func (b *Bridge) reconnect() {
 	}
 }
 
+func (b *Bridge) isAssistantAvailable() bool {
+	b.heartbeatMu.RLock()
+	last := b.lastHeartbeat
+	b.heartbeatMu.RUnlock()
+
+	if last.IsZero() {
+		return false
+	}
+	return time.Since(last) < HeartbeatStaleThreshold
+}
+
 func (b *Bridge) SendToolRequest(ctx context.Context, toolName string, args map[string]any) (string, error) {
+	if !b.isAssistantAvailable() {
+		return "", fmt.Errorf("assistant device unavailable (no heartbeat for >%v); phone may be in background or offline", HeartbeatStaleThreshold)
+	}
+
 	requestID := uuid.New().String()
 
 	ch := make(chan *protocol.ToolUseResult, 1)

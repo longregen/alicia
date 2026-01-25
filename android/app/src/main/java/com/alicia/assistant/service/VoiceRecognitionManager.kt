@@ -5,7 +5,10 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import com.alicia.assistant.telemetry.AliciaTelemetry
 import com.google.gson.Gson
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Span
 import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -124,6 +127,10 @@ class VoiceRecognitionManager(
     }
 
     private suspend fun transcribe(file: File, onResult: (RecognitionResult) -> Unit) {
+        val transcribeSpan = AliciaTelemetry.startSpan("asr.transcribe",
+            Attributes.builder().put("asr.model", "whisper").build()
+        )
+        val startTimeMs = System.currentTimeMillis()
         try {
             val result = withContext(Dispatchers.IO) {
                 val mimeType = if (file.extension == "wav") "audio/wav" else "audio/mp4"
@@ -154,6 +161,10 @@ class VoiceRecognitionManager(
                 }
             }
 
+            val durationMs = System.currentTimeMillis() - startTimeMs
+            transcribeSpan.setAttribute("asr.duration_ms", durationMs)
+            transcribeSpan.setAttribute("asr.text_length", (result?.length ?: 0).toLong())
+
             withContext(Dispatchers.Main) {
                 when {
                     result == null -> onResult(RecognitionResult.Error(ErrorReason.SERVER_ERROR))
@@ -164,8 +175,11 @@ class VoiceRecognitionManager(
                     else -> onResult(RecognitionResult.Error(ErrorReason.NO_SPEECH_DETECTED))
                 }
             }
+            transcribeSpan.end()
         } catch (e: Exception) {
             Log.e(TAG, "Transcription failed", e)
+            AliciaTelemetry.recordError(transcribeSpan, e)
+            transcribeSpan.end()
             withContext(Dispatchers.Main) {
                 onResult(RecognitionResult.Error(ErrorReason.NETWORK_ERROR, e))
             }
@@ -199,6 +213,10 @@ class VoiceRecognitionManager(
     }
 
     suspend fun transcribeVerbose(file: File): VerboseTranscription? = withContext(Dispatchers.IO) {
+        val verboseSpan = AliciaTelemetry.startSpan("asr.transcribe_verbose",
+            Attributes.builder().put("asr.model", "whisper").build()
+        )
+        val startTimeMs = System.currentTimeMillis()
         try {
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -233,14 +251,21 @@ class VoiceRecognitionManager(
                     } ?: emptyList()
 
                     Log.d(TAG, "Verbose transcription: $text (${words.size} words, ${durationMs}ms)")
+                    verboseSpan.setAttribute("asr.duration_ms", System.currentTimeMillis() - startTimeMs)
+                    verboseSpan.setAttribute("asr.text_length", text.length.toLong())
+                    verboseSpan.setAttribute("asr.word_count", words.size.toLong())
+                    verboseSpan.end()
                     VerboseTranscription(text, words, durationMs)
                 } else {
                     Log.e(TAG, "Whisper verbose API error: ${response.code} $body")
+                    verboseSpan.end()
                     null
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Verbose transcription failed", e)
+            AliciaTelemetry.recordError(verboseSpan, e)
+            verboseSpan.end()
             null
         }
     }
@@ -280,6 +305,7 @@ class VoiceRecognitionManager(
     }
 
     private fun recordWithVad(vadDetector: SileroVadDetector): VadResult {
+        val recordingSpan = AliciaTelemetry.startSpan("voice.recording")
         val bufferSize = maxOf(
             AudioRecord.getMinBufferSize(
                 VAD_SAMPLE_RATE,
@@ -300,6 +326,8 @@ class VoiceRecognitionManager(
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "AudioRecord failed to initialize")
             recorder.release()
+            AliciaTelemetry.addSpanEvent(recordingSpan, "vad.init_failed")
+            recordingSpan.end()
             return VadResult.Error
         }
 
@@ -315,7 +343,14 @@ class VoiceRecognitionManager(
 
         try {
             while (isRecording) {
-                if (System.currentTimeMillis() - startTime > MAX_RECORDING_MS) break
+                if (System.currentTimeMillis() - startTime > MAX_RECORDING_MS) {
+                    AliciaTelemetry.addSpanEvent(recordingSpan, "vad.max_duration",
+                        Attributes.builder()
+                            .put("vad.max_duration_ms", MAX_RECORDING_MS.toLong())
+                            .build()
+                    )
+                    break
+                }
 
                 val read = recorder.read(frame, 0, VAD_FRAME_SIZE)
                 if (read != VAD_FRAME_SIZE) continue
@@ -331,12 +366,24 @@ class VoiceRecognitionManager(
                     if (prob > SPEECH_THRESHOLD) {
                         speechDetected = true
                         silenceStartMs = 0L
+                        AliciaTelemetry.addSpanEvent(recordingSpan, "vad.speech_start",
+                            Attributes.builder()
+                                .put("vad.probability", prob.toDouble())
+                                .put("vad.elapsed_ms", (System.currentTimeMillis() - startTime))
+                                .build()
+                        )
                     }
                 } else {
                     if (prob < SILENCE_THRESHOLD) {
                         if (silenceStartMs == 0L) {
                             silenceStartMs = System.currentTimeMillis()
                         } else if (System.currentTimeMillis() - silenceStartMs >= SILENCE_DURATION_MS) {
+                            AliciaTelemetry.addSpanEvent(recordingSpan, "vad.silence_detected",
+                                Attributes.builder()
+                                    .put("vad.silence_duration_ms", SILENCE_DURATION_MS)
+                                    .put("vad.total_duration_ms", (System.currentTimeMillis() - startTime))
+                                    .build()
+                            )
                             break
                         }
                     } else {
@@ -350,8 +397,15 @@ class VoiceRecognitionManager(
         }
 
         val pcmData = pcmStream.toByteArray()
-        if (pcmData.isEmpty() || !speechDetected) return VadResult.NoSpeech
+        if (pcmData.isEmpty() || !speechDetected) {
+            AliciaTelemetry.addSpanEvent(recordingSpan, "vad.no_speech")
+            recordingSpan.end()
+            return VadResult.NoSpeech
+        }
 
+        recordingSpan.setAttribute("voice.recording_duration_ms", System.currentTimeMillis() - startTime)
+        recordingSpan.setAttribute("voice.pcm_bytes", pcmData.size.toLong())
+        recordingSpan.end()
         return VadResult.Audio(writeWavFile(pcmData))
     }
 

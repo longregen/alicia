@@ -13,9 +13,15 @@ import androidx.recyclerview.widget.RecyclerView
 import com.alicia.assistant.databinding.ActivityChatBinding
 import com.alicia.assistant.service.AliciaApiClient
 import com.alicia.assistant.storage.ConversationRepository
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import com.alicia.assistant.ws.AssistantWebSocket
+import com.alicia.assistant.ws.MessageListener
+import io.opentelemetry.api.common.Attributes
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ChatActivity : ComponentActivity() {
 
@@ -29,6 +35,84 @@ class ChatActivity : ComponentActivity() {
     private lateinit var conversationId: String
     private val messageAdapter = MessageAdapter()
     private val messages = mutableListOf<AliciaApiClient.Message>()
+    private var webSocket: AssistantWebSocket? = null
+    private var pendingMessageId: String? = null
+
+    private val messageListener = object : MessageListener {
+        override fun onUserMessage(conversationId: String, messageId: String, content: String, previousId: String?) {
+            // Server confirmed user message - update the temp message with the real ID
+            if (conversationId == this@ChatActivity.conversationId) {
+                runOnUiThread {
+                    pendingMessageId?.let { pendingId ->
+                        val idx = messages.indexOfFirst { it.id == pendingId }
+                        if (idx >= 0) {
+                            messages[idx] = AliciaApiClient.Message(
+                                id = messageId,
+                                conversationId = conversationId,
+                                role = "user",
+                                content = content,
+                                status = "completed",
+                                previousId = previousId
+                            )
+                            messageAdapter.notifyItemChanged(idx)
+                        }
+                    }
+                }
+            }
+        }
+
+        override fun onAssistantMessage(conversationId: String, messageId: String, content: String, previousId: String?) {
+            if (conversationId == this@ChatActivity.conversationId) {
+                runOnUiThread {
+                    val msg = AliciaApiClient.Message(
+                        id = messageId,
+                        conversationId = conversationId,
+                        role = "assistant",
+                        content = content,
+                        status = "completed",
+                        previousId = previousId
+                    )
+                    messages.add(msg)
+                    messageAdapter.notifyItemInserted(messages.size - 1)
+                    scrollToBottom()
+                    binding.sendButton.isEnabled = true
+                    binding.typingIndicator.visibility = View.GONE
+                    pendingMessageId = null
+                }
+            }
+        }
+
+        override fun onThinkingUpdate(conversationId: String, messageId: String, content: String, progress: Float) {
+            // Could update typing indicator with progress
+        }
+
+        override fun onToolUseStarted(conversationId: String, toolName: String, arguments: Map<String, Any?>) {
+            // Could show tool usage indicator
+        }
+
+        override fun onToolUseCompleted(conversationId: String, toolName: String, success: Boolean) {
+            // Could update tool usage indicator
+        }
+
+        override fun onError(conversationId: String, error: String) {
+            if (conversationId == this@ChatActivity.conversationId) {
+                runOnUiThread {
+                    Toast.makeText(this@ChatActivity, error, Toast.LENGTH_SHORT).show()
+                    binding.sendButton.isEnabled = true
+                    binding.typingIndicator.visibility = View.GONE
+                    // Remove pending user message on error
+                    pendingMessageId?.let { pendingId ->
+                        val idx = messages.indexOfFirst { it.id == pendingId }
+                        if (idx >= 0) {
+                            messages.removeAt(idx)
+                            messageAdapter.notifyItemRemoved(idx)
+                        }
+                    }
+                    pendingMessageId = null
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,6 +129,12 @@ class ChatActivity : ComponentActivity() {
         val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
         repository = ConversationRepository(this, apiClient)
 
+        webSocket = (application as? AliciaApplication)?.assistantWebSocket
+        webSocket?.let { ws ->
+            ws.addMessageListener(conversationId, messageListener)
+            ws.subscribeToConversation(conversationId)
+        }
+
         binding.toolbar.setNavigationOnClickListener { finish() }
 
         val layoutManager = LinearLayoutManager(this).apply {
@@ -58,16 +148,28 @@ class ChatActivity : ComponentActivity() {
         loadMessages()
     }
 
+    override fun onDestroy() {
+        webSocket?.removeMessageListener(conversationId)
+        webSocket?.unsubscribeFromConversation(conversationId)
+        super.onDestroy()
+    }
+
     private fun loadMessages() {
         lifecycleScope.launch {
-            try {
-                val loadedMessages = repository.getMessages(conversationId)
-                messages.clear()
-                messages.addAll(loadedMessages)
-                messageAdapter.notifyDataSetChanged()
-                scrollToBottom()
-            } catch (e: Exception) {
-                Toast.makeText(this@ChatActivity, R.string.load_failed, Toast.LENGTH_SHORT).show()
+            AliciaTelemetry.withSpanAsync("chat.load_messages", Attributes.builder()
+                .put("conversation.id", conversationId)
+                .build()
+            ) { span ->
+                try {
+                    val loadedMessages = repository.getMessages(conversationId)
+                    messages.clear()
+                    messages.addAll(loadedMessages)
+                    messageAdapter.notifyDataSetChanged()
+                    scrollToBottom()
+                } catch (e: Exception) {
+                    AliciaTelemetry.recordError(span, e)
+                    Toast.makeText(this@ChatActivity, R.string.load_failed, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -87,35 +189,71 @@ class ChatActivity : ComponentActivity() {
             content = content,
             status = "complete"
         )
+        pendingMessageId = tempUserMsg.id
         messages.add(tempUserMsg)
         messageAdapter.notifyItemInserted(messages.size - 1)
         scrollToBottom()
 
         val previousId = if (messages.size >= 2) messages[messages.size - 2].id else null
 
+        // Try WebSocket first
+        val ws = webSocket
+        if (ws != null && ws.isConnected()) {
+            lifecycleScope.launch {
+                AliciaTelemetry.withSpanAsync("chat.send_message_ws", Attributes.builder()
+                    .put("conversation.id", conversationId)
+                    .put("message.content_length", content.length.toLong())
+                    .build()
+                ) { span ->
+                    val sent = withContext(Dispatchers.IO) {
+                        ws.sendUserMessage(conversationId, content, previousId)
+                    }
+                    if (!sent) {
+                        AliciaTelemetry.addSpanEvent(span, "ws_send_failed_fallback_http")
+                        // Fall back to HTTP if WebSocket send fails
+                        sendMessageViaHttp(content, tempUserMsg, previousId)
+                    }
+                    // Response will come via messageListener callback
+                }
+            }
+        } else {
+            // Fall back to HTTP
+            sendMessageViaHttp(content, tempUserMsg, previousId)
+        }
+    }
+
+    private fun sendMessageViaHttp(content: String, tempUserMsg: AliciaApiClient.Message, previousId: String?) {
         lifecycleScope.launch {
-            try {
-                val response = repository.sendMessage(conversationId, content, previousId)
+            AliciaTelemetry.withSpanAsync("chat.send_message_http", Attributes.builder()
+                .put("conversation.id", conversationId)
+                .put("message.content_length", content.length.toLong())
+                .build()
+            ) { span ->
+                try {
+                    val response = repository.sendMessage(conversationId, content, previousId)
 
-                val tempIdx = messages.indexOfFirst { it.id == tempUserMsg.id }
-                if (tempIdx >= 0) {
-                    messages[tempIdx] = response.userMessage
-                    messageAdapter.notifyItemChanged(tempIdx)
-                }
+                    val tempIdx = messages.indexOfFirst { it.id == tempUserMsg.id }
+                    if (tempIdx >= 0) {
+                        messages[tempIdx] = response.userMessage
+                        messageAdapter.notifyItemChanged(tempIdx)
+                    }
 
-                messages.add(response.assistantMessage)
-                messageAdapter.notifyItemInserted(messages.size - 1)
-                scrollToBottom()
-            } catch (e: Exception) {
-                val tempIdx = messages.indexOfFirst { it.id == tempUserMsg.id }
-                if (tempIdx >= 0) {
-                    messages.removeAt(tempIdx)
-                    messageAdapter.notifyItemRemoved(tempIdx)
+                    messages.add(response.assistantMessage)
+                    messageAdapter.notifyItemInserted(messages.size - 1)
+                    scrollToBottom()
+                } catch (e: Exception) {
+                    AliciaTelemetry.recordError(span, e)
+                    val tempIdx = messages.indexOfFirst { it.id == tempUserMsg.id }
+                    if (tempIdx >= 0) {
+                        messages.removeAt(tempIdx)
+                        messageAdapter.notifyItemRemoved(tempIdx)
+                    }
+                    Toast.makeText(this@ChatActivity, R.string.send_failed, Toast.LENGTH_SHORT).show()
+                } finally {
+                    binding.sendButton.isEnabled = true
+                    binding.typingIndicator.visibility = View.GONE
+                    pendingMessageId = null
                 }
-                Toast.makeText(this@ChatActivity, R.string.send_failed, Toast.LENGTH_SHORT).show()
-            } finally {
-                binding.sendButton.isEnabled = true
-                binding.typingIndicator.visibility = View.GONE
             }
         }
     }

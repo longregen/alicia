@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.util.Log
 import com.alicia.assistant.storage.NoteRepository
 import com.alicia.assistant.storage.PreferencesManager
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import com.alicia.assistant.telemetry.ActivityLifecycleTracer
 import com.alicia.assistant.tools.*
 import com.alicia.assistant.ws.AssistantWebSocket
 import com.alicia.assistant.ws.ToolRegistry
@@ -17,6 +19,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 
 class AliciaApplication : Application() {
 
@@ -39,12 +44,38 @@ class AliciaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        extractBundledModelIfNeeded()
-        initAssistantWebSocket()
-        applicationScope.launch {
-            NoteRepository(this@AliciaApplication)
-                .migrateFromPreferences(PreferencesManager(this@AliciaApplication))
+
+        AliciaTelemetry.initialize(this)
+        registerActivityLifecycleCallbacks(ActivityLifecycleTracer())
+
+        AliciaTelemetry.withSpan("app.startup") { span ->
+            createNotificationChannel()
+            AliciaTelemetry.addSpanEvent(span, "notification_channel_created")
+
+            extractBundledModelIfNeeded()
+            AliciaTelemetry.addSpanEvent(span, "model_extraction_started")
+
+            initAssistantWebSocket()
+            AliciaTelemetry.addSpanEvent(span, "websocket_initialized")
+
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) {
+                    Log.i(TAG, "App in foreground, starting heartbeat")
+                    assistantWebSocket.startHeartbeat()
+                }
+
+                override fun onStop(owner: LifecycleOwner) {
+                    Log.i(TAG, "App in background, stopping heartbeat")
+                    assistantWebSocket.stopHeartbeat()
+                }
+            })
+            AliciaTelemetry.addSpanEvent(span, "lifecycle_observer_registered")
+
+            applicationScope.launch {
+                NoteRepository(this@AliciaApplication)
+                    .migrateFromPreferences(PreferencesManager(this@AliciaApplication))
+            }
+            AliciaTelemetry.addSpanEvent(span, "migration_launched")
         }
     }
 
@@ -59,7 +90,7 @@ class AliciaApplication : Application() {
         }
 
         assistantWebSocket = AssistantWebSocket(
-            baseUrl = "wss://llm.hjkl.lol/api/v1/ws",
+            baseUrl = "wss://alicia.hjkl.lol/api/v1/ws",
             agentSecret = "not-needed",
             toolRegistry = toolRegistry
         )

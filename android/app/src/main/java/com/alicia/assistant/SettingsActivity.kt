@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.service.VoiceAssistantService
 import com.alicia.assistant.storage.PreferencesManager
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import io.opentelemetry.api.common.Attributes
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
@@ -68,20 +70,51 @@ class SettingsActivity : ComponentActivity() {
 
     private fun setupListeners() {
         wakeWordSwitch.setOnCheckedChangeListener { _, isChecked ->
-            saveSettings()
-            if (isChecked) {
-                VoiceAssistantService.ensureRunning(this)
-            } else {
-                VoiceAssistantService.stop(this)
+            AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
+                .put("setting.name", "wake_word_enabled")
+                .put("setting.value", isChecked.toString())
+                .build()
+            ) {
+                saveSettings()
+                if (isChecked) {
+                    VoiceAssistantService.ensureRunning(this)
+                } else {
+                    VoiceAssistantService.stop(this)
+                }
             }
         }
 
-        voiceFeedbackSwitch.setOnCheckedChangeListener { _, _ -> saveSettings() }
-        hapticFeedbackSwitch.setOnCheckedChangeListener { _, _ -> saveSettings() }
+        voiceFeedbackSwitch.setOnCheckedChangeListener { _, isChecked ->
+            AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
+                .put("setting.name", "voice_feedback_enabled")
+                .put("setting.value", isChecked.toString())
+                .build()
+            ) {
+                saveSettings()
+            }
+        }
+        hapticFeedbackSwitch.setOnCheckedChangeListener { _, isChecked ->
+            AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
+                .put("setting.name", "haptic_feedback_enabled")
+                .put("setting.value", isChecked.toString())
+                .build()
+            ) {
+                saveSettings()
+            }
+        }
         ttsSpeedSlider.addOnChangeListener { _, value, _ ->
             ttsSpeedValue.text = String.format("%.1fx", value)
-            saveSettings()
         }
+        ttsSpeedSlider.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {}
+            override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
+                AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
+                    .put("setting.name", "tts_speed")
+                    .put("setting.value", slider.value.toString())
+                    .build()
+                ) { saveSettings() }
+            }
+        })
 
         findViewById<android.view.View>(R.id.manageModelsButton).setOnClickListener {
             startActivity(Intent(this, ModelManagerActivity::class.java))

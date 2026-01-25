@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.alicia.assistant.service.VoiceAssistantService
+import com.alicia.assistant.telemetry.AliciaTelemetry
 
 class BootReceiver : BroadcastReceiver() {
 
@@ -15,8 +16,11 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null) return
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.i(TAG, "BootReceiver: device boot completed, starting wake word service")
-            VoiceAssistantService.ensureRunning(context)
+            AliciaTelemetry.withSpan("app.boot_received") { span ->
+                Log.i(TAG, "BootReceiver: device boot completed, starting wake word service")
+                AliciaTelemetry.addSpanEvent(span, "service.auto_start")
+                VoiceAssistantService.ensureRunning(context)
+            }
         }
     }
 }

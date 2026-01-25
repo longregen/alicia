@@ -8,7 +8,10 @@ import android.os.IBinder
 import android.util.Log
 import com.alicia.assistant.AliciaApplication
 import com.alicia.assistant.R
+import com.alicia.assistant.telemetry.AliciaTelemetry
 import com.alicia.assistant.model.VoskModelInfo
+import com.alicia.assistant.telemetry.ServiceTracer
+import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +59,13 @@ class ModelDownloadService : Service() {
 
         startForeground(NOTIFICATION_ID, buildNotification("Downloading model..."))
 
+        ServiceTracer.onServiceStart(
+            "model_download",
+            Attributes.builder()
+                .put("model.id", modelId)
+                .build()
+        )
+
         val modelInfo = VoskModelInfo.fromId(modelId)
         val job = scope.launch {
             downloadAndExtract(modelInfo)
@@ -84,6 +94,7 @@ class ModelDownloadService : Service() {
             connection.connect()
             val totalSize = connection.contentLength.toLong()
 
+            val progressMilestones = mutableSetOf<Int>()
             connection.inputStream.use { inputStream ->
                 FileOutputStream(zipFile).use { output ->
                     val buffer = ByteArray(8192)
@@ -96,13 +107,35 @@ class ModelDownloadService : Service() {
                         if (totalSize > 0) {
                             val pct = (downloaded * 100 / totalSize).toInt()
                             updateProgress(modelInfo.id, pct)
+                            for (milestone in listOf(25, 50, 75)) {
+                                if (pct >= milestone && milestone !in progressMilestones) {
+                                    progressMilestones.add(milestone)
+                                    ServiceTracer.addServiceEvent(
+                                        "model_download",
+                                        "download_progress",
+                                        Attributes.builder()
+                                            .put("download.percent", milestone.toLong())
+                                            .put("download.bytes", downloaded)
+                                            .put("download.total_bytes", totalSize)
+                                            .build()
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
+            ServiceTracer.addServiceEvent(
+                "model_download",
+                "download_complete",
+                Attributes.builder()
+                    .put("download.total_bytes", totalSize)
+                    .build()
+            )
             updateProgress(modelInfo.id, -1)
 
+            ServiceTracer.addServiceEvent("model_download", "extract_start")
             ZipInputStream(zipFile.inputStream()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
@@ -128,19 +161,26 @@ class ModelDownloadService : Service() {
                 }
             }
             zipFile.delete()
+            ServiceTracer.addServiceEvent("model_download", "extract_complete")
 
             removeProgress(modelInfo.id)
             Log.d(TAG, "Model ${modelInfo.id} download complete")
+            ServiceTracer.onServiceStop("model_download")
         } catch (e: CancellationException) {
             modelDir.deleteRecursively()
             zipFile.delete()
             removeProgress(modelInfo.id)
+            ServiceTracer.onServiceStop("model_download")
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Download failed for ${modelInfo.id}", e)
+            ServiceTracer.getServiceSpan("model_download")?.let { span ->
+                AliciaTelemetry.recordError(span, e)
+            }
             modelDir.deleteRecursively()
             zipFile.delete()
             removeProgress(modelInfo.id)
+            ServiceTracer.onServiceStop("model_download")
         }
     }
 

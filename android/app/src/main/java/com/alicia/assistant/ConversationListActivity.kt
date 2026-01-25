@@ -16,6 +16,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.alicia.assistant.databinding.ActivityConversationsBinding
 import com.alicia.assistant.service.AliciaApiClient
 import com.alicia.assistant.storage.ConversationRepository
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -54,33 +56,39 @@ class ConversationListActivity : ComponentActivity() {
 
     private fun loadConversations() {
         lifecycleScope.launch {
-            try {
-                val conversations = repository.listConversations()
-                binding.loadingState.visibility = View.GONE
+            AliciaTelemetry.withSpanAsync("conversations.load") { span ->
+                try {
+                    val conversations = repository.listConversations()
+                    binding.loadingState.visibility = View.GONE
 
-                if (conversations.isEmpty()) {
+                    if (conversations.isEmpty()) {
+                        binding.emptyState.visibility = View.VISIBLE
+                        binding.conversationsRecyclerView.visibility = View.GONE
+                    } else {
+                        binding.emptyState.visibility = View.GONE
+                        binding.conversationsRecyclerView.visibility = View.VISIBLE
+                        adapter.submitList(conversations)
+                    }
+                } catch (e: Exception) {
+                    AliciaTelemetry.recordError(span, e)
+                    binding.loadingState.visibility = View.GONE
                     binding.emptyState.visibility = View.VISIBLE
-                    binding.conversationsRecyclerView.visibility = View.GONE
-                } else {
-                    binding.emptyState.visibility = View.GONE
-                    binding.conversationsRecyclerView.visibility = View.VISIBLE
-                    adapter.submitList(conversations)
+                    Toast.makeText(this@ConversationListActivity, R.string.load_failed, Toast.LENGTH_SHORT).show()
                 }
-            } catch (e: Exception) {
-                binding.loadingState.visibility = View.GONE
-                binding.emptyState.visibility = View.VISIBLE
-                Toast.makeText(this@ConversationListActivity, R.string.load_failed, Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun createNewConversation() {
         lifecycleScope.launch {
-            try {
-                val conversation = repository.createConversation(getString(R.string.new_conversation))
-                openConversation(conversation.id, conversation.title)
-            } catch (e: Exception) {
-                Toast.makeText(this@ConversationListActivity, R.string.create_failed, Toast.LENGTH_SHORT).show()
+            AliciaTelemetry.withSpanAsync("conversations.create") { span ->
+                try {
+                    val conversation = repository.createConversation(getString(R.string.new_conversation))
+                    openConversation(conversation.id, conversation.title)
+                } catch (e: Exception) {
+                    AliciaTelemetry.recordError(span, e)
+                    Toast.makeText(this@ConversationListActivity, R.string.create_failed, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

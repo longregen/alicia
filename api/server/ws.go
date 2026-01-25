@@ -37,9 +37,10 @@ type Hub struct {
 	agentMu      sync.RWMutex
 	voiceConn    *websocket.Conn
 	voiceMu      sync.RWMutex
-	assistantConn  *websocket.Conn
-	assistantMu    sync.RWMutex
-	assistantTools []protocol.AssistantTool
+	assistantConn          *websocket.Conn
+	assistantMu            sync.RWMutex
+	assistantTools         []protocol.AssistantTool
+	lastAssistantHeartbeat time.Time
 	monitorConns map[*websocket.Conn]struct{}
 	monitorMu    sync.RWMutex
 	// Enables blocking request/response pattern over async WebSocket for the REST API's sync endpoint
@@ -145,7 +146,14 @@ func (h *Hub) SubscribeAssistant(conn *websocket.Conn) {
 	h.assistantMu.Lock()
 	defer h.assistantMu.Unlock()
 	h.assistantConn = conn
+	h.lastAssistantHeartbeat = time.Now()
 	slog.Info("ws: assistant connected")
+}
+
+func (h *Hub) updateAssistantHeartbeat() {
+	h.assistantMu.Lock()
+	h.lastAssistantHeartbeat = time.Now()
+	h.assistantMu.Unlock()
 }
 
 func (h *Hub) UnsubscribeAssistant(conn *websocket.Conn) {
@@ -321,6 +329,7 @@ func (h *Hub) BroadcastPreferencesUpdate(prefs *domain.UserPreferences) {
 		MemoryMinFactual:         prefs.MemoryMinFactual,
 		MemoryRetrievalCount:     prefs.MemoryRetrievalCount,
 		MaxTokens:                prefs.MaxTokens,
+		Temperature:              prefs.Temperature,
 		ParetoTargetScore:        prefs.ParetoTargetScore,
 		ParetoMaxGenerations:     prefs.ParetoMaxGenerations,
 		ParetoBranchesPerGen:     prefs.ParetoBranchesPerGen,
@@ -647,8 +656,9 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case protocol.TypeUserMessage:
-				if isVoice && env.ConversationID != "" {
-					h.handleVoiceUserMessage(ctx, env)
+				if env.ConversationID != "" {
+					// Handle user messages from any subscribed client (voice, assistant, or regular)
+					h.handleClientUserMessage(ctx, env)
 				}
 
 			case protocol.TypeGenRequest:
@@ -656,8 +666,15 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					h.hub.BroadcastToAgent(data)
 				}
 
+			case protocol.TypeAssistantHeartbeat:
+				if isAssistant {
+					h.hub.updateAssistantHeartbeat()
+					h.hub.broadcastToMonitors(data, "assistant", "monitor")
+				}
+
 			case protocol.TypeAssistantToolsRegister:
 				if isAssistant {
+					h.hub.updateAssistantHeartbeat()
 					reg, err := protocol.DecodeBody[protocol.AssistantToolsRegister](env)
 					if err != nil {
 						slog.Error("ws: decode assistant tools register error", "error", err)
@@ -678,6 +695,7 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			case protocol.TypeToolUseResult:
 				if isAssistant {
+					h.hub.updateAssistantHeartbeat()
 					// Route tool results from assistant to monitors (for mcp-assistant bridge)
 					h.hub.broadcastToMonitors(data, "assistant", "monitor")
 				} else if isAgent && env.ConversationID != "" {
@@ -862,31 +880,31 @@ func (h *WSHandler) persistAgentMessage(ctx context.Context, env *protocol.Envel
 	}
 }
 
-func (h *WSHandler) handleVoiceUserMessage(ctx context.Context, env *protocol.Envelope) {
+func (h *WSHandler) handleClientUserMessage(ctx context.Context, env *protocol.Envelope) {
 	msg, err := protocol.DecodeBody[protocol.UserMessage](env)
 	if err != nil {
-		slog.Error("ws: decode voice user message error", "error", err)
+		slog.Error("ws: decode user message error", "error", err)
 		return
 	}
 
 	convID := env.ConversationID
 	userID := env.UserID
 
-	slog.Info("ws: voice user message", "conversation_id", convID, "user_id", userID, "chars", len(msg.Content))
+	slog.Info("ws: client user message", "conversation_id", convID, "user_id", userID, "chars", len(msg.Content))
 
 	if h.store == nil {
-		slog.Error("ws: store not available for voice user message")
+		slog.Error("ws: store not available for user message")
 		return
 	}
 
 	if msg.Content == "" {
-		slog.Warn("ws: voice user message has empty content", "conversation_id", convID)
+		slog.Warn("ws: user message has empty content", "conversation_id", convID)
 		return
 	}
 
 	conv, err := h.store.GetConversation(ctx, convID)
 	if err != nil {
-		slog.Error("ws: get conversation for voice message error", "error", err, "conversation_id", convID)
+		slog.Error("ws: get conversation for user message error", "error", err, "conversation_id", convID)
 		return
 	}
 
@@ -909,11 +927,11 @@ func (h *WSHandler) handleVoiceUserMessage(ctx context.Context, env *protocol.En
 		return h.store.UpdateConversationTip(ctx, convID, userMsg.ID)
 	})
 	if err != nil {
-		slog.Error("ws: create voice user message error", "error", err, "conversation_id", convID)
+		slog.Error("ws: create user message error", "error", err, "conversation_id", convID)
 		return
 	}
 
-	slog.Info("ws: voice user message created", "message_id", userMsg.ID, "conversation_id", convID)
+	slog.Info("ws: user message created", "message_id", userMsg.ID, "conversation_id", convID)
 
 	prevID := ""
 	if previousID != nil {
@@ -926,5 +944,5 @@ func (h *WSHandler) handleVoiceUserMessage(ctx context.Context, env *protocol.En
 		PreviousID:     prevID,
 	})
 
-	h.hub.SendGenerationRequest(ctx, convID, userMsg.ID, previousID, true)
+	h.hub.SendGenerationRequest(ctx, convID, userMsg.ID, previousID, false)
 }

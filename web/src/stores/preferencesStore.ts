@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import sharedDefaults from '@shared/preferences/defaults.json';
 
 export interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
@@ -11,6 +12,7 @@ export interface UserPreferences {
   memory_min_factual: number | null;
   memory_retrieval_count: number;
   max_tokens: number;
+  temperature: number;
   pareto_target_score: number;
   pareto_max_generations: number;
   pareto_branches_per_gen: number;
@@ -33,24 +35,7 @@ interface PreferencesActions {
   setError: (error: string | null) => void;
 }
 
-const DEFAULT_PREFERENCES: UserPreferences = {
-  theme: 'system',
-  audio_output_enabled: false,
-  voice_speed: 1.0,
-  memory_min_importance: 3,
-  memory_min_historical: 2,
-  memory_min_personal: 2,
-  memory_min_factual: 2,
-  memory_retrieval_count: 4,
-  max_tokens: 16384,
-  pareto_target_score: 3.0,
-  pareto_max_generations: 7,
-  pareto_branches_per_gen: 3,
-  pareto_archive_size: 50,
-  pareto_enable_crossover: true,
-  confirm_delete_memory: true,
-  show_relevance_scores: false,
-};
+const DEFAULT_PREFERENCES: UserPreferences = sharedDefaults as UserPreferences;
 
 export const usePreferencesStore = create<PreferencesState & PreferencesActions>()(
   immer((set) => ({

@@ -15,7 +15,10 @@ import com.alicia.assistant.MainActivity
 import com.alicia.assistant.R
 import com.alicia.assistant.model.VoskModelInfo
 import com.alicia.assistant.storage.PreferencesManager
+import com.alicia.assistant.telemetry.AliciaTelemetry
+import com.alicia.assistant.telemetry.ServiceTracer
 import com.google.gson.Gson
+import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -66,6 +69,15 @@ class VoiceAssistantService : Service(), RecognitionListener {
             return START_NOT_STICKY
         }
         serviceScope.launch {
+            val settings = preferencesManager.getSettings()
+            val modelInfo = VoskModelInfo.fromId(settings.voskModelId)
+            ServiceTracer.onServiceStart(
+                "wake_word_detection",
+                Attributes.builder()
+                    .put("wake_word.word", settings.wakeWord.lowercase().trim())
+                    .put("vosk.model_id", modelInfo.id)
+                    .build()
+            )
             stateMutex.withLock {
                 shutdownNativeResources()
             }
@@ -90,10 +102,6 @@ class VoiceAssistantService : Service(), RecognitionListener {
             .build()
     }
 
-    /**
-     * Shuts down native Vosk resources in the correct order, waiting for the audio thread
-     * to fully exit before releasing the recognizer and model. Must be called within [stateMutex].
-     */
     private suspend fun shutdownNativeResources() {
         val hadSpeechService = speechService != null
         withContext(Dispatchers.Main) {
@@ -101,9 +109,6 @@ class VoiceAssistantService : Service(), RecognitionListener {
             speechService = null
         }
         if (hadSpeechService) {
-            // The Vosk SpeechService audio thread may still be executing a recognition
-            // callback when stop() returns. Allow it time to fully exit before we
-            // release the native recognizer/model to avoid use-after-free.
             delay(NATIVE_SHUTDOWN_DELAY_MS)
         }
         recognizer?.close()
@@ -174,6 +179,14 @@ class VoiceAssistantService : Service(), RecognitionListener {
 
     override fun onError(exception: Exception?) {
         Log.e(TAG, "onError: recognition error (consecutiveErrors=$consecutiveErrors)", exception)
+        ServiceTracer.addServiceEvent(
+            "wake_word_detection",
+            "recognition_error",
+            Attributes.builder()
+                .put("error.message", exception?.message ?: "unknown")
+                .put("error.consecutive_count", consecutiveErrors.toLong())
+                .build()
+        )
         restartRecognition()
     }
 
@@ -212,6 +225,11 @@ class VoiceAssistantService : Service(), RecognitionListener {
             }
             if (text.contains(wakeWord, ignoreCase = true)) {
                 Log.i(TAG, "checkForWakeWord: *** WAKE WORD DETECTED *** text='$text'")
+                ServiceTracer.addServiceEvent(
+                    "wake_word_detection",
+                    "wake_word_detected",
+                    Attributes.builder().put("wake_word.text", text).build()
+                )
                 onWakeWordDetected()
             }
         } catch (e: Exception) {
@@ -238,6 +256,7 @@ class VoiceAssistantService : Service(), RecognitionListener {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: VoiceAssistantService shutting down")
+        ServiceTracer.onServiceStop("wake_word_detection")
         instance = null
         running = false
         super.onDestroy()
@@ -282,10 +301,12 @@ class VoiceAssistantService : Service(), RecognitionListener {
         }
 
         fun pauseDetection() {
+            ServiceTracer.addServiceEvent("wake_word_detection", "detection_paused")
             instance?.speechService?.setPause(true)
         }
 
         fun resumeDetection() {
+            ServiceTracer.addServiceEvent("wake_word_detection", "detection_resumed")
             instance?.speechService?.setPause(false)
         }
 

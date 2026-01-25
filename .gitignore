@@ -24,6 +24,7 @@ docker-compose.override.yml.local
 backups/
 
 # Go
+assistant
 /alicia
 mcp/mcp-deno-calc
 mcp/mcp-garden
