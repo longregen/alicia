@@ -77,6 +77,7 @@ func getSystemPrompt(memories []Memory, notes []Note, tools []Tool, instructions
 			fmt.Fprintf(&tb, "- %s: %s\n", t.Name, t.Description)
 		}
 		tb.WriteString("\nUse tools as needed to find the best answer.")
+		tb.WriteString("\nIMPORTANT: You MUST use the final_answer tool to send your response to the user. Never write responses as plain text - always call final_answer(content=\"your response\").")
 		toolsStr = tb.String()
 	}
 
@@ -229,8 +230,9 @@ func HandleSend(ctx context.Context, req ResponseGenerationRequest, deps AgentDe
 		))
 	defer span.End()
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
 	cfg := GenerateConfig{
-		MaxToolIterations: 5,
+		MaxToolIterations: userPrefs.MaxToolIterations,
 		EnableTools:       req.EnableTools,
 		ParetoMode:        deps.ParetoMode && req.UsePareto,
 	}
@@ -273,8 +275,9 @@ func HandleRegenerate(ctx context.Context, req ResponseGenerationRequest, deps A
 		slog.ErrorContext(ctx, "failed to update conversation tip", "error", err)
 	}
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
 	cfg := GenerateConfig{
-		MaxToolIterations: 5,
+		MaxToolIterations: userPrefs.MaxToolIterations,
 		EnableTools:       req.EnableTools,
 		ParetoMode:        deps.ParetoMode && req.UsePareto,
 	}
@@ -307,8 +310,9 @@ func HandleContinue(ctx context.Context, req ResponseGenerationRequest, deps Age
 		return fmt.Errorf("get message: %w", err)
 	}
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
 	cfg := GenerateConfig{
-		MaxToolIterations: 5,
+		MaxToolIterations: userPrefs.MaxToolIterations,
 		EnableTools:       req.EnableTools,
 	}
 	return continueResponse(ctx, convID, msg, cfg, deps)
@@ -325,8 +329,9 @@ func HandleEdit(ctx context.Context, req ResponseGenerationRequest, deps AgentDe
 		))
 	defer span.End()
 
+	userPrefs := deps.Prefs.Get(deps.UserID)
 	cfg := GenerateConfig{
-		MaxToolIterations: 5,
+		MaxToolIterations: userPrefs.MaxToolIterations,
 		EnableTools:       req.EnableTools,
 		ParetoMode:        deps.ParetoMode && req.UsePareto,
 	}
@@ -410,6 +415,8 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 			tools = append(tools, deps.MCP.Tools()...)
 		}
 	}
+	// Always add final_answer tool to force responses through function calling API
+	tools = append(tools, FinalAnswerTool())
 
 	llmMsgs, systemPrompt := buildLLMMessages(messages, nil, nil, tools)
 	llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: getContinuePrompt()})
@@ -425,6 +432,7 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 	userPrefs := deps.Prefs.Get(deps.UserID)
 	resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
 		Temperature:    float32Ptr(userPrefs.Temperature),
+		ToolChoice:     "required",
 		GenerationName: "agent.continue_response",
 		PromptName:     systemPrompt.Name,
 		PromptVersion:  systemPrompt.Version,
@@ -434,7 +442,16 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 		return err
 	}
 
-	fullContent := msg.Content + resp.Content
+	// Extract content from final_answer tool call if present
+	respContent := resp.Content
+	for _, tc := range resp.ToolCalls {
+		if IsFinalAnswerCall(tc) {
+			respContent = ExtractFinalAnswer(tc)
+			break
+		}
+	}
+
+	fullContent := msg.Content + respContent
 	reasoning := msg.Reasoning
 	if resp.Reasoning != "" {
 		if reasoning != "" {
@@ -512,6 +529,8 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			tools = append(tools, deps.MCP.Tools()...)
 		}
 	}
+	// Always add final_answer tool to force responses through function calling API
+	tools = append(tools, FinalAnswerTool())
 
 	llmMsgs, systemPrompt := buildLLMMessages(messages, memories, notes, tools)
 
@@ -566,6 +585,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 		llmStart := time.Now()
 		resp, err := deps.LLM.ChatWithOptions(llmCtx, llmMsgs, tools, ChatOptions{
 			Temperature:    temperature,
+			ToolChoice:     "required",
 			GenerationName: "agent.tool_loop",
 			PromptName:     systemPrompt.Name,
 			PromptVersion:  systemPrompt.Version,
@@ -594,20 +614,44 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:tool_loop", "llm.chat", systemPrompt, resp.Content, llmStart, llmEnd)
 		}
 
+		// Check for final_answer tool call first
+		var foundFinalAnswer bool
+		for _, tc := range resp.ToolCalls {
+			if IsFinalAnswerCall(tc) {
+				finalContent = ExtractFinalAnswer(tc)
+				foundFinalAnswer = true
+				break
+			}
+		}
+		if foundFinalAnswer {
+			break
+		}
+
+		// Fallback: if no tool calls at all (shouldn't happen with tool_choice=required)
 		if len(resp.ToolCalls) == 0 {
+			slog.WarnContext(ctx, "tool_choice=required but no tool calls returned, using content as fallback")
 			finalContent = resp.Content
 			break
 		}
 
 		llmMsgs = append(llmMsgs, LLMMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 
-		toolNames := make([]string, len(resp.ToolCalls))
-		for j, tc := range resp.ToolCalls {
-			toolNames[j] = tc.Name
+		// Filter out final_answer from tool names for status message
+		var toolNames []string
+		for _, tc := range resp.ToolCalls {
+			if !IsFinalAnswerCall(tc) {
+				toolNames = append(toolNames, tc.Name)
+			}
 		}
-		deps.Notifier.SendThinking(ctx, msgID, fmt.Sprintf("Using %s...", strings.Join(toolNames, ", ")))
+		if len(toolNames) > 0 {
+			deps.Notifier.SendThinking(ctx, msgID, fmt.Sprintf("Using %s...", strings.Join(toolNames, ", ")))
+		}
 
 		for _, tc := range resp.ToolCalls {
+			// Skip final_answer - it's not a real tool to execute
+			if IsFinalAnswerCall(tc) {
+				continue
+			}
 			deps.Notifier.SendToolStart(ctx, tc.ID, tc.Name, tc.Arguments)
 
 			mcpName := tc.Name

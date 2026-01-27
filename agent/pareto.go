@@ -237,6 +237,8 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			tools = append(tools, deps.MCP.Tools()...)
 		}
 	}
+	// Always add final_answer tool to force responses through function calling API
+	tools = append(tools, FinalAnswerTool())
 
 	setupSpan.SetAttributes(
 		attribute.Int("memory_count", len(memories)),
@@ -563,6 +565,7 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 		llmStart := time.Now()
 		resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
 			Temperature:    temperature,
+			ToolChoice:     "required",
 			GenerationName: "pareto.candidate",
 			PromptName:     systemPrompt.Name,
 			PromptVersion:  systemPrompt.Version,
@@ -589,6 +592,7 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 				retryStart := time.Now()
 				resp, err = deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
 					Temperature:    float32Ptr(temp),
+					ToolChoice:     "required",
 					GenerationName: "pareto.candidate",
 					PromptName:     systemPrompt.Name,
 					PromptVersion:  systemPrompt.Version,
@@ -615,16 +619,34 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 			execTrace.ReasoningSteps = append(execTrace.ReasoningSteps, resp.Reasoning)
 		}
 
-		// No tool calls means we have our final answer
+		// Check for final_answer tool call first
+		var foundFinalAnswer bool
+		for _, tc := range resp.ToolCalls {
+			if IsFinalAnswerCall(tc) {
+				execTrace.FinalAnswer = ExtractFinalAnswer(tc)
+				foundFinalAnswer = true
+				slog.InfoContext(ctx, "final answer received via tool", "content_length", len(execTrace.FinalAnswer))
+				break
+			}
+		}
+		if foundFinalAnswer {
+			break
+		}
+
+		// Fallback: if no tool calls at all (shouldn't happen with tool_choice=required)
 		if len(resp.ToolCalls) == 0 {
+			slog.WarnContext(ctx, "tool_choice=required but no tool calls returned, using content as fallback")
 			execTrace.FinalAnswer = resp.Content
-			slog.InfoContext(ctx, "final answer received", "content_length", len(execTrace.FinalAnswer))
 			break
 		}
 
 		llmMsgs = append(llmMsgs, LLMMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 
 		for _, tc := range resp.ToolCalls {
+			// Skip final_answer - it's not a real tool to execute
+			if IsFinalAnswerCall(tc) {
+				continue
+			}
 			mcpName := tc.Name
 			if strings.HasPrefix(mcpName, "mcp_garden_") {
 				mcpName = strings.TrimPrefix(mcpName, "mcp_garden_")

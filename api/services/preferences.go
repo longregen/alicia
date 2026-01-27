@@ -32,6 +32,7 @@ func DefaultPreferences(userID string) *domain.UserPreferences {
 		MemoryMinFactual:         ptr.To(d.MemoryMinFactual),
 		MemoryRetrievalCount:     d.MemoryRetrievalCount,
 		MaxTokens:                d.MaxTokens,
+		MaxToolIterations:        d.MaxToolIterations,
 		Temperature:              d.Temperature,
 		ParetoTargetScore:        d.ParetoTargetScore,
 		ParetoMaxGenerations:     d.ParetoMaxGenerations,

@@ -15,7 +15,7 @@ func (s *Store) GetUserPreferences(ctx context.Context, userID string) (*domain.
 	query := `
 		SELECT user_id, theme, audio_output_enabled, voice_speed,
 		       memory_min_importance, memory_min_historical, memory_min_personal, memory_min_factual,
-		       memory_retrieval_count, max_tokens, temperature,
+		       memory_retrieval_count, max_tokens, max_tool_iterations, temperature,
 		       pareto_target_score, pareto_max_generations, pareto_branches_per_gen, pareto_archive_size, pareto_enable_crossover,
 		       notes_similarity_threshold, notes_max_count,
 		       confirm_delete_memory, show_relevance_scores,
@@ -27,7 +27,7 @@ func (s *Store) GetUserPreferences(ctx context.Context, userID string) (*domain.
 	err := s.conn(ctx).QueryRow(ctx, query, userID).Scan(
 		&prefs.UserID, &prefs.Theme, &prefs.AudioOutputEnabled, &prefs.VoiceSpeed,
 		&prefs.MemoryMinImportance, &prefs.MemoryMinHistorical, &prefs.MemoryMinPersonal, &prefs.MemoryMinFactual,
-		&prefs.MemoryRetrievalCount, &prefs.MaxTokens, &prefs.Temperature,
+		&prefs.MemoryRetrievalCount, &prefs.MaxTokens, &prefs.MaxToolIterations, &prefs.Temperature,
 		&prefs.ParetoTargetScore, &prefs.ParetoMaxGenerations, &prefs.ParetoBranchesPerGen, &prefs.ParetoArchiveSize, &prefs.ParetoEnableCrossover,
 		&prefs.NotesSimilarityThreshold, &prefs.NotesMaxCount,
 		&prefs.ConfirmDeleteMemory, &prefs.ShowRelevanceScores,
@@ -46,12 +46,12 @@ func (s *Store) UpsertUserPreferences(ctx context.Context, prefs *domain.UserPre
 		INSERT INTO user_preferences (
 			user_id, theme, audio_output_enabled, voice_speed,
 			memory_min_importance, memory_min_historical, memory_min_personal, memory_min_factual,
-			memory_retrieval_count, max_tokens, temperature,
+			memory_retrieval_count, max_tokens, max_tool_iterations, temperature,
 			pareto_target_score, pareto_max_generations, pareto_branches_per_gen, pareto_archive_size, pareto_enable_crossover,
 			notes_similarity_threshold, notes_max_count,
 			confirm_delete_memory, show_relevance_scores,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 		ON CONFLICT (user_id) DO UPDATE SET
 			theme = EXCLUDED.theme,
 			audio_output_enabled = EXCLUDED.audio_output_enabled,
@@ -62,6 +62,7 @@ func (s *Store) UpsertUserPreferences(ctx context.Context, prefs *domain.UserPre
 			memory_min_factual = EXCLUDED.memory_min_factual,
 			memory_retrieval_count = EXCLUDED.memory_retrieval_count,
 			max_tokens = EXCLUDED.max_tokens,
+			max_tool_iterations = EXCLUDED.max_tool_iterations,
 			temperature = EXCLUDED.temperature,
 			pareto_target_score = EXCLUDED.pareto_target_score,
 			pareto_max_generations = EXCLUDED.pareto_max_generations,
@@ -83,7 +84,7 @@ func (s *Store) UpsertUserPreferences(ctx context.Context, prefs *domain.UserPre
 	_, err := s.conn(ctx).Exec(ctx, query,
 		prefs.UserID, prefs.Theme, prefs.AudioOutputEnabled, prefs.VoiceSpeed,
 		prefs.MemoryMinImportance, prefs.MemoryMinHistorical, prefs.MemoryMinPersonal, prefs.MemoryMinFactual,
-		prefs.MemoryRetrievalCount, prefs.MaxTokens, prefs.Temperature,
+		prefs.MemoryRetrievalCount, prefs.MaxTokens, prefs.MaxToolIterations, prefs.Temperature,
 		prefs.ParetoTargetScore, prefs.ParetoMaxGenerations, prefs.ParetoBranchesPerGen, prefs.ParetoArchiveSize, prefs.ParetoEnableCrossover,
 		prefs.NotesSimilarityThreshold, prefs.NotesMaxCount,
 		prefs.ConfirmDeleteMemory, prefs.ShowRelevanceScores,

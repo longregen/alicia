@@ -42,6 +42,7 @@ type ChatOptions struct {
 	Temperature    *float32
 	MaxTokens      int                                   // overrides client default if > 0
 	ResponseFormat *openai.ChatCompletionResponseFormat  // structured output format
+	ToolChoice     any                                   // "auto", "required", "none" or openai.ToolChoice struct
 	GenerationName string                                // passed as metadata.generation_name for LiteLLM OTEL span naming
 	PromptName     string
 	PromptVersion  int
@@ -116,6 +117,9 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 					Parameters:  t.Schema,
 				},
 			}
+		}
+		if opts.ToolChoice != nil {
+			req.ToolChoice = opts.ToolChoice
 		}
 	}
 

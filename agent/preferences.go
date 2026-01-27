@@ -21,6 +21,7 @@ type UserPreferences struct {
 	MemoryMinFactual         *int
 	MemoryRetrievalCount     int
 	MaxTokens                int
+	MaxToolIterations        int
 	Temperature              float32
 	ParetoTargetScore        float32
 	ParetoMaxGenerations     int
@@ -40,6 +41,7 @@ func DefaultPreferences() UserPreferences {
 		MemoryMinFactual:         ptr.To(d.MemoryMinFactual),
 		MemoryRetrievalCount:     d.MemoryRetrievalCount,
 		MaxTokens:                d.MaxTokens,
+		MaxToolIterations:        d.MaxToolIterations,
 		Temperature:              defaultTemperature(),
 		ParetoTargetScore:        d.ParetoTargetScore,
 		ParetoMaxGenerations:     d.ParetoMaxGenerations,
@@ -99,6 +101,9 @@ func (s *PreferencesStore) Update(update protocol.PreferencesUpdate) {
 	}
 	if p.MaxTokens == 0 {
 		p.MaxTokens = defaults.MaxTokens
+	}
+	if p.MaxToolIterations == 0 {
+		p.MaxToolIterations = defaults.MaxToolIterations
 	}
 	if p.ParetoTargetScore == 0 {
 		p.ParetoTargetScore = defaults.ParetoTargetScore

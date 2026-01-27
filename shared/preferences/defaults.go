@@ -21,6 +21,7 @@ type Defaults struct {
 	MemoryMinFactual         int     `json:"memory_min_factual"`
 	MemoryRetrievalCount     int     `json:"memory_retrieval_count"`
 	MaxTokens                int     `json:"max_tokens"`
+	MaxToolIterations        int     `json:"max_tool_iterations"`
 	Temperature              float32 `json:"temperature"`
 	ParetoTargetScore        float32 `json:"pareto_target_score"`
 	ParetoMaxGenerations     int     `json:"pareto_max_generations"`
