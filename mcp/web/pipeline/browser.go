@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -42,8 +43,9 @@ func (p *BrowserPool) Initialize() error {
 	}
 
 	// Find or download Chrome/Chromium
+	// Redirect launcher output to stderr so it doesn't corrupt JSON-RPC on stdout
 	path, _ := launcher.LookPath()
-	u := launcher.New().Bin(path).Headless(true).MustLaunch()
+	u := launcher.New().Bin(path).Headless(true).Logger(os.Stderr).MustLaunch()
 
 	browser := rod.New().ControlURL(u)
 	if err := browser.Connect(); err != nil {

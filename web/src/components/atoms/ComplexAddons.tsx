@@ -62,6 +62,7 @@ export interface ToolDetail {
   description: string;
   result?: string;
   status?: 'pending' | 'running' | 'completed' | 'error';
+  emoji?: string;
 }
 
 const formatWebSearchCompact = (toolName: string, args: string, result: string): React.ReactNode => {
@@ -1042,23 +1043,6 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
     }
   }, [audioState, audioDuration]);
 
-  const getToolDetail = (addonId: string): ToolDetail | undefined => {
-    return toolDetails.find(tool => tool.id === addonId);
-  };
-
-  const getAddonAnimation = (_addon: MessageAddon, toolDetail?: ToolDetail) => {
-    if (toolDetail?.status === 'running') {
-      return 'animate-pulse scale-110';
-    }
-    if (toolDetail?.status === 'pending') {
-      return 'animate-pulse opacity-70';
-    }
-    if (toolDetail?.status === 'error') {
-      return 'text-error';
-    }
-    return '';
-  };
-
   // Helper functions for memory badges
   const getRelevancePercentage = (relevance: number): number => Math.round(relevance * 100);
 
@@ -1159,52 +1143,50 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
       );
     }
 
-    // Default rendering for tool/icon addon types - with hover popover
-    const toolDetail = getToolDetail(addon.id);
-
-    // Render tool badge with hover popover
-    return (
-      <HoverPopover
-        key={addon.id}
-        content={
-          toolDetail ? (
-            <ToolPopoverContent toolDetail={toolDetail} showFeedback={showFeedback} />
-          ) : (
-            <div className="text-sm text-muted">No details available</div>
-          )
-        }
-        side="top"
-        align="start"
-        sideOffset={8}
-        alignOffset={8}
-        openDelay={150}
-        closeDelay={300}
-        width="w-96"
-      >
-        <button
-          className={cls(
-            'inline-flex items-center justify-center w-7 h-7 rounded-md',
-            'text-sm cursor-pointer transition-all duration-200',
-            'hover:bg-surface-hover hover:ring-2 hover:ring-accent/50 border border-transparent',
-            toolDetail?.status === 'running' ? 'bg-accent/10 border-accent/30' : 'bg-surface',
-            toolDetail?.status === 'completed' ? 'hover:border-success/30' : '',
-            toolDetail?.status === 'error' ? 'bg-error/10 border-error/30' : '',
-            getAddonAnimation(addon, toolDetail)
-          )}
-          title={`${toolDetail?.name || addon.tooltip} - Hover for details`}
-        >
-          {toolDetail?.name ? getToolEmoji(toolDetail.name) : addon.emoji}
-        </button>
-      </HoverPopover>
-    );
+    // Non-tool addon types should not reach here
+    return null;
   };
 
   return (
     <div className={cls('space-y-2 w-full', className)}>
       {/* Main addon row */}
       <div className="flex items-center justify-between w-full gap-3">
-        {/* Left: All addons inline */}
+        {/* Left: Tool badges + other addons inline */}
         <div className={cls('flex items-center gap-2', 'flex-wrap')}>
+          {toolDetails.map((tool) => {
+            const emoji = tool.emoji || getToolEmoji(tool.name);
+            const animation = tool.status === 'running' ? 'animate-pulse scale-110'
+              : tool.status === 'pending' ? 'animate-pulse opacity-70'
+              : tool.status === 'error' ? 'text-error' : '';
+            return (
+              <HoverPopover
+                key={tool.id}
+                content={<ToolPopoverContent toolDetail={tool} showFeedback={showFeedback} />}
+                side="top"
+                align="start"
+                sideOffset={8}
+                alignOffset={8}
+                openDelay={150}
+                closeDelay={300}
+                width="w-96"
+              >
+                <button
+                  className={cls(
+                    'inline-flex items-center justify-center w-7 h-7 rounded-md',
+                    'text-sm cursor-pointer transition-all duration-200',
+                    'hover:bg-surface-hover hover:ring-2 hover:ring-accent/50 border border-transparent',
+                    tool.status === 'running' ? 'bg-accent/10 border-accent/30' : 'bg-surface',
+                    tool.status === 'completed' ? 'hover:border-success/30' : '',
+                    tool.status === 'error' ? 'bg-error/10 border-error/30' : '',
+                    animation
+                  )}
+                  title={`${tool.name} - Hover for details`}
+                >
+                  {emoji}
+                </button>
+              </HoverPopover>
+            );
+          })}
           {addons.map(renderAddon)}
         </div>
 

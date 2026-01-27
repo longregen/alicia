@@ -100,6 +100,14 @@ function wrapInEnvelope(data: unknown, conversationId: string): Envelope {
 
   const dto = data as Record<string, unknown>;
 
+  if ('messageId' in dto && 'success' in dto && 'conversationId' in dto) {
+    return {
+      conversationId: (dto.conversationId as string) || conversationId,
+      type: MessageType.GenerationComplete,
+      body: data,
+    };
+  }
+
   if ('success' in dto && 'conversationId' in dto) {
     return {
       conversationId: (dto.conversationId as string) || conversationId,
@@ -273,6 +281,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.ReasoningStep:
       case MessageType.ThinkingSummary:
       case MessageType.BranchUpdate:
+      case MessageType.GenerationComplete:
         handleChatProtocolMessage(envelope);
         break;
 

@@ -12,8 +12,6 @@ import (
 
 	"github.com/longregen/alicia/pkg/langfuse"
 	openai "github.com/sashabaranov/go-openai"
-
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -24,42 +22,22 @@ const (
 	defaultMemoryExtractionTimeout = 60 * time.Second
 )
 
-type MemoryCandidate struct {
-	Content string `json:"content"`
+type MemoryCandidate = string
+
+// DimensionResult holds the output of a single eval dimension LLM call.
+type DimensionResult struct {
+	Rating        int
+	Thinking      string
+	PromptName    string
+	PromptVersion int
 }
 
-type MemoryScores struct {
-	Importance int
-	Historical int
-	Personal   int
-	Factual    int
-}
-
-type MemoryThresholds struct {
-	Importance *int
-	Historical *int
-	Personal   *int
-	Factual    *int
-}
-
-func (s MemoryScores) Passes(t MemoryThresholds) bool {
-	if t.Importance != nil && s.Importance < *t.Importance {
-		return false
-	}
-	if t.Historical != nil && s.Historical < *t.Historical {
-		return false
-	}
-	if t.Personal != nil && s.Personal < *t.Personal {
-		return false
-	}
-	if t.Factual != nil && s.Factual < *t.Factual {
-		return false
-	}
-	return true
-}
-
-func (s MemoryScores) NormalizedImportance() float32 {
-	return float32(s.Importance) / 5.0
+// MemoryEvalResult holds all dimension results for a memory candidate.
+type MemoryEvalResult struct {
+	Importance DimensionResult
+	Historical DimensionResult
+	Personal   DimensionResult
+	Factual    DimensionResult
 }
 
 func getMemoryExtractionTimeout() time.Duration {
@@ -73,7 +51,7 @@ func getMemoryExtractionTimeout() time.Duration {
 	return defaultMemoryExtractionTimeout
 }
 
-func ExtractAndSaveMemories(ctx context.Context, convID string, deps AgentDeps) {
+func ExtractAndSaveMemories(ctx context.Context, convID, msgID string, deps AgentDeps) {
 	if os.Getenv("MEMORY_EXTRACTION_ENABLED") == "false" {
 		return
 	}
@@ -82,58 +60,109 @@ func ExtractAndSaveMemories(ctx context.Context, convID string, deps AgentDeps) 
 	defer cancel()
 
 	messages, err := LoadConversationFull(ctx, deps.DB, convID)
-	if err != nil || len(messages) < 2 {
+	if err != nil {
+		slog.ErrorContext(ctx, "memory extraction: failed to load conversation", "conv_id", convID, "error", err)
+		return
+	}
+	if len(messages) < 2 {
+		slog.DebugContext(ctx, "memory extraction: skipping, too few messages", "conv_id", convID, "count", len(messages))
 		return
 	}
 
-	candidates := extractMemoryCandidates(ctx, deps.LLM, buildConversationText(messages))
+	extractPrompt := RetrievePromptTemplate("alicia/agent/memory-extract", fallbackMemoryExtract,
+		map[string]string{"conversation": langfuse.TruncateString(buildConversationText(messages), conversationMaxLength, "...")})
+
+	candidates := extractMemoryCandidates(ctx, deps.LLM, extractPrompt)
 	if len(candidates) == 0 {
+		slog.InfoContext(ctx, "memory extraction: no candidates found", "conv_id", convID, "msg_id", msgID)
 		return
 	}
 
-	thresholds := deps.Prefs.GetThresholds(deps.UserID)
 	slog.InfoContext(ctx, "memory extraction started", "candidates", len(candidates), "user_id", deps.UserID)
 
 	for _, candidate := range candidates {
-		if candidate.Content == "" {
+		if candidate == "" {
 			continue
 		}
 
-		preview := langfuse.TruncateString(candidate.Content, 50, "...")
-		scores := evaluateMemory(ctx, deps.LLM, candidate.Content)
-		slog.InfoContext(ctx, "memory evaluated", "preview", preview, "importance", scores.Importance, "historical", scores.Historical, "personal", scores.Personal, "factual", scores.Factual)
+		preview := langfuse.TruncateString(candidate, 50, "...")
+		evalResult := evaluateMemory(ctx, deps.LLM, candidate)
+		slog.InfoContext(ctx, "memory evaluated", "preview", preview,
+			"importance", evalResult.Importance.Rating, "historical", evalResult.Historical.Rating,
+			"personal", evalResult.Personal.Rating, "factual", evalResult.Factual.Rating)
 
-		accepted := scores.Passes(thresholds)
-
-		go sendMemoryScoresToLangfuse(ctx, scores, accepted, convID, deps.UserID)
-
-		if !accepted {
-			continue
+		// Build generation record — persisted via defer at end of each candidate
+		gen := MemoryGeneration{
+			ID:                       NewMemoryGenerationID(),
+			ConversationID:           convID,
+			MessageID:                msgID,
+			MemoryContent:            candidate,
+			ExtractPromptName:        extractPrompt.Name,
+			ExtractPromptVersion:     extractPrompt.Version,
+			ImportanceRating:         evalResult.Importance.Rating,
+			ImportanceThinking:       evalResult.Importance.Thinking,
+			ImportancePromptName:     evalResult.Importance.PromptName,
+			ImportancePromptVersion:  evalResult.Importance.PromptVersion,
+			HistoricalRating:         evalResult.Historical.Rating,
+			HistoricalThinking:       evalResult.Historical.Thinking,
+			HistoricalPromptName:     evalResult.Historical.PromptName,
+			HistoricalPromptVersion:  evalResult.Historical.PromptVersion,
+			PersonalRating:           evalResult.Personal.Rating,
+			PersonalThinking:         evalResult.Personal.Thinking,
+			PersonalPromptName:       evalResult.Personal.PromptName,
+			PersonalPromptVersion:    evalResult.Personal.PromptVersion,
+			FactualRating:            evalResult.Factual.Rating,
+			FactualThinking:          evalResult.Factual.Thinking,
+			FactualPromptName:        evalResult.Factual.PromptName,
+			FactualPromptVersion:     evalResult.Factual.PromptVersion,
 		}
 
-		embedding, err := deps.LLM.Embed(ctx, candidate.Content)
-		if err != nil {
-			slog.ErrorContext(ctx, "memory embedding failed", "error", err)
-			continue
-		}
+		func() {
+			defer func() {
+				if err := CreateMemoryGeneration(ctx, deps.DB, gen); err != nil {
+					slog.ErrorContext(ctx, "memory generation record failed", "error", err)
+				}
+			}()
 
-		existing, err := SearchMemories(ctx, deps.DB, embedding, memorySimilarityThreshold, memorySimilarityTopK)
-		if err != nil {
-			slog.ErrorContext(ctx, "memory search failed", "error", err)
-			continue
-		}
+			embedding, err := deps.LLM.Embed(ctx, candidate)
+			if err != nil {
+				slog.ErrorContext(ctx, "memory embedding failed", "error", err)
+				return
+			}
+			if len(embedding) == 0 {
+				slog.WarnContext(ctx, "memory embedding returned empty vector, skipping search")
+				return
+			}
 
-		action := rerankMemory(ctx, deps.LLM, candidate.Content, existing)
-		if action != "KEEP" {
-			slog.InfoContext(ctx, "memory discarded", "preview", preview, "action", action)
-			continue
-		}
+			existing, err := SearchMemories(ctx, deps.DB, embedding, memorySimilarityThreshold, memorySimilarityTopK)
+			if err != nil {
+				slog.ErrorContext(ctx, "memory search failed", "error", err)
+				return
+			}
+			slog.InfoContext(ctx, "memory similarity search", "preview", preview, "similar_count", len(existing))
 
-		if err := CreateMemory(ctx, deps.DB, NewMemoryID(), candidate.Content, embedding, scores.NormalizedImportance()); err != nil {
-			slog.ErrorContext(ctx, "memory creation failed", "error", err)
-		} else {
-			slog.InfoContext(ctx, "memory created", "preview", preview)
-		}
+			decision, promptName, promptVersion := decideMemory(ctx, deps.LLM, candidate, evalResult, existing)
+			gen.RerankDecision = decision
+			gen.RerankPromptName = promptName
+			gen.RerankPromptVersion = promptVersion
+			gen.Accepted = decision == "KEEP"
+
+			go sendMemoryScoresToLangfuse(evalResult, gen.Accepted, convID, msgID, deps.UserID)
+
+			if decision != "KEEP" {
+				slog.InfoContext(ctx, "memory discarded", "preview", preview, "decision", decision)
+				return
+			}
+
+			importance := float32(evalResult.Importance.Rating) / 5.0
+			memID := NewMemoryID()
+			if err := CreateMemory(ctx, deps.DB, memID, candidate, embedding, importance); err != nil {
+				slog.ErrorContext(ctx, "memory creation failed", "error", err)
+			} else {
+				slog.InfoContext(ctx, "memory created", "preview", preview)
+				gen.MemoryID = &memID
+			}
+		}()
 	}
 }
 
@@ -153,178 +182,175 @@ var memoryExtractResponseFormat = &openai.ChatCompletionResponseFormat{
 	JSONSchema: &openai.ChatCompletionResponseFormatJSONSchema{
 		Name:   "memory_candidates",
 		Strict: true,
-		Schema: json.RawMessage(`{"type":"object","properties":{"memories":{"type":"array","items":{"type":"object","properties":{"content":{"type":"string"}},"required":["content"],"additionalProperties":false}}},"required":["memories"],"additionalProperties":false}`),
+		Schema: json.RawMessage(`{"type":"object","properties":{"memories":{"type":"array","items":{"type":"string"}}},"required":["memories"],"additionalProperties":false}`),
 	},
 }
 
-type memoryCandidatesWrapper struct {
-	Memories []MemoryCandidate `json:"memories"`
+var evalDimensionResponseFormat = &openai.ChatCompletionResponseFormat{
+	Type: openai.ChatCompletionResponseFormatTypeJSONSchema,
+	JSONSchema: &openai.ChatCompletionResponseFormatJSONSchema{
+		Name:   "dimension_rating",
+		Strict: true,
+		Schema: json.RawMessage(`{"type":"object","properties":{"rating":{"type":"integer","enum":[1,2,3,4,5]}},"required":["rating"],"additionalProperties":false}`),
+	},
 }
 
-func extractMemoryCandidates(ctx context.Context, llm *LLMClient, conversation string) []MemoryCandidate {
-	prompt := getPrompt("alicia/agent/memory-extract", fallbackMemoryExtract,
-		map[string]string{"conversation": langfuse.TruncateString(conversation, conversationMaxLength, "...")})
-
-	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+func extractMemoryCandidates(ctx context.Context, llm *LLMClient, prompt PromptResult) []MemoryCandidate {
+	slog.InfoContext(ctx, "memory extraction: calling LLM", "prompt_name", prompt.Name, "prompt_version", prompt.Version)
+	resp, err := MakeLLMCall(ctx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
 		MaxTokens:      1000,
 		ResponseFormat: memoryExtractResponseFormat,
 		GenerationName: "memory.extract",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+		Prompt:         prompt,
+		TraceName:      "agent:memory",
+		NoRetry:        true,
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "memory extraction failed", "error", err)
+		slog.ErrorContext(ctx, "memory extraction LLM call failed", "error", err)
 		return nil
 	}
+	slog.InfoContext(ctx, "memory extraction: LLM responded", "content_length", len(resp.Content), "tokens", resp.TotalTokens)
 
 	content := strings.TrimSpace(resp.Content)
 
-	var wrapper memoryCandidatesWrapper
-	if err := json.Unmarshal([]byte(content), &wrapper); err == nil && len(wrapper.Memories) > 0 {
-		if len(wrapper.Memories) > maxMemoryCandidates {
-			return wrapper.Memories[:maxMemoryCandidates]
-		}
-		return wrapper.Memories
+	var wrapper struct {
+		Memories []MemoryCandidate `json:"memories"`
+	}
+	if err := json.Unmarshal([]byte(content), &wrapper); err != nil {
+		slog.WarnContext(ctx, "memory extraction: failed to parse response", "error", err, "response", content)
+		return nil
 	}
 
-	// Some models ignore json_schema and return a raw array.
-	var candidates []MemoryCandidate
-	if err := json.Unmarshal([]byte(content), &candidates); err != nil {
-		start, end := strings.Index(content, "["), strings.LastIndex(content, "]")
-		if start < 0 || end <= start {
-			slog.WarnContext(ctx, "memory extraction: no valid JSON in response", "response", content)
-			return nil
-		}
-		if err := json.Unmarshal([]byte(content[start:end+1]), &candidates); err != nil {
-			slog.ErrorContext(ctx, "memory JSON parse failed", "error", err)
-			return nil
-		}
+	if len(wrapper.Memories) > maxMemoryCandidates {
+		return wrapper.Memories[:maxMemoryCandidates]
 	}
-
-	if len(candidates) > maxMemoryCandidates {
-		candidates = candidates[:maxMemoryCandidates]
-	}
-	return candidates
+	return wrapper.Memories
 }
 
-func evaluateMemory(ctx context.Context, llm *LLMClient, content string) MemoryScores {
+func evaluateMemory(ctx context.Context, llm *LLMClient, content string) MemoryEvalResult {
 	var wg sync.WaitGroup
-	var scores MemoryScores
+	var result MemoryEvalResult
 
 	dims := []struct {
 		prompt   string
 		fallback string
-		dest     *int
+		dest     *DimensionResult
 	}{
-		{"alicia/agent/memory-eval-importance", fallbackEvalImportance, &scores.Importance},
-		{"alicia/agent/memory-eval-historical", fallbackEvalHistorical, &scores.Historical},
-		{"alicia/agent/memory-eval-personal", fallbackEvalPersonal, &scores.Personal},
-		{"alicia/agent/memory-eval-factual", fallbackEvalFactual, &scores.Factual},
+		{"alicia/agent/memory-eval-importance", fallbackEvalImportance, &result.Importance},
+		{"alicia/agent/memory-eval-historical", fallbackEvalHistorical, &result.Historical},
+		{"alicia/agent/memory-eval-personal", fallbackEvalPersonal, &result.Personal},
+		{"alicia/agent/memory-eval-factual", fallbackEvalFactual, &result.Factual},
 	}
 
 	for _, dim := range dims {
 		wg.Add(1)
-		go func(prompt, fallback string, dest *int) {
+		go func(promptName, fallback string, dest *DimensionResult) {
 			defer wg.Done()
-			*dest = evalDimension(ctx, llm, prompt, fallback, content)
+			*dest = evalDimension(ctx, llm, promptName, fallback, content)
 		}(dim.prompt, dim.fallback, dim.dest)
 	}
 
 	wg.Wait()
-	return scores
+	return result
 }
 
-func evalDimension(ctx context.Context, llm *LLMClient, promptName, fallback, content string) int {
-	prompt := getPrompt(promptName, fallback, map[string]string{"memory": content})
+func evalDimension(ctx context.Context, llm *LLMClient, promptName, fallback, content string) DimensionResult {
+	prompt := RetrievePromptTemplate(promptName, fallback, map[string]string{"memory": content})
 
-	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
+	result := DimensionResult{
+		Rating:        3,
+		PromptName:    prompt.Name,
+		PromptVersion: prompt.Version,
+	}
+
+	resp, err := MakeLLMCall(ctx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
+		ResponseFormat: evalDimensionResponseFormat,
 		GenerationName: "memory.eval_dimension",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+		Prompt:         prompt,
+		TraceName:      "agent:memory",
+		NoRetry:        true,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "memory eval failed", "prompt", promptName, "error", err)
-		return 3
+		return result
 	}
 
-	if text := strings.TrimSpace(resp.Content); len(text) > 0 {
-		if rating, err := strconv.Atoi(text[:1]); err == nil && rating >= 1 && rating <= 5 {
-			return rating
-		}
+	result.Thinking = resp.Reasoning
+
+	text := strings.TrimSpace(resp.Content)
+
+	var parsed struct {
+		Rating int `json:"rating"`
 	}
-	return 3
+	if err := json.Unmarshal([]byte(text), &parsed); err == nil && parsed.Rating >= 1 && parsed.Rating <= 5 {
+		result.Rating = parsed.Rating
+	}
+	return result
 }
 
-func rerankMemory(ctx context.Context, llm *LLMClient, newMemory string, existing []Memory) string {
+func decideMemory(ctx context.Context, llm *LLMClient, newMemory string, eval MemoryEvalResult, existing []Memory) (decision, promptName string, promptVersion int) {
+	var existingStr string
 	if len(existing) == 0 {
-		return "KEEP"
+		existingStr = "(none)"
+	} else {
+		var sb strings.Builder
+		for i, m := range existing {
+			sb.WriteString(strconv.Itoa(i+1) + ". " + m.Content + "\n")
+		}
+		existingStr = sb.String()
 	}
 
-	var existingStr strings.Builder
-	for i, m := range existing {
-		existingStr.WriteString(strconv.Itoa(i+1) + ". " + m.Content + "\n")
-	}
-
-	prompt := getPrompt("alicia/agent/memory-rerank", fallbackMemoryRerank, map[string]string{
+	prompt := RetrievePromptTemplate("alicia/agent/memory-decide", fallbackMemoryDecide, map[string]string{
 		"new_memory":        newMemory,
-		"existing_memories": existingStr.String(),
+		"importance":        strconv.Itoa(eval.Importance.Rating),
+		"historical":        strconv.Itoa(eval.Historical.Rating),
+		"personal":          strconv.Itoa(eval.Personal.Rating),
+		"factual":           strconv.Itoa(eval.Factual.Rating),
+		"existing_memories": existingStr,
 	})
 
-	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "memory.rerank",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	promptName = prompt.Name
+	promptVersion = prompt.Version
+	decision = "KEEP"
+
+	resp, err := MakeLLMCall(ctx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
+		GenerationName: "memory.decide",
+		Prompt:         prompt,
+		TraceName:      "agent:memory",
+		NoRetry:        true,
 	})
 	if err != nil {
-		return "KEEP"
+		slog.ErrorContext(ctx, "memory decide LLM call failed", "error", err)
+		return
 	}
 
-	decision := strings.ToUpper(strings.TrimSpace(resp.Content))
-	if strings.HasPrefix(decision, "DROP") {
-		return "DROP"
+	d := strings.ToUpper(strings.TrimSpace(resp.Content))
+	slog.InfoContext(ctx, "memory decide result", "decision", d, "existing_count", len(existing))
+	if strings.HasPrefix(d, "DROP") {
+		decision = "DROP"
 	}
-	return "KEEP"
+	return
 }
 
-func getPrompt(name, fallback string, vars map[string]string) PromptResult {
-	if client := getLangfuseClient(); client != nil {
-		if prompt, err := client.GetPrompt(name, langfuse.WithLabel("production")); err == nil {
-			return PromptResult{
-				Text:    prompt.Compile(vars),
-				Name:    prompt.Name,
-				Version: prompt.Version,
-			}
-		}
-	}
-	return PromptResult{Text: langfuse.CompileTemplate(fallback, vars)}
-}
-
-func sendMemoryScoresToLangfuse(ctx context.Context, scores MemoryScores, accepted bool, convID, userID string) {
+func sendMemoryScoresToLangfuse(eval MemoryEvalResult, accepted bool, convID, msgID, userID string) {
 	client := getLangfuseClient()
 	if client == nil {
 		return
 	}
 
-	span := trace.SpanFromContext(ctx)
-	if !span.SpanContext().IsValid() {
-		slog.WarnContext(ctx, "memory evaluation: no valid trace context, skipping langfuse score ingestion")
-		return
-	}
-	traceID := span.SpanContext().TraceID().String()
+	traceID := "memeval-" + convID + "-" + msgID
 
-	// Detached context: must complete even if caller's context is cancelled
-	sendCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Trace ensures scores inherit session/user context in Langfuse UI
-	if err := client.CreateTrace(sendCtx, langfuse.TraceParams{
+	if err := client.CreateTrace(ctx, langfuse.TraceParams{
 		ID:        traceID,
 		Name:      "memory-evaluation",
 		SessionID: convID,
 		UserID:    userID,
 		Tags:      []string{"memory"},
 	}); err != nil {
-		slog.ErrorContext(ctx, "failed to create langfuse trace for memory scores", "error", err)
+		slog.Error("failed to create langfuse trace for memory scores", "error", err)
 	}
 
 	acceptedValue := 0.0
@@ -333,17 +359,17 @@ func sendMemoryScoresToLangfuse(ctx context.Context, scores MemoryScores, accept
 	}
 
 	lfScores := []langfuse.ScoreParams{
-		{TraceID: traceID, Name: "memory/importance", Value: float64(scores.Importance), DataType: langfuse.ScoreDataTypeNumeric},
-		{TraceID: traceID, Name: "memory/historical", Value: float64(scores.Historical), DataType: langfuse.ScoreDataTypeNumeric},
-		{TraceID: traceID, Name: "memory/personal", Value: float64(scores.Personal), DataType: langfuse.ScoreDataTypeNumeric},
-		{TraceID: traceID, Name: "memory/factual", Value: float64(scores.Factual), DataType: langfuse.ScoreDataTypeNumeric},
+		{TraceID: traceID, Name: "memory/importance", Value: float64(eval.Importance.Rating), DataType: langfuse.ScoreDataTypeNumeric},
+		{TraceID: traceID, Name: "memory/historical", Value: float64(eval.Historical.Rating), DataType: langfuse.ScoreDataTypeNumeric},
+		{TraceID: traceID, Name: "memory/personal", Value: float64(eval.Personal.Rating), DataType: langfuse.ScoreDataTypeNumeric},
+		{TraceID: traceID, Name: "memory/factual", Value: float64(eval.Factual.Rating), DataType: langfuse.ScoreDataTypeNumeric},
 		{TraceID: traceID, Name: "memory/accepted", Value: acceptedValue, DataType: langfuse.ScoreDataTypeBoolean},
 	}
 
-	if err := client.CreateScoreBatch(sendCtx, lfScores); err != nil {
-		slog.ErrorContext(ctx, "failed to send memory scores to langfuse", "error", err)
+	if err := client.CreateScoreBatch(ctx, lfScores); err != nil {
+		slog.Error("failed to send memory scores to langfuse", "error", err)
 	} else {
-		slog.InfoContext(ctx, "sent memory scores to langfuse", "trace_id", traceID, "session_id", convID, "user_id", userID, "accepted", accepted)
+		slog.Info("sent memory scores to langfuse", "trace_id", traceID, "session_id", convID, "user_id", userID, "accepted", accepted)
 	}
 }
 
@@ -358,10 +384,10 @@ Focus on:
 Conversation:
 {{conversation}}
 
-Return a JSON array. Each memory should be a concise, standalone statement.
-Example: [{"content": "User prefers dark mode"}, {"content": "User is building a Go project called Alicia"}]
+Each memory should be a concise, standalone statement.
+Example: {"memories": ["User prefers dark mode", "User is building a Go project called Alicia"]}
 
-Return [] if nothing worth remembering. Only return the JSON array, no explanation.`
+Return {"memories": []} if nothing worth remembering.`
 
 const fallbackEvalImportance = `Rate this memory's importance (1-5).
 
@@ -373,7 +399,7 @@ Memory: {{memory}}
 4 = Important, should remember
 5 = Critical, must remember
 
-Respond with only the number.`
+Respond with only the number, in format: {"rating": 1-5}`
 
 const fallbackEvalHistorical = `Rate this memory's future usefulness (1-5).
 
@@ -385,7 +411,7 @@ Memory: {{memory}}
 4 = Frequently useful
 5 = Always relevant, foundational
 
-Respond with only the number.`
+Respond with only the number, in format: {"rating": 1-5}`
 
 const fallbackEvalPersonal = `Rate this memory's personal relevance (1-5).
 
@@ -397,7 +423,7 @@ Memory: {{memory}}
 4 = Quite personal
 5 = Deeply personal, unique to this user
 
-Respond with only the number.`
+Respond with only the number, in format: {"rating": 1-5}`
 
 const fallbackEvalFactual = `Rate this memory's factfulness (1-5).
 
@@ -409,17 +435,22 @@ Memory: {{memory}}
 4 = High confidence
 5 = Explicitly stated as fact
 
-Respond with only the number.`
+Respond with only the number, in format: {"rating": 1-5}`
 
-const fallbackMemoryRerank = `Decide whether to add this new memory to the memory bank.
+const fallbackMemoryDecide = `Decide whether to store this new memory.
 
 New memory: {{new_memory}}
+
+Evaluation scores (1-5):
+- Importance: {{importance}}
+- Historical usefulness: {{historical}}
+- Personal relevance: {{personal}}
+- Factual confidence: {{factual}}
 
 Existing similar memories:
 {{existing_memories}}
 
-Respond with exactly one of:
-KEEP - if new memory adds unique value not in existing memories
-DROP - if redundant, duplicate, or already covered
+Respond KEEP if this memory is worth storing (high quality and not redundant).
+Respond DROP if low quality, redundant, or already covered.
 
 No explanation needed.`

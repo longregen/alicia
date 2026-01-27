@@ -43,11 +43,3 @@ export interface MessageAddon {
   memoryData?: MemoryAddonData[]; // Data for memory addon type
 }
 
-export interface ToolData {
-  id: string;
-  name: string;
-  description: string;
-  status?: 'running' | 'completed' | 'error';
-  result?: string;
-  type?: string; // 'reasoning' | 'search' | 'calculation' etc.
-}

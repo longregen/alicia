@@ -25,5 +25,6 @@ var (
 	NewThinkingID    = id.NewThinking
 	NewReasoningID   = id.NewReasoning
 	NewToolUseID     = id.NewToolUse
-	NewMemoryTraceID = id.NewMemoryTrace
+	NewMemoryTraceID      = id.NewMemoryTrace
+	NewMemoryGenerationID = id.NewMemoryGeneration
 )

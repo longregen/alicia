@@ -35,6 +35,7 @@ const (
 	TypeAssistantToolsRegister     = protocol.TypeAssistantToolsRegister
 	TypeAssistantToolsAck          = protocol.TypeAssistantToolsAck
 	TypeAssistantHeartbeat         = protocol.TypeAssistantHeartbeat
+	TypeGenerationComplete         = protocol.TypeGenerationComplete
 )
 
 type (
@@ -67,4 +68,5 @@ type (
 	AssistantToolsRegister     = protocol.AssistantToolsRegister
 	AssistantTool              = protocol.AssistantTool
 	AssistantToolsAck          = protocol.AssistantToolsAck
+	GenerationComplete         = protocol.GenerationComplete
 )

@@ -43,6 +43,9 @@ type Hub struct {
 	lastAssistantHeartbeat time.Time
 	monitorConns map[*websocket.Conn]struct{}
 	monitorMu    sync.RWMutex
+	// Tracks active generations: convID → messageID (set on GenRequest, cleared on AssistantMsg)
+	activeGens   map[string]string
+	activeGensMu sync.Mutex
 	// Enables blocking request/response pattern over async WebSocket for the REST API's sync endpoint
 	syncWaiters      map[string]chan SyncResult
 	syncToolUses     map[string][]protocol.ToolUseRequest // tool uses accumulated by assistant message ID for sync responses
@@ -54,6 +57,7 @@ func NewHub() *Hub {
 	return &Hub{
 		convSubs:         make(map[string]map[*websocket.Conn]struct{}),
 		monitorConns:     make(map[*websocket.Conn]struct{}),
+		activeGens:       make(map[string]string),
 		syncWaiters:      make(map[string]chan SyncResult),
 		syncToolUses:     make(map[string][]protocol.ToolUseRequest),
 		syncToolUsesKeys: make(map[string][]string),
@@ -303,6 +307,10 @@ func (h *Hub) SendGenerationRequest(ctx context.Context, convID, userMsgID strin
 		slog.Error("ws: encode generation request error", "error", err)
 		return
 	}
+
+	h.activeGensMu.Lock()
+	h.activeGens[convID] = userMsgID
+	h.activeGensMu.Unlock()
 
 	h.BroadcastToAgent(data)
 }
@@ -657,7 +665,6 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			case protocol.TypeUserMessage:
 				if env.ConversationID != "" {
-					// Handle user messages from any subscribed client (voice, assistant, or regular)
 					h.handleClientUserMessage(ctx, env)
 				}
 
@@ -731,6 +738,23 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isAgent {
+		// Broadcast GenerationComplete with error for any active generations
+		h.hub.activeGensMu.Lock()
+		activeGens := make(map[string]string, len(h.hub.activeGens))
+		for k, v := range h.hub.activeGens {
+			activeGens[k] = v
+		}
+		h.hub.activeGens = make(map[string]string)
+		h.hub.activeGensMu.Unlock()
+
+		for convID := range activeGens {
+			h.hub.BroadcastEnvelope(convID, protocol.TypeGenerationComplete, &protocol.GenerationComplete{
+				ConversationID: convID,
+				Success:        false,
+				Error:          "agent disconnected",
+			})
+		}
+
 		h.hub.UnsubscribeAgent(conn)
 	} else if isVoice {
 		h.hub.UnsubscribeVoice(conn)
@@ -826,6 +850,17 @@ func (h *WSHandler) persistAgentMessage(ctx context.Context, env *protocol.Envel
 		if err := h.store.UpdateConversationTip(ctx, msg.ConversationID, msg.ID); err != nil {
 			slog.Error("ws: update conversation tip error", "error", err, "conversation_id", msg.ConversationID)
 		}
+
+		// Clear active generation and broadcast GenerationComplete
+		h.hub.activeGensMu.Lock()
+		delete(h.hub.activeGens, msg.ConversationID)
+		h.hub.activeGensMu.Unlock()
+
+		h.hub.BroadcastEnvelope(msg.ConversationID, protocol.TypeGenerationComplete, &protocol.GenerationComplete{
+			MessageID:      msg.ID,
+			ConversationID: msg.ConversationID,
+			Success:        true,
+		})
 
 		// Notify any sync waiters for this conversation
 		h.hub.NotifySyncWaiter(msg.ConversationID, msg)

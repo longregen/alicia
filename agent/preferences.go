@@ -127,13 +127,4 @@ func (s *PreferencesStore) Update(update protocol.PreferencesUpdate) {
 	s.prefs[update.UserID] = p
 }
 
-func (s *PreferencesStore) GetThresholds(userID string) MemoryThresholds {
-	p := s.Get(userID)
-	return MemoryThresholds{
-		Importance: p.MemoryMinImportance,
-		Historical: p.MemoryMinHistorical,
-		Personal:   p.MemoryMinPersonal,
-		Factual:    p.MemoryMinFactual,
-	}
-}
 

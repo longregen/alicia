@@ -5,22 +5,39 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/longregen/alicia/pkg/langfuse"
-
+	openai "github.com/sashabaranov/go-openai"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
-// Package-level compiled regexes for performance (avoid recompiling on each call)
-var (
-	starsRegex = regexp.MustCompile(`(?i)STARS:\s*(\d+(?:\.\d+)?)`)
-	numRegex   = regexp.MustCompile(`^(\d+(?:\.\d+)?)`)
-)
+// scoreTool is the single tool used to force structured score output from LLM judges.
+var scoreTool = Tool{
+	Name:        "score",
+	Description: "Submit your rating score.",
+	Schema: map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"stars": map[string]any{
+				"type":        "number",
+				"description": "Rating from 1 to 5",
+				"minimum":     1,
+				"maximum":     5,
+			},
+		},
+		"required":             []string{"stars"},
+		"additionalProperties": false,
+	},
+}
+
+// scoreToolChoice forces the LLM to call the score tool.
+var scoreToolChoice = openai.ToolChoice{
+	Type:     openai.ToolTypeFunction,
+	Function: openai.ToolFunction{Name: "score"},
+}
 
 // PathEvaluator evaluates execution paths across multiple dimensions
 type PathEvaluator struct {
@@ -35,7 +52,7 @@ func NewPathEvaluator(llm *LLMClient, lf *langfuse.Client, convID, userID string
 }
 
 // Evaluate scores a path across 6 Pareto dimensions (all 1-5 star ratings)
-func (e *PathEvaluator) Evaluate(ctx context.Context, query string, trace *ExecutionTrace) (PathScores, string, error) {
+func (e *PathEvaluator) Evaluate(ctx context.Context, query string, trace *ExecutionTrace, parentSpanID string) (PathScores, string, error) {
 	if trace == nil {
 		return PathScores{}, "", fmt.Errorf("trace cannot be nil")
 	}
@@ -58,16 +75,16 @@ func (e *PathEvaluator) Evaluate(ctx context.Context, query string, trace *Execu
 	}
 
 	evalWithRetry("effectiveness", func(c context.Context) (float64, error) {
-		return e.llmJudgeEffectiveness(c, query, trace)
+		return e.llmJudgeEffectiveness(c, query, trace, parentSpanID)
 	}, &scores.Effectiveness)
 	evalWithRetry("quality", func(c context.Context) (float64, error) {
-		return e.llmJudgeAnswerQuality(c, query, trace)
+		return e.llmJudgeAnswerQuality(c, query, trace, parentSpanID)
 	}, &scores.AnswerQuality)
 	evalWithRetry("hallucination", func(c context.Context) (float64, error) {
-		return e.llmJudgeHallucination(c, trace)
+		return e.llmJudgeHallucination(c, trace, parentSpanID)
 	}, &scores.Hallucination)
 	evalWithRetry("specificity", func(c context.Context) (float64, error) {
-		return e.llmJudgeSpecificity(c, query, trace)
+		return e.llmJudgeSpecificity(c, query, trace, parentSpanID)
 	}, &scores.Specificity)
 
 	if err := g.Wait(); err != nil {
@@ -146,7 +163,7 @@ func clampStars(score float64) float64 {
 	return score
 }
 
-func (e *PathEvaluator) llmJudgeEffectiveness(ctx context.Context, query string, trace *ExecutionTrace) (float64, error) {
+func (e *PathEvaluator) llmJudgeEffectiveness(ctx context.Context, query string, trace *ExecutionTrace, parentSpanID string) (float64, error) {
 	fallbackPrompt := `Rate how effectively this response answers the user's question.
 
 QUESTION: {{question}}
@@ -160,36 +177,34 @@ Rate on a 1-5 scale:
 4: Good - answered the question with minor issues
 5: Excellent - fully and correctly answered the question
 
-Output format: STARS: [1-5]`
+Call the score tool with your rating.`
 
 	vars := map[string]string{
 		"question": query,
-		"response": truncateForPrompt(trace.FinalAnswer, 1500),
+		"response": trace.FinalAnswer,
 	}
 
-	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-effectiveness", fallbackPrompt, vars)
+	prompt := RetrievePromptTemplate("alicia/pareto/eval-effectiveness", fallbackPrompt, vars)
 
-	llmStart := time.Now()
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.eval.effectiveness",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	resp, err := MakeLLMCall(ctx, e.llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, []Tool{scoreTool}, LLMCallOptions{
+		GenerationName:      "pareto.eval.effectiveness",
+		Prompt:              prompt,
+		ToolChoice:          scoreToolChoice,
+		ConvID:              e.convID,
+		UserID:              e.userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: parentSpanID,
+		InputOverride:       map[string]any{"question": query, "answer": trace.FinalAnswer},
+		NoRetry:             true,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
 	}
-	llmEnd := time.Now()
 
-	if prompt.Name != "" {
-		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("eval-effectiveness-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.effectiveness", prompt, resp.Content, llmStart, llmEnd)
-	}
-
-	return parseStarRating(resp.Content)
+	return parseScoreToolCall(resp)
 }
 
-func (e *PathEvaluator) llmJudgeAnswerQuality(ctx context.Context, query string, trace *ExecutionTrace) (float64, error) {
+func (e *PathEvaluator) llmJudgeAnswerQuality(ctx context.Context, query string, trace *ExecutionTrace, parentSpanID string) (float64, error) {
 	fallbackPrompt := `Rate the quality of this answer's content and presentation.
 
 QUESTION: {{question}}
@@ -203,36 +218,34 @@ Rate on a 1-5 scale:
 4: Good - clear, well-organized, and helpful
 5: Excellent - exceptionally clear, insightful, and perfectly addresses the need
 
-Output format: STARS: [1-5]`
+Call the score tool with your rating.`
 
 	vars := map[string]string{
 		"question": query,
-		"answer":   truncateForPrompt(trace.FinalAnswer, 1500),
+		"answer":   trace.FinalAnswer,
 	}
 
-	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-quality", fallbackPrompt, vars)
+	prompt := RetrievePromptTemplate("alicia/pareto/eval-quality", fallbackPrompt, vars)
 
-	llmStart := time.Now()
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.eval.quality",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	resp, err := MakeLLMCall(ctx, e.llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, []Tool{scoreTool}, LLMCallOptions{
+		GenerationName:      "pareto.eval.quality",
+		Prompt:              prompt,
+		ToolChoice:          scoreToolChoice,
+		ConvID:              e.convID,
+		UserID:              e.userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: parentSpanID,
+		InputOverride:       map[string]any{"question": query, "answer": trace.FinalAnswer},
+		NoRetry:             true,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
 	}
-	llmEnd := time.Now()
 
-	if prompt.Name != "" {
-		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("eval-quality-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.quality", prompt, resp.Content, llmStart, llmEnd)
-	}
-
-	return parseStarRating(resp.Content)
+	return parseScoreToolCall(resp)
 }
 
-func (e *PathEvaluator) llmJudgeHallucination(ctx context.Context, trace *ExecutionTrace) (float64, error) {
+func (e *PathEvaluator) llmJudgeHallucination(ctx context.Context, trace *ExecutionTrace, parentSpanID string) (float64, error) {
 	toolOutputs := formatToolOutputs(trace.ToolCalls)
 
 	// If no tools were used, we can't check for hallucinations against tool outputs
@@ -255,36 +268,34 @@ Rate on a 1-5 scale:
 4: Mostly accurate - reasonable inferences, no major fabrications
 5: Fully accurate - all claims supported by tool outputs
 
-Output format: STARS: [1-5]`
+Call the score tool with your rating.`
 
 	vars := map[string]string{
-		"tool_outputs": truncateForPrompt(toolOutputs, 2000),
-		"answer":       truncateForPrompt(trace.FinalAnswer, 1000),
+		"tool_outputs": toolOutputs,
+		"answer":       trace.FinalAnswer,
 	}
 
-	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-hallucination", fallbackPrompt, vars)
+	prompt := RetrievePromptTemplate("alicia/pareto/eval-hallucination", fallbackPrompt, vars)
 
-	llmStart := time.Now()
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.eval.hallucination",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	resp, err := MakeLLMCall(ctx, e.llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, []Tool{scoreTool}, LLMCallOptions{
+		GenerationName:      "pareto.eval.hallucination",
+		Prompt:              prompt,
+		ToolChoice:          scoreToolChoice,
+		ConvID:              e.convID,
+		UserID:              e.userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: parentSpanID,
+		InputOverride:       map[string]any{"tool_outputs": toolOutputs, "answer": trace.FinalAnswer},
+		NoRetry:             true,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
 	}
-	llmEnd := time.Now()
 
-	if prompt.Name != "" {
-		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("eval-hallucination-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.hallucination", prompt, resp.Content, llmStart, llmEnd)
-	}
-
-	return parseStarRating(resp.Content)
+	return parseScoreToolCall(resp)
 }
 
-func (e *PathEvaluator) llmJudgeSpecificity(ctx context.Context, query string, trace *ExecutionTrace) (float64, error) {
+func (e *PathEvaluator) llmJudgeSpecificity(ctx context.Context, query string, trace *ExecutionTrace, parentSpanID string) (float64, error) {
 	fallbackPrompt := `Rate whether the answer's level of detail matches what the question needs.
 
 QUESTION: {{question}}
@@ -298,33 +309,31 @@ Rate on a 1-5 scale:
 4: Good match - appropriate level of detail for the question type
 5: Perfect match - exactly the right amount of detail and depth
 
-Output format: STARS: [1-5]`
+Call the score tool with your rating.`
 
 	vars := map[string]string{
 		"question": query,
-		"answer":   truncateForPrompt(trace.FinalAnswer, 1000),
+		"answer":   trace.FinalAnswer,
 	}
 
-	prompt := e.getPromptWithFallback(ctx, "alicia/pareto/eval-specificity", fallbackPrompt, vars)
+	prompt := RetrievePromptTemplate("alicia/pareto/eval-specificity", fallbackPrompt, vars)
 
-	llmStart := time.Now()
-	resp, err := e.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.eval.specificity",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	resp, err := MakeLLMCall(ctx, e.llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, []Tool{scoreTool}, LLMCallOptions{
+		GenerationName:      "pareto.eval.specificity",
+		Prompt:              prompt,
+		ToolChoice:          scoreToolChoice,
+		ConvID:              e.convID,
+		UserID:              e.userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: parentSpanID,
+		InputOverride:       map[string]any{"question": query, "answer": trace.FinalAnswer},
+		NoRetry:             true,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("LLM call failed: %w", err)
 	}
-	llmEnd := time.Now()
 
-	if prompt.Name != "" {
-		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("eval-specificity-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, e.convID, e.userID, e.llm.model, "agent:pareto", "pareto.eval.specificity", prompt, resp.Content, llmStart, llmEnd)
-	}
-
-	return parseStarRating(resp.Content)
+	return parseScoreToolCall(resp)
 }
 
 func (e *PathEvaluator) generateFeedback(query string, trace *ExecutionTrace, scores PathScores) string {
@@ -369,29 +378,12 @@ func (e *PathEvaluator) generateFeedback(query string, trace *ExecutionTrace, sc
 	return strings.Join(feedbackParts, " ")
 }
 
-func (e *PathEvaluator) getPromptWithFallback(ctx context.Context, promptName string, fallback string, vars map[string]string) PromptResult {
-	if e.langfuse != nil {
-		prompt, err := e.langfuse.GetPromptContext(ctx, promptName, langfuse.WithLabel("production"))
-		if err == nil {
-			return PromptResult{
-				Text:    prompt.Compile(vars),
-				Name:    prompt.Name,
-				Version: prompt.Version,
-			}
-		}
-	}
-	return PromptResult{Text: langfuse.CompileTemplate(fallback, vars)}
-}
-
 func formatToolOutputs(toolCalls []ToolCallRecord) string {
 	var sb strings.Builder
 
 	for i, tc := range toolCalls {
 		if tc.Success && tc.Result != nil {
 			resultStr := fmt.Sprintf("%v", tc.Result)
-			if len(resultStr) > 500 {
-				resultStr = resultStr[:500] + "..."
-			}
 			sb.WriteString(fmt.Sprintf("[Tool %d: %s]\n%s\n\n", i+1, tc.ToolName, resultStr))
 		}
 	}
@@ -399,26 +391,19 @@ func formatToolOutputs(toolCalls []ToolCallRecord) string {
 	return sb.String()
 }
 
-func parseStarRating(response string) (float64, error) {
-	matches := starsRegex.FindStringSubmatch(response)
-	if len(matches) > 1 {
-		stars, err := strconv.ParseFloat(matches[1], 64)
-		if err == nil {
-			return clampStars(stars), nil
+func parseScoreToolCall(resp *LLMResponse) (float64, error) {
+	for _, tc := range resp.ToolCalls {
+		if tc.Name == "score" {
+			if v, ok := tc.Arguments["stars"]; ok {
+				switch n := v.(type) {
+				case float64:
+					return clampStars(n), nil
+				case int:
+					return clampStars(float64(n)), nil
+				}
+			}
 		}
 	}
-
-	matches = numRegex.FindStringSubmatch(strings.TrimSpace(response))
-	if len(matches) > 1 {
-		stars, err := strconv.ParseFloat(matches[1], 64)
-		if err == nil {
-			return clampStars(stars), nil
-		}
-	}
-
-	return 0, fmt.Errorf("failed to parse star rating from LLM response: %.100s", response)
+	return 0, fmt.Errorf("LLM did not call score tool; content: %.100s", resp.Content)
 }
 
-func truncateForPrompt(s string, maxLen int) string {
-	return langfuse.TruncateString(s, maxLen, "...[truncated]")
-}

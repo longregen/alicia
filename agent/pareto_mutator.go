@@ -2,27 +2,68 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/longregen/alicia/pkg/langfuse"
-	oteltrace "go.opentelemetry.io/otel/trace"
+	openai "github.com/sashabaranov/go-openai"
 )
 
-var (
-	lessonsRegex         = regexp.MustCompile(`(?is)LESSONS_LEARNED:\s*(.*?)(?:IMPROVED_STRATEGY:|MERGED_STRATEGY:|$)`)
-	improvedStrategyRegex = regexp.MustCompile(`(?is)IMPROVED_STRATEGY:\s*(.*)`)
-	mergedStrategyRegex   = regexp.MustCompile(`(?is)MERGED_STRATEGY:\s*(.*)`)
-)
+var mutateTool = Tool{
+	Name:        "mutate_result",
+	Description: "Submit mutation analysis with lessons learned and improved strategy.",
+	Schema: map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"lessons": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "New lessons learned from this attempt",
+			},
+			"improved_strategy": map[string]any{
+				"type":        "string",
+				"description": "Improved strategy prompt for the next attempt",
+			},
+		},
+		"required":             []string{"lessons", "improved_strategy"},
+		"additionalProperties": false,
+	},
+}
+
+var mutateToolChoice = openai.ToolChoice{
+	Type:     openai.ToolTypeFunction,
+	Function: openai.ToolFunction{Name: "mutate_result"},
+}
+
+var crossoverTool = Tool{
+	Name:        "crossover_result",
+	Description: "Submit the merged strategy combining the best elements of both.",
+	Schema: map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"merged_strategy": map[string]any{
+				"type":        "string",
+				"description": "Merged strategy combining the best elements of both",
+			},
+		},
+		"required":             []string{"merged_strategy"},
+		"additionalProperties": false,
+	},
+}
+
+var crossoverToolChoice = openai.ToolChoice{
+	Type:     openai.ToolTypeFunction,
+	Function: openai.ToolFunction{Name: "crossover_result"},
+}
 
 type PathMutator struct {
-	llm      *LLMClient
-	langfuse *langfuse.Client
-	convID   string
-	userID   string
+	llm          *LLMClient
+	langfuse     *langfuse.Client
+	convID       string
+	userID       string
+	parentSpanID string
 }
 
 func NewPathMutator(llm *LLMClient, lf *langfuse.Client, convID, userID string) *PathMutator {
@@ -44,19 +85,10 @@ FEEDBACK: {{feedback}}
 ACCUMULATED LESSONS:
 {{lessons}}
 
-Based on what worked and what didn't, provide:
-1. LESSONS_LEARNED: New lessons from this attempt (bullet points, each on its own line starting with "- ")
-2. IMPROVED_STRATEGY: A better strategy prompt for the next attempt
-
+Based on what worked and what didn't, provide new lessons and an improved strategy.
 The improved strategy should be specific, actionable, and address the failures observed.
 
-Format your response exactly like this:
-LESSONS_LEARNED:
-- lesson 1
-- lesson 2
-
-IMPROVED_STRATEGY:
-Your improved strategy text here...`
+Call the mutate_result tool with your analysis.`
 
 const crossoverFallbackPrompt = `Merge these two successful strategies into one.
 
@@ -72,44 +104,13 @@ STRATEGY 2 (from path with scores: effectiveness={{scores2}}):
 Lessons learned:
 {{lessons2}}
 
-Create a MERGED_STRATEGY that combines the best elements:
+Create a merged strategy that combines the best elements:
 - Keep what makes each strategy effective
 - Resolve conflicts in favor of accuracy
 - Be specific and actionable
 
-Format your response exactly like this:
-MERGED_STRATEGY:
-Your merged strategy text here...`
+Call the crossover_result tool with your merged strategy.`
 
-func (m *PathMutator) getMutationPrompt(ctx context.Context, vars map[string]string) PromptResult {
-	if m.langfuse != nil {
-		prompt, err := m.langfuse.GetPromptContext(ctx, "alicia/pareto/mutation-strategy", langfuse.WithLabel("production"))
-		if err == nil {
-			return PromptResult{
-				Text:    prompt.Compile(vars),
-				Name:    prompt.Name,
-				Version: prompt.Version,
-			}
-		}
-		slog.WarnContext(ctx, "langfuse GetPrompt failed for mutation-strategy, using fallback", "error", err)
-	}
-	return PromptResult{Text: langfuse.CompileTemplate(mutationStrategyFallbackPrompt, vars)}
-}
-
-func (m *PathMutator) getCrossoverPrompt(ctx context.Context, vars map[string]string) PromptResult {
-	if m.langfuse != nil {
-		prompt, err := m.langfuse.GetPromptContext(ctx, "alicia/pareto/mutation-crossover", langfuse.WithLabel("production"))
-		if err == nil {
-			return PromptResult{
-				Text:    prompt.Compile(vars),
-				Name:    prompt.Name,
-				Version: prompt.Version,
-			}
-		}
-		slog.WarnContext(ctx, "langfuse GetPrompt failed for mutation-crossover, using fallback", "error", err)
-	}
-	return PromptResult{Text: langfuse.CompileTemplate(crossoverFallbackPrompt, vars)}
-}
 
 func (m *PathMutator) MutateStrategy(ctx context.Context, candidate *PathCandidate, trace *ExecutionTrace, feedback string) (*PathCandidate, error) {
 	if candidate == nil {
@@ -134,27 +135,23 @@ func (m *PathMutator) MutateStrategy(ctx context.Context, candidate *PathCandida
 		"lessons":  lessonsStr,
 	}
 
-	prompt := m.getMutationPrompt(ctx, promptVars)
+	prompt := RetrievePromptTemplate("alicia/pareto/mutation-strategy", mutationStrategyFallbackPrompt, promptVars)
 
-	llmStart := time.Now()
-	response, err := m.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.mutate",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	response, err := MakeLLMCall(ctx, m.llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, []Tool{mutateTool}, LLMCallOptions{
+		GenerationName:      "pareto.mutate",
+		Prompt:              prompt,
+		ToolChoice:          mutateToolChoice,
+		ConvID:              m.convID,
+		UserID:              m.userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: m.parentSpanID,
+		NoRetry:             true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM response for mutation: %w", err)
 	}
-	llmEnd := time.Now()
 
-	if prompt.Name != "" {
-		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("mutate-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, m.convID, m.userID, m.llm.model, "agent:pareto", "pareto.mutate", prompt, response.Content, llmStart, llmEnd)
-	}
-
-	newLessons := parseMutationLessons(response.Content)
-	newStrategy := parseMutationStrategy(response.Content)
+	newLessons, newStrategy, _ := parseMutateToolCall(response)
 
 	if newStrategy == "" {
 		newStrategy = candidate.StrategyPrompt + "\n\nAdditional guidance based on previous attempt: " + feedback
@@ -195,26 +192,23 @@ func (m *PathMutator) Crossover(ctx context.Context, parent1, parent2 *PathCandi
 		"lessons2":  lessons2,
 	}
 
-	prompt := m.getCrossoverPrompt(ctx, promptVars)
+	prompt := RetrievePromptTemplate("alicia/pareto/mutation-crossover", crossoverFallbackPrompt, promptVars)
 
-	llmStart := time.Now()
-	response, err := m.llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.crossover",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	response, err := MakeLLMCall(ctx, m.llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, []Tool{crossoverTool}, LLMCallOptions{
+		GenerationName:      "pareto.crossover",
+		Prompt:              prompt,
+		ToolChoice:          crossoverToolChoice,
+		ConvID:              m.convID,
+		UserID:              m.userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: m.parentSpanID,
+		NoRetry:             true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM response for crossover: %w", err)
 	}
-	llmEnd := time.Now()
 
-	if prompt.Name != "" {
-		traceID := oteltrace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("crossover-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, m.convID, m.userID, m.llm.model, "agent:pareto", "pareto.crossover", prompt, response.Content, llmStart, llmEnd)
-	}
-
-	mergedStrategy := parseMergedStrategyText(response.Content)
+	mergedStrategy, _ := parseCrossoverToolCall(response)
 	if mergedStrategy == "" {
 		mergedStrategy = fmt.Sprintf("Combined approach:\n\nFrom strategy 1:\n%s\n\nFrom strategy 2:\n%s",
 			parent1.StrategyPrompt, parent2.StrategyPrompt)
@@ -294,48 +288,40 @@ func formatTraceArgs(args map[string]any) string {
 	return strings.Join(parts, ", ")
 }
 
-func parseMutationLessons(response string) []string {
-	matches := lessonsRegex.FindStringSubmatch(response)
+func parseMutateToolCall(resp *LLMResponse) ([]string, string, error) {
+	for _, tc := range resp.ToolCalls {
+		if tc.Name == "mutate_result" {
+			var lessons []string
+			var strategy string
 
-	var lessons []string
-	if len(matches) > 1 {
-		lessonsSection := strings.TrimSpace(matches[1])
-		lines := strings.Split(lessonsSection, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			line = strings.TrimPrefix(line, "-")
-			line = strings.TrimPrefix(line, "*")
-			line = strings.TrimPrefix(line, "\u2022")
-			line = strings.TrimSpace(line)
-			if line != "" && len(line) > 3 {
-				lessons = append(lessons, line)
+			if v, ok := tc.Arguments["lessons"]; ok {
+				raw, err := json.Marshal(v)
+				if err == nil {
+					json.Unmarshal(raw, &lessons)
+				}
+			}
+			if v, ok := tc.Arguments["improved_strategy"]; ok {
+				if s, ok := v.(string); ok {
+					strategy = s
+				}
+			}
+			return lessons, strategy, nil
+		}
+	}
+	return nil, "", fmt.Errorf("LLM did not call mutate_result tool; content: %.100s", resp.Content)
+}
+
+func parseCrossoverToolCall(resp *LLMResponse) (string, error) {
+	for _, tc := range resp.ToolCalls {
+		if tc.Name == "crossover_result" {
+			if v, ok := tc.Arguments["merged_strategy"]; ok {
+				if s, ok := v.(string); ok {
+					return s, nil
+				}
 			}
 		}
 	}
-	return lessons
-}
-
-func parseMutationStrategy(response string) string {
-	matches := improvedStrategyRegex.FindStringSubmatch(response)
-
-	if len(matches) > 1 {
-		strategy := strings.TrimSpace(matches[1])
-		if idx := strings.Index(strings.ToUpper(strategy), "LESSONS_LEARNED:"); idx > 0 {
-			strategy = strings.TrimSpace(strategy[:idx])
-		}
-		return strategy
-	}
-	return ""
-}
-
-func parseMergedStrategyText(response string) string {
-	matches := mergedStrategyRegex.FindStringSubmatch(response)
-
-	if len(matches) > 1 {
-		return strings.TrimSpace(matches[1])
-	}
-
-	return parseMutationStrategy(response)
+	return "", fmt.Errorf("LLM did not call crossover_result tool; content: %.100s", resp.Content)
 }
 
 func uniqueMergeLessons(a, b []string) []string {

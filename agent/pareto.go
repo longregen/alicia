@@ -184,7 +184,8 @@ func createSeedCandidates(count int) []*PathCandidate {
 func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQuery string, cfg GenerateConfig, paretoCfg ParetoConfig, deps AgentDeps) error {
 	deps.Notifier.SetMessageID(msgID)
 	deps.Notifier.SetPreviousID(previousID)
-	deps.Notifier.SendThinking(ctx, msgID, "Starting pareto exploration...")
+	deps.Notifier.SendStartAnswer(ctx, msgID)
+	deps.Notifier.SendThinking(ctx, msgID, "Thinking...")
 
 	// Initialize components
 	archive := NewPathParetoArchive(paretoCfg.ArchiveSize)
@@ -217,7 +218,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	embedding, err := deps.LLM.Embed(setupCtx, userQuery)
 	if err != nil {
 		slog.ErrorContext(setupCtx, "failed to generate embedding for memory search", "error", err)
-	} else if embedding != nil {
+	} else if len(embedding) > 0 {
 		userPrefs := deps.Prefs.Get(deps.UserID)
 		memories, err = SearchMemories(setupCtx, deps.DB, embedding, 0.7, userPrefs.MemoryRetrievalCount)
 		if err != nil {
@@ -249,9 +250,6 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	seeds := createSeedCandidates(paretoCfg.BranchesPerGen)
 	weights := DefaultPathScoreWeights()
 
-	// Load conversation title for progress context (may be empty for new conversations)
-	convTitle, _ := GetConversationTitle(ctx, deps.DB, convID)
-
 	for gen := 0; gen < paretoCfg.MaxGenerations; gen++ {
 		genCtx, genSpan := otel.Tracer("alicia-agent").Start(ctx, "pareto.generation",
 			trace.WithAttributes(
@@ -259,7 +257,21 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 				attribute.Int("branches", len(seeds)),
 			))
 
-		deps.Notifier.SendThinking(genCtx, msgID, fmt.Sprintf("Exploring generation %d/%d (%d branches)...", gen+1, paretoCfg.MaxGenerations, len(seeds)))
+		// Use the OTel span ID as the Langfuse span ID so LiteLLM observations
+		// (which inherit the OTel parent) nest correctly under our Langfuse spans.
+		genOTelSpanID := genSpan.SpanContext().SpanID().String()
+		genStart := time.Now()
+		if lfClient != nil {
+			traceID := genSpan.SpanContext().TraceID().String()
+			_ = lfClient.CreateSpan(genCtx, langfuse.SpanParams{
+				TraceID:   traceID,
+				ID:        genOTelSpanID,
+				Name:      fmt.Sprintf("pareto.generation-%d", gen+1),
+				StartTime: genStart,
+				Metadata:  map[string]any{"generation": gen + 1, "branches": len(seeds)},
+			})
+		}
+		genParentSpanID := genOTelSpanID
 
 		var wg sync.WaitGroup
 		var candidatesDone atomic.Int32
@@ -269,57 +281,59 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 
 		totalCandidates := len(seeds)
 		stopProgress := startProgressTicker(genCtx, deps.Notifier, msgID, 5*time.Second, func() string {
-			done := int(candidatesDone.Load())
-			best := float64(bestScoreX100.Load()) / 100.0
-			remaining := totalCandidates - done
+			remaining := totalCandidates - int(candidatesDone.Load())
 			if remaining == 0 {
 				return ""
 			}
 
-			var status string
-			if done == 0 {
-				if gen == 0 {
-					status = fmt.Sprintf("Running %d candidates in parallel...", totalCandidates)
-				} else {
-					status = fmt.Sprintf("Testing %d refined strategies...", totalCandidates)
-				}
-			} else if best > 0 {
-				status = fmt.Sprintf("%d/%d evaluated (best: %.1f/5), %d still running...", done, totalCandidates, best, remaining)
-			} else {
-				status = fmt.Sprintf("%d/%d candidates evaluated, %d still running...", done, totalCandidates, remaining)
+			if toolDesc := tracker.Describe(genCtx, deps.LLM, userQuery, convID, deps.UserID, genOTelSpanID); toolDesc != "" {
+				return toolDesc
 			}
-
-			// Add LLM-generated tool activity description
-			if toolDesc := tracker.Describe(genCtx, deps.LLM, userQuery, convID, deps.UserID); toolDesc != "" {
-				status += "\n" + toolDesc
-			}
-
-			// Add context from best frontier answer so far
-			bestAnswer := ""
-			if archiveBest := archive.GetBestByWeightedSum(weights); archiveBest != nil && archiveBest.Trace != nil {
-				bestAnswer = archiveBest.Trace.FinalAnswer
-			}
-			desc := buildProgressContext(userQuery, convTitle, bestAnswer)
-			return status + "\n" + desc
+			return ""
 		})
 
-		for _, candidate := range seeds {
+		for i, candidate := range seeds {
 			wg.Add(1)
-			go func(c *PathCandidate) {
+			go func(c *PathCandidate, idx int) {
 				defer wg.Done()
 				defer candidatesDone.Add(1)
 
-				// Candidate execution span
+				// Candidate execution span (OTel)
 				execCtx, execSpan := otel.Tracer("alicia-agent").Start(genCtx, "pareto.candidate_execution",
 					trace.WithAttributes(
 						attribute.String("candidate_id", c.ID),
 						attribute.Int("generation", c.Generation),
 					))
 
-				execTrace, err := executeCandidateWithStrategy(execCtx, c, messages, memories, tools, userQuery, convID, cfg, deps, tracker)
+				// Create a per-candidate Langfuse span using the OTel span ID
+				candidateSpanID := execSpan.SpanContext().SpanID().String()
+				candidateStart := time.Now()
+				if lfClient != nil {
+					traceID := execSpan.SpanContext().TraceID().String()
+					_ = lfClient.CreateSpan(execCtx, langfuse.SpanParams{
+						TraceID:             traceID,
+						ID:                  candidateSpanID,
+						ParentObservationID: genParentSpanID,
+						Name:                fmt.Sprintf("pareto.candidate-%d", idx+1),
+						StartTime:           candidateStart,
+						Metadata:            map[string]any{"candidate_id": c.ID, "generation": c.Generation},
+					})
+				}
+
+				execTrace, err := executeCandidateWithStrategy(execCtx, c, messages, memories, tools, userQuery, convID, cfg, deps, tracker, candidateSpanID)
 				if err != nil {
 					execSpan.RecordError(err)
 					execSpan.End()
+					// Close per-candidate Langfuse span on failure
+					if lfClient != nil {
+						traceID := execSpan.SpanContext().TraceID().String()
+						_ = lfClient.UpdateSpan(execCtx, langfuse.SpanParams{
+							TraceID: traceID,
+							ID:      candidateSpanID,
+							EndTime: time.Now(),
+							Output:  map[string]any{"error": err.Error()},
+						})
+					}
 					slog.ErrorContext(execCtx, "candidate failed", "candidate_id", c.ID, "error", err)
 					return
 				}
@@ -331,17 +345,29 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 				)
 				execSpan.End()
 
-				// Evaluation span
+				// Evaluation span (OTel)
 				_, evalSpan := otel.Tracer("alicia-agent").Start(genCtx, "pareto.candidate_evaluation",
 					trace.WithAttributes(
 						attribute.String("candidate_id", c.ID),
 						attribute.Int("generation", c.Generation),
 					))
 
-				scores, feedback, evalErr := evaluator.Evaluate(genCtx, userQuery, execTrace)
+				scores, feedback, evalErr := evaluator.Evaluate(genCtx, userQuery, execTrace, candidateSpanID)
 				if evalErr != nil {
 					evalSpan.RecordError(evalErr)
 					evalSpan.End()
+					// Close per-candidate Langfuse span on eval failure
+					if lfClient != nil {
+						spanCtx := trace.SpanContextFromContext(genCtx)
+						if spanCtx.IsValid() {
+							_ = lfClient.UpdateSpan(genCtx, langfuse.SpanParams{
+								TraceID: spanCtx.TraceID().String(),
+								ID:      candidateSpanID,
+								EndTime: time.Now(),
+								Output:  map[string]any{"error": evalErr.Error()},
+							})
+						}
+					}
 					slog.ErrorContext(genCtx, "evaluation failed", "candidate_id", c.ID, "error", evalErr)
 					return
 				}
@@ -357,6 +383,35 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 				)
 				evalSpan.End()
 
+				// Close per-candidate Langfuse span on success
+				if lfClient != nil {
+					spanCtx := trace.SpanContextFromContext(genCtx)
+					if spanCtx.IsValid() {
+						ws := scores.WeightedSum(weights)
+						_ = lfClient.UpdateSpan(genCtx, langfuse.SpanParams{
+							TraceID: spanCtx.TraceID().String(),
+							ID:      candidateSpanID,
+							EndTime: time.Now(),
+							Input:   c.Trace.FinalAnswer,
+							Output: map[string]any{
+								"weighted_score": ws,
+								"feedback":       feedback,
+							},
+							Metadata: map[string]any{
+								"pareto.score.effectiveness":  scores.Effectiveness,
+								"pareto.score.answer_quality": scores.AnswerQuality,
+								"pareto.score.hallucination":  scores.Hallucination,
+								"pareto.score.specificity":    scores.Specificity,
+								"pareto.score.token_cost":     scores.TokenCost,
+								"pareto.score.latency":        scores.Latency,
+								"pareto.score.weighted":       ws,
+								"gen_ai.usage.input_tokens":   c.Trace.TotalTokens,
+								"gen_ai.tool.call_count":      len(c.Trace.ToolCalls),
+							},
+						})
+					}
+				}
+
 				// Track best score for progress reporting
 				scoreX100 := int64(scores.WeightedSum(weights) * 100)
 				for {
@@ -370,7 +425,7 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 				}
 
 				results <- c
-			}(candidate)
+			}(candidate, i)
 		}
 
 		go func() {
@@ -403,11 +458,19 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			progress = 100
 		}
 
-		statusMsg := generateThinkingStatus(genCtx, deps.LLM, userQuery, best.StrategyPrompt, convID, deps.UserID, progress)
-		deps.Notifier.SendThinkingWithProgress(genCtx, msgID, statusMsg, progress)
-
 		if bestScore >= float64(paretoCfg.TargetScore) {
 			genSpan.End()
+			if lfClient != nil {
+				spanCtx := trace.SpanContextFromContext(ctx)
+				if spanCtx.IsValid() {
+					_ = lfClient.UpdateSpan(genCtx, langfuse.SpanParams{
+						TraceID: spanCtx.TraceID().String(),
+						ID:      genOTelSpanID,
+						EndTime: time.Now(),
+						Output:  map[string]any{"best_score": bestScore, "early_termination": true},
+					})
+				}
+			}
 			break
 		}
 
@@ -417,27 +480,29 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 					attribute.Int("archive_size", archive.Size()),
 				))
 
-			deps.Notifier.SendThinking(genCtx, msgID, "Evolving strategies for next generation...")
+			// Create a Langfuse span for the mutation round, using the OTel span ID
+			// so LiteLLM observations nest correctly.
+			mutOTelSpanID := mutSpan.SpanContext().SpanID().String()
+			mutStart := time.Now()
+			if lfClient != nil {
+				traceID := mutSpan.SpanContext().TraceID().String()
+				_ = lfClient.CreateSpan(genCtx, langfuse.SpanParams{
+					TraceID:             traceID,
+					ID:                  mutOTelSpanID,
+					ParentObservationID: genOTelSpanID,
+					Name:                fmt.Sprintf("pareto.mutation-%d", gen+1),
+					StartTime:           mutStart,
+					Metadata:            map[string]any{"generation": gen + 1},
+				})
+			}
+			mutator.parentSpanID = mutOTelSpanID
+
 			parents := archive.SelectForMutation(paretoCfg.BranchesPerGen)
 
 			var mutWg sync.WaitGroup
 			var mutationsDone atomic.Int32
-			totalMutations := len(parents)
 			mutResults := make(chan *PathCandidate, len(parents)+1)
 
-			stopMutProgress := startProgressTicker(genCtx, deps.Notifier, msgID, 5*time.Second, func() string {
-				done := int(mutationsDone.Load())
-				if done == 0 || done >= totalMutations {
-					return ""
-				}
-				status := fmt.Sprintf("Evolved %d/%d strategies...", done, totalMutations)
-				bestAnswer := ""
-				if archiveBest := archive.GetBestByWeightedSum(weights); archiveBest != nil && archiveBest.Trace != nil {
-					bestAnswer = archiveBest.Trace.FinalAnswer
-				}
-				context := buildProgressContext(userQuery, convTitle, bestAnswer)
-				return status + "\n" + context
-			})
 
 			for _, parent := range parents {
 				mutWg.Add(1)
@@ -475,7 +540,6 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			for mutated := range mutResults {
 				seeds = append(seeds, mutated)
 			}
-			stopMutProgress()
 
 			if len(seeds) == 0 {
 				slog.WarnContext(genCtx, "no mutations produced, using parents for next generation")
@@ -484,9 +548,37 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 
 			mutSpan.SetAttributes(attribute.Int("mutated_count", len(seeds)))
 			mutSpan.End()
+
+			// Close the Langfuse mutation span
+			if lfClient != nil {
+				spanCtx := trace.SpanContextFromContext(ctx)
+				if spanCtx.IsValid() {
+					_ = lfClient.UpdateSpan(genCtx, langfuse.SpanParams{
+						TraceID: spanCtx.TraceID().String(),
+						ID:      mutOTelSpanID,
+						EndTime: time.Now(),
+					})
+				}
+			}
 		}
 
 		genSpan.End()
+
+		// Close the Langfuse generation span
+		if lfClient != nil {
+			spanCtx := trace.SpanContextFromContext(ctx)
+			if spanCtx.IsValid() {
+				_ = lfClient.UpdateSpan(genCtx, langfuse.SpanParams{
+					TraceID: spanCtx.TraceID().String(),
+					ID:      genOTelSpanID,
+					EndTime: time.Now(),
+					Output: map[string]any{
+						"best_score":   bestScore,
+						"archive_size": archive.Size(),
+					},
+				})
+			}
+		}
 	}
 
 	// Select best result
@@ -529,21 +621,23 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 	slog.InfoContext(ctx, "response complete", "message_id", msgID, "content_length", len(finalContent))
 
 	// Update title asynchronously (detached context with timeout to survive client disconnect)
-	titleCtx, titleCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	// Carry span context so LiteLLM associates the request with the right trace
+	titleCtx, titleCancel := context.WithTimeout(
+		trace.ContextWithSpanContext(context.Background(), trace.SpanFromContext(ctx).SpanContext()),
+		45*time.Second,
+	)
 	go func() {
 		defer titleCancel()
 		maybeUpdateTitle(titleCtx, deps, convID, userQuery, finalContent)
 	}()
 
 	// Extract and save memories asynchronously (detached context to survive client disconnect)
-	// Carry span context for Langfuse score ingestion
-	memCtx := trace.ContextWithSpanContext(context.Background(), trace.SpanFromContext(ctx).SpanContext())
-	go ExtractAndSaveMemories(memCtx, convID, deps)
+	go ExtractAndSaveMemories(context.Background(), convID, msgID, deps)
 
 	return nil
 }
 
-func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate, history []Message, memories []Memory, tools []Tool, userQuery, convID string, cfg GenerateConfig, deps AgentDeps, tracker *toolTracker) (*ExecutionTrace, error) {
+func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate, history []Message, memories []Memory, tools []Tool, userQuery, convID string, cfg GenerateConfig, deps AgentDeps, tracker *toolTracker, parentSpanID string) (*ExecutionTrace, error) {
 	startTime := time.Now()
 
 	execTrace := &ExecutionTrace{
@@ -563,24 +657,40 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 
 	for i := 0; i < cfg.MaxToolIterations; i++ {
 		llmStart := time.Now()
-		resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
+		// Use NoTelemetry because we need deferred send with IterToolCalls after tool execution
+		resp, err := MakeLLMCall(ctx, deps.LLM, llmMsgs, tools, LLMCallOptions{
 			Temperature:    temperature,
-			ToolChoice:     "required",
+			ToolChoice:     "auto",
 			GenerationName: "pareto.candidate",
-			PromptName:     systemPrompt.Name,
-			PromptVersion:  systemPrompt.Version,
+			Prompt:         systemPrompt,
+			NoTelemetry:    true,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("LLM chat failed: %w", err)
 		}
 		llmEnd := time.Now()
 
-		if systemPrompt.Name != "" {
-			genID := fmt.Sprintf("%s-iter-%d", candidate.ID, i)
-			go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:pareto", "pareto.candidate", systemPrompt, resp.Content, llmStart, llmEnd)
+		// Deferred: send generation to Langfuse after tool calls are collected
+		iterGenID := fmt.Sprintf("%s-iter-%d", candidate.ID, i)
+		iterResp := resp
+		iterStart := llmStart
+		iterEnd := llmEnd
+		iterTemp := temperature
+		sendIterGeneration := func(iterToolCalls []ToolCallRecord) {
+			go sendGenerationToLangfuse(LangfuseGeneration{
+				TraceID: traceID, ID: iterGenID, ParentObservationID: parentSpanID,
+				ConvID: convID, UserID: deps.UserID, Model: deps.LLM.model,
+				TraceName: "agent:pareto", GenerationName: "pareto.candidate",
+				Prompt: systemPrompt, Input: llmMsgs, Output: formatIterOutput(iterResp, iterToolCalls),
+				StartTime: iterStart, EndTime: iterEnd,
+				PromptTokens: iterResp.PromptTokens, CompletionTokens: iterResp.CompletionTokens, TotalTokens: iterResp.TotalTokens,
+				Temperature: iterTemp, MaxTokens: deps.LLM.maxTokens,
+				Tools: toolNames(tools), ReasoningTokens: iterResp.ReasoningTokens,
+				Reasoning: iterResp.Reasoning, FinishReason: iterResp.FinishReason, IterToolCalls: iterToolCalls,
+			})
 		}
 
-		totalTokens += len(resp.Content) / 4
+		totalTokens += resp.TotalTokens
 
 		// Handle empty response with no tool calls - retry with increasing temperature
 		if len(resp.ToolCalls) == 0 && strings.TrimSpace(resp.Content) == "" {
@@ -589,22 +699,20 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 					return nil, ctx.Err()
 				}
 				slog.WarnContext(ctx, "empty response, retrying", "temperature", temp, "attempt", retry+1, "max_attempts", len(emptyRetryTemperatures))
-				retryStart := time.Now()
-				resp, err = deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
-					Temperature:    float32Ptr(temp),
-					ToolChoice:     "required",
-					GenerationName: "pareto.candidate",
-					PromptName:     systemPrompt.Name,
-					PromptVersion:  systemPrompt.Version,
+				retryTemp := float32Ptr(temp)
+				resp, err = MakeLLMCall(ctx, deps.LLM, llmMsgs, tools, LLMCallOptions{
+					Temperature:         retryTemp,
+					ToolChoice:          "auto",
+					GenerationName:      "pareto.candidate",
+					Prompt:              systemPrompt,
+					ConvID:              convID,
+					UserID:              deps.UserID,
+					TraceName:           "agent:pareto",
+					ParentObservationID: parentSpanID,
 				})
 				if err != nil {
 					slog.ErrorContext(ctx, "retry failed", "attempt", retry+1, "error", err)
 					continue
-				}
-				retryEnd := time.Now()
-				if systemPrompt.Name != "" {
-					genID := fmt.Sprintf("%s-iter-%d-retry-%d", candidate.ID, i, retry)
-					go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:pareto", "pareto.candidate", systemPrompt, resp.Content, retryStart, retryEnd)
 				}
 				if strings.TrimSpace(resp.Content) != "" || len(resp.ToolCalls) > 0 {
 					break
@@ -630,18 +738,20 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 			}
 		}
 		if foundFinalAnswer {
+			sendIterGeneration(nil)
 			break
 		}
 
-		// Fallback: if no tool calls at all (shouldn't happen with tool_choice=required)
+		// No tool calls — plain text response, use content directly
 		if len(resp.ToolCalls) == 0 {
-			slog.WarnContext(ctx, "tool_choice=required but no tool calls returned, using content as fallback")
 			execTrace.FinalAnswer = resp.Content
+			sendIterGeneration(nil)
 			break
 		}
 
 		llmMsgs = append(llmMsgs, LLMMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 
+		var iterToolCalls []ToolCallRecord
 		for _, tc := range resp.ToolCalls {
 			// Skip final_answer - it's not a real tool to execute
 			if IsFinalAnswerCall(tc) {
@@ -678,9 +788,11 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 				toolMsg = LLMMessage{Role: "tool", Content: fmt.Sprintf("%v", result), ToolCallID: tc.ID}
 			}
 
+			iterToolCalls = append(iterToolCalls, record)
 			execTrace.ToolCalls = append(execTrace.ToolCalls, record)
 			llmMsgs = append(llmMsgs, toolMsg)
 		}
+		sendIterGeneration(iterToolCalls)
 
 		if i == cfg.MaxToolIterations-1 {
 			execTrace.FinalAnswer = resp.Content
@@ -709,29 +821,25 @@ Progress: {{progress}}%
 
 Be witty, playful, or encouraging. Output ONLY the message, nothing else.`
 
-func generateThinkingStatus(ctx context.Context, llm *LLMClient, question, strategy, convID, userID string, progress float32) string {
+func generateThinkingStatus(ctx context.Context, llm *LLMClient, question, strategy, convID, userID string, progress float32, parentSpanID string) string {
 	vars := map[string]string{
 		"question": question,
 		"strategy": strategy,
 		"progress": fmt.Sprintf("%.0f", progress),
 	}
-	prompt := getPrompt("alicia/pareto/thinking-status", fallbackThinkingStatusPrompt, vars)
+	prompt := RetrievePromptTemplate("alicia/pareto/thinking-status", fallbackThinkingStatusPrompt, vars)
 
-	llmStart := time.Now()
-	resp, err := llm.ChatWithOptions(ctx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.thinking_status",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	resp, err := MakeLLMCall(ctx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
+		GenerationName:      "pareto.thinking_status",
+		Prompt:              prompt,
+		ConvID:              convID,
+		UserID:              userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: parentSpanID,
+		NoRetry:             true,
 	})
 	if err != nil {
 		return fmt.Sprintf("Exploring... %.0f%%", progress)
-	}
-	llmEnd := time.Now()
-
-	if prompt.Name != "" {
-		traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("thinking-status-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, convID, userID, llm.model, "agent:pareto", "pareto.thinking_status", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	status := strings.TrimSpace(resp.Content)
@@ -764,7 +872,7 @@ func (t *toolTracker) Record(name string, args map[string]any) {
 
 // Describe generates a natural language one-liner describing current tool activity.
 // Uses an LLM with caching — only regenerates when new calls have been recorded.
-func (t *toolTracker) Describe(ctx context.Context, llm *LLMClient, userQuery, convID, userID string) string {
+func (t *toolTracker) Describe(ctx context.Context, llm *LLMClient, userQuery, convID, userID, parentSpanID string) string {
 	t.mu.Lock()
 	count := len(t.calls)
 	if count == 0 {
@@ -780,7 +888,7 @@ func (t *toolTracker) Describe(ctx context.Context, llm *LLMClient, userQuery, c
 	copy(calls, t.calls)
 	t.mu.Unlock()
 
-	desc := generateToolDescription(ctx, llm, userQuery, convID, userID, calls)
+	desc := generateToolDescription(ctx, llm, userQuery, convID, userID, calls, parentSpanID)
 
 	t.mu.Lock()
 	if len(t.calls) == count {
@@ -818,7 +926,7 @@ Write ONLY a short natural description. Examples:
 - "Running SQL to count orders by customer"
 No quotes, no prefix.`
 
-func generateToolDescription(ctx context.Context, llm *LLMClient, userQuery, convID, userID string, calls []toolCallEntry) string {
+func generateToolDescription(ctx context.Context, llm *LLMClient, userQuery, convID, userID string, calls []toolCallEntry, parentSpanID string) string {
 	// Build operations list
 	var ops []string
 	for _, c := range calls {
@@ -833,27 +941,23 @@ func generateToolDescription(ctx context.Context, llm *LLMClient, userQuery, con
 		"question":   truncateStr(userQuery, 200),
 		"operations": strings.Join(ops, "\n"),
 	}
-	prompt := getPrompt("alicia/pareto/tool-description", fallbackToolDescPrompt, vars)
+	prompt := RetrievePromptTemplate("alicia/pareto/tool-description", fallbackToolDescPrompt, vars)
 
 	descCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
-	llmStart := time.Now()
-	resp, err := llm.ChatWithOptions(descCtx, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, ChatOptions{
-		GenerationName: "pareto.tool_description",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+	resp, err := MakeLLMCall(descCtx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
+		GenerationName:      "pareto.tool_description",
+		Prompt:              prompt,
+		ConvID:              convID,
+		UserID:              userID,
+		TraceName:           "agent:pareto",
+		ParentObservationID: parentSpanID,
+		NoRetry:             true,
 	})
 	if err != nil {
 		// Fallback: simple list format
 		return fallbackToolSummary(calls)
-	}
-	llmEnd := time.Now()
-
-	if prompt.Name != "" {
-		traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
-		genID := fmt.Sprintf("tool-desc-%d", llmStart.UnixNano())
-		go sendGenerationToLangfuse(traceID, genID, convID, userID, llm.model, "agent:pareto", "pareto.tool_description", prompt, resp.Content, llmStart, llmEnd)
 	}
 
 	desc := strings.TrimSpace(resp.Content)
@@ -884,30 +988,46 @@ func fallbackToolSummary(calls []toolCallEntry) string {
 	return strings.Join(parts, ", ")
 }
 
+// formatIterOutput builds a structured output for a candidate iteration generation,
+// including the LLM content, tool call requests, and their execution results.
+func formatIterOutput(resp *LLMResponse, toolCalls []ToolCallRecord) any {
+	if len(resp.ToolCalls) == 0 && len(toolCalls) == 0 {
+		return resp.Content
+	}
+	out := map[string]any{
+		"content": resp.Content,
+	}
+	if len(resp.ToolCalls) > 0 {
+		requests := make([]map[string]any, len(resp.ToolCalls))
+		for i, tc := range resp.ToolCalls {
+			requests[i] = map[string]any{
+				"tool": tc.Name,
+				"args": tc.Arguments,
+			}
+		}
+		out["tool_requests"] = requests
+	}
+	if len(toolCalls) > 0 {
+		results := make([]map[string]any, len(toolCalls))
+		for i, tc := range toolCalls {
+			r := map[string]any{
+				"tool":    tc.ToolName,
+				"success": tc.Success,
+			}
+			if tc.Success {
+				r["result"] = tc.Result
+			} else {
+				r["error"] = tc.Error
+			}
+			results[i] = r
+		}
+		out["tool_results"] = results
+	}
+	return out
+}
+
 func truncateStr(s string, maxLen int) string {
 	return langfuse.TruncateString(strings.TrimSpace(s), maxLen, "...")
-}
-
-func snippetFirstLast(s string, first, last int) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= first+last+3 {
-		return s
-	}
-	return s[:first] + "..." + s[len(s)-last:]
-}
-
-func buildProgressContext(userQuery, title, bestAnswer string) string {
-	var parts []string
-	q := truncateStr(userQuery, 200)
-	if title != "" {
-		parts = append(parts, fmt.Sprintf("[%s] %s", title, q))
-	} else {
-		parts = append(parts, q)
-	}
-	if bestAnswer != "" {
-		parts = append(parts, "Best: "+snippetFirstLast(bestAnswer, 100, 100))
-	}
-	return strings.Join(parts, "\n")
 }
 
 func startProgressTicker(ctx context.Context, notifier Notifier, msgID string, interval time.Duration, statusFn func() string) func() {

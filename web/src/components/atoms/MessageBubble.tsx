@@ -157,10 +157,21 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   const renderContent = () => {
-    if (typeof content === 'string') {
-      return <div>{formatContentSafe(content)}</div>;
+    const isStreaming = state === MESSAGE_STATES.STREAMING;
+    const rendered = typeof content === 'string'
+      ? <div>{formatContentSafe(content)}</div>
+      : content;
+
+    if (isStreaming) {
+      return (
+        <div className="inline">
+          {rendered}
+          <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />
+        </div>
+      );
     }
-    return content;
+
+    return rendered;
   };
 
   const renderAddonIcon = (addon: MessageAddon) => (
@@ -252,7 +263,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             <svg className={cls('w-4', 'h-4')} fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
-            <span className={cls('text-xs')}>Failed to send</span>
+            <span className={cls('text-xs')}>{type === MESSAGE_TYPES.ASSISTANT ? 'Generation failed' : 'Failed to send'}</span>
           </div>
         )}
       </div>

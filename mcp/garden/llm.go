@@ -74,10 +74,14 @@ type ChatCompletionResponse struct {
 }
 
 func (c *LLMClient) Complete(ctx context.Context, messages []ChatMessage) (string, error) {
-	return c.CompleteWithMaxTokens(ctx, messages, c.defaultMaxTk)
+	return c.completeInternal(ctx, messages, c.defaultMaxTk)
 }
 
 func (c *LLMClient) CompleteWithMaxTokens(ctx context.Context, messages []ChatMessage, maxTokens int) (string, error) {
+	return c.completeInternal(ctx, messages, maxTokens)
+}
+
+func (c *LLMClient) completeInternal(ctx context.Context, messages []ChatMessage, maxTokens int) (string, error) {
 	if !c.IsConfigured() {
 		return "", fmt.Errorf("LLM not configured")
 	}

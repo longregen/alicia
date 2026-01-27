@@ -243,9 +243,8 @@
 
           voice = let
             src = pkgs.runCommand "voice-src" {} ''
-              mkdir -p $out/api $out/pkg/otel $out/shared
+              mkdir -p $out/pkg/otel $out/shared
               cp -r ${goSrcFilter ./voice "voice-src"}/* $out/
-              cp -r ${goSrcFilter ./api "api-src"}/* $out/api/
               cp -r ${otelSrc}/* $out/pkg/otel/
               cp -r ${sharedSrc}/* $out/shared/
             '';
@@ -253,7 +252,6 @@
             inherit src;
             version = "0.1.0";
             preBuild = vendorLocalModules [
-              { src = "api"; dst = "api"; }
               { src = "pkg/otel"; dst = "pkg/otel"; }
               { src = "shared"; dst = "shared"; }
             ];
@@ -358,6 +356,7 @@
             pgcli
 
             # Tools
+            watchexec
             gomod2nix.packages.${system}.default
           ] ++ [
             db-migrate

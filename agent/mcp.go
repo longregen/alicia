@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// MCPClient is a stdio client for the Model Context Protocol.
+// MCPClient is a stdio JSON-RPC client for the Model Context Protocol.
 type MCPClient struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
@@ -27,7 +27,6 @@ type MCPClient struct {
 	mu     sync.Mutex
 }
 
-// JSON-RPC request structure
 type jsonRPCRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id,omitempty"`
@@ -35,10 +34,9 @@ type jsonRPCRequest struct {
 	Params  any    `json:"params,omitempty"`
 }
 
-// JSON-RPC response structure
 type jsonRPCResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      *int            `json:"id,omitempty"` // Pointer to detect omission (notifications have no id)
+	ID      *int            `json:"id,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *jsonRPCError   `json:"error,omitempty"`
 }
@@ -48,7 +46,7 @@ type jsonRPCError struct {
 	Message string `json:"message"`
 }
 
-// NewMCPClient spawns an MCP server process and initializes the connection.
+// NewMCPClient spawns an MCP server and performs the initialization handshake.
 func NewMCPClient(command string, args []string, env []string) (*MCPClient, error) {
 	cmd := exec.Command(command, args...)
 	cmd.Env = env
@@ -76,13 +74,11 @@ func NewMCPClient(command string, args []string, env []string) (*MCPClient, erro
 		nextID: 1,
 	}
 
-	// Initialize the connection
 	if err := c.initialize(); err != nil {
 		c.Close()
 		return nil, fmt.Errorf("initialize: %w", err)
 	}
 
-	// List available tools
 	if err := c.listTools(); err != nil {
 		c.Close()
 		return nil, fmt.Errorf("list tools: %w", err)
@@ -91,12 +87,10 @@ func NewMCPClient(command string, args []string, env []string) (*MCPClient, erro
 	return c, nil
 }
 
-// Tools returns the available tools from the MCP server.
 func (c *MCPClient) Tools() []Tool {
 	return c.tools
 }
 
-// Call invokes a tool on the MCP server.
 func (c *MCPClient) Call(ctx context.Context, toolName string, args map[string]any) (any, error) {
 	ctx, span := otel.Tracer("alicia-agent").Start(ctx, "mcp.call_tool",
 		trace.WithAttributes(
@@ -107,7 +101,6 @@ func (c *MCPClient) Call(ctx context.Context, toolName string, args map[string]a
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Inject trace context via _meta field for distributed tracing
 	params := map[string]any{
 		"name":      toolName,
 		"arguments": args,
@@ -120,7 +113,6 @@ func (c *MCPClient) Call(ctx context.Context, toolName string, args map[string]a
 		return nil, err
 	}
 
-	// Parse the result to extract content
 	var callResult struct {
 		Content []struct {
 			Type string `json:"type"`
@@ -132,13 +124,11 @@ func (c *MCPClient) Call(ctx context.Context, toolName string, args map[string]a
 		return nil, fmt.Errorf("parse call result: %w", err)
 	}
 
-	// Return text content if simple, otherwise return full content
 	if len(callResult.Content) == 1 && callResult.Content[0].Type == "text" {
 		span.SetAttributes(attribute.Int("mcp.result_length", len(callResult.Content[0].Text)))
 		return callResult.Content[0].Text, nil
 	}
 
-	// Return the raw content for complex results
 	var raw any
 	if err := json.Unmarshal(result, &raw); err != nil {
 		span.RecordError(err)
@@ -147,18 +137,12 @@ func (c *MCPClient) Call(ctx context.Context, toolName string, args map[string]a
 	return raw, nil
 }
 
-// Close terminates the MCP server process.
 func (c *MCPClient) Close() error {
 	c.stdin.Close()
 	return c.cmd.Wait()
 }
 
-// initialize performs the MCP initialization handshake.
 func (c *MCPClient) initialize() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Send initialize request
 	params := map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
@@ -173,7 +157,6 @@ func (c *MCPClient) initialize() error {
 		return fmt.Errorf("initialize request: %w", err)
 	}
 
-	// Send initialized notification (no id, no response expected)
 	notification := jsonRPCRequest{
 		JSONRPC: "2.0",
 		Method:  "initialized",
@@ -185,11 +168,7 @@ func (c *MCPClient) initialize() error {
 	return nil
 }
 
-// listTools fetches the available tools from the MCP server.
 func (c *MCPClient) listTools() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	result, err := c.request("tools/list", map[string]any{})
 	if err != nil {
 		return err
@@ -218,8 +197,7 @@ func (c *MCPClient) listTools() error {
 	return nil
 }
 
-// request sends a JSON-RPC request and waits for the response.
-// Caller must hold the mutex.
+// request sends a JSON-RPC request and waits for the response. Caller must hold mu.
 func (c *MCPClient) request(method string, params any) (json.RawMessage, error) {
 	id := c.nextID
 	c.nextID++
@@ -238,7 +216,6 @@ func (c *MCPClient) request(method string, params any) (json.RawMessage, error) 
 	return c.receive(id)
 }
 
-// send writes a JSON-RPC message to the server.
 func (c *MCPClient) send(msg any) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -253,7 +230,6 @@ func (c *MCPClient) send(msg any) error {
 	return nil
 }
 
-// receive reads a JSON-RPC response with the expected id.
 func (c *MCPClient) receive(expectedID int) (json.RawMessage, error) {
 	for {
 		line, err := c.stdout.ReadBytes('\n')
@@ -267,16 +243,13 @@ func (c *MCPClient) receive(expectedID int) (json.RawMessage, error) {
 			continue
 		}
 
-		// Skip notifications (no id field)
 		if resp.ID == nil {
-			continue
+			continue // notification
 		}
-
 		if *resp.ID != expectedID {
 			slog.Warn("mcp: unexpected response id", "got", *resp.ID, "expected", expectedID)
 			continue
 		}
-
 		if resp.Error != nil {
 			return nil, fmt.Errorf("rpc error %d: %s", resp.Error.Code, resp.Error.Message)
 		}
@@ -285,68 +258,54 @@ func (c *MCPClient) receive(expectedID int) (json.RawMessage, error) {
 	}
 }
 
-// ============================================================================
-// MCPManager - manages multiple MCP clients with namespaced tools
-// ============================================================================
-
-// MCPManager wraps multiple MCP clients and provides a unified interface.
+// MCPManager manages multiple MCP clients with namespaced tools.
 type MCPManager struct {
-	clients map[string]*MCPClient // server name -> client
-	tools   []Tool                // all tools with "server:" prefix
-	toolMap map[string]string     // prefixed tool name -> server name
+	clients map[string]*MCPClient
+	tools   []Tool
+	toolMap map[string]string // "server:tool" -> server name
 	mu      sync.RWMutex
 }
 
-// NewMCPManager creates an MCPManager from database server configs.
 func NewMCPManager(servers []MCPServerConfig) (*MCPManager, error) {
 	m := &MCPManager{
 		clients: make(map[string]*MCPClient),
 		toolMap: make(map[string]string),
 	}
 
-	// Build base environment
 	baseEnv := []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + os.Getenv("HOME"),
 	}
 
+	// Per-server env vars to forward from the host environment.
+	serverEnvVars := map[string][]string{
+		"garden":    {"GARDEN_DATABASE_URL"},
+		"web":       {"KAGI_API_KEY"},
+		"assistant": {"AGENT_SECRET", "OTEL_EXPORTER_OTLP_ENDPOINT"},
+	}
+
 	for _, srv := range servers {
 		if srv.TransportType != "stdio" {
-			slog.Warn("mcp server transport type not supported", "server", srv.Name, "transport_type", srv.TransportType)
+			slog.Warn("mcp: unsupported transport", "server", srv.Name, "type", srv.TransportType)
 			continue
 		}
-
 		if srv.Command == "" {
-			slog.Warn("mcp server has no command specified", "server", srv.Name)
+			slog.Warn("mcp: no command", "server", srv.Name)
 			continue
 		}
 
-		// Build environment for this server
 		env := append([]string{}, baseEnv...)
-
-		// Add any server-specific env vars based on name
-		// TODO: could store these in DB too
-		if srv.Name == "garden" {
-			if dbURL := os.Getenv("GARDEN_DATABASE_URL"); dbURL != "" {
-				env = append(env, "GARDEN_DATABASE_URL="+dbURL)
+		for _, key := range serverEnvVars[srv.Name] {
+			if val := os.Getenv(key); val != "" {
+				env = append(env, key+"="+val)
 			}
 		}
-		if srv.Name == "web" {
-			if kagiKey := os.Getenv("KAGI_API_KEY"); kagiKey != "" {
-				env = append(env, "KAGI_API_KEY="+kagiKey)
-			}
-		}
+		// Special case: derive WS_URL from SERVER_URL
 		if srv.Name == "assistant" {
 			if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
 				wsURL := strings.Replace(serverURL, "https://", "wss://", 1)
 				wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
 				env = append(env, "WS_URL="+wsURL)
-			}
-			if secret := os.Getenv("AGENT_SECRET"); secret != "" {
-				env = append(env, "AGENT_SECRET="+secret)
-			}
-			if otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); otelEndpoint != "" {
-				env = append(env, "OTEL_EXPORTER_OTLP_ENDPOINT="+otelEndpoint)
 			}
 		}
 
@@ -357,8 +316,6 @@ func NewMCPManager(servers []MCPServerConfig) (*MCPManager, error) {
 		}
 
 		m.clients[srv.Name] = client
-
-		// Add tools with server prefix
 		for _, tool := range client.Tools() {
 			prefixedName := srv.Name + ":" + tool.Name
 			m.tools = append(m.tools, Tool{
@@ -379,14 +336,12 @@ func NewMCPManager(servers []MCPServerConfig) (*MCPManager, error) {
 	return m, nil
 }
 
-// Tools returns all tools from all MCP servers (with prefixes).
 func (m *MCPManager) Tools() []Tool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.tools
 }
 
-// Call invokes a tool, routing to the correct MCP server based on prefix.
 func (m *MCPManager) Call(ctx context.Context, toolName string, args map[string]any) (any, error) {
 	ctx, span := otel.Tracer("alicia-agent").Start(ctx, "mcp_manager.call",
 		trace.WithAttributes(
@@ -396,31 +351,22 @@ func (m *MCPManager) Call(ctx context.Context, toolName string, args map[string]
 
 	m.mu.RLock()
 	serverName, ok := m.toolMap[toolName]
+	client := m.clients[serverName]
+	m.mu.RUnlock()
+
 	if !ok {
-		m.mu.RUnlock()
 		err := fmt.Errorf("unknown tool: %s", toolName)
 		span.RecordError(err)
 		return nil, err
 	}
-	client := m.clients[serverName]
-	m.mu.RUnlock()
 
 	span.SetAttributes(attribute.String("mcp.server_name", serverName))
-
-	if client == nil {
-		err := fmt.Errorf("MCP server %s not available", serverName)
-		span.RecordError(err)
-		return nil, err
-	}
-
-	// Strip the prefix when calling the actual tool
 	actualToolName := strings.TrimPrefix(toolName, serverName+":")
 	span.SetAttributes(attribute.String("mcp.actual_tool_name", actualToolName))
 
 	return client.Call(ctx, actualToolName, args)
 }
 
-// Close shuts down all MCP clients.
 func (m *MCPManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

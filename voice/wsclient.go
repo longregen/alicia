@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/longregen/alicia/api/protocol"
+	"github.com/longregen/alicia/shared/protocol"
 	"github.com/longregen/alicia/pkg/otel"
 	"github.com/longregen/alicia/shared/backoff"
 )

@@ -15,9 +15,8 @@ import type {
   MessageRole,
   MessageState,
   MessageAddon,
-  ToolData,
 } from '../../types/components';
-import type { MessageId, ConversationId } from '../../types/chat';
+import type { MessageId, ConversationId, ThinkingEntry, ReasoningEntry } from '../../types/chat';
 
 interface ReasoningBlockProps {
   content: string;
@@ -110,8 +109,8 @@ export interface ChatBubbleProps extends BaseComponentProps {
   streamingText?: string;
   /** Array of addons to display with the message */
   addons?: MessageAddon[];
-  /** Array of tools attached to the message */
-  tools?: ToolData[];
+  /** Array of tool details attached to the message */
+  toolDetails?: ToolDetail[];
   /** Message ID for branch tracking */
   messageId?: MessageId;
   /** Conversation ID for branch API calls */
@@ -124,6 +123,10 @@ export interface ChatBubbleProps extends BaseComponentProps {
   onContinueFromHere?: (messageId: MessageId) => void;
   /** Callback when user clicks "Retry" to regenerate an assistant message */
   onRetry?: (messageId: MessageId) => void;
+  /** Structured thinking entries */
+  thinkingEntries?: ThinkingEntry[];
+  /** Structured reasoning steps */
+  reasoningSteps?: ReasoningEntry[];
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
@@ -134,13 +137,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   showTyping = false,
   streamingText = '',
   addons = [],
-  tools = [],
+  toolDetails = [],
   messageId,
   conversationId,
   onEditMessage,
   onBranchSwitch,
   onContinueFromHere,
   onRetry,
+  thinkingEntries = [],
+  reasoningSteps = [],
   className = ''
 }) => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -187,154 +192,51 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     return state.speakingState.speaking && state.speakingState.messageId === messageId;
   });
 
-  const processContent = (text: string, isStreaming = false): React.ReactNode => {
-    let processedText = text;
+  const getContentToDisplay = (): React.ReactNode => {
+    const isStreaming = state === MESSAGE_STATES.STREAMING;
+    const rawText = isStreaming ? (streamingText || content) : content;
+    let text = rawText;
 
     if (isStreaming) {
-      // Remove incomplete tags at the end (no closing >)
-      processedText = processedText.replace(/<[^>]*$/, '');
-      processedText = processedText.replace(/<\/[^>]*$/, '');
-
-      // Handle incomplete thinking-summary tags (opened but not closed yet)
-      // Extract content from incomplete tag and show it as italic text
-      const incompleteThinkingMatch = /<thinking-summary[^>]*>([^<]*)$/.exec(processedText);
-      if (incompleteThinkingMatch) {
-        const thinkingContent = incompleteThinkingMatch[1].trim();
-        processedText = processedText.replace(/<thinking-summary[^>]*>[^<]*$/, '');
-        if (thinkingContent) {
-          return (
-            <>
-              {processedText && <span>{processedText}</span>}
-              <div className="text-xs text-muted italic whitespace-pre-line">{thinkingContent}</div>
-            </>
-          );
-        }
-      }
-
-      // Also handle incomplete reasoning tags
-      const incompleteReasoningMatch = /<reasoning[^>]*>([^<]*)$/.exec(processedText);
-      if (incompleteReasoningMatch) {
-        processedText = processedText.replace(/<reasoning[^>]*>[^<]*$/, '');
-      }
+      text = text.replace(/<[^>]*$/, '');
+      text = text.replace(/<\/[^>]*$/, '');
     }
 
-    // Strip raw <thinking> tags from LLM responses (different from <thinking-summary>)
-    if (processedText.includes('<thinking')) {
-      processedText = processedText.replace(/<thinking[^>]*>[\s\S]*?<\/thinking>/g, '');
+    // Strip embedded reasoning XML tags — structured props replace them
+    text = text.replace(/<reasoning[^>]*>[\s\S]*?<\/reasoning>/g, '');
+
+    const hasThinking = thinkingEntries.length > 0;
+    const hasReasoning = reasoningSteps.length > 0;
+
+    // Simple case: just text, let MessageBubble handle markdown
+    if (!hasThinking && !hasReasoning) {
+      return text;
     }
 
-    const thinkingSummaryPattern = /<thinking-summary([^>]*)>([\s\S]*?)<\/thinking-summary>/g;
-    const reasoningPattern = /<reasoning([^>]*)>([\s\S]*?)<\/reasoning>/g;
-
-    interface ThinkingSummaryData {
-      content: string;
-      id?: string;
-      progress?: number;
-      startIndex: number;
-      endIndex: number;
-    }
-
-    interface ReasoningBlockData {
-      sequence: number;
-      content: string;
-      id?: string;
-      startIndex: number;
-      endIndex: number;
-    }
-
-    const thinkingSummaries: ThinkingSummaryData[] = [];
-    const reasoningBlocks: ReasoningBlockData[] = [];
-    let match: RegExpExecArray | null;
-
-    while ((match = thinkingSummaryPattern.exec(processedText)) !== null) {
-      const attrsStr = match[1];
-      const idMatch = /data-id="([^"]+)"/.exec(attrsStr);
-      const progressMatch = /data-progress="([^"]+)"/.exec(attrsStr);
-      const id = idMatch ? idMatch[1] : undefined;
-      const progress = progressMatch ? parseFloat(progressMatch[1]) : undefined;
-      thinkingSummaries.push({
-        content: match[2],
-        id,
-        progress,
-        startIndex: match.index,
-        endIndex: thinkingSummaryPattern.lastIndex,
-      });
-    }
-
-    while ((match = reasoningPattern.exec(processedText)) !== null) {
-      const attrsStr = match[1];
-      const sequenceMatch = /data-sequence="(\d+)"/.exec(attrsStr);
-      const idMatch = /data-id="([^"]+)"/.exec(attrsStr);
-      const sequence = sequenceMatch ? parseInt(sequenceMatch[1], 10) : 0;
-      const id = idMatch ? idMatch[1] : undefined;
-      reasoningBlocks.push({
-        sequence,
-        content: match[2],
-        id,
-        startIndex: match.index,
-        endIndex: reasoningPattern.lastIndex,
-      });
-    }
-
-    if (reasoningBlocks.length === 0 && thinkingSummaries.length === 0) {
-      return processedText;
-    }
-
-    reasoningBlocks.sort((a, b) => a.sequence - b.sequence);
-
+    // Build parts with thinking/reasoning blocks around text
+    const sortedReasoning = [...reasoningSteps].sort((a, b) => a.sequence - b.sequence);
     const parts: React.ReactNode[] = [];
     let keyIndex = 0;
 
-    for (const summary of thinkingSummaries) {
+    for (const entry of thinkingEntries) {
       parts.push(
         <div key={`thinking-summary-${keyIndex++}`} className="text-xs text-muted italic mb-2 whitespace-pre-line">
-          {summary.content}
+          {entry.content}
         </div>
       );
     }
 
-    const allBlocks = [
-      ...thinkingSummaries.map(b => ({ startIndex: b.startIndex, endIndex: b.endIndex })),
-      ...reasoningBlocks.map(b => ({ startIndex: b.startIndex, endIndex: b.endIndex })),
-    ].sort((a, b) => a.startIndex - b.startIndex);
-
-    let currentPos = 0;
-    for (const block of allBlocks) {
-      if (block.startIndex > currentPos) {
-        const textSegment = processedText.slice(currentPos, block.startIndex).trim();
-        if (textSegment) {
-          parts.push(<span key={`text-${keyIndex++}`}>{textSegment}</span>);
-        }
-      }
-      currentPos = block.endIndex;
+    if (text.trim()) {
+      parts.push(<span key={`text-${keyIndex++}`}>{text}</span>);
     }
 
-    for (const block of reasoningBlocks) {
+    for (const step of sortedReasoning) {
       parts.push(
-        <ReasoningBlock key={`reasoning-${keyIndex}`} content={block.content} keyId={keyIndex++} id={block.id} />
+        <ReasoningBlock key={`reasoning-${keyIndex}`} content={step.content} keyId={keyIndex++} id={step.id} />
       );
-    }
-
-    if (currentPos < processedText.length) {
-      const remainingText = processedText.slice(currentPos).trim();
-      if (remainingText) {
-        parts.push(<span key={`text-${keyIndex++}`}>{remainingText}</span>);
-      }
     }
 
     return parts;
-  };
-
-  const getContentToDisplay = (): React.ReactNode => {
-    if (state === MESSAGE_STATES.STREAMING) {
-      return (
-        <div className="layout-center">
-          <span>{processContent(streamingText || content, true)}</span>
-          <span className="inline-block w-0.5 h-4 bg-current ml-1 animate-pulse" />
-        </div>
-      );
-    }
-    return processContent(content);
   };
 
   const handleEditClick = () => {
@@ -369,14 +271,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 
   const inlineAddons = addons.filter(addon => addon.position === 'inline' || !addon.position);
   const belowAddons = addons.filter(addon => addon.position === 'below');
-
-  const toolDetails: ToolDetail[] = tools.map(tool => ({
-    id: tool.id,
-    name: tool.name,
-    description: tool.description,
-    result: tool.result,
-    status: tool.status
-  }));
 
   const roleClass = type === MESSAGE_TYPES.USER ? 'user' : type === MESSAGE_TYPES.ASSISTANT ? 'assistant' : 'system';
   const isUser = type === MESSAGE_TYPES.USER;

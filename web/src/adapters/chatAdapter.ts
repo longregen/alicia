@@ -11,6 +11,7 @@ import {
   ReasoningStep,
   ThinkingSummary,
   BranchUpdate,
+  GenerationComplete,
 } from '../types/protocol';
 import { useChatStore } from '../stores/chatStore';
 import {
@@ -23,6 +24,19 @@ import {
 } from '../types/chat';
 
 type ChatStore = ReturnType<typeof useChatStore.getState>;
+
+function ensureStreamingMessage(
+  store: ChatStore,
+  messageId: ReturnType<typeof createMessageId>,
+  conversationId: ConversationId,
+): void {
+  if (store.getMessage(conversationId, messageId)) return;
+  const message = createEmptyMessage(messageId, conversationId, 'assistant');
+  message.status = 'streaming';
+  store.addMessage(conversationId, message);
+  store.setTipMessageId(conversationId, messageId);
+  store.startStreaming(conversationId, messageId);
+}
 
 export function handleChatProtocolMessage(envelope: Envelope): void {
   const store = useChatStore.getState();
@@ -69,6 +83,10 @@ export function handleChatProtocolMessage(envelope: Envelope): void {
 
     case MessageType.BranchUpdate:
       handleBranchUpdate(envelope.body as BranchUpdate, store);
+      break;
+
+    case MessageType.GenerationComplete:
+      handleGenerationComplete(envelope.body as GenerationComplete, store);
       break;
   }
 }
@@ -147,13 +165,7 @@ function handleToolUseRequest(msg: ToolUseRequest, store: ChatStore): void {
   const messageId = createMessageId(msg.messageId);
   const conversationId = createConversationId(msg.conversationId);
 
-  if (!store.getMessage(conversationId, messageId)) {
-    const message = createEmptyMessage(messageId, conversationId, 'assistant');
-    message.status = 'streaming';
-    store.addMessage(conversationId, message);
-    store.setTipMessageId(conversationId, messageId);
-    store.startStreaming(conversationId, messageId);
-  }
+  ensureStreamingMessage(store, messageId, conversationId);
 
   store.addToolCall(conversationId, messageId, {
     id: createToolCallId(msg.id),
@@ -166,31 +178,27 @@ function handleToolUseRequest(msg: ToolUseRequest, store: ChatStore): void {
 
 function handleToolUseResult(msg: ToolUseResult, store: ChatStore): void {
   const conversationId = createConversationId(msg.conversationId);
+  const update = msg.success
+    ? { status: 'success' as const, result: msg.result }
+    : { status: 'error' as const, error: msg.error || 'Unknown error' };
+
+  // Fast path: direct lookup when messageId is provided by the agent
+  if (msg.messageId) {
+    const messageId = createMessageId(msg.messageId);
+    ensureStreamingMessage(store, messageId, conversationId);
+    store.updateToolCall(conversationId, messageId, msg.requestId, update);
+    return;
+  }
+
+  // Fallback: linear scan for backward compatibility (no messageId in payload)
   const convState = store.getConversationState(conversationId);
   if (!convState) return;
 
-  const messages = convState.messages;
-  let matchedMessageId: ReturnType<typeof createMessageId> | undefined;
-
-  for (const [, m] of messages) {
+  for (const [, m] of convState.messages) {
     if (m.tool_calls.some((tc) => tc.id === msg.requestId)) {
-      matchedMessageId = m.id;
-      break;
+      store.updateToolCall(conversationId, m.id, msg.requestId, update);
+      return;
     }
-  }
-
-  if (!matchedMessageId) return;
-
-  if (msg.success) {
-    store.updateToolCall(conversationId, matchedMessageId, msg.requestId, {
-      status: 'success',
-      result: msg.result,
-    });
-  } else {
-    store.updateToolCall(conversationId, matchedMessageId, msg.requestId, {
-      status: 'error',
-      error: msg.error || 'Unknown error',
-    });
   }
 }
 
@@ -198,13 +206,7 @@ function handleMemoryTrace(msg: ProtocolMemoryTrace, store: ChatStore): void {
   const messageId = createMessageId(msg.messageId);
   const conversationId = createConversationId(msg.conversationId);
 
-  if (!store.getMessage(conversationId, messageId)) {
-    const message = createEmptyMessage(messageId, conversationId, 'assistant');
-    message.status = 'streaming';
-    store.addMessage(conversationId, message);
-    store.setTipMessageId(conversationId, messageId);
-    store.startStreaming(conversationId, messageId);
-  }
+  ensureStreamingMessage(store, messageId, conversationId);
 
   store.addMemoryTrace(conversationId, messageId, {
     id: createMemoryTraceId(msg.id),
@@ -225,22 +227,20 @@ function handleAssistantMessage(msg: ProtocolAssistantMessage, store: ChatStore)
 
   const existing = store.getMessage(conversationId, messageId);
   if (existing) {
-    // Preserve reasoning blocks that were added during streaming
-    // thinking-summary tags are transient progress indicators, intentionally discarded
-    const reasoningTags = existing.content.match(/<reasoning[^>]*>[\s\S]*?<\/reasoning>\n?/g) || [];
-    const newContent = reasoningTags.join('') + msg.content;
+    // Drop tool calls that never received a result (pending/running) — they were likely
+    // abandoned by the agent. Keep completed and errored ones.
+    const resolvedToolCalls = existing.tool_calls.filter(
+      (tc) => tc.status === 'success' || tc.status === 'error'
+    );
 
     store.updateMessage(conversationId, messageId, {
-      content: newContent,
+      content: msg.content,
       status: 'completed',
       previous_id: previousId,
+      tool_calls: resolvedToolCalls,
     });
     store.setTipMessageId(conversationId, messageId);
-
-    const convState = store.getConversationState(conversationId);
-    if (convState?.streamingMessageId === messageId) {
-      store.finishStreaming(conversationId);
-    }
+    store.finishStreaming(conversationId);
     return;
   }
 
@@ -252,26 +252,25 @@ function handleAssistantMessage(msg: ProtocolAssistantMessage, store: ChatStore)
 
   store.addMessage(conversationId, message);
   store.setTipMessageId(conversationId, messageId);
-
-  const convState = store.getConversationState(conversationId);
-  if (convState?.streamingMessageId) {
-    store.finishStreaming(conversationId);
-  }
+  store.finishStreaming(conversationId);
 }
 
 function handleErrorMessage(msg: ProtocolErrorMessage, store: ChatStore, conversationId: ConversationId | null): void {
   console.error(`[Protocol Error] ${msg.code}: ${msg.message}`);
 
-  const targetConvId = conversationId || store.activeConversationId;
+  const targetConvId = msg.conversationId
+    ? createConversationId(msg.conversationId)
+    : conversationId || store.activeConversationId;
   if (!targetConvId) return;
 
-  const convState = store.getConversationState(targetConvId);
-  const streamingId = convState?.streamingMessageId;
-  if (!streamingId) return;
+  const targetMessageId = msg.messageId
+    ? createMessageId(msg.messageId)
+    : store.getConversationState(targetConvId)?.streamingMessageId;
+  if (!targetMessageId) return;
 
-  const message = store.getMessage(targetConvId, streamingId);
+  const message = store.getMessage(targetConvId, targetMessageId);
   if (message) {
-    store.updateMessage(targetConvId, streamingId, {
+    store.updateMessage(targetConvId, targetMessageId, {
       status: 'error',
       content: message.content + `\n\n[Error: ${msg.message}]`,
     });
@@ -282,46 +281,51 @@ function handleErrorMessage(msg: ProtocolErrorMessage, store: ChatStore, convers
 function handleReasoningStep(msg: ReasoningStep, store: ChatStore): void {
   const messageId = createMessageId(msg.messageId);
   const conversationId = createConversationId(msg.conversationId);
-  let message = store.getMessage(conversationId, messageId);
+  ensureStreamingMessage(store, messageId, conversationId);
 
-  if (!message) {
-    const newMessage = createEmptyMessage(messageId, conversationId, 'assistant');
-    newMessage.status = 'streaming';
-    store.addMessage(conversationId, newMessage);
-    store.setTipMessageId(conversationId, messageId);
-    store.startStreaming(conversationId, messageId);
-    message = newMessage;
-  }
-
-  const reasoningTag = `<reasoning data-sequence="${msg.sequence}" data-id="${msg.id}">${msg.content}</reasoning>`;
-  store.appendContent(conversationId, messageId, '\n' + reasoningTag);
+  store.addReasoningStep(conversationId, messageId, {
+    id: msg.id,
+    sequence: msg.sequence,
+    content: msg.content,
+  });
 }
 
 function handleThinkingSummary(msg: ThinkingSummary, store: ChatStore): void {
   const messageId = createMessageId(msg.messageId);
   const conversationId = createConversationId(msg.conversationId);
 
-  if (!store.getMessage(conversationId, messageId)) {
-    const newMessage = createEmptyMessage(messageId, conversationId, 'assistant');
-    newMessage.status = 'streaming';
-    store.addMessage(conversationId, newMessage);
-    store.setTipMessageId(conversationId, messageId);
-    store.startStreaming(conversationId, messageId);
-  }
+  ensureStreamingMessage(store, messageId, conversationId);
 
-  const currentMessage = store.getMessage(conversationId, messageId);
-  if (!currentMessage) return;
-
-  const progressAttr = msg.progress !== undefined && msg.progress > 0 ? ` data-progress="${msg.progress}"` : '';
-  const summaryTag = `<thinking-summary data-id="${msg.id}"${progressAttr}>${msg.content}</thinking-summary>\n`;
-  const contentWithoutThinking = currentMessage.content.replace(/<thinking-summary[^>]*>[\s\S]*?<\/thinking-summary>\n?/g, '');
-  store.updateMessage(conversationId, messageId, {
-    content: summaryTag + contentWithoutThinking,
+  store.setThinking(conversationId, messageId, {
+    id: msg.id,
+    content: msg.content,
+    progress: msg.progress,
   });
 }
 
 function handleBranchUpdate(_msg: BranchUpdate, _store: ChatStore): void {
   // BranchUpdate notifies that a new sibling was created - UI can subscribe to this for branch navigation
+}
+
+function handleGenerationComplete(msg: GenerationComplete, store: ChatStore): void {
+  const conversationId = createConversationId(msg.conversationId);
+
+  if (msg.success) {
+    store.finishStreaming(conversationId);
+  } else {
+    const convState = store.getConversationState(conversationId);
+    const streamingId = convState?.streamingMessageId;
+    if (streamingId) {
+      const message = store.getMessage(conversationId, streamingId);
+      if (message) {
+        store.updateMessage(conversationId, streamingId, {
+          status: 'error',
+          content: message.content + `\n\n[Error: ${msg.error || 'generation failed'}]`,
+        });
+      }
+    }
+    store.finishStreaming(conversationId);
+  }
 }
 
 export function handleChatConnectionLost(): void {

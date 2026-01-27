@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
+	openai "github.com/sashabaranov/go-openai"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -41,8 +42,26 @@ func getLangfuseClient() *langfuse.Client {
 // PromptResult holds compiled prompt text and its Langfuse metadata for tracing.
 type PromptResult struct {
 	Text    string
-	Name    string // Langfuse prompt name (empty if fallback)
-	Version int    // Langfuse prompt version (0 if fallback)
+	Name    string
+	Version int
+}
+
+// RetrievePromptTemplate fetches a prompt from Langfuse by name with production label,
+// compiling it with the given vars. Falls back to compiling the fallback template locally.
+func RetrievePromptTemplate(name string, fallback string, vars map[string]string) PromptResult {
+	client := getLangfuseClient()
+	if client != nil {
+		prompt, err := client.GetPrompt(name, langfuse.WithLabel("production"))
+		if err == nil {
+			return PromptResult{
+				Text:    prompt.Compile(vars),
+				Name:    prompt.Name,
+				Version: prompt.Version,
+			}
+		}
+		slog.Warn("langfuse prompt fetch failed, using fallback", "prompt", name, "error", err)
+	}
+	return PromptResult{Text: langfuse.CompileTemplate(fallback, vars)}
 }
 
 func getSystemPrompt(memories []Memory, notes []Note, tools []Tool, instructions string) PromptResult {
@@ -77,7 +96,7 @@ func getSystemPrompt(memories []Memory, notes []Note, tools []Tool, instructions
 			fmt.Fprintf(&tb, "- %s: %s\n", t.Name, t.Description)
 		}
 		tb.WriteString("\nUse tools as needed to find the best answer.")
-		tb.WriteString("\nIMPORTANT: You MUST use the final_answer tool to send your response to the user. Never write responses as plain text - always call final_answer(content=\"your response\").")
+		tb.WriteString("\nWhen you are ready to respond, you can either call answer_user(content=\"your response\") or simply write your response as plain text.")
 		toolsStr = tb.String()
 	}
 
@@ -114,62 +133,38 @@ func getSystemPrompt(memories []Memory, notes []Note, tools []Tool, instructions
 	return PromptResult{Text: system}
 }
 
-func getContinuePrompt() string {
-	client := getLangfuseClient()
-
-	if client != nil {
-		prompt, err := client.GetPrompt("alicia/agent/continue-response", langfuse.WithLabel("production"))
-		if err != nil {
-			slog.Warn("failed to fetch continue prompt from langfuse, using default", "error", err)
-		} else {
-			return prompt.GetText()
-		}
-	}
-
-	return "Please continue your previous response."
+func getContinuePrompt() PromptResult {
+	return RetrievePromptTemplate("alicia/agent/continue-response", "Please continue your previous response.", nil)
 }
 
 func getTitlePrompt(userMsg, assistantMsg string) PromptResult {
-	client := getLangfuseClient()
-
 	vars := map[string]string{"user_message": userMsg}
 	if assistantMsg != "" {
 		vars["assistant_message"] = assistantMsg
 	}
 
-	if client != nil {
-		prompt, err := client.GetPrompt("alicia/agent/conversation-title", langfuse.WithLabel("production"))
-		if err != nil {
-			slog.Warn("failed to fetch title prompt from langfuse, using default", "error", err)
-		} else {
-			return PromptResult{
-				Text:    prompt.Compile(vars),
-				Name:    prompt.Name,
-				Version: prompt.Version,
-			}
-		}
+	fallback := "Generate a short title (under 50 chars) for this conversation.\n\nUser message: {{user_message}}\n\nRespond with ONLY the title, no quotes or explanation."
+	if assistantMsg != "" {
+		fallback = "Generate a short title (under 50 chars) for this conversation.\n\nUser message: {{user_message}}\nAssistant response: {{assistant_message}}\n\nRespond with ONLY the title, no quotes or explanation."
 	}
 
-	// Fallback prompt
-	text := "Generate a short title (under 50 chars) for this conversation.\n\nUser message: " + userMsg
-	if assistantMsg != "" {
-		text += "\nAssistant response: " + assistantMsg
-	}
-	text += "\n\nRespond with ONLY the title, no quotes or explanation."
-	return PromptResult{Text: text}
+	return RetrievePromptTemplate("alicia/agent/conversation-title", fallback, vars)
 }
 
-func generateTitle(ctx context.Context, llm *LLMClient, userMsg, assistantMsg string) (string, error) {
+func generateTitle(ctx context.Context, deps AgentDeps, convID, userMsg, assistantMsg string) (string, error) {
 	prompt := getTitlePrompt(
 		langfuse.TruncateString(userMsg, 500, "..."),
 		langfuse.TruncateString(assistantMsg, 500, "..."),
 	)
 
 	msgs := []LLMMessage{{Role: "user", Content: prompt.Text}}
-	resp, err := llm.ChatWithOptions(ctx, msgs, nil, ChatOptions{
+	resp, err := MakeLLMCall(ctx, deps.LLM, msgs, nil, LLMCallOptions{
 		GenerationName: "agent.generate_title",
-		PromptName:     prompt.Name,
-		PromptVersion:  prompt.Version,
+		Prompt:         prompt,
+		ConvID:         convID,
+		UserID:         deps.UserID,
+		TraceName:      "agent:title",
+		NoRetry:        true,
 	})
 	if err != nil {
 		return "", err
@@ -194,7 +189,7 @@ func maybeUpdateTitle(ctx context.Context, deps AgentDeps, convID, userMsg, assi
 		return
 	}
 
-	title, err := generateTitle(ctx, deps.LLM, userMsg, assistantMsg)
+	title, err := generateTitle(ctx, deps, convID, userMsg, assistantMsg)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to generate title", "conversation_id", convID, "error", err)
 		return
@@ -419,7 +414,8 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 	tools = append(tools, FinalAnswerTool())
 
 	llmMsgs, systemPrompt := buildLLMMessages(messages, nil, nil, tools)
-	llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: getContinuePrompt()})
+	continuePrompt := getContinuePrompt()
+	llmMsgs = append(llmMsgs, LLMMessage{Role: "user", Content: continuePrompt.Text})
 
 	if systemPrompt.Name != "" {
 		span := trace.SpanFromContext(ctx)
@@ -430,12 +426,14 @@ func continueResponse(ctx context.Context, convID string, msg *Message, cfg Gene
 	}
 
 	userPrefs := deps.Prefs.Get(deps.UserID)
-	resp, err := deps.LLM.ChatWithOptions(ctx, llmMsgs, tools, ChatOptions{
+	resp, err := MakeLLMCall(ctx, deps.LLM, llmMsgs, tools, LLMCallOptions{
 		Temperature:    float32Ptr(userPrefs.Temperature),
-		ToolChoice:     "required",
+		ToolChoice:     "auto",
 		GenerationName: "agent.continue_response",
-		PromptName:     systemPrompt.Name,
-		PromptVersion:  systemPrompt.Version,
+		Prompt:         systemPrompt,
+		ConvID:         convID,
+		UserID:         deps.UserID,
+		TraceName:      "agent:continue",
 	})
 	if err != nil {
 		deps.Notifier.SendError(ctx, msg.ID, err)
@@ -482,6 +480,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 	deps.Notifier.SetMessageID(msgID)
 	deps.Notifier.SetPreviousID(previousID)
+	deps.Notifier.SendStartAnswer(ctx, msgID)
 	deps.Notifier.SendThinking(ctx, msgID, "Processing request...")
 
 	setupCtx, setupSpan := otel.Tracer("alicia-agent").Start(ctx, "response.setup",
@@ -496,7 +495,7 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 	embedding, err := deps.LLM.Embed(setupCtx, userQuery)
 	if err != nil {
 		slog.ErrorContext(setupCtx, "failed to generate embedding for memory search", "error", err)
-	} else if embedding != nil {
+	} else if len(embedding) > 0 {
 		userPrefs := deps.Prefs.Get(deps.UserID)
 		memories, err = SearchMemories(setupCtx, deps.DB, embedding, 0.7, userPrefs.MemoryRetrievalCount)
 		if err != nil {
@@ -582,13 +581,14 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 		llmCtx, llmSpan := otel.Tracer("alicia-agent").Start(ctx, "llm.chat",
 			trace.WithAttributes(llmAttrs...))
 
-		llmStart := time.Now()
-		resp, err := deps.LLM.ChatWithOptions(llmCtx, llmMsgs, tools, ChatOptions{
+		resp, err := MakeLLMCall(llmCtx, deps.LLM, llmMsgs, tools, LLMCallOptions{
 			Temperature:    temperature,
-			ToolChoice:     "required",
+			ToolChoice:     "auto",
 			GenerationName: "agent.tool_loop",
-			PromptName:     systemPrompt.Name,
-			PromptVersion:  systemPrompt.Version,
+			Prompt:         systemPrompt,
+			ConvID:         convID,
+			UserID:         deps.UserID,
+			TraceName:      "agent:tool_loop",
 		})
 		if err != nil {
 			llmSpan.RecordError(err)
@@ -596,7 +596,6 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			deps.Notifier.SendError(ctx, msgID, err)
 			return err
 		}
-		llmEnd := time.Now()
 
 		llmSpan.SetAttributes(
 			attribute.Int("response_length", len(resp.Content)),
@@ -606,12 +605,6 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 		if resp.Reasoning != "" {
 			reasoningParts = append(reasoningParts, resp.Reasoning)
-		}
-
-		if systemPrompt.Name != "" {
-			traceID := span.SpanContext().TraceID().String()
-			genID := llmSpan.SpanContext().SpanID().String()
-			go sendGenerationToLangfuse(traceID, genID, convID, deps.UserID, deps.LLM.model, "agent:tool_loop", "llm.chat", systemPrompt, resp.Content, llmStart, llmEnd)
 		}
 
 		// Check for final_answer tool call first
@@ -627,25 +620,13 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			break
 		}
 
-		// Fallback: if no tool calls at all (shouldn't happen with tool_choice=required)
+		// No tool calls — plain text response, use content directly
 		if len(resp.ToolCalls) == 0 {
-			slog.WarnContext(ctx, "tool_choice=required but no tool calls returned, using content as fallback")
 			finalContent = resp.Content
 			break
 		}
 
 		llmMsgs = append(llmMsgs, LLMMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
-
-		// Filter out final_answer from tool names for status message
-		var toolNames []string
-		for _, tc := range resp.ToolCalls {
-			if !IsFinalAnswerCall(tc) {
-				toolNames = append(toolNames, tc.Name)
-			}
-		}
-		if len(toolNames) > 0 {
-			deps.Notifier.SendThinking(ctx, msgID, fmt.Sprintf("Using %s...", strings.Join(toolNames, ", ")))
-		}
 
 		for _, tc := range resp.ToolCalls {
 			// Skip final_answer - it's not a real tool to execute
@@ -719,16 +700,18 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 	slog.InfoContext(ctx, "response complete", "message_id", msgID, "content_length", len(finalContent))
 
 	// Detached context with timeout: title update must complete even if client disconnects
-	titleCtx, titleCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	// Carry span context so LiteLLM associates the request with the right trace
+	titleCtx, titleCancel := context.WithTimeout(
+		trace.ContextWithSpanContext(context.Background(), trace.SpanFromContext(ctx).SpanContext()),
+		45*time.Second,
+	)
 	go func() {
 		defer titleCancel()
 		maybeUpdateTitle(titleCtx, deps, convID, userQuery, finalContent)
 	}()
 
 	// Extract and save memories asynchronously (detached context to survive client disconnect)
-	// Carry span context for Langfuse score ingestion
-	memCtx := trace.ContextWithSpanContext(context.Background(), trace.SpanFromContext(ctx).SpanContext())
-	go ExtractAndSaveMemories(memCtx, convID, deps)
+	go ExtractAndSaveMemories(context.Background(), convID, msgID, deps)
 
 	return nil
 }
@@ -783,7 +766,72 @@ func buildLLMMessages(history []Message, newMemories []Memory, notes []Note, too
 	return msgs, systemPrompt
 }
 
-func sendGenerationToLangfuse(traceID, genID, convID, userID, model, traceName, generationName string, prompt PromptResult, output string, start, end time.Time) {
+func toolNames(tools []Tool) []string {
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Name
+	}
+	return names
+}
+
+// LangfuseGeneration holds all parameters for sending a generation to Langfuse.
+type LangfuseGeneration struct {
+	TraceID             string
+	ID                  string
+	ParentObservationID string
+	ConvID              string
+	UserID              string
+	Model               string
+	TraceName           string
+	GenerationName      string
+	Prompt              PromptResult
+	Input               any
+	Output              any
+	StartTime           time.Time
+	EndTime             time.Time
+	PromptTokens        int
+	CompletionTokens    int
+	TotalTokens         int
+	// Metadata fields
+	Temperature     *float32
+	MaxTokens       int
+	Tools           []string // tool names only
+	Streaming       bool
+	ReasoningTokens int
+	Reasoning       string           // thinking/reasoning output
+	FinishReason    string           // why the model stopped generating
+	IterToolCalls   []ToolCallRecord // tool calls executed in this iteration
+}
+
+// LLMCallOptions configures a MakeLLMCall invocation, embedding ChatOptions fields
+// plus telemetry context. Zero-value fields are safe defaults (no telemetry, with retry).
+type LLMCallOptions struct {
+	// ChatOptions fields
+	Temperature    *float32
+	MaxTokens      int
+	ResponseFormat *openai.ChatCompletionResponseFormat
+	ToolChoice     any
+	GenerationName string
+	PromptName     string
+	PromptVersion  int
+
+	// Telemetry context
+	ConvID              string
+	UserID              string
+	TraceName           string
+	ParentObservationID string
+	Prompt              PromptResult
+
+	// Input/Output overrides for Langfuse (e.g. evaluator judges with structured I/O)
+	InputOverride  any
+	OutputOverride any
+
+	// Behavior flags
+	NoTelemetry bool // skip Langfuse generation
+	NoRetry     bool // skip token-length retry loop
+}
+
+func sendGenerationToLangfuse(gen LangfuseGeneration) {
 	client := getLangfuseClient()
 	if client == nil {
 		return
@@ -793,24 +841,75 @@ func sendGenerationToLangfuse(traceID, genID, convID, userID, model, traceName, 
 	defer cancel()
 
 	if err := client.CreateTrace(ctx, langfuse.TraceParams{
-		ID:        traceID,
-		Name:      traceName,
-		SessionID: convID,
-		UserID:    userID,
+		ID:        gen.TraceID,
+		Name:      gen.TraceName,
+		SessionID: gen.ConvID,
+		UserID:    gen.UserID,
 	}); err != nil {
 		slog.Warn("langfuse: failed to create trace for generation", "error", err)
 	}
 
+	modelParams := map[string]any{}
+	if gen.MaxTokens > 0 {
+		modelParams["gen_ai.request.max_tokens"] = gen.MaxTokens
+	}
+	if gen.Temperature != nil {
+		modelParams["gen_ai.request.temperature"] = *gen.Temperature
+	}
+
+	metadata := map[string]any{}
+	if len(gen.Tools) > 0 {
+		defs := make([]map[string]any, len(gen.Tools))
+		for i, name := range gen.Tools {
+			defs[i] = map[string]any{"name": name}
+		}
+		metadata["gen_ai.tool.definitions"] = defs
+	}
+	if gen.Streaming {
+		metadata["gen_ai.request.streaming"] = true
+	}
+	if gen.ReasoningTokens > 0 {
+		metadata["gen_ai.usage.reasoning_tokens"] = gen.ReasoningTokens
+	}
+	if gen.Reasoning != "" {
+		metadata["gen_ai.reasoning"] = gen.Reasoning
+	}
+	if gen.FinishReason != "" {
+		metadata["gen_ai.response.finish_reasons"] = []string{gen.FinishReason}
+	}
+	if len(gen.IterToolCalls) > 0 {
+		calls := make([]map[string]any, len(gen.IterToolCalls))
+		for i, tc := range gen.IterToolCalls {
+			call := map[string]any{
+				"gen_ai.tool.name":      tc.ToolName,
+				"gen_ai.tool.arguments": tc.Arguments,
+				"success":               tc.Success,
+			}
+			if tc.Error != "" {
+				call["error"] = tc.Error
+			}
+			calls[i] = call
+		}
+		metadata["gen_ai.tool.calls"] = calls
+	}
+
 	if err := client.CreateGeneration(ctx, langfuse.GenerationParams{
-		TraceID:       traceID,
-		ID:            genID,
-		Name:          generationName,
-		Model:         model,
-		PromptName:    prompt.Name,
-		PromptVersion: prompt.Version,
-		Output:        langfuse.TruncateString(output, 10000, "..."),
-		StartTime:     start,
-		EndTime:       end,
+		TraceID:             gen.TraceID,
+		ID:                  gen.ID,
+		ParentObservationID: gen.ParentObservationID,
+		Name:                gen.GenerationName,
+		Model:               gen.Model,
+		PromptName:          gen.Prompt.Name,
+		PromptVersion:       gen.Prompt.Version,
+		Input:               gen.Input,
+		Output:              gen.Output,
+		StartTime:           gen.StartTime,
+		EndTime:             gen.EndTime,
+		PromptTokens:        gen.PromptTokens,
+		CompletionTokens:    gen.CompletionTokens,
+		TotalTokens:         gen.TotalTokens,
+		ModelParameters:     modelParams,
+		Metadata:            metadata,
 	}); err != nil {
 		slog.Warn("langfuse: failed to create generation", "error", err)
 	}

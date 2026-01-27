@@ -31,11 +31,21 @@ const (
 	TypeAssistantToolsRegister     MessageType = 70
 	TypeAssistantToolsAck          MessageType = 71
 	TypeAssistantHeartbeat         MessageType = 72
+	TypeGenerationComplete         MessageType = 80
 )
 
+type GenerationComplete struct {
+	MessageID      string `msgpack:"messageId" json:"messageId"`
+	ConversationID string `msgpack:"conversationId" json:"conversationId"`
+	Success        bool   `msgpack:"success" json:"success"`
+	Error          string `msgpack:"error,omitempty" json:"error,omitempty"`
+}
+
 type Error struct {
-	Code    string `msgpack:"code" json:"code"`
-	Message string `msgpack:"message" json:"message"`
+	Code           string `msgpack:"code" json:"code"`
+	Message        string `msgpack:"message" json:"message"`
+	MessageID      string `msgpack:"messageId,omitempty" json:"messageId,omitempty"`
+	ConversationID string `msgpack:"conversationId,omitempty" json:"conversationId,omitempty"`
 }
 
 type UserMessage struct {
@@ -82,6 +92,7 @@ type ToolUseRequest struct {
 type ToolUseResult struct {
 	ID             string `msgpack:"id" json:"id"`
 	RequestID      string `msgpack:"requestId" json:"requestId"`
+	MessageID      string `msgpack:"messageId,omitempty" json:"messageId,omitempty"`
 	ConversationID string `msgpack:"conversationId" json:"conversationId"`
 	Success        bool   `msgpack:"success" json:"success"`
 	Result         any    `msgpack:"result,omitempty" json:"result,omitempty"`

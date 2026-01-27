@@ -118,7 +118,6 @@ func main() {
 	secret := flag.String("secret", "", "Agent secret for auth (optional)")
 	flag.Parse()
 
-	msgCh := make(chan rawMessage, 256)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -142,73 +141,91 @@ func main() {
 		30 * time.Second,
 	}
 
-	var conn *websocket.Conn
-	for attempt := 0; ; attempt++ {
-		var err error
-		conn, _, err = websocket.DefaultDialer.Dial(*url, headers)
-		if err == nil {
-			break
-		}
-		if attempt >= len(delays) {
-			log.Fatalf("%s✗ Connection failed after %d attempts: %v%s\n", red, attempt+1, err, reset)
-		}
-		fmt.Printf("%s  retrying in %v...%s\n", dim, delays[attempt], reset)
-		time.Sleep(delays[attempt])
-	}
-	defer conn.Close()
-
-	fmt.Printf("%s%s✓ Connected%s\n", bold, green, reset)
-
-	// Subscribe in monitor mode
-	subEnv := Envelope{
-		Type: 40, // TypeSubscribe
-		Body: map[string]interface{}{"monitorMode": true},
-	}
-	subData, err := msgpack.Marshal(&subEnv)
-	if err != nil {
-		log.Fatalf("%s✗ Failed to encode subscribe: %v%s\n", red, err, reset)
-	}
-	if err := conn.WriteMessage(websocket.BinaryMessage, subData); err != nil {
-		log.Fatalf("%s✗ Failed to send subscribe: %v%s\n", red, err, reset)
-	}
-	fmt.Printf("%s%s✓ Subscribed (monitor mode)%s\n\n", bold, green, reset)
-
-	// Receiver goroutine
-	go func() {
-		defer close(msgCh)
-		for {
-			_, raw, err := conn.ReadMessage()
-			if err != nil {
-				fmt.Printf("\n%s✗ Read error: %v%s\n", red, err, reset)
-				return
-			}
-			var frame monitorFrame
-			if err := msgpack.Unmarshal(raw, &frame); err != nil || len(frame.Data) == 0 {
-				// Not a monitor frame (e.g. SubscribeAck), decode directly
-				msgCh <- rawMessage{data: raw, ts: time.Now()}
-				continue
-			}
-			msgCh <- rawMessage{data: frame.Data, src: frame.Src, dst: frame.Dst, ts: time.Now()}
-		}
-	}()
-
-	// Printer loop
 	msgNum := 0
 	for {
-		select {
-		case msg, ok := <-msgCh:
-			if !ok {
-				fmt.Printf("\n%s%s─── connection closed ───%s\n", dim, red, reset)
+		conn, err := dialWithRetry(*url, headers, delays, interrupt)
+		if err != nil {
+			fmt.Printf("\n%s%s─── interrupted ───%s\n", dim, yellow, reset)
+			return
+		}
+
+		fmt.Printf("%s%s✓ Connected%s\n", bold, green, reset)
+
+		// Subscribe in monitor mode
+		subEnv := Envelope{
+			Type: 40, // TypeSubscribe
+			Body: map[string]interface{}{"monitorMode": true},
+		}
+		subData, err := msgpack.Marshal(&subEnv)
+		if err != nil {
+			log.Fatalf("%s✗ Failed to encode subscribe: %v%s\n", red, err, reset)
+		}
+		if err := conn.WriteMessage(websocket.BinaryMessage, subData); err != nil {
+			conn.Close()
+			fmt.Printf("%s✗ Failed to send subscribe: %v%s\n", red, err, reset)
+			fmt.Printf("%s%s─── reconnecting... ───%s\n", dim, yellow, reset)
+			continue
+		}
+		fmt.Printf("%s%s✓ Subscribed (monitor mode)%s\n\n", bold, green, reset)
+
+		// Receiver goroutine
+		msgCh := make(chan rawMessage, 256)
+		go func() {
+			defer close(msgCh)
+			for {
+				_, raw, err := conn.ReadMessage()
+				if err != nil {
+					fmt.Printf("\n%s✗ Read error: %v%s\n", red, err, reset)
+					return
+				}
+				var frame monitorFrame
+				if err := msgpack.Unmarshal(raw, &frame); err != nil || len(frame.Data) == 0 {
+					msgCh <- rawMessage{data: raw, ts: time.Now()}
+					continue
+				}
+				msgCh <- rawMessage{data: frame.Data, src: frame.Src, dst: frame.Dst, ts: time.Now()}
+			}
+		}()
+
+		// Printer loop — breaks on disconnect or interrupt
+		disconnected := false
+		for !disconnected {
+			select {
+			case msg, ok := <-msgCh:
+				if !ok {
+					disconnected = true
+				} else {
+					msgNum++
+					printMessage(msgNum, msg)
+				}
+			case <-interrupt:
+				fmt.Printf("\n%s%s─── interrupted ───%s\n", dim, yellow, reset)
+				conn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+				conn.Close()
 				return
 			}
-			msgNum++
-			printMessage(msgNum, msg)
+		}
 
+		conn.Close()
+		fmt.Printf("%s%s─── connection lost, reconnecting... ───%s\n\n", dim, yellow, reset)
+	}
+}
+
+func dialWithRetry(url string, headers http.Header, delays []time.Duration, interrupt <-chan os.Signal) (*websocket.Conn, error) {
+	for attempt := 0; ; attempt++ {
+		conn, _, err := websocket.DefaultDialer.Dial(url, headers)
+		if err == nil {
+			return conn, nil
+		}
+		if attempt >= len(delays) {
+			return nil, fmt.Errorf("failed after %d attempts: %w", attempt+1, err)
+		}
+		fmt.Printf("%s  retrying in %v...%s\n", dim, delays[attempt], reset)
+		select {
+		case <-time.After(delays[attempt]):
 		case <-interrupt:
-			fmt.Printf("\n%s%s─── interrupted ───%s\n", dim, yellow, reset)
-			conn.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			return
+			return nil, fmt.Errorf("interrupted")
 		}
 	}
 }

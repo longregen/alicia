@@ -33,6 +33,19 @@ export interface MemoryTrace {
   relevance: number;
 }
 
+export interface ThinkingEntry {
+  id: string;
+  content: string;
+  progress?: number;
+  timestamp?: number;
+}
+
+export interface ReasoningEntry {
+  id: string;
+  sequence: number;
+  content: string;
+}
+
 export interface ChatMessage {
   id: MessageId;
   conversation_id: ConversationId;
@@ -41,6 +54,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
+  thinking: ThinkingEntry[];
+  reasoning_steps: ReasoningEntry[];
   status: MessageStatus;
   created_at: string;
   tool_calls: ToolCall[];
@@ -60,6 +75,8 @@ export function createEmptyMessage(
     branch_index: 0,
     status: 'streaming',
     created_at: new Date().toISOString(),
+    thinking: [],
+    reasoning_steps: [],
     tool_calls: [],
     memory_traces: [],
   };

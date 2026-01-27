@@ -23,7 +23,8 @@ const (
 
 	PrefixThinking    = "th"
 	PrefixReasoning   = "rs"
-	PrefixMemoryTrace = "mt"
+	PrefixMemoryTrace      = "mt"
+	PrefixMemoryGeneration = "mg"
 )
 
 func New(prefix string) string {
@@ -56,3 +57,4 @@ func NewMemoryUseFeedback() string { return New(PrefixMemoryUseFeedback) }
 func NewThinking() string          { return New(PrefixThinking) }
 func NewReasoning() string         { return New(PrefixReasoning) }
 func NewMemoryTrace() string       { return New(PrefixMemoryTrace) }
+func NewMemoryGeneration() string  { return New(PrefixMemoryGeneration) }

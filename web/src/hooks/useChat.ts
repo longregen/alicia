@@ -58,6 +58,8 @@ function convertApiMessage(
     status: msg.status,
     created_at: msg.created_at,
     previous_id: msg.previous_id ? createMessageId(msg.previous_id) : undefined,
+    thinking: [],
+    reasoning_steps: [],
     tool_calls: toolUses.map(convertToolUse),
     memory_traces: memoryUses.map(convertMemoryUse),
   };

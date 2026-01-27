@@ -321,32 +321,191 @@ func (c *Client) CreateTrace(ctx context.Context, params TraceParams) error {
 	return nil
 }
 
+// SpanParams holds parameters for creating a span observation in Langfuse.
+type SpanParams struct {
+	TraceID             string         // Required: trace ID to associate with
+	ID                  string         // Required: unique span ID
+	ParentObservationID string         // Optional: parent span ID for nesting
+	Name                string         // Optional: name for the span
+	Input               any            // Optional: input data
+	Output              any            // Optional: output data
+	Metadata            map[string]any // Optional: arbitrary key-value pairs
+	StartTime           time.Time      // Optional: when the span started
+	EndTime             time.Time      // Optional: when the span ended
+}
+
+// spanBody is the body of a span-create ingestion event.
+type spanBody struct {
+	TraceID             string         `json:"traceId"`
+	ID                  string         `json:"id"`
+	ParentObservationID string         `json:"parentObservationId,omitempty"`
+	Name                string         `json:"name,omitempty"`
+	Input               any            `json:"input,omitempty"`
+	Output              any            `json:"output,omitempty"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	StartTime           time.Time      `json:"startTime"`
+	EndTime             time.Time      `json:"endTime,omitempty"`
+}
+
 // GenerationParams holds parameters for creating a generation observation in Langfuse.
 type GenerationParams struct {
-	TraceID       string    // Required: trace ID to associate with
-	ID            string    // Required: unique generation ID (use span ID)
-	Name          string    // Optional: name for the generation (e.g., "llm.chat")
-	Model         string    // Optional: model name
-	PromptName    string    // Required for linking: Langfuse prompt name
-	PromptVersion int       // Required for linking: Langfuse prompt version
-	Input         any       // Optional: input messages
-	Output        string    // Optional: output content
-	StartTime     time.Time // Optional: when the generation started
-	EndTime       time.Time // Optional: when the generation ended
+	TraceID             string    // Required: trace ID to associate with
+	ID                  string    // Required: unique generation ID (use span ID)
+	ParentObservationID string    // Optional: parent span ID for nesting
+	Name                string    // Optional: name for the generation (e.g., "llm.chat")
+	Model               string    // Optional: model name
+	PromptName          string    // Required for linking: Langfuse prompt name
+	PromptVersion       int       // Required for linking: Langfuse prompt version
+	Input               any       // Optional: input messages
+	Output              any       // Optional: output content
+	StartTime           time.Time // Optional: when the generation started
+	EndTime             time.Time // Optional: when the generation ended
+	PromptTokens        int       // Optional: prompt token count
+	CompletionTokens    int       // Optional: completion token count
+	TotalTokens         int       // Optional: total token count
+	ModelParameters     map[string]any // Optional: model config (temperature, max_tokens, etc.)
+	Metadata            map[string]any // Optional: arbitrary metadata (tools, streaming, etc.)
+}
+
+// generationUsage holds token usage data for a generation.
+type generationUsage struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
+	TotalTokens      int `json:"totalTokens"`
 }
 
 // generationBody is the body of a generation-create ingestion event.
 type generationBody struct {
-	TraceID       string    `json:"traceId"`
-	ID            string    `json:"id"`
-	Name          string    `json:"name,omitempty"`
-	Model         string    `json:"model,omitempty"`
-	PromptName    string    `json:"promptName,omitempty"`
-	PromptVersion int       `json:"promptVersion,omitempty"`
-	Input         any       `json:"input,omitempty"`
-	Output        string    `json:"output,omitempty"`
-	StartTime     time.Time `json:"startTime"`
-	EndTime       time.Time `json:"endTime,omitempty"`
+	TraceID             string           `json:"traceId"`
+	ID                  string           `json:"id"`
+	ParentObservationID string           `json:"parentObservationId,omitempty"`
+	Name                string           `json:"name,omitempty"`
+	Model               string           `json:"model,omitempty"`
+	PromptName          string           `json:"promptName,omitempty"`
+	PromptVersion       int              `json:"promptVersion,omitempty"`
+	Input               any              `json:"input,omitempty"`
+	Output              any              `json:"output,omitempty"`
+	Usage               *generationUsage `json:"usage,omitempty"`
+	ModelParameters     map[string]any   `json:"modelParameters,omitempty"`
+	Metadata            map[string]any   `json:"metadata,omitempty"`
+	StartTime           time.Time        `json:"startTime"`
+	EndTime             time.Time        `json:"endTime,omitempty"`
+}
+
+// CreateSpan creates a span observation in Langfuse via the ingestion API.
+// Spans group related observations (generations, other spans) under a parent.
+func (c *Client) CreateSpan(ctx context.Context, params SpanParams) error {
+	if params.TraceID == "" {
+		return fmt.Errorf("langfuse: traceID is required")
+	}
+	if params.ID == "" {
+		return fmt.Errorf("langfuse: span ID is required")
+	}
+
+	now := time.Now().UTC()
+	if params.StartTime.IsZero() {
+		params.StartTime = now
+	}
+
+	event := ingestionEvent{
+		ID:        fmt.Sprintf("evt-span-%s-%d", params.ID[:8], now.UnixMilli()),
+		Type:      "span-create",
+		Timestamp: now,
+		Body: spanBody{
+			TraceID:             params.TraceID,
+			ID:                  params.ID,
+			ParentObservationID: params.ParentObservationID,
+			Name:                params.Name,
+			Input:               params.Input,
+			Output:              params.Output,
+			Metadata:            params.Metadata,
+			StartTime:           params.StartTime,
+			EndTime:             params.EndTime,
+		},
+	}
+
+	batch := map[string]any{"batch": []ingestionEvent{event}}
+	body, err := json.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("langfuse: failed to marshal span: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("https://%s/api/public/ingestion", c.host)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("langfuse: failed to create request: %w", err)
+	}
+
+	req.SetBasicAuth(c.publicKey, c.secretKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("langfuse: span creation request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusMultiStatus {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("langfuse: span ingestion failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	c.log.Printf("langfuse: created span %s (name=%s, parent=%s)", params.ID, params.Name, params.ParentObservationID)
+	return nil
+}
+
+// UpdateSpan updates an existing span observation in Langfuse (e.g., to set EndTime).
+func (c *Client) UpdateSpan(ctx context.Context, params SpanParams) error {
+	if params.ID == "" {
+		return fmt.Errorf("langfuse: span ID is required")
+	}
+
+	now := time.Now().UTC()
+
+	event := ingestionEvent{
+		ID:        fmt.Sprintf("evt-span-upd-%s-%d", params.ID[:8], now.UnixMilli()),
+		Type:      "span-update",
+		Timestamp: now,
+		Body: spanBody{
+			TraceID:             params.TraceID,
+			ID:                  params.ID,
+			ParentObservationID: params.ParentObservationID,
+			Name:                params.Name,
+			Output:              params.Output,
+			Metadata:            params.Metadata,
+			EndTime:             params.EndTime,
+		},
+	}
+
+	batch := map[string]any{"batch": []ingestionEvent{event}}
+	body, err := json.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("langfuse: failed to marshal span update: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("https://%s/api/public/ingestion", c.host)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("langfuse: failed to create request: %w", err)
+	}
+
+	req.SetBasicAuth(c.publicKey, c.secretKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("langfuse: span update request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusMultiStatus {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("langfuse: span update failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
 }
 
 // CreateGeneration creates a generation observation in Langfuse.
@@ -364,22 +523,38 @@ func (c *Client) CreateGeneration(ctx context.Context, params GenerationParams) 
 		params.StartTime = now
 	}
 
+	genBody := generationBody{
+		TraceID:             params.TraceID,
+		ID:                  params.ID,
+		ParentObservationID: params.ParentObservationID,
+		Name:                params.Name,
+		Model:               params.Model,
+		PromptName:          params.PromptName,
+		PromptVersion:       params.PromptVersion,
+		Input:               params.Input,
+		Output:              params.Output,
+		StartTime:           params.StartTime,
+		EndTime:             params.EndTime,
+	}
+	if params.PromptTokens > 0 || params.CompletionTokens > 0 || params.TotalTokens > 0 {
+		genBody.Usage = &generationUsage{
+			PromptTokens:     params.PromptTokens,
+			CompletionTokens: params.CompletionTokens,
+			TotalTokens:      params.TotalTokens,
+		}
+	}
+	if len(params.ModelParameters) > 0 {
+		genBody.ModelParameters = params.ModelParameters
+	}
+	if len(params.Metadata) > 0 {
+		genBody.Metadata = params.Metadata
+	}
+
 	event := ingestionEvent{
 		ID:        fmt.Sprintf("evt-gen-%s-%d", params.ID[:8], now.UnixMilli()),
 		Type:      "generation-create",
 		Timestamp: now,
-		Body: generationBody{
-			TraceID:       params.TraceID,
-			ID:            params.ID,
-			Name:          params.Name,
-			Model:         params.Model,
-			PromptName:    params.PromptName,
-			PromptVersion: params.PromptVersion,
-			Input:         params.Input,
-			Output:        params.Output,
-			StartTime:     params.StartTime,
-			EndTime:       params.EndTime,
-		},
+		Body:      genBody,
 	}
 
 	batch := map[string]any{"batch": []ingestionEvent{event}}

@@ -2,7 +2,6 @@ import React, { useMemo, useCallback } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import UserMessage from './UserMessage';
 import AssistantMessage from './AssistantMessage';
-import StreamingMessage from './StreamingMessage';
 import {
   useChatStore,
   selectConversationActiveBranch,
@@ -30,7 +29,7 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, className = '
 
   const renderItem = useCallback((index: number) => {
     if (streamingMessageId && index === messages.length) {
-      return <StreamingMessage conversationId={conversationId} className="mb-4" />;
+      return <AssistantMessage streaming conversationId={conversationId} className="mb-4" />;
     }
 
     const message = messages[index];
@@ -38,9 +37,9 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, className = '
 
     const messageId = message.id as MessageId;
 
-    // Render streaming messages via StreamingMessage component
+    // Render streaming messages via AssistantMessage with streaming prop
     if (messageId === streamingMessageId) {
-      return <StreamingMessage conversationId={conversationId} className="mb-4" />;
+      return <AssistantMessage streaming conversationId={conversationId} className="mb-4" />;
     }
 
     if (message.role === 'user') {

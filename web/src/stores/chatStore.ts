@@ -9,6 +9,8 @@ import {
   ToolCall,
   MemoryTrace,
   MessageStatus,
+  ThinkingEntry,
+  ReasoningEntry,
 } from '../types/chat';
 
 enableMapSet();
@@ -69,6 +71,8 @@ interface ChatActions {
   addToolCall: (conversationId: ConversationId, messageId: MessageId, toolCall: ToolCall) => void;
   updateToolCall: (conversationId: ConversationId, messageId: MessageId, toolCallId: string, updates: Partial<ToolCall>) => void;
   addMemoryTrace: (conversationId: ConversationId, messageId: MessageId, trace: MemoryTrace) => void;
+  setThinking: (conversationId: ConversationId, messageId: MessageId, entry: ThinkingEntry) => void;
+  addReasoningStep: (conversationId: ConversationId, messageId: MessageId, step: ReasoningEntry) => void;
   startStreaming: (conversationId: ConversationId, messageId: MessageId) => void;
   finishStreaming: (conversationId: ConversationId) => void;
   initiateRegeneration: (conversationId: ConversationId, optimisticMessage: ChatMessage) => void;
@@ -214,6 +218,38 @@ export const useChatStore = create<ChatStore>()(
               msg.memory_traces[idx] = trace;
             } else {
               msg.memory_traces.push(trace);
+            }
+          }
+        }
+      }),
+
+    setThinking: (conversationId, messageId, entry) =>
+      set((state) => {
+        const conv = state.conversations.get(conversationId);
+        if (conv) {
+          const msg = conv.messages.get(messageId);
+          if (msg) {
+            const idx = msg.thinking.findIndex((t) => t.id === entry.id);
+            if (idx >= 0) {
+              msg.thinking[idx] = entry;
+            } else {
+              msg.thinking = [entry];
+            }
+          }
+        }
+      }),
+
+    addReasoningStep: (conversationId, messageId, step) =>
+      set((state) => {
+        const conv = state.conversations.get(conversationId);
+        if (conv) {
+          const msg = conv.messages.get(messageId);
+          if (msg) {
+            const idx = msg.reasoning_steps.findIndex((r) => r.id === step.id);
+            if (idx >= 0) {
+              msg.reasoning_steps[idx] = step;
+            } else {
+              msg.reasoning_steps.push(step);
             }
           }
         }

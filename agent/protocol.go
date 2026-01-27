@@ -72,6 +72,18 @@ func (n *WSNotifier) send(ctx context.Context, msgType protocol.MessageType, bod
 	}
 }
 
+func (n *WSNotifier) SendStartAnswer(ctx context.Context, messageID string) {
+	n.mu.Lock()
+	convID := n.conversationID
+	prevID := n.previousID
+	n.mu.Unlock()
+	n.send(ctx, protocol.TypeStartAnswer, protocol.StartAnswer{
+		MessageID:      messageID,
+		ConversationID: convID,
+		PreviousID:     prevID,
+	})
+}
+
 func (n *WSNotifier) SendThinking(ctx context.Context, messageID, text string) {
 	n.SendThinkingWithProgress(ctx, messageID, text, 0)
 }
@@ -108,10 +120,12 @@ func (n *WSNotifier) SendToolStart(ctx context.Context, id, name string, args ma
 func (n *WSNotifier) SendToolComplete(ctx context.Context, id string, success bool, result any, errMsg string) {
 	n.mu.Lock()
 	convID := n.conversationID
+	msgID := n.messageID
 	n.mu.Unlock()
 	n.send(ctx, protocol.TypeToolUseResult, protocol.ToolUseResult{
 		ID:             NewToolUseID(),
 		RequestID:      id,
+		MessageID:      msgID,
 		ConversationID: convID,
 		Success:        success,
 		Result:         result,
@@ -136,14 +150,12 @@ func (n *WSNotifier) SendComplete(ctx context.Context, messageID, content string
 func (n *WSNotifier) SendError(ctx context.Context, messageID string, err error) {
 	n.mu.Lock()
 	convID := n.conversationID
-	prevID := n.previousID
 	n.mu.Unlock()
-	n.send(ctx, protocol.TypeAssistantMsg, protocol.AssistantMessage{
-		ID:             messageID,
-		PreviousID:     prevID,
+	n.send(ctx, protocol.TypeError, protocol.Error{
+		Code:           "agent_error",
+		Message:        err.Error(),
+		MessageID:      messageID,
 		ConversationID: convID,
-		Content:        "Error: " + err.Error(),
-		Timestamp:      time.Now().UnixMilli(),
 	})
 }
 

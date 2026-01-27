@@ -1,80 +1,78 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ChatBubble from '../molecules/ChatBubble';
-import { useChatStore } from '../../stores/chatStore';
+import { useChatStore, selectConversationStreamingMessage } from '../../stores/chatStore';
+import { getToolEmoji } from '../atoms/ComplexAddons';
+import type { ToolDetail } from '../atoms/ComplexAddons';
 import type { MessageId, ConversationId, ToolCall, MemoryTrace } from '../../types/chat';
-import type { MessageAddon, ToolData } from '../../types/components';
+import type { MessageAddon } from '../../types/components';
 
 export interface AssistantMessageProps {
   conversationId: ConversationId | null;
-  messageId: MessageId;
+  messageId?: MessageId;
+  streaming?: boolean;
   onBranchSwitch?: (targetMessageId: string) => void;
   onRetry?: (messageId: MessageId) => void;
   className?: string;
 }
 
-const AssistantMessage: React.FC<AssistantMessageProps> = ({ conversationId, messageId, onBranchSwitch, onRetry, className = '' }) => {
-  const message = useChatStore((state) => {
-    if (!conversationId) return undefined;
-    return state.conversations.get(conversationId)?.messages.get(messageId);
-  });
-
-  if (!message) return null;
-
-  const tools: ToolData[] = message.tool_calls.map((tc: ToolCall) => ({
+function buildToolDetails(toolCalls: ToolCall[]): ToolDetail[] {
+  return toolCalls.map((tc) => ({
     id: tc.id as string,
     name: tc.tool_name,
     description: `Arguments: ${JSON.stringify(tc.arguments)}`,
-    status: tc.status === 'success' ? 'completed' : tc.status === 'error' ? 'error' : 'running',
+    status: tc.status === 'success' ? 'completed' as const : tc.status === 'error' ? 'error' as const : 'running' as const,
     result: tc.status === 'success' ? String(tc.result) : tc.status === 'error' ? tc.error : undefined,
+    emoji: getToolEmoji(tc.tool_name),
   }));
+}
 
-  const addons: MessageAddon[] = [];
+function buildMemoryAddons(memoryTraces: MemoryTrace[]): MessageAddon[] {
+  if (memoryTraces.length === 0) return [];
+  return [{
+    id: 'memory-traces',
+    type: 'memory',
+    position: 'inline',
+    memoryData: memoryTraces.map((trace) => ({
+      id: trace.id as string,
+      content: trace.content,
+      relevance: trace.relevance,
+    })),
+  }];
+}
 
-  tools.forEach((tool) => {
-    const getToolEmoji = (name: string) => {
-      const n = name.toLowerCase();
-      if (n.includes('memory')) return '🧠';
-      if (n.includes('web') || n.includes('search')) return '🌐';
-      if (n.includes('file')) return '📄';
-      if (n.includes('code')) return '⚙️';
-      return '🔧';
-    };
+const AssistantMessage: React.FC<AssistantMessageProps> = ({ conversationId, messageId, streaming, onBranchSwitch, onRetry, className = '' }) => {
+  // Streaming path
+  const streamingSelector = useMemo(() => selectConversationStreamingMessage(conversationId), [conversationId]);
+  const streamingMessage = useChatStore(streamingSelector);
 
-    addons.push({
-      id: tool.id,
-      type: 'tool',
-      position: 'inline',
-      emoji: getToolEmoji(tool.name),
-      tooltip: tool.name,
-    });
+  // Completed path
+  const completedMessage = useChatStore((state) => {
+    if (streaming || !conversationId || !messageId) return undefined;
+    return state.conversations.get(conversationId)?.messages.get(messageId);
   });
 
-  if (message.memory_traces.length > 0) {
-    addons.push({
-      id: 'memory-traces',
-      type: 'memory',
-      position: 'inline',
-      memoryData: message.memory_traces.map((trace: MemoryTrace) => ({
-        id: trace.id as string,
-        content: trace.content,
-        relevance: trace.relevance,
-      })),
-    });
-  }
+  const message = streaming ? streamingMessage : completedMessage;
+  if (!message) return null;
+
+  const toolDetails = buildToolDetails(message.tool_calls);
+  const addons = buildMemoryAddons(message.memory_traces);
 
   return (
     <div className={`flex flex-col items-start gap-2 ${className}`}>
       <ChatBubble
         type="assistant"
-        content={message.content}
-        state="completed"
+        content={streaming ? '' : message.content}
+        state={streaming ? 'streaming' : message.status === 'error' ? 'error' : 'completed'}
         timestamp={new Date(message.created_at)}
+        streamingText={streaming ? message.content : undefined}
         addons={addons}
-        tools={tools}
-        messageId={messageId}
+        toolDetails={toolDetails}
+        messageId={streaming ? undefined : messageId}
         conversationId={conversationId || undefined}
         onBranchSwitch={onBranchSwitch}
         onRetry={onRetry}
+        thinkingEntries={message.thinking}
+        reasoningSteps={message.reasoning_steps}
       />
     </div>
   );

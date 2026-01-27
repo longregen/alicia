@@ -23,6 +23,7 @@ export enum MessageType {
   VoiceLeaveAck = 54,
   VoiceStatus = 55,
   VoiceSpeaking = 56,
+  GenerationComplete = 80,
 }
 
 export interface Envelope {
@@ -41,6 +42,8 @@ export interface Envelope {
 export interface ErrorMessage {
   code: string;
   message: string;
+  messageId?: string;
+  conversationId?: string;
 }
 
 export interface UserMessage {
@@ -69,6 +72,7 @@ export interface ToolUseRequest {
 export interface ToolUseResult {
   id: string;
   requestId: string;
+  messageId?: string;
   conversationId: string;
   success: boolean;
   result?: unknown;
@@ -190,5 +194,12 @@ export interface VoiceStatus {
   conversationId: string;
   status: 'queue_full' | 'queue_ok' | 'speaking' | 'idle';
   queueLength: number;
+  error?: string;
+}
+
+export interface GenerationComplete {
+  messageId: string;
+  conversationId: string;
+  success: boolean;
   error?: string;
 }

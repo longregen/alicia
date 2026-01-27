@@ -123,7 +123,8 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # Helper to run commands in nix shell
 run_in_nix() {
-    echo "cd $PROJECT_DIR && nix develop --command bash -lc '$1'"
+    local escaped="${1//\'/\'\\\'\'}"
+    echo "cd $PROJECT_DIR && nix develop --command bash -lc '${escaped}'"
 }
 
 # Create new session in project root
@@ -153,15 +154,15 @@ tmux split-window -v -t "$SESSION" -p 75 -c "$PROJECT_DIR"
 # Top-left: API
 tmux select-pane -t "$SESSION" -L
 tmux select-pane -t "$SESSION" -U
-tmux send-keys -t "$SESSION" "$(run_in_nix 'cd api && set -a; source .env 2>/dev/null; set +a; exec go run .')" C-m
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd api && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -w ../shared -w ../pkg -e go,mod,sum -- go run .')" C-m
 
 # Middle-left: Agent
 tmux select-pane -t "$SESSION" -D
-tmux send-keys -t "$SESSION" "sleep 2; $(run_in_nix "cd agent && set -a; source .env 2>/dev/null; set +a; PATH=$PROJECT_DIR/mcp:\$PATH go run .")" C-m
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd agent && set -a; source .env 2>/dev/null; set +a; PATH='"$PROJECT_DIR"'/mcp:$PATH exec watchexec -r -w . -w ../shared -w ../pkg -w ../mcp -e go,mod,sum --shell=bash -- '\''cd ../mcp && go build -o mcp-web ./web && go build -o mcp-garden ./garden && go build -o mcp-deno-calc ./deno-calc && cd ../agent && go run .'\''')" C-m
 
 # Bottom-left: Voice
 tmux select-pane -t "$SESSION" -D
-tmux send-keys -t "$SESSION" "$(run_in_nix 'cd voice && set -a; source .env 2>/dev/null; set +a; exec go run .')" C-m
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd voice && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -w ../shared -w ../pkg -e go,mod,sum -- go run .')" C-m
 
 # Top-right: Web
 tmux select-pane -t "$SESSION" -R
@@ -170,7 +171,7 @@ tmux send-keys -t "$SESSION" "$(run_in_nix 'cd web && npm run dev')" C-m
 
 # Bottom-right: Monitor
 tmux select-pane -t "$SESSION" -D
-tmux send-keys -t "$SESSION" "$(run_in_nix 'cd monitor && set -a; source .env 2>/dev/null; set +a; exec go run .')" C-m
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd monitor && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -e go,mod,sum -- go run .')" C-m
 
 # Select monitor pane (bottom-right)
 

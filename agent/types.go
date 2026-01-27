@@ -57,9 +57,14 @@ type LLMToolCall struct {
 }
 
 type LLMResponse struct {
-	Content   string
-	Reasoning string
-	ToolCalls []LLMToolCall
+	Content          string
+	Reasoning        string
+	ToolCalls        []LLMToolCall
+	FinishReason     string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	ReasoningTokens  int
 }
 
 type ResponseGenerationRequest struct {
@@ -83,6 +88,7 @@ type GenerateConfig struct {
 type Notifier interface {
 	SetMessageID(id string)
 	SetPreviousID(id string)
+	SendStartAnswer(ctx context.Context, messageID string)
 	SendThinking(ctx context.Context, messageID, text string)
 	SendThinkingWithProgress(ctx context.Context, messageID, text string, progress float32)
 	SendToolStart(ctx context.Context, id, name string, args map[string]any)

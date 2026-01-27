@@ -3,7 +3,7 @@ package main
 import (
 	"sync"
 
-	"github.com/longregen/alicia/api/protocol"
+	"github.com/longregen/alicia/shared/protocol"
 )
 
 type VoicePreferences struct {

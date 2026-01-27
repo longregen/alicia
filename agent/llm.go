@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/longregen/alicia/pkg/otel"
 	"github.com/longregen/alicia/shared/jsonutil"
 	"github.com/longregen/alicia/shared/llm"
 	openai "github.com/sashabaranov/go-openai"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type LLMClient struct {
@@ -92,18 +94,10 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 	if opts.Temperature != nil {
 		req.Temperature = *opts.Temperature
 	}
-	if opts.GenerationName != "" || opts.PromptName != "" {
-		meta := map[string]string{}
-		if opts.GenerationName != "" {
-			meta["generation_name"] = opts.GenerationName
+	if opts.GenerationName != "" {
+		req.Metadata = map[string]string{
+			"generation_name": opts.GenerationName,
 		}
-		if opts.PromptName != "" {
-			meta["observation.prompt.name"] = opts.PromptName
-			if opts.PromptVersion > 0 {
-				meta["observation.prompt.version"] = strconv.Itoa(opts.PromptVersion)
-			}
-		}
-		req.Metadata = meta
 	}
 
 	if len(tools) > 0 {
@@ -136,7 +130,11 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 	choice := resp.Choices[0]
 	slog.InfoContext(ctx, "llm response", "content_length", len(choice.Message.Content), "tool_calls", len(choice.Message.ToolCalls), "finish_reason", choice.FinishReason)
 
-	result := &LLMResponse{Content: choice.Message.Content, Reasoning: choice.Message.ReasoningContent}
+	result := &LLMResponse{Content: choice.Message.Content, Reasoning: choice.Message.ReasoningContent, FinishReason: string(choice.FinishReason),
+		PromptTokens: resp.Usage.PromptTokens, CompletionTokens: resp.Usage.CompletionTokens, TotalTokens: resp.Usage.TotalTokens}
+	if resp.Usage.CompletionTokensDetails != nil {
+		result.ReasoningTokens = resp.Usage.CompletionTokensDetails.ReasoningTokens
+	}
 	for _, tc := range choice.Message.ToolCalls {
 		result.ToolCalls = append(result.ToolCalls, LLMToolCall{
 			ID:        tc.ID,
@@ -147,6 +145,68 @@ func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, 
 	return result, nil
 }
 
+// MakeLLMCall is the unified entry point for LLM calls. It handles retry logic
+// (unless NoRetry is set) and automatic Langfuse telemetry (unless NoTelemetry is set).
+func MakeLLMCall(ctx context.Context, llm *LLMClient, msgs []LLMMessage, tools []Tool, opts LLMCallOptions) (*LLMResponse, error) {
+	llmStart := time.Now()
+
+	chatOpts := ChatOptions{
+		Temperature:    opts.Temperature,
+		MaxTokens:      opts.MaxTokens,
+		ResponseFormat: opts.ResponseFormat,
+		ToolChoice:     opts.ToolChoice,
+		GenerationName: opts.GenerationName,
+		PromptName:     opts.PromptName,
+		PromptVersion:  opts.PromptVersion,
+	}
+	// Use prompt metadata if PromptName/PromptVersion not set directly
+	if chatOpts.PromptName == "" && opts.Prompt.Name != "" {
+		chatOpts.PromptName = opts.Prompt.Name
+		chatOpts.PromptVersion = opts.Prompt.Version
+	}
+
+	var resp *LLMResponse
+	var err error
+	if opts.NoRetry {
+		resp, err = llm.ChatWithOptions(ctx, msgs, tools, chatOpts)
+	} else {
+		resp, err = chatWithTokenRetry(ctx, llm, msgs, tools, chatOpts)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	llmEnd := time.Now()
+
+	if !opts.NoTelemetry {
+		traceID := trace.SpanFromContext(ctx).SpanContext().TraceID().String()
+		genID := fmt.Sprintf("%s-%d", opts.GenerationName, llmStart.UnixNano())
+
+		input := any(msgs)
+		if opts.InputOverride != nil {
+			input = opts.InputOverride
+		}
+		output := any(resp.Content)
+		if opts.OutputOverride != nil {
+			output = opts.OutputOverride
+		}
+
+		go sendGenerationToLangfuse(LangfuseGeneration{
+			TraceID: traceID, ID: genID, ParentObservationID: opts.ParentObservationID,
+			ConvID: opts.ConvID, UserID: opts.UserID, Model: llm.model,
+			TraceName: opts.TraceName, GenerationName: opts.GenerationName,
+			Prompt: opts.Prompt, Input: input, Output: output,
+			StartTime: llmStart, EndTime: llmEnd,
+			PromptTokens: resp.PromptTokens, CompletionTokens: resp.CompletionTokens, TotalTokens: resp.TotalTokens,
+			Temperature: opts.Temperature, MaxTokens: llm.maxTokens,
+			Tools: toolNames(tools), ReasoningTokens: resp.ReasoningTokens,
+			Reasoning: resp.Reasoning, FinishReason: resp.FinishReason,
+		})
+	}
+
+	return resp, nil
+}
+
 func (c *LLMClient) Embed(ctx context.Context, text string) ([]float32, error) {
 	resp, err := c.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Model: openai.EmbeddingModel(c.embeddingModel),
@@ -155,7 +215,8 @@ func (c *LLMClient) Embed(ctx context.Context, text string) ([]float32, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(resp.Data) == 0 {
+	if len(resp.Data) == 0 || len(resp.Data[0].Embedding) == 0 {
+		slog.WarnContext(ctx, "embedding API returned empty vector", "input_length", len(text))
 		return nil, nil
 	}
 	return resp.Data[0].Embedding, nil

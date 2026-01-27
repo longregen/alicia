@@ -335,7 +335,6 @@ function AppContent() {
                 onRetry={handleRetry}
                 onArchive={handleArchiveCurrentConversation}
                 onDelete={handleDeleteCurrentConversation}
-                showControls={true}
               />
             ) : (
               <Redirect to="/" />

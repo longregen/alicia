@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { MoreVertical, Volume2, VolumeX, Archive, Trash2, Menu } from 'lucide-react';
 import MessageList from './MessageList';
 import InputArea from './InputArea';
-import ResponseControls from './ResponseControls';
 import { useConnectionStore, ConnectionStatus } from '../../stores/connectionStore';
 import { useVoiceConnectionStore, VoiceConnectionStatus } from '../../stores/voiceConnectionStore';
 import { useSidebarStore } from '../../stores/sidebarStore';
@@ -23,7 +22,6 @@ import { createConversationId } from '../../types/chat';
 
 export interface ChatWindowProps {
   onSendMessage?: (message: string, isVoice: boolean) => void;
-  onStopStreaming?: () => void;
   onRegenerateResponse?: () => void;
   onBranchSwitch?: (targetMessageId: string) => void;
   onRetry?: (messageId: MessageId) => void;
@@ -31,13 +29,11 @@ export interface ChatWindowProps {
   onDelete?: () => void;
   conversationId?: string | null;
   conversationTitle?: string;
-  showControls?: boolean;
   className?: string;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
   onSendMessage,
-  onStopStreaming,
   onRegenerateResponse,
   onBranchSwitch,
   onRetry,
@@ -45,7 +41,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   onDelete,
   conversationId = null,
   conversationTitle = 'Conversation',
-  showControls = true,
   className = '',
 }) => {
   const convId: ConversationId | null = useMemo(
@@ -189,16 +184,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         <MessageList conversationId={convId} onBranchSwitch={onBranchSwitch} onRetry={onRetry} />
       </div>
 
-      {showControls && (
-        <ResponseControls
-          conversationId={convId}
-          onStop={onStopStreaming}
-          onRegenerate={onRegenerateResponse}
-          show={isConnected}
-        />
-      )}
-
-      <InputArea
+<InputArea
         onSend={onSendMessage}
         onPublishAudioTrack={voiceActive ? publishAudioTrack : undefined}
         onVoiceActiveChange={setVoiceActive}

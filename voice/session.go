@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/longregen/alicia/api/protocol"
+	"github.com/longregen/alicia/shared/protocol"
 	"github.com/longregen/alicia/pkg/otel"
 	"github.com/longregen/alicia/shared/backoff"
 	"go.opentelemetry.io/otel/attribute"

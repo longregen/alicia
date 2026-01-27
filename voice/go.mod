@@ -6,7 +6,6 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/livekit/protocol v1.44.0
 	github.com/livekit/server-sdk-go/v2 v2.13.1
-	github.com/longregen/alicia/api v0.0.0
 	github.com/longregen/alicia/pkg/otel v0.0.0
 	github.com/longregen/alicia/shared v0.0.0
 	github.com/pion/webrtc/v4 v4.2.3
@@ -46,6 +45,7 @@ require (
 	github.com/livekit/mediatransportutil v0.0.0-20260113174415-2e8ba344fca3 // indirect
 	github.com/livekit/psrpc v0.7.1 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
+	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/nats-io/nats.go v1.48.0 // indirect
 	github.com/nats-io/nkeys v0.4.14 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
@@ -101,8 +101,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/longregen/alicia/api => ../api
 
 replace github.com/longregen/alicia/pkg/otel => ../pkg/otel
 

@@ -285,6 +285,86 @@ func CreateMemory(ctx context.Context, pool *pgxpool.Pool, id, content string, e
 	return err
 }
 
+// --- Memory Generations ---
+
+type MemoryGeneration struct {
+	ID                      string
+	ConversationID          string
+	MessageID               string
+	MemoryContent           string
+	ExtractPromptName       string
+	ExtractPromptVersion    int
+	ImportanceRating        int
+	ImportanceThinking      string
+	ImportancePromptName    string
+	ImportancePromptVersion int
+	HistoricalRating        int
+	HistoricalThinking      string
+	HistoricalPromptName    string
+	HistoricalPromptVersion int
+	PersonalRating          int
+	PersonalThinking        string
+	PersonalPromptName      string
+	PersonalPromptVersion   int
+	FactualRating           int
+	FactualThinking         string
+	FactualPromptName       string
+	FactualPromptVersion    int
+	RerankDecision          string
+	RerankPromptName        string
+	RerankPromptVersion     int
+	Accepted                bool
+	MemoryID                *string
+}
+
+func CreateMemoryGeneration(ctx context.Context, pool *pgxpool.Pool, g MemoryGeneration) error {
+	_, err := pool.Exec(ctx, `
+		INSERT INTO memory_generations (
+			id, conversation_id, message_id, memory_content,
+			extract_prompt_name, extract_prompt_version,
+			importance_rating, importance_thinking, importance_prompt_name, importance_prompt_version,
+			historical_rating, historical_thinking, historical_prompt_name, historical_prompt_version,
+			personal_rating, personal_thinking, personal_prompt_name, personal_prompt_version,
+			factual_rating, factual_thinking, factual_prompt_name, factual_prompt_version,
+			rerank_decision, rerank_prompt_name, rerank_prompt_version,
+			accepted, memory_id
+		) VALUES (
+			$1, $2, $3, $4,
+			$5, $6,
+			$7, $8, $9, $10,
+			$11, $12, $13, $14,
+			$15, $16, $17, $18,
+			$19, $20, $21, $22,
+			$23, $24, $25,
+			$26, $27
+		)
+	`,
+		g.ID, g.ConversationID, g.MessageID, g.MemoryContent,
+		nilIfEmpty(g.ExtractPromptName), nilIfZero(g.ExtractPromptVersion),
+		g.ImportanceRating, nilIfEmpty(g.ImportanceThinking), nilIfEmpty(g.ImportancePromptName), nilIfZero(g.ImportancePromptVersion),
+		g.HistoricalRating, nilIfEmpty(g.HistoricalThinking), nilIfEmpty(g.HistoricalPromptName), nilIfZero(g.HistoricalPromptVersion),
+		g.PersonalRating, nilIfEmpty(g.PersonalThinking), nilIfEmpty(g.PersonalPromptName), nilIfZero(g.PersonalPromptVersion),
+		g.FactualRating, nilIfEmpty(g.FactualThinking), nilIfEmpty(g.FactualPromptName), nilIfZero(g.FactualPromptVersion),
+		nilIfEmpty(g.RerankDecision), nilIfEmpty(g.RerankPromptName), nilIfZero(g.RerankPromptVersion),
+		g.Accepted, g.MemoryID,
+	)
+	return err
+}
+
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func nilIfZero(i int) *int {
+	if i == 0 {
+		return nil
+	}
+	return &i
+}
+
 // --- Notes ---
 
 type Note struct {
