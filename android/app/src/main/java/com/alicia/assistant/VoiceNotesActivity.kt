@@ -352,7 +352,7 @@ class VoiceNotesActivity : ComponentActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 lifecycleScope.launch {
-                    AliciaTelemetry.withSpan("note.delete", Attributes.builder()
+                    AliciaTelemetry.withSpanAsync("note.delete", Attributes.builder()
                         .put("note.id", note.id)
                         .build()
                     ) {

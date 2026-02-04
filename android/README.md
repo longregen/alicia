@@ -38,8 +38,11 @@ app/
 │   │   ├── service/
 │   │   │   ├── VoiceRecognitionManager.kt  # Speech-to-text
 │   │   │   └── VoiceAssistantService.kt    # Background service
-│   │   ├── skills/
-│   │   │   └── SkillRouter.kt           # Command processing
+│   │   ├── ws/
+│   │   │   ├── AssistantWebSocket.kt    # WebSocket for MCP tools
+│   │   │   ├── ToolRegistry.kt          # Tool registration
+│   │   │   └── ToolExecutor.kt          # Tool execution interface
+│   │   ├── tools/                       # Device tool executors
 │   │   └── storage/
 │   │       └── PreferencesManager.kt    # Data persistence
 │   ├── res/
@@ -209,10 +212,10 @@ The app requires the following permissions:
 
 ## Privacy
 
-- All voice processing happens on-device
-- No data sent to external servers (except Android's speech recognition)
-- Voice notes stored locally only
-- No analytics or tracking
+- Wake-word detection runs on-device using Vosk
+- Voice commands and chat messages are sent to a self-hosted backend at alicia.hjkl.lol for AI processing (Whisper STT, LLM agent, Kokoro TTS)
+- Voice notes are stored locally only
+- No third-party analytics or tracking
 
 ## License
 

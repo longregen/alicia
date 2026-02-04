@@ -26,12 +26,12 @@ import kotlinx.coroutines.sync.withLock
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
-import org.vosk.android.SpeechService
 import java.io.File
 
 class VoiceAssistantService : Service(), RecognitionListener {
 
-    private var speechService: SpeechService? = null
+    private var speechService: BluetoothSpeechService? = null
+    private var bluetoothAudioManager: BluetoothAudioManager? = null
     private var model: Model? = null
     @Volatile private var wakeWord: String = "alicia"
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -56,6 +56,7 @@ class VoiceAssistantService : Service(), RecognitionListener {
         running = true
         Log.d(TAG, "onCreate: VoiceAssistantService created")
         preferencesManager = PreferencesManager(this)
+        bluetoothAudioManager = BluetoothAudioManager(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -67,6 +68,11 @@ class VoiceAssistantService : Service(), RecognitionListener {
             Log.e(TAG, "onStartCommand: RECORD_AUDIO not granted, stopping service")
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.MODIFY_AUDIO_SETTINGS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "onStartCommand: MODIFY_AUDIO_SETTINGS not granted, Bluetooth audio routing may not work")
         }
         serviceScope.launch {
             val settings = preferencesManager.getSettings()
@@ -149,9 +155,15 @@ class VoiceAssistantService : Service(), RecognitionListener {
             Log.d(TAG, "initWakeWordDetection: recognizer grammar=$grammar")
             recognizer = Recognizer(model, SAMPLE_RATE, grammar)
 
-            withContext(Dispatchers.Main) {
-                speechService = SpeechService(recognizer, SAMPLE_RATE)
-                speechService?.startListening(this@VoiceAssistantService)
+            val started = withContext(Dispatchers.Main) {
+                speechService = BluetoothSpeechService(recognizer!!, SAMPLE_RATE, bluetoothAudioManager!!)
+                speechService?.startListening(this@VoiceAssistantService) ?: false
+            }
+
+            if (!started) {
+                Log.e(TAG, "initWakeWordDetection: failed to start BluetoothSpeechService")
+                stopSelf()
+                return@withLock
             }
 
             consecutiveErrors = 0
@@ -267,6 +279,8 @@ class VoiceAssistantService : Service(), RecognitionListener {
         recognizer = null
         model?.close()
         model = null
+        bluetoothAudioManager?.release()
+        bluetoothAudioManager = null
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
 

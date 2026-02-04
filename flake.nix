@@ -312,6 +312,7 @@
               export GRADLE_OPTS="-Djava.io.tmpdir=$TMPDIR -Dorg.gradle.native.dir=$TMPDIR/native"
               mkdir -p $TMPDIR/native
 
+              mkdir -p app/src/main/assets
               cp ${sileroVadModel} app/src/main/assets/silero_vad.onnx
               mkdir -p app/src/main/assets/vosk-models/small-en-us
               cp -r ${voskModelSmallEn}/. app/src/main/assets/vosk-models/small-en-us/

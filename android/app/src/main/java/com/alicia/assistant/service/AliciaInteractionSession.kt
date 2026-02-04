@@ -20,7 +20,6 @@ import android.widget.ImageButton
 import android.widget.TextView
 import com.alicia.assistant.R
 import com.alicia.assistant.model.RecognitionResult
-import com.alicia.assistant.skills.SkillRouter
 import com.alicia.assistant.storage.PreferencesManager
 import kotlinx.coroutines.*
 import java.util.UUID
@@ -33,14 +32,18 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         private const val RESPONSE_DISMISS_DELAY_MS = 2500L
         private const val WAVE_RING_1_DURATION_MS = 1000L
         private const val WAVE_RING_2_DURATION_MS = 1400L
+
+        // Persistent voice conversation ID across sessions
+        private var voiceConversationId: String? = null
     }
 
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private lateinit var bluetoothAudioManager: BluetoothAudioManager
     private lateinit var voiceRecognitionManager: VoiceRecognitionManager
     private lateinit var vadDetector: SileroVadDetector
-    private lateinit var skillRouter: SkillRouter
     private lateinit var ttsManager: TtsManager
     private lateinit var preferencesManager: PreferencesManager
+    private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
     private val screenContextManager = ScreenContextManager()
     private var screenContext: String? = null
     private var ocrJob: Job? = null
@@ -61,9 +64,9 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
 
     override fun onCreate() {
         super.onCreate()
-        voiceRecognitionManager = VoiceRecognitionManager(context, sessionScope)
+        bluetoothAudioManager = BluetoothAudioManager(context)
+        voiceRecognitionManager = VoiceRecognitionManager(context, sessionScope, bluetoothAudioManager)
         vadDetector = SileroVadDetector.create(context)
-        skillRouter = SkillRouter(context)
         ttsManager = TtsManager(context, sessionScope)
         preferencesManager = PreferencesManager(context)
     }
@@ -213,19 +216,41 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
             sessionSpan?.let {
                 AliciaTelemetry.addSpanEvent(it, "voice.processing_start")
             }
-            val result = withContext(Dispatchers.IO) {
-                skillRouter.processInput(text, capturedContext)
+
+            val response = try {
+                withContext(Dispatchers.IO) {
+                    val convId = getOrCreateVoiceConversation()
+                    val content = if (capturedContext != null) {
+                        "[Screen content]\n$capturedContext\n[End screen content]\n\nUser: $text"
+                    } else {
+                        text
+                    }
+                    try {
+                        apiClient.sendMessageSync(convId, content).assistantMessage.content
+                    } catch (e: AliciaApiClient.ApiException) {
+                        if (e.statusCode == 404) {
+                            // Conversation was deleted, create a new one
+                            val newConvId = createNewVoiceConversation()
+                            apiClient.sendMessageSync(newConvId, content).assistantMessage.content
+                        } else {
+                            throw e
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Chat failed", e)
+                "Sorry, I couldn't get a response right now."
             }
 
             sessionSpan?.let {
                 AliciaTelemetry.addSpanEvent(it, "voice.response_received",
                     Attributes.builder()
-                        .put("voice.response_length", result.response.length.toLong())
+                        .put("voice.response_length", response.length.toLong())
                         .build()
                 )
             }
 
-            responseText?.text = result.response
+            responseText?.text = response
             responseText?.visibility = View.VISIBLE
             statusText?.visibility = View.GONE
 
@@ -238,7 +263,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
             }
 
             if (settings.voiceFeedbackEnabled) {
-                ttsManager.speak(result.response, settings.ttsSpeed) {
+                ttsManager.speak(response, settings.ttsSpeed) {
                     finish()
                 }
             } else {
@@ -246,6 +271,17 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
                 finish()
             }
         }
+    }
+
+    private suspend fun getOrCreateVoiceConversation(): String {
+        voiceConversationId?.let { return it }
+        return createNewVoiceConversation()
+    }
+
+    private suspend fun createNewVoiceConversation(): String {
+        val conversation = apiClient.createConversation("Voice Chat")
+        voiceConversationId = conversation.id
+        return conversation.id
     }
 
     private fun startWaveAnimation() {
@@ -304,6 +340,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         sessionSpan?.end()
         sessionSpan = null
         voiceRecognitionManager.destroy()
+        bluetoothAudioManager.release()
         vadDetector.close()
         ttsManager.destroy()
         screenContextManager.release()

@@ -21,9 +21,9 @@ import com.alicia.assistant.service.TtsManager
 import com.alicia.assistant.service.VoiceAssistantService
 import com.alicia.assistant.service.VoiceRecognitionManager
 import com.alicia.assistant.service.saveRecordedNote
+import com.alicia.assistant.storage.PreferencesManager
 import com.alicia.assistant.viewmodel.MainViewModel
 import com.google.android.material.color.MaterialColors
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -31,10 +31,15 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : ComponentActivity() {
-    
+
+    companion object {
+        private var mainConversationId: String? = null
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var voiceRecognitionManager: VoiceRecognitionManager
     private lateinit var ttsManager: TtsManager
+    private var isSetupComplete = false
     private var vadDetector: SileroVadDetector? = null
     private val vadLock = Any()
     private val viewModel: MainViewModel by viewModels()
@@ -43,21 +48,34 @@ class MainActivity : ComponentActivity() {
     private lateinit var noteVoiceManager: VoiceRecognitionManager
     private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
     
-    companion object {
-        private const val REQUEST_RECORD_AUDIO = 1001
-    }
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Check onboarding on first creation only
+        if (savedInstanceState == null) {
+            lifecycleScope.launch {
+                if (!PreferencesManager(this@MainActivity).isOnboardingCompleted()) {
+                    startActivity(Intent(this@MainActivity, OnboardingActivity::class.java))
+                    finish()
+                    return@launch
+                }
+                continueWithSetup()
+            }
+            return
+        }
+
+        continueWithSetup()
+    }
+
+    private fun continueWithSetup() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         voiceRecognitionManager = VoiceRecognitionManager(this, lifecycleScope)
         noteVoiceManager = VoiceRecognitionManager(this, lifecycleScope)
         ttsManager = TtsManager(this, lifecycleScope)
 
         setupUI()
-        checkPermissions()
 
         lifecycleScope.launch(Dispatchers.IO) {
             val detector = SileroVadDetector.create(this@MainActivity)
@@ -74,6 +92,8 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra("start_listening")
             lifecycleScope.launch { delay(500); startListening() }
         }
+
+        isSetupComplete = true
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -86,6 +106,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!isSetupComplete) return
+
         viewModel.refreshSettings()
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             VoiceAssistantService.ensureRunning(this)
@@ -97,6 +119,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        if (!isSetupComplete) return
         ttsManager.stopPlayback()
     }
 
@@ -137,44 +160,12 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, VoiceNotesActivity::class.java))
         }
     }
-    
-    private fun checkPermissions() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                REQUEST_RECORD_AUDIO
-            )
-        }
-    }
-    
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
-        when (requestCode) {
-            REQUEST_RECORD_AUDIO -> {
-                if (grantResults.isNotEmpty() &&
-                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    VoiceAssistantService.ensureRunning(this)
-                } else {
-                    MaterialAlertDialogBuilder(this)
-                        .setTitle("Permission Required")
-                        .setMessage("Microphone permission is required for voice input.")
-                        .setPositiveButton("OK", null)
-                        .show()
-                }
-            }
-        }
-    }
-    
+
     private fun startListening() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
-            checkPermissions()
+            // Permission should have been granted during onboarding
+            Toast.makeText(this, R.string.microphone_permission_required, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -266,11 +257,26 @@ class MainActivity : ComponentActivity() {
         binding.transcribedText.visibility = View.VISIBLE
         binding.responseText.visibility = View.GONE
 
-        val result = withContext(Dispatchers.IO) {
-            viewModel.skillRouter.processInput(text)
+        val response = try {
+            withContext(Dispatchers.IO) {
+                val convId = getOrCreateMainConversation()
+                apiClient.sendMessageSync(convId, text).assistantMessage.content
+            }
+        } catch (e: AliciaApiClient.ApiException) {
+            if (e.statusCode == 404) {
+                // Conversation was deleted, create a new one
+                withContext(Dispatchers.IO) {
+                    val convId = createNewMainConversation()
+                    apiClient.sendMessageSync(convId, text).assistantMessage.content
+                }
+            } else {
+                "Sorry, I couldn't get a response right now."
+            }
+        } catch (e: Exception) {
+            "Sorry, I couldn't get a response right now."
         }
 
-        binding.responseText.text = result.response
+        binding.responseText.text = response
         binding.responseText.visibility = View.VISIBLE
         binding.statusText.text = getString(R.string.tap_to_speak)
         binding.activationButton.isEnabled = true
@@ -278,14 +284,26 @@ class MainActivity : ComponentActivity() {
         viewModel.refreshSettings()
         val settings = viewModel.settings
         if (settings.voiceFeedbackEnabled) {
-            ttsManager.speak(result.response, settings.ttsSpeed)
+            ttsManager.speak(response, settings.ttsSpeed)
         }
+    }
+
+    private suspend fun getOrCreateMainConversation(): String {
+        mainConversationId?.let { return it }
+        return createNewMainConversation()
+    }
+
+    private suspend fun createNewMainConversation(): String {
+        val conversation = apiClient.createConversation("Main Chat")
+        mainConversationId = conversation.id
+        return conversation.id
     }
     
     private fun startNoteRecording() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
-            checkPermissions()
+            // Permission should have been granted during onboarding
+            Toast.makeText(this, R.string.microphone_permission_required, Toast.LENGTH_SHORT).show()
             return
         }
         if (isListening) return
@@ -359,6 +377,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (!isSetupComplete) return
+
         ttsManager.destroy()
         voiceRecognitionManager.destroy()
         noteVoiceManager.destroy()

@@ -162,7 +162,7 @@ object AliciaTelemetry {
 
     fun getTraceContext(span: Span? = null): Map<String, Any?> {
         val targetSpan = span ?: Span.current()
-        val ctx = targetSpan.spanContext()
+        val ctx = targetSpan.spanContext
         if (!ctx.isValid) return emptyMap()
 
         return mapOf(

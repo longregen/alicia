@@ -25,6 +25,7 @@ class PreferencesManager(private val context: Context) {
         private val TTS_SPEED = floatPreferencesKey("tts_speed")
         private val VOSK_MODEL_ID = stringPreferencesKey("vosk_model_id")
         private val VOICE_NOTES = stringPreferencesKey("voice_notes")
+        private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
     
     suspend fun saveSettings(settings: AppSettings) {
@@ -65,6 +66,17 @@ class PreferencesManager(private val context: Context) {
     suspend fun clearLegacyNotes() {
         context.dataStore.edit { prefs ->
             prefs.remove(VOICE_NOTES)
+        }
+    }
+
+    suspend fun isOnboardingCompleted(): Boolean {
+        val prefs = context.dataStore.data.first()
+        return prefs[ONBOARDING_COMPLETED] ?: false
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[ONBOARDING_COMPLETED] = completed
         }
     }
 }

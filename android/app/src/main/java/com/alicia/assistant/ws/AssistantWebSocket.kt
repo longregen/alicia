@@ -10,20 +10,21 @@ import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.msgpack.core.MessagePack
 import org.msgpack.value.Value
-import org.msgpack.value.ValueFactory
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-interface MessageListener {
-    fun onUserMessage(conversationId: String, messageId: String, content: String, previousId: String?)
-    fun onAssistantMessage(conversationId: String, messageId: String, content: String, previousId: String?)
-    fun onThinkingUpdate(conversationId: String, messageId: String, content: String, progress: Float)
-    fun onToolUseStarted(conversationId: String, toolName: String, arguments: Map<String, Any?>)
-    fun onToolUseCompleted(conversationId: String, toolName: String, success: Boolean)
-    fun onError(conversationId: String, error: String)
-}
-
+/**
+ * WebSocket client for MCP (Model Context Protocol) device tool handling.
+ *
+ * This WebSocket is used exclusively for:
+ * - Registering device tools (battery, location, screen, clipboard) with the agent
+ * - Receiving tool execution requests from the agent (execution: "client")
+ * - Sending tool execution results back to the agent
+ * - Maintaining connection health via heartbeat
+ *
+ * Message sending uses REST API via AliciaApiClient, not this WebSocket.
+ */
 class AssistantWebSocket(
     private val baseUrl: String,
     private val agentSecret: String,
@@ -32,13 +33,9 @@ class AssistantWebSocket(
     companion object {
         private const val TAG = "AssistantWebSocket"
 
-        private const val TYPE_USER_MESSAGE = 2
-        private const val TYPE_ASSISTANT_MSG = 3
         private const val TYPE_TOOL_USE_REQUEST = 6
         private const val TYPE_TOOL_USE_RESULT = 7
-        private const val TYPE_THINKING_SUMMARY = 34
         private const val TYPE_SUBSCRIBE = 40
-        private const val TYPE_UNSUBSCRIBE = 41
         private const val TYPE_SUBSCRIBE_ACK = 42
         private const val TYPE_ASSISTANT_TOOLS_REGISTER = 70
         private const val TYPE_ASSISTANT_TOOLS_ACK = 71
@@ -47,38 +44,6 @@ class AssistantWebSocket(
 
         private const val RECONNECT_DELAY_MS = 5000L
         private const val MAX_RECONNECT_DELAY_MS = 60000L
-    }
-
-    // Listeners keyed by conversation ID to support multiple concurrent conversations
-    private val conversationListeners = ConcurrentHashMap<String, MessageListener>()
-
-    /**
-     * Register a listener for a specific conversation.
-     * Multiple conversations can have different listeners simultaneously.
-     */
-    fun addMessageListener(conversationId: String, listener: MessageListener) {
-        conversationListeners[conversationId] = listener
-    }
-
-    /**
-     * Remove listener for a specific conversation.
-     */
-    fun removeMessageListener(conversationId: String) {
-        conversationListeners.remove(conversationId)
-    }
-
-    @Deprecated("Use addMessageListener(conversationId, listener) instead", ReplaceWith("addMessageListener(conversationId, listener)"))
-    fun setMessageListener(listener: MessageListener?) {
-        // Legacy support: sets a global listener for empty conversation ID
-        if (listener != null) {
-            conversationListeners[""] = listener
-        } else {
-            conversationListeners.remove("")
-        }
-    }
-
-    private fun getListener(conversationId: String): MessageListener? {
-        return conversationListeners[conversationId] ?: conversationListeners[""]
     }
 
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -100,7 +65,6 @@ class AssistantWebSocket(
     private var lastSendTime = 0L
     @Volatile
     private var sessionSpan: Span? = null
-    private val subscribedConversations = mutableSetOf<String>()
 
     private fun closeCurrentConnection() {
         webSocket?.close(1000, "Replacing connection")
@@ -174,7 +138,6 @@ class AssistantWebSocket(
         stopHeartbeat()
         reconnecting = false
         reconnectJob?.cancel()
-        subscribedConversations.clear()
         webSocket?.close(1000, "Client closing")
         webSocket = null
         scope.cancel()
@@ -201,36 +164,6 @@ class AssistantWebSocket(
 
     fun isConnected(): Boolean = connected
 
-    /**
-     * Send a user message to the server for processing by the agent.
-     * The response will be delivered via the MessageListener callbacks.
-     */
-    fun sendUserMessage(conversationId: String, content: String, previousId: String? = null): Boolean {
-        if (!connected) {
-            Log.w(TAG, "Cannot send message: not connected")
-            return false
-        }
-
-        val body = mutableMapOf<String, Any?>(
-            "id" to java.util.UUID.randomUUID().toString(),
-            "conversationId" to conversationId,
-            "content" to content
-        )
-        if (previousId != null) {
-            body["previousId"] = previousId
-        }
-        AliciaTelemetry.injectTraceContext(body)
-
-        val envelope = buildEnvelope(conversationId, TYPE_USER_MESSAGE, body)
-        val sent = sendRaw(envelope)
-        if (sent) {
-            Log.i(TAG, "Sent user message to conversation $conversationId")
-        } else {
-            Log.w(TAG, "Failed to send user message")
-        }
-        return sent
-    }
-
     private fun sendHeartbeat() {
         if (!connected) return
         if (System.currentTimeMillis() - lastSendTime < HEARTBEAT_INTERVAL_MS) return
@@ -252,44 +185,6 @@ class AssistantWebSocket(
             Log.w(TAG, "Failed to send subscribe message")
         }
         subscribeSpan.end()
-    }
-
-    /**
-     * Subscribe to a conversation to receive messages and updates.
-     * Must be called before sending messages to that conversation.
-     */
-    fun subscribeToConversation(conversationId: String): Boolean {
-        if (!connected) {
-            Log.w(TAG, "Cannot subscribe: not connected")
-            return false
-        }
-        if (conversationId in subscribedConversations) {
-            return true // Already subscribed
-        }
-
-        val body = mutableMapOf<String, Any?>("conversationId" to conversationId)
-        AliciaTelemetry.injectTraceContext(body)
-        val envelope = buildEnvelope(conversationId, TYPE_SUBSCRIBE, body)
-        val sent = sendRaw(envelope)
-        if (sent) {
-            subscribedConversations.add(conversationId)
-            Log.i(TAG, "Subscribed to conversation $conversationId")
-        } else {
-            Log.w(TAG, "Failed to subscribe to conversation $conversationId")
-        }
-        return sent
-    }
-
-    /**
-     * Unsubscribe from a conversation.
-     */
-    fun unsubscribeFromConversation(conversationId: String): Boolean {
-        if (!connected) return false
-        subscribedConversations.remove(conversationId)
-
-        val body = mapOf("conversationId" to conversationId)
-        val envelope = buildEnvelope(conversationId, TYPE_UNSUBSCRIBE, body)
-        return sendRaw(envelope)
     }
 
     private fun registerTools(ws: WebSocket) {
@@ -349,46 +244,18 @@ class AssistantWebSocket(
                     val count = (body["toolCount"] as? Number)?.toInt() ?: 0
                     Log.i(TAG, "Tools acknowledged: $count")
                 }
-                TYPE_USER_MESSAGE -> {
-                    val body = envelope["body"] as? Map<*, *> ?: return
-                    val messageId = body["id"] as? String ?: return
-                    val content = body["content"] as? String ?: ""
-                    val previousId = body["previousId"] as? String
-                    Log.i(TAG, "Received user message confirmation: $messageId")
-                    getListener(conversationId)?.onUserMessage(conversationId, messageId, content, previousId)
-                }
-                TYPE_ASSISTANT_MSG -> {
-                    val body = envelope["body"] as? Map<*, *> ?: return
-                    val messageId = body["id"] as? String ?: return
-                    val content = body["content"] as? String ?: ""
-                    val previousId = body["previousId"] as? String
-                    Log.i(TAG, "Received assistant message: $messageId")
-                    getListener(conversationId)?.onAssistantMessage(conversationId, messageId, content, previousId)
-                }
-                TYPE_THINKING_SUMMARY -> {
-                    val body = envelope["body"] as? Map<*, *> ?: return
-                    val messageId = body["messageId"] as? String ?: return
-                    val content = body["content"] as? String ?: ""
-                    val progress = (body["progress"] as? Number)?.toFloat() ?: 0f
-                    getListener(conversationId)?.onThinkingUpdate(conversationId, messageId, content, progress)
-                }
                 TYPE_TOOL_USE_REQUEST -> {
                     val body = envelope["body"] as? Map<*, *> ?: return
-                    val execution = body["execution"] as? String
-                    val toolName = body["toolName"] as? String ?: "unknown"
-                    @Suppress("UNCHECKED_CAST")
-                    val arguments = (body["arguments"] as? Map<String, Any?>) ?: emptyMap()
-
-                    getListener(conversationId)?.onToolUseStarted(conversationId, toolName, arguments)
-
-                    if (execution == "client") {
+                    if (body["execution"] == "client") {
+                        val toolName = body["toolName"] as? String ?: "unknown"
+                        Log.i(TAG, "Received tool request: $toolName")
                         handleToolRequest(envelope)
                     }
                 }
                 TYPE_TOOL_USE_RESULT -> {
                     val body = envelope["body"] as? Map<*, *> ?: return
                     val success = body["success"] as? Boolean ?: false
-                    getListener(conversationId)?.onToolUseCompleted(conversationId, "", success)
+                    Log.d(TAG, "Tool result acknowledged: success=$success")
                 }
             }
         } catch (e: Exception) {
@@ -410,26 +277,15 @@ class AssistantWebSocket(
                 .put("tool.name", toolName)
                 .build())
             val executor = toolRegistry.get(toolName)
-            val result: Map<String, Any?>
-            val success: Boolean
-            val error: String?
-
-            if (executor != null) {
+            val (result, success, error) = if (executor != null) {
                 try {
-                    val value = executor.execute(arguments)
-                    result = value
-                    success = true
-                    error = null
+                    Triple(executor.execute(arguments), true, null)
                 } catch (e: Exception) {
-                    result = emptyMap()
-                    success = false
-                    error = e.message ?: "Unknown error"
                     AliciaTelemetry.recordError(toolSpan, e)
+                    Triple(emptyMap<String, Any?>(), false, e.message ?: "Unknown error")
                 }
             } else {
-                result = emptyMap()
-                success = false
-                error = "Unknown tool: $toolName"
+                Triple(emptyMap<String, Any?>(), false, "Unknown tool: $toolName")
             }
 
             toolSpan.setAttribute("tool.status", if (success) "success" else "error")
@@ -446,7 +302,7 @@ class AssistantWebSocket(
         error: String?
     ) {
         val body = mutableMapOf<String, Any?>(
-            "id" to java.util.UUID.randomUUID().toString(),
+            "id" to UUID.randomUUID().toString(),
             "requestId" to requestId,
             "conversationId" to conversationId,
             "success" to success

@@ -79,6 +79,7 @@
     <string name="thinking">Thinking…</string>
     <string name="send_failed">Failed to send message</string>
     <string name="load_failed">Failed to load conversations</string>
+    <string name="conversation_not_found">Conversation no longer exists</string>
     <string name="create_failed">Failed to create conversation</string>
     <string name="tool_used">Used: %s</string>
 
@@ -99,4 +100,24 @@
     <!-- Attribution -->
     <string name="attribution_wake_word">Wake word detection</string>
     <string name="attribution_voice_command">Voice command recording</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Welcome to Alicia</string>
+    <string name="onboarding_welcome_desc">Your voice assistant. Let\'s set up a few things.</string>
+    <string name="onboarding_mic_title">Microphone Access</string>
+    <string name="onboarding_mic_desc">Alicia needs microphone access to hear your voice commands and wake word.</string>
+    <string name="onboarding_notifications_title">Notifications</string>
+    <string name="onboarding_notifications_desc">Allow notifications so Alicia can run in the background and listen for your wake word.</string>
+    <string name="onboarding_bluetooth_title">Bluetooth Audio</string>
+    <string name="onboarding_bluetooth_desc">Optional: Allow Bluetooth to use your wireless headset microphone.</string>
+    <string name="onboarding_location_title">Location Access</string>
+    <string name="onboarding_location_desc">Optional: Allow location access so Alicia can answer questions about where you are.</string>
+    <string name="onboarding_complete_title">You\'re All Set!</string>
+    <string name="onboarding_complete_desc">Say \"Alicia\" or tap the microphone to get started.</string>
+    <string name="skip">Skip</string>
+    <string name="next">Next</string>
+    <string name="get_started">Get Started</string>
+    <string name="permission_granted">Permission Granted</string>
+    <string name="permission_denied">Permission Denied</string>
+    <string name="permission_required_to_continue">This permission is required to continue</string>
 </resources>

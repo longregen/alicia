@@ -22,16 +22,18 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicBoolean
 
 class VoiceRecognitionManager(
     private val context: Context,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val bluetoothAudioManager: BluetoothAudioManager? = null
 ) {
 
     private var mediaRecorder: MediaRecorder? = null
     private var audioFile: File? = null
     private var activeCallback: ((RecognitionResult) -> Unit)? = null
-    @Volatile private var isRecording = false
+    private val isRecording = AtomicBoolean(false)
     private val gson = Gson()
 
     private data class WhisperResponse(val text: String)
@@ -65,18 +67,27 @@ class VoiceRecognitionManager(
     }
 
     fun startListening(onResult: (RecognitionResult) -> Unit) {
-        if (isRecording) {
+        if (!isRecording.compareAndSet(false, true)) {
             onResult(RecognitionResult.Error(ErrorReason.RECORDING_FAILED))
             return
         }
         activeCallback = onResult
+
+        // Enable Bluetooth audio if available
+        val btEnabled = bluetoothAudioManager?.enableBluetoothAudio() ?: false
+        val audioSource = if (btEnabled) {
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        } else {
+            MediaRecorder.AudioSource.MIC
+        }
+        Log.d(TAG, "startListening: bluetooth=$btEnabled, audioSource=$audioSource")
 
         val recorder = MediaRecorder(context)
         try {
             audioFile = File.createTempFile("voice_", ".m4a", context.cacheDir)
 
             recorder.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setAudioSource(audioSource)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setAudioSamplingRate(16000)
@@ -87,19 +98,19 @@ class VoiceRecognitionManager(
             }
 
             mediaRecorder = recorder
-            isRecording = true
             Log.d(TAG, "Recording started")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording", e)
             recorder.release()
+            bluetoothAudioManager?.disableBluetoothAudio()
+            isRecording.set(false)
             activeCallback = null
             onResult(RecognitionResult.Error(ErrorReason.RECORDING_FAILED, e))
         }
     }
 
     fun stopListening() {
-        if (!isRecording) return
-        isRecording = false
+        if (!isRecording.compareAndSet(true, false)) return
 
         val callback = activeCallback ?: return
         activeCallback = null
@@ -117,8 +128,11 @@ class VoiceRecognitionManager(
             try { mediaRecorder?.reset() } catch (_: Exception) {}
             mediaRecorder?.release()
             mediaRecorder = null
+            bluetoothAudioManager?.disableBluetoothAudio()
             callback(RecognitionResult.Error(ErrorReason.RECORDING_STOPPED_EARLY, e))
             return
+        } finally {
+            bluetoothAudioManager?.disableBluetoothAudio()
         }
 
         val file = audioFile ?: return
@@ -189,8 +203,7 @@ class VoiceRecognitionManager(
     }
 
     fun stopAndGetFile(): File? {
-        if (!isRecording) return null
-        isRecording = false
+        if (!isRecording.compareAndSet(true, false)) return null
         activeCallback = null
 
         return try {
@@ -209,6 +222,8 @@ class VoiceRecognitionManager(
             mediaRecorder?.release()
             mediaRecorder = null
             null
+        } finally {
+            bluetoothAudioManager?.disableBluetoothAudio()
         }
     }
 
@@ -271,17 +286,16 @@ class VoiceRecognitionManager(
     }
 
     fun startListeningWithVad(vadDetector: SileroVadDetector, onResult: (RecognitionResult) -> Unit) {
-        if (isRecording) {
+        if (!isRecording.compareAndSet(false, true)) {
             onResult(RecognitionResult.Error(ErrorReason.RECORDING_FAILED))
             return
         }
-        isRecording = true
         activeCallback = onResult
         vadDetector.resetState()
 
         vadJob = scope.launch {
             val result = withContext(Dispatchers.IO) { recordWithVad(vadDetector) }
-            isRecording = false
+            isRecording.set(false)
             val callback = activeCallback ?: return@launch
             activeCallback = null
 
@@ -294,11 +308,11 @@ class VoiceRecognitionManager(
     }
 
     fun stopVadListeningEarly() {
-        isRecording = false
+        isRecording.set(false)
     }
 
     fun cancelVadListening() {
-        isRecording = false
+        isRecording.set(false)
         vadJob?.cancel()
         vadJob = null
         activeCallback = null
@@ -306,18 +320,47 @@ class VoiceRecognitionManager(
 
     private fun recordWithVad(vadDetector: SileroVadDetector): VadResult {
         val recordingSpan = AliciaTelemetry.startSpan("voice.recording")
+
+        // Enable Bluetooth audio if available
+        val btEnabled = bluetoothAudioManager?.enableBluetoothAudio() ?: false
+        val actualSampleRate = if (btEnabled) {
+            bluetoothAudioManager?.getEffectiveSampleRate(VAD_SAMPLE_RATE) ?: VAD_SAMPLE_RATE
+        } else {
+            VAD_SAMPLE_RATE
+        }
+        val needsResampling = actualSampleRate != VAD_SAMPLE_RATE
+
+        Log.d(TAG, "Recording with sampleRate=$actualSampleRate, bluetooth=$btEnabled, needsResampling=$needsResampling")
+        recordingSpan.setAttribute("voice.bluetooth_enabled", btEnabled)
+        recordingSpan.setAttribute("voice.sample_rate", actualSampleRate.toLong())
+
+        // Use VOICE_COMMUNICATION for Bluetooth, MIC otherwise
+        val audioSource = if (btEnabled) {
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        } else {
+            MediaRecorder.AudioSource.MIC
+        }
+
+        // Calculate frame size for actual sample rate
+        val actualFrameSize = if (needsResampling) {
+            // For 8kHz->16kHz, we need half the frames to produce VAD_FRAME_SIZE after resampling
+            VAD_FRAME_SIZE * actualSampleRate / VAD_SAMPLE_RATE
+        } else {
+            VAD_FRAME_SIZE
+        }
+
         val bufferSize = maxOf(
             AudioRecord.getMinBufferSize(
-                VAD_SAMPLE_RATE,
+                actualSampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
             ),
-            VAD_FRAME_SIZE * 2 * 4
+            actualFrameSize * 2 * 4
         )
 
         val recorder = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            VAD_SAMPLE_RATE,
+            audioSource,
+            actualSampleRate,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
             bufferSize
@@ -326,6 +369,7 @@ class VoiceRecognitionManager(
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "AudioRecord failed to initialize")
             recorder.release()
+            bluetoothAudioManager?.disableBluetoothAudio()
             AliciaTelemetry.addSpanEvent(recordingSpan, "vad.init_failed")
             recordingSpan.end()
             return VadResult.Error
@@ -334,15 +378,18 @@ class VoiceRecognitionManager(
         recorder.startRecording()
 
         val pcmStream = ByteArrayOutputStream()
-        val frame = ShortArray(VAD_FRAME_SIZE)
+        val inputFrame = ShortArray(actualFrameSize)
         val pcmBuffer = ByteBuffer.allocate(VAD_FRAME_SIZE * 2).order(ByteOrder.LITTLE_ENDIAN)
         val floatFrame = FloatArray(VAD_FRAME_SIZE)
+        val streamResampler = if (needsResampling) {
+            AudioResampler.StreamResampler(actualSampleRate, VAD_SAMPLE_RATE)
+        } else null
         var speechDetected = false
         var silenceStartMs = 0L
         val startTime = System.currentTimeMillis()
 
         try {
-            while (isRecording) {
+            while (isRecording.get()) {
                 if (System.currentTimeMillis() - startTime > MAX_RECORDING_MS) {
                     AliciaTelemetry.addSpanEvent(recordingSpan, "vad.max_duration",
                         Attributes.builder()
@@ -352,8 +399,15 @@ class VoiceRecognitionManager(
                     break
                 }
 
-                val read = recorder.read(frame, 0, VAD_FRAME_SIZE)
-                if (read != VAD_FRAME_SIZE) continue
+                val read = recorder.read(inputFrame, 0, actualFrameSize)
+                if (read != actualFrameSize) continue
+
+                // Resample if needed (8kHz -> 16kHz)
+                val frame = if (streamResampler != null) {
+                    streamResampler.resampleFrame(inputFrame)
+                } else {
+                    inputFrame
+                }
 
                 pcmBuffer.clear()
                 for (sample in frame) pcmBuffer.putShort(sample)
@@ -394,6 +448,7 @@ class VoiceRecognitionManager(
         } finally {
             recorder.stop()
             recorder.release()
+            bluetoothAudioManager?.disableBluetoothAudio()
         }
 
         val pcmData = pcmStream.toByteArray()
