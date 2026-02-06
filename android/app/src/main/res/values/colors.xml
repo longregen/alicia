@@ -68,4 +68,9 @@
     <color name="conversation_recent_background_dark">#1A1A1A</color>
     <color name="conversation_most_recent_background_dark">#262626</color>
     <color name="conversation_unread_accent_dark">@color/alicia_accent_light</color>
+
+    <!-- VPN status colors -->
+    <color name="vpn_connected">#4CAF50</color>
+    <color name="vpn_connected_dark">#66BB6A</color>
+    <color name="vpn_connecting">#FF9800</color>
 </resources>

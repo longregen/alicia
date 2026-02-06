@@ -429,6 +429,8 @@
             androidBuildScript
             androidFhsEnv
             pkgs.maestro
+            pkgs.go
+            pkgs.gomobile
           ];
 
           shellHook = ''
@@ -452,6 +454,7 @@ EOF
             echo "  ./gradlew assembleDebug    - Build debug APK"
             echo "  build-apk                  - Build ARM v7 debug APK"
             echo "  maestro test e2e/          - Run E2E tests (device required)"
+            echo "  ./build-libtailscale.sh     - Build libtailscale.aar from source"
             echo ""
             echo "NixOS users: If AAPT2 fails, use the FHS environment:"
             echo "  android-fhs-env -c './gradlew assembleDebug'"

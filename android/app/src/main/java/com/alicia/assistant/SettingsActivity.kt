@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.service.VoiceAssistantService
@@ -14,6 +13,8 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
+import com.alicia.assistant.model.VpnStatus
+import com.alicia.assistant.service.VpnManager
 import kotlinx.coroutines.launch
 
 class SettingsActivity : ComponentActivity() {
@@ -49,6 +50,15 @@ class SettingsActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         VoiceAssistantService.ensureRunning(this)
+
+        // Update VPN status text
+        val vpnStatusText = findViewById<TextView>(R.id.vpnSettingsStatus)
+        when (VpnManager.state.value.status) {
+            VpnStatus.CONNECTED -> vpnStatusText.text = getString(R.string.vpn_connected)
+            VpnStatus.CONNECTING -> vpnStatusText.text = getString(R.string.vpn_connecting_status)
+            VpnStatus.DISCONNECTED -> vpnStatusText.text = getString(R.string.vpn_status_off)
+            VpnStatus.ERROR -> vpnStatusText.text = getString(R.string.vpn_error)
+        }
     }
 
     override fun onPause() {
@@ -112,6 +122,10 @@ class SettingsActivity : ComponentActivity() {
 
         findViewById<View>(R.id.manageModelsButton).setOnClickListener {
             startActivity(Intent(this, ModelManagerActivity::class.java))
+        }
+
+        findViewById<View>(R.id.vpnSettingsCard).setOnClickListener {
+            startActivity(Intent(this, VpnSettingsActivity::class.java))
         }
 
     }

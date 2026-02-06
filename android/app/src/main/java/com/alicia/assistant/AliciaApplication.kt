@@ -8,6 +8,8 @@ import com.alicia.assistant.storage.NoteRepository
 import com.alicia.assistant.storage.PreferencesManager
 import com.alicia.assistant.telemetry.AliciaTelemetry
 import com.alicia.assistant.telemetry.ActivityLifecycleTracer
+import com.alicia.assistant.service.AliciaVpnService
+import com.alicia.assistant.service.VpnManager
 import com.alicia.assistant.tools.*
 import com.alicia.assistant.ws.AssistantWebSocket
 import com.alicia.assistant.ws.ToolRegistry
@@ -51,6 +53,12 @@ class AliciaApplication : Application() {
         AliciaTelemetry.withSpan("app.startup") { span ->
             createNotificationChannel()
             AliciaTelemetry.addSpanEvent(span, "notification_channel_created")
+
+            createVpnNotificationChannel()
+            AliciaTelemetry.addSpanEvent(span, "vpn_notification_channel_created")
+
+            VpnManager.init(this)
+            AliciaTelemetry.addSpanEvent(span, "vpn_manager_initialized")
 
             extractBundledModelIfNeeded()
             AliciaTelemetry.addSpanEvent(span, "model_extraction_started")
@@ -105,6 +113,19 @@ class AliciaApplication : Application() {
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Wake word detection service"
+        }
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun createVpnNotificationChannel() {
+        val channel = NotificationChannel(
+            AliciaVpnService.CHANNEL_ID,
+            "VPN Service",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "VPN connection status"
         }
 
         val notificationManager = getSystemService(NotificationManager::class.java)

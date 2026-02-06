@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.util.Log
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.view.View
 import android.view.animation.AnimationUtils
@@ -36,6 +37,9 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.alicia.assistant.model.VpnState
+import com.alicia.assistant.model.VpnStatus
+import com.alicia.assistant.service.VpnManager
 
 class MainActivity : ComponentActivity() {
 
@@ -84,6 +88,7 @@ class MainActivity : ComponentActivity() {
         ttsManager = TtsManager(this, lifecycleScope)
 
         setupUI()
+        setupVpn()
 
         lifecycleScope.launch(Dispatchers.IO) {
             val detector = SileroVadDetector.create(this@MainActivity)
@@ -117,6 +122,14 @@ class MainActivity : ComponentActivity() {
                 delay(UI_SETTLE_DELAY_MS)
                 startListening()
             }
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == VpnManager.VPN_PERMISSION_REQUEST_CODE && resultCode == RESULT_OK) {
+            VpnManager.startVpnService(this)
         }
     }
 
@@ -229,7 +242,7 @@ class MainActivity : ComponentActivity() {
         backgroundAnimator?.cancel()
 
         binding.activationButton.setImageResource(R.drawable.ic_microphone)
-        binding.activationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+        binding.activationButton.backgroundTintList = ColorStateList.valueOf(
             MaterialColors.getColor(binding.activationButton, com.google.android.material.R.attr.colorPrimaryContainer)
         )
         binding.activationButton.isEnabled = false
@@ -260,10 +273,10 @@ class MainActivity : ComponentActivity() {
         if (listening) {
             // Update button appearance
             binding.activationButton.setImageResource(R.drawable.ic_stop)
-            binding.activationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            binding.activationButton.backgroundTintList = ColorStateList.valueOf(
                 getColor(R.color.recording_active)
             )
-            binding.activationButton.imageTintList = android.content.res.ColorStateList.valueOf(
+            binding.activationButton.imageTintList = ColorStateList.valueOf(
                 android.graphics.Color.WHITE
             )
             binding.statusText.setTextColor(
@@ -311,10 +324,10 @@ class MainActivity : ComponentActivity() {
         } else {
             // Update button appearance
             binding.activationButton.setImageResource(R.drawable.ic_microphone)
-            binding.activationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            binding.activationButton.backgroundTintList = ColorStateList.valueOf(
                 MaterialColors.getColor(binding.activationButton, com.google.android.material.R.attr.colorPrimaryContainer)
             )
-            binding.activationButton.imageTintList = android.content.res.ColorStateList.valueOf(
+            binding.activationButton.imageTintList = ColorStateList.valueOf(
                 MaterialColors.getColor(binding.activationButton, com.google.android.material.R.attr.colorOnPrimaryContainer)
             )
             binding.statusText.setTextColor(
@@ -378,7 +391,7 @@ class MainActivity : ComponentActivity() {
 
         isRecordingNote = true
         binding.noteRecordButton.setImageResource(R.drawable.ic_stop)
-        binding.noteRecordButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+        binding.noteRecordButton.backgroundTintList = ColorStateList.valueOf(
             getColor(R.color.recording_active)
         )
         binding.statusText.text = getString(R.string.recording_note)
@@ -390,7 +403,7 @@ class MainActivity : ComponentActivity() {
                 lifecycleScope.launch {
                     isRecordingNote = false
                     binding.noteRecordButton.setImageResource(R.drawable.ic_edit_note)
-                    binding.noteRecordButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                    binding.noteRecordButton.backgroundTintList = ColorStateList.valueOf(
                         MaterialColors.getColor(binding.noteRecordButton, com.google.android.material.R.attr.colorSecondaryContainer)
                     )
                     binding.statusText.text = getString(R.string.tap_to_speak)
@@ -407,7 +420,7 @@ class MainActivity : ComponentActivity() {
     private fun stopNoteRecording() {
         isRecordingNote = false
         binding.noteRecordButton.setImageResource(R.drawable.ic_edit_note)
-        binding.noteRecordButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
+        binding.noteRecordButton.backgroundTintList = ColorStateList.valueOf(
             MaterialColors.getColor(binding.noteRecordButton, com.google.android.material.R.attr.colorSecondaryContainer)
         )
         binding.statusText.setTextColor(
@@ -433,6 +446,86 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this@MainActivity, R.string.no_speech_detected, Toast.LENGTH_SHORT).show()
                 is SaveNoteResult.Success ->
                     Toast.makeText(this@MainActivity, getString(R.string.note_saved), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun setupVpn() {
+        lifecycleScope.launch {
+            VpnManager.state.collect { vpnState ->
+                updateVpnUI(vpnState)
+            }
+        }
+
+        binding.vpnToggle.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                VpnManager.connect(this)
+            } else {
+                VpnManager.disconnect(this)
+            }
+        }
+
+        binding.vpnStatusCard.setOnLongClickListener {
+            startActivity(Intent(this, VpnSettingsActivity::class.java))
+            true
+        }
+    }
+
+    private fun updateVpnUI(vpnState: VpnState) {
+        val vpnIcon = binding.vpnIcon
+        val vpnTitle = binding.vpnStatusTitle
+        val vpnSubtitle = binding.vpnStatusSubtitle
+        val vpnToggle = binding.vpnToggle
+
+        // Prevent toggle listener from firing during programmatic update
+        vpnToggle.setOnCheckedChangeListener(null)
+
+        when (vpnState.status) {
+            VpnStatus.DISCONNECTED -> {
+                vpnIcon.clearAnimation()
+                vpnIcon.imageTintList = ColorStateList.valueOf(
+                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorOnSurfaceVariant)
+                )
+                vpnTitle.text = getString(R.string.vpn_off)
+                vpnSubtitle.text = getString(R.string.vpn_tap_to_connect)
+                vpnToggle.isChecked = false
+            }
+            VpnStatus.CONNECTING -> {
+                val pulseAnim = AnimationUtils.loadAnimation(this, R.anim.vpn_pulse)
+                vpnIcon.startAnimation(pulseAnim)
+                vpnIcon.imageTintList = ColorStateList.valueOf(
+                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorPrimary)
+                )
+                vpnTitle.text = getString(R.string.vpn_connecting_status)
+                vpnSubtitle.text = getString(R.string.vpn_setting_up_tunnel)
+                vpnToggle.isChecked = true
+            }
+            VpnStatus.CONNECTED -> {
+                vpnIcon.clearAnimation()
+                vpnIcon.imageTintList = ColorStateList.valueOf(
+                    getColor(R.color.vpn_connected)
+                )
+                vpnTitle.text = getString(R.string.vpn_connected_label)
+                vpnSubtitle.text = vpnState.exitNode?.let { getString(R.string.vpn_connected_via, it.location) } ?: getString(R.string.vpn_connected)
+                vpnToggle.isChecked = true
+            }
+            VpnStatus.ERROR -> {
+                vpnIcon.clearAnimation()
+                vpnIcon.imageTintList = ColorStateList.valueOf(
+                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorError)
+                )
+                vpnTitle.text = getString(R.string.vpn_error_label)
+                vpnSubtitle.text = getString(R.string.vpn_tap_to_retry)
+                vpnToggle.isChecked = false
+            }
+        }
+
+        // Re-attach listener
+        vpnToggle.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                VpnManager.connect(this@MainActivity)
+            } else {
+                VpnManager.disconnect(this@MainActivity)
             }
         }
     }

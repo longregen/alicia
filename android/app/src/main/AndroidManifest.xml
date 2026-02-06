@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <attribution
         android:tag="wake_word"
@@ -104,6 +106,18 @@
             android:screenOrientation="portrait"
             android:parentActivityName=".SettingsActivity" />
 
+        <activity
+            android:name=".VpnSettingsActivity"
+            android:exported="false"
+            android:label="@string/vpn_settings_title"
+            android:parentActivityName=".SettingsActivity" />
+
+        <activity
+            android:name=".VpnQrScanActivity"
+            android:exported="false"
+            android:label="@string/vpn_scan_qr"
+            android:parentActivityName=".VpnSettingsActivity" />
+
         <service
             android:name=".service.VoiceAssistantService"
             android:enabled="true"
@@ -156,6 +170,19 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".service.AliciaVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="VPN tunnel for secure network access via Tailscale/Headscale" />
+        </service>
+
         <receiver
             android:name=".receiver.BootReceiver"
             android:enabled="true"
@@ -167,7 +194,7 @@
 
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="ocr" />
+            android:value="ocr,barcode" />
 
     </application>
 

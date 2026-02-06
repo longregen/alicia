@@ -132,4 +132,18 @@ dependencies {
     }
     implementation("io.opentelemetry:opentelemetry-exporter-sender-okhttp")
     implementation("io.opentelemetry.instrumentation:opentelemetry-okhttp-3.0:2.10.0-alpha")
+
+    // libtailscale (Tailscale VPN engine via gomobile)
+    val libtailscaleAar = file("libs/libtailscale.aar")
+    if (libtailscaleAar.exists()) {
+        implementation(files("libs/libtailscale.aar"))
+    }
+
+    // ML Kit Barcode Scanning (QR code scanner for VPN auth)
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // CameraX (for QR code scanner)
+    implementation("androidx.camera:camera-camera2:1.4.0")
+    implementation("androidx.camera:camera-lifecycle:1.4.0")
+    implementation("androidx.camera:camera-view:1.4.0")
 }

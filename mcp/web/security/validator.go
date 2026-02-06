@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
 // AllowedHosts is an optional allowlist of hosts. If non-empty, only these hosts are permitted.
 var AllowedHosts []string
+
+// allowLocal caches whether MCP_WEB_ALLOW_LOCAL is set at startup.
+var allowLocal = os.Getenv("MCP_WEB_ALLOW_LOCAL") != ""
 
 // IsPrivateIP checks if an IP address is private, loopback, or otherwise internal
 func IsPrivateIP(ip net.IP) bool {
@@ -87,13 +91,12 @@ func ValidateURL(rawURL string) error {
 		return nil
 	}
 
-	// Block common internal hostnames
 	lowerHostname := strings.ToLower(hostname)
-	internalHostnames := []string{
-		"localhost",
-		"localhost.localdomain",
-		"local",
-		"internal",
+
+	// When MCP_WEB_ALLOW_LOCAL is set, skip localhost/private-IP checks
+	// but still block cloud metadata endpoints (SSRF to metadata services
+	// is dangerous even in development).
+	metadataHostnames := []string{
 		"metadata",
 		"metadata.google.internal",
 		"instance-data",
@@ -104,22 +107,36 @@ func ValidateURL(rawURL string) error {
 		"kubernetes.default.svc",
 		"kubernetes.default.svc.cluster.local",
 	}
-
-	for _, internal := range internalHostnames {
-		if lowerHostname == internal || strings.HasSuffix(lowerHostname, "."+internal) {
-			return fmt.Errorf("hostname %q is not allowed: internal/metadata hostname", hostname)
+	for _, meta := range metadataHostnames {
+		if lowerHostname == meta || strings.HasSuffix(lowerHostname, "."+meta) {
+			return fmt.Errorf("hostname %q is not allowed: cloud metadata endpoint", hostname)
 		}
 	}
 
-	// Resolve hostname to IP addresses and check each one
-	ips, err := net.LookupIP(hostname)
-	if err != nil {
-		return fmt.Errorf("cannot resolve hostname %q: %w", hostname, err)
-	}
+	if !allowLocal {
+		// Block local/internal hostnames
+		localHostnames := []string{
+			"localhost",
+			"localhost.localdomain",
+			"local",
+			"internal",
+		}
+		for _, local := range localHostnames {
+			if lowerHostname == local || strings.HasSuffix(lowerHostname, "."+local) {
+				return fmt.Errorf("hostname %q is not allowed: internal hostname (set MCP_WEB_ALLOW_LOCAL=1 to permit)", hostname)
+			}
+		}
 
-	for _, ip := range ips {
-		if IsPrivateIP(ip) {
-			return fmt.Errorf("hostname %q resolves to private/internal IP address %s", hostname, ip.String())
+		// Resolve hostname to IP addresses and check each one
+		ips, err := net.LookupIP(hostname)
+		if err != nil {
+			return fmt.Errorf("cannot resolve hostname %q: %w", hostname, err)
+		}
+
+		for _, ip := range ips {
+			if IsPrivateIP(ip) {
+				return fmt.Errorf("hostname %q resolves to private/internal IP address %s (set MCP_WEB_ALLOW_LOCAL=1 to permit)", hostname, ip.String())
+			}
 		}
 	}
 

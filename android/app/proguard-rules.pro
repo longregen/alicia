@@ -29,3 +29,9 @@
 # gRPC
 -keep class io.grpc.** { *; }
 -dontwarn io.grpc.**
+
+# libtailscale (gomobile generated)
+-keep class com.tailscale.** { *; }
+-keep class go.** { *; }
+-dontwarn com.tailscale.**
+-dontwarn go.**

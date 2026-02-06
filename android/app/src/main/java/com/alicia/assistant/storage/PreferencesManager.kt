@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.alicia.assistant.model.AppSettings
+import com.alicia.assistant.model.VpnSettings
 import com.alicia.assistant.model.VoiceNote
 import android.util.Log
 import com.google.gson.Gson
@@ -27,6 +28,11 @@ class PreferencesManager(private val context: Context) {
         private val VOSK_MODEL_ID = stringPreferencesKey("vosk_model_id")
         private val VOICE_NOTES = stringPreferencesKey("voice_notes")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        private val VPN_AUTO_CONNECT = booleanPreferencesKey("vpn_auto_connect")
+        private val VPN_EXIT_NODE_ID = stringPreferencesKey("vpn_exit_node_id")
+        private val HEADSCALE_URL = stringPreferencesKey("headscale_url")
+        private val VPN_AUTH_KEY = stringPreferencesKey("vpn_auth_key")
+        private val VPN_NODE_REGISTERED = booleanPreferencesKey("vpn_node_registered")
     }
     
     suspend fun saveSettings(settings: AppSettings) {
@@ -78,6 +84,31 @@ class PreferencesManager(private val context: Context) {
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    suspend fun getVpnSettings(): VpnSettings {
+        val prefs = context.dataStore.data.first()
+        return VpnSettings(
+            autoConnect = prefs[VPN_AUTO_CONNECT] ?: true,
+            selectedExitNodeId = prefs[VPN_EXIT_NODE_ID],
+            headscaleUrl = prefs[HEADSCALE_URL] ?: "",
+            authKey = prefs[VPN_AUTH_KEY] ?: "",
+            nodeRegistered = prefs[VPN_NODE_REGISTERED] ?: false
+        )
+    }
+
+    suspend fun saveVpnSettings(settings: VpnSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[VPN_AUTO_CONNECT] = settings.autoConnect
+            if (settings.selectedExitNodeId != null) {
+                prefs[VPN_EXIT_NODE_ID] = settings.selectedExitNodeId
+            } else {
+                prefs.remove(VPN_EXIT_NODE_ID)
+            }
+            prefs[HEADSCALE_URL] = settings.headscaleUrl
+            prefs[VPN_AUTH_KEY] = settings.authKey
+            prefs[VPN_NODE_REGISTERED] = settings.nodeRegistered
         }
     }
 }
