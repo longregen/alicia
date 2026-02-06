@@ -1,10 +1,10 @@
 package com.alicia.assistant
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -19,10 +19,9 @@ import kotlinx.coroutines.launch
 class OnboardingActivity : ComponentActivity() {
 
     private lateinit var binding: ActivityOnboardingBinding
-    private lateinit var preferencesManager: PreferencesManager
     private lateinit var pagerAdapter: OnboardingPagerAdapter
-    private var pendingPermissionPage: OnboardingPage? = null
     private val indicators = mutableListOf<View>()
+    private val roleManager: RoleManager? by lazy { getSystemService(RoleManager::class.java) }
 
     private val micPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -48,12 +47,21 @@ class OnboardingActivity : ComponentActivity() {
         handlePermissionResult(OnboardingPage.LOCATION, granted)
     }
 
+    private val assistantRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        pagerAdapter.refreshPages()
+        rebuildPageIndicators()
+        if (roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true) {
+            Toast.makeText(this, R.string.assistant_configured, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityOnboardingBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        preferencesManager = PreferencesManager(this)
         setupViewPager()
         setupButtons()
         setupPageIndicators()
@@ -61,17 +69,19 @@ class OnboardingActivity : ComponentActivity() {
 
     private fun setupViewPager() {
         pagerAdapter = OnboardingPagerAdapter(
-            onGrantPermission = { page -> requestPermissionForPage(page) },
-            getPermissionStatus = { page -> isPermissionGranted(page) }
+            onGrantPermission = { page -> requestPermission(page) },
+            getPermissionStatus = { page -> isPermissionGranted(page) },
+            onSetupAssistant = { requestAssistantRole() },
+            isAssistantConfigured = { roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true }
         )
         binding.viewPager.adapter = pagerAdapter
-        binding.viewPager.isUserInputEnabled = false // Disable swipe, use buttons
+        binding.viewPager.isUserInputEnabled = false
 
         binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 updatePageIndicators(position)
                 updateButtons(position)
-                refreshCurrentPagePermissionStatus()
+                refreshCurrentPage()
             }
         })
     }
@@ -80,7 +90,6 @@ class OnboardingActivity : ComponentActivity() {
         binding.nextButton.setOnClickListener {
             val currentPage = pagerAdapter.getPage(binding.viewPager.currentItem)
 
-            // Check if required permission is missing
             if (currentPage.isPermissionPage && !currentPage.isOptional && !isPermissionGranted(currentPage)) {
                 Toast.makeText(this, R.string.permission_required_to_continue, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -94,7 +103,6 @@ class OnboardingActivity : ComponentActivity() {
         }
 
         binding.skipButton.setOnClickListener {
-            // Skip is only shown for optional permissions
             if (binding.viewPager.currentItem < pagerAdapter.itemCount - 1) {
                 binding.viewPager.currentItem++
             }
@@ -104,7 +112,6 @@ class OnboardingActivity : ComponentActivity() {
     }
 
     private fun setupPageIndicators() {
-        val pageCount = pagerAdapter.itemCount
         val params = LinearLayout.LayoutParams(
             resources.getDimensionPixelSize(R.dimen.indicator_size),
             resources.getDimensionPixelSize(R.dimen.indicator_size)
@@ -113,7 +120,7 @@ class OnboardingActivity : ComponentActivity() {
             marginEnd = resources.getDimensionPixelSize(R.dimen.indicator_margin)
         }
 
-        for (i in 0 until pageCount) {
+        repeat(pagerAdapter.itemCount) {
             val indicator = View(this).apply {
                 layoutParams = params
                 setBackgroundResource(R.drawable.indicator_inactive)
@@ -128,8 +135,7 @@ class OnboardingActivity : ComponentActivity() {
     private fun updatePageIndicators(position: Int) {
         indicators.forEachIndexed { index, view ->
             view.setBackgroundResource(
-                if (index == position) R.drawable.indicator_active
-                else R.drawable.indicator_inactive
+                if (index == position) R.drawable.indicator_active else R.drawable.indicator_inactive
             )
         }
     }
@@ -138,53 +144,30 @@ class OnboardingActivity : ComponentActivity() {
         val page = pagerAdapter.getPage(position)
         val isLastPage = position == pagerAdapter.itemCount - 1
 
-        binding.nextButton.text = if (isLastPage) {
-            getString(R.string.get_started)
-        } else {
-            getString(R.string.next)
-        }
+        binding.nextButton.text = getString(if (isLastPage) R.string.get_started else R.string.next)
+        binding.skipButton.visibility = if (page.isOptional && !isLastPage) View.VISIBLE else View.GONE
+    }
 
-        // Show skip button only for optional permission pages
-        binding.skipButton.visibility = if (page.isOptional) {
-            View.VISIBLE
-        } else {
-            View.GONE
+    private fun requestPermission(page: OnboardingPage) {
+        when (page) {
+            OnboardingPage.MICROPHONE -> micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            OnboardingPage.NOTIFICATIONS -> notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            OnboardingPage.BLUETOOTH -> bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            OnboardingPage.LOCATION -> locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            else -> {}
         }
     }
 
-    private fun requestPermissionForPage(page: OnboardingPage) {
-        pendingPermissionPage = page
-
-        when (page) {
-            OnboardingPage.MICROPHONE -> {
-                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
-            OnboardingPage.NOTIFICATIONS -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    // Notifications don't need runtime permission on older Android
-                    handlePermissionResult(page, true)
-                }
-            }
-            OnboardingPage.BLUETOOTH -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                } else {
-                    // Bluetooth Connect doesn't need runtime permission on older Android
-                    handlePermissionResult(page, true)
-                }
-            }
-            OnboardingPage.LOCATION -> {
-                locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-            }
-            else -> { /* Not a permission page */ }
-        }
+    private fun requestAssistantRole() {
+        // RoleManager.createRequestRoleIntent(ROLE_ASSISTANT) is silently rejected
+        // on Google-branded images where the role is marked non-requestable.
+        // Open the system voice-input settings instead, which works everywhere.
+        assistantRoleLauncher.launch(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
     }
 
     private fun handlePermissionResult(page: OnboardingPage, granted: Boolean) {
-        refreshCurrentPagePermissionStatus()
-
+        pagerAdapter.refreshPages()
+        rebuildPageIndicators()
         if (granted) {
             Toast.makeText(this, R.string.permission_granted, Toast.LENGTH_SHORT).show()
         } else if (!page.isOptional) {
@@ -192,40 +175,31 @@ class OnboardingActivity : ComponentActivity() {
         }
     }
 
-    private fun refreshCurrentPagePermissionStatus() {
-        val position = binding.viewPager.currentItem
-        pagerAdapter.notifyItemChanged(position)
+    private fun refreshCurrentPage() {
+        pagerAdapter.notifyItemChanged(binding.viewPager.currentItem)
+    }
+
+    private fun rebuildPageIndicators() {
+        binding.indicatorContainer.removeAllViews()
+        indicators.clear()
+        setupPageIndicators()
+        updateButtons(binding.viewPager.currentItem)
     }
 
     private fun isPermissionGranted(page: OnboardingPage): Boolean {
-        return when (page) {
-            OnboardingPage.MICROPHONE -> {
-                checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-            }
-            OnboardingPage.NOTIFICATIONS -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                } else {
-                    true // Always granted on older Android
-                }
-            }
-            OnboardingPage.BLUETOOTH -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-                } else {
-                    true // Always granted on older Android
-                }
-            }
-            OnboardingPage.LOCATION -> {
-                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            }
-            else -> true // Not a permission page
+        val permission = when (page) {
+            OnboardingPage.MICROPHONE -> Manifest.permission.RECORD_AUDIO
+            OnboardingPage.NOTIFICATIONS -> Manifest.permission.POST_NOTIFICATIONS
+            OnboardingPage.BLUETOOTH -> Manifest.permission.BLUETOOTH_CONNECT
+            OnboardingPage.LOCATION -> Manifest.permission.ACCESS_COARSE_LOCATION
+            else -> return true
         }
+        return checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     private fun completeOnboarding() {
         lifecycleScope.launch {
-            preferencesManager.setOnboardingCompleted(true)
+            PreferencesManager(this@OnboardingActivity).setOnboardingCompleted(true)
             startActivity(Intent(this@OnboardingActivity, MainActivity::class.java))
             finish()
         }

@@ -23,6 +23,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
@@ -33,6 +34,9 @@ class VoiceAssistantService : Service(), RecognitionListener {
     private var speechService: BluetoothSpeechService? = null
     private var bluetoothAudioManager: BluetoothAudioManager? = null
     private var model: Model? = null
+    // Written from the IO-dispatched serviceScope (initWakeWordDetection), read from
+    // the Vosk recognition callback thread (checkForWakeWord).  Volatile ensures the
+    // recognition thread always sees the latest configured wake word.
     @Volatile private var wakeWord: String = "alicia"
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var consecutiveErrors = 0
@@ -40,6 +44,9 @@ class VoiceAssistantService : Service(), RecognitionListener {
     private var recognizer: Recognizer? = null
     private val gson = Gson()
     private val stateMutex = Mutex()
+    // Set on the Vosk recognition callback thread (onWakeWordDetected) and cleared
+    // from the IO-dispatched serviceScope after the restart delay.  Volatile prevents
+    // duplicate assist sessions when callbacks fire on different threads.
     @Volatile private var isRestarting = false
 
     private data class VoskHypothesis(val text: String?, val partial: String?)
@@ -113,9 +120,13 @@ class VoiceAssistantService : Service(), RecognitionListener {
         withContext(Dispatchers.Main) {
             speechService?.stop()
             speechService = null
-        }
-        if (hadSpeechService) {
-            delay(NATIVE_SHUTDOWN_DELAY_MS)
+            // Keep the delay inside the same guarded section so that another
+            // coroutine cannot re-initialise resources while native shutdown
+            // is still settling.  `delay` only suspends (does not block the
+            // Main looper), so this is safe on the Main dispatcher.
+            if (hadSpeechService) {
+                delay(NATIVE_SHUTDOWN_DELAY_MS)
+            }
         }
         recognizer?.close()
         recognizer = null
@@ -151,7 +162,10 @@ class VoiceAssistantService : Service(), RecognitionListener {
 
             model?.close()
             model = Model(modelDir.absolutePath)
-            val grammar = "[\"${wakeWord}\", \"[unk]\"]"
+            val grammar = JSONArray().apply {
+                put(wakeWord)
+                put("[unk]")
+            }.toString()
             Log.d(TAG, "initWakeWordDetection: recognizer grammar=$grammar")
             recognizer = Recognizer(model, SAMPLE_RATE, grammar)
 
@@ -293,8 +307,26 @@ class VoiceAssistantService : Service(), RecognitionListener {
         private const val ERROR_RESTART_DELAY_MS = 1000L
         private const val NATIVE_SHUTDOWN_DELAY_MS = 200L
 
+        // NOTE: These static debouncing flags (running, lastStartAttempt, START_DEBOUNCE_MS)
+        // assume a single service instance at a time.  This is normally guaranteed by
+        // Android's service lifecycle (the framework will not create two instances of the
+        // same service), but the flags themselves do NOT enforce that invariant.  If you
+        // need authoritative "is the service alive?" state, query the Android
+        // ActivityManager or rely on the service's own onCreate/onDestroy lifecycle
+        // callbacks rather than these companion-object flags.
+
+        // Written from the Main thread (onCreate/onDestroy), read from any thread via
+        // the static pauseDetection/resumeDetection helpers.  Volatile ensures callers
+        // see the current service instance without synchronisation.
         @Volatile private var instance: VoiceAssistantService? = null
+
+        // Written from the Main thread (onCreate/onDestroy), read from arbitrary caller
+        // threads in ensureRunning.  Volatile guarantees visibility of the latest value.
         @Volatile private var running = false
+
+        // Read and written from arbitrary threads calling ensureRunning.  Volatile makes
+        // the timestamp visible across threads (the inherent TOCTOU race is acceptable
+        // here because the debounce is best-effort).
         @Volatile private var lastStartAttempt = 0L
         private const val START_DEBOUNCE_MS = 5000L
 

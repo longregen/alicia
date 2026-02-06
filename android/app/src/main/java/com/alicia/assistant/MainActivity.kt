@@ -6,6 +6,10 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import android.content.res.Configuration
 import android.view.View
 import android.view.animation.AnimationUtils
 import android.widget.Toast
@@ -29,11 +33,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
     companion object {
-        private var mainConversationId: String? = null
+        /** Allow UI to settle before activating microphone */
+        private const val UI_SETTLE_DELAY_MS = 500L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -47,11 +55,11 @@ class MainActivity : ComponentActivity() {
     private var isRecordingNote = false
     private lateinit var noteVoiceManager: VoiceRecognitionManager
     private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
+    private var backgroundAnimator: ValueAnimator? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Check onboarding on first creation only
         if (savedInstanceState == null) {
             lifecycleScope.launch {
                 if (!PreferencesManager(this@MainActivity).isOnboardingCompleted()) {
@@ -90,7 +98,11 @@ class MainActivity : ComponentActivity() {
 
         if (intent?.getBooleanExtra("start_listening", false) == true) {
             intent.removeExtra("start_listening")
-            lifecycleScope.launch { delay(500); startListening() }
+            lifecycleScope.launch {
+                // Allow UI to settle before activating microphone
+                delay(UI_SETTLE_DELAY_MS)
+                startListening()
+            }
         }
 
         isSetupComplete = true
@@ -100,7 +112,11 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         if (intent?.getBooleanExtra("start_listening", false) == true) {
             intent.removeExtra("start_listening")
-            lifecycleScope.launch { delay(500); startListening() }
+            lifecycleScope.launch {
+                // Allow UI to settle before activating microphone
+                delay(UI_SETTLE_DELAY_MS)
+                startListening()
+            }
         }
     }
 
@@ -161,16 +177,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startListening() {
+    private fun requireRecordPermission(): Boolean {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            // Permission should have been granted during onboarding
-            Toast.makeText(this, R.string.microphone_permission_required, Toast.LENGTH_SHORT).show()
-            return
+            == PackageManager.PERMISSION_GRANTED) {
+            return true
         }
+        Toast.makeText(this, R.string.microphone_permission_required, Toast.LENGTH_SHORT).show()
+        return false
+    }
+
+    private fun startListening() {
+        if (!requireRecordPermission()) return
+        if (isRecordingNote) return
 
         isListening = true
-        if (viewModel.settings.hapticFeedbackEnabled) {
+        if (viewModel.settings.value.hapticFeedbackEnabled) {
             binding.activationButton.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
         }
         updateUIForListening(true)
@@ -190,7 +211,7 @@ class MainActivity : ComponentActivity() {
                     is RecognitionResult.Error -> {
                         binding.statusText.text = getString(R.string.tap_to_speak)
                         binding.activationButton.isEnabled = true
-                        Toast.makeText(this@MainActivity, "Recognition failed", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, R.string.recognition_failed, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -200,7 +221,13 @@ class MainActivity : ComponentActivity() {
     private fun stopListening() {
         isListening = false
 
+        // Stop all animations
         binding.activationButton.clearAnimation()
+        binding.waveRing1.clearAnimation()
+        binding.waveRing2.clearAnimation()
+        binding.waveRing3.clearAnimation()
+        backgroundAnimator?.cancel()
+
         binding.activationButton.setImageResource(R.drawable.ic_microphone)
         binding.activationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
             MaterialColors.getColor(binding.activationButton, com.google.android.material.R.attr.colorPrimaryContainer)
@@ -208,6 +235,13 @@ class MainActivity : ComponentActivity() {
         binding.activationButton.isEnabled = false
         binding.waveRing1.visibility = View.GONE
         binding.waveRing2.visibility = View.GONE
+        binding.waveRing3.visibility = View.GONE
+
+        // Reset background
+        binding.listeningOverlay.setBackgroundColor(
+            MaterialColors.getColor(binding.listeningOverlay, com.google.android.material.R.attr.colorSurface)
+        )
+
         binding.statusText.text = getString(R.string.processing)
         binding.statusText.setTextColor(
             MaterialColors.getColor(binding.statusText, com.google.android.material.R.attr.colorOnSurfaceVariant)
@@ -224,33 +258,90 @@ class MainActivity : ComponentActivity() {
         }
 
         if (listening) {
+            // Update button appearance
             binding.activationButton.setImageResource(R.drawable.ic_stop)
             binding.activationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
                 getColor(R.color.recording_active)
+            )
+            binding.activationButton.imageTintList = android.content.res.ColorStateList.valueOf(
+                android.graphics.Color.WHITE
             )
             binding.statusText.setTextColor(
                 getColor(R.color.recording_active)
             )
 
+            // Start button pulse animation
             val pulseAnimation = AnimationUtils.loadAnimation(this, R.anim.pulse)
             binding.activationButton.startAnimation(pulseAnimation)
+
+            // Show and animate wave rings with staggered expanding animations
             binding.waveRing1.visibility = View.VISIBLE
             binding.waveRing2.visibility = View.VISIBLE
+            binding.waveRing3.visibility = View.VISIBLE
+
+            val waveAnim1 = AnimationUtils.loadAnimation(this, R.anim.wave_expand_1)
+            val waveAnim2 = AnimationUtils.loadAnimation(this, R.anim.wave_expand_2)
+            val waveAnim3 = AnimationUtils.loadAnimation(this, R.anim.wave_expand_3)
+
+            binding.waveRing1.startAnimation(waveAnim1)
+            binding.waveRing2.startAnimation(waveAnim2)
+            binding.waveRing3.startAnimation(waveAnim3)
+
+            // Animate background to subtle red tint
+            val surfaceColor = MaterialColors.getColor(
+                binding.listeningOverlay,
+                com.google.android.material.R.attr.colorSurface
+            )
+            val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+            val tintColor = if (isDarkMode) {
+                getColor(R.color.recording_background_tint_dark)
+            } else {
+                getColor(R.color.recording_background_tint_light)
+            }
+
+            backgroundAnimator?.cancel()
+            backgroundAnimator = ValueAnimator.ofObject(ArgbEvaluator(), surfaceColor, tintColor).apply {
+                duration = 400
+                addUpdateListener { animator ->
+                    binding.listeningOverlay.setBackgroundColor(animator.animatedValue as Int)
+                }
+                start()
+            }
         } else {
+            // Update button appearance
             binding.activationButton.setImageResource(R.drawable.ic_microphone)
             binding.activationButton.backgroundTintList = android.content.res.ColorStateList.valueOf(
                 MaterialColors.getColor(binding.activationButton, com.google.android.material.R.attr.colorPrimaryContainer)
+            )
+            binding.activationButton.imageTintList = android.content.res.ColorStateList.valueOf(
+                MaterialColors.getColor(binding.activationButton, com.google.android.material.R.attr.colorOnPrimaryContainer)
             )
             binding.statusText.setTextColor(
                 MaterialColors.getColor(binding.statusText, com.google.android.material.R.attr.colorOnSurfaceVariant)
             )
 
+            // Stop all animations
             binding.activationButton.clearAnimation()
+            binding.waveRing1.clearAnimation()
+            binding.waveRing2.clearAnimation()
+            binding.waveRing3.clearAnimation()
+            backgroundAnimator?.cancel()
+
+            // Hide wave rings
             binding.waveRing1.visibility = View.GONE
             binding.waveRing2.visibility = View.GONE
+            binding.waveRing3.visibility = View.GONE
+
+            // Reset background color
+            val surfaceColor = MaterialColors.getColor(
+                binding.listeningOverlay,
+                com.google.android.material.R.attr.colorSurface
+            )
+            binding.listeningOverlay.setBackgroundColor(surfaceColor)
         }
     }
-    
+
     private suspend fun processVoiceInput(text: String) {
         binding.responseCard.visibility = View.VISIBLE
         binding.transcribedText.text = text
@@ -259,20 +350,13 @@ class MainActivity : ComponentActivity() {
 
         val response = try {
             withContext(Dispatchers.IO) {
-                val convId = getOrCreateMainConversation()
-                apiClient.sendMessageSync(convId, text).assistantMessage.content
-            }
-        } catch (e: AliciaApiClient.ApiException) {
-            if (e.statusCode == 404) {
-                // Conversation was deleted, create a new one
-                withContext(Dispatchers.IO) {
-                    val convId = createNewMainConversation()
-                    apiClient.sendMessageSync(convId, text).assistantMessage.content
-                }
-            } else {
-                "Sorry, I couldn't get a response right now."
+                val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                val title = "Voice ${dateFormat.format(Date())}"
+                val conversation = apiClient.createConversation(title)
+                apiClient.sendMessageSync(conversation.id, text).assistantMessage.content
             }
         } catch (e: Exception) {
+            Log.e("MainActivity", "Voice interaction failed", e)
             "Sorry, I couldn't get a response right now."
         }
 
@@ -282,30 +366,14 @@ class MainActivity : ComponentActivity() {
         binding.activationButton.isEnabled = true
 
         viewModel.refreshSettings()
-        val settings = viewModel.settings
+        val settings = viewModel.settings.value
         if (settings.voiceFeedbackEnabled) {
             ttsManager.speak(response, settings.ttsSpeed)
         }
     }
-
-    private suspend fun getOrCreateMainConversation(): String {
-        mainConversationId?.let { return it }
-        return createNewMainConversation()
-    }
-
-    private suspend fun createNewMainConversation(): String {
-        val conversation = apiClient.createConversation("Main Chat")
-        mainConversationId = conversation.id
-        return conversation.id
-    }
     
     private fun startNoteRecording() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            // Permission should have been granted during onboarding
-            Toast.makeText(this, R.string.microphone_permission_required, Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!requireRecordPermission()) return
         if (isListening) return
 
         isRecordingNote = true
@@ -330,7 +398,7 @@ class MainActivity : ComponentActivity() {
                         MaterialColors.getColor(binding.statusText, com.google.android.material.R.attr.colorOnSurfaceVariant)
                     )
                     binding.activationButton.isEnabled = true
-                    Toast.makeText(this@MainActivity, "Recording failed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, R.string.recording_failed, Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -350,7 +418,7 @@ class MainActivity : ComponentActivity() {
         if (tempFile == null) {
             binding.statusText.text = getString(R.string.tap_to_speak)
             binding.activationButton.isEnabled = true
-            Toast.makeText(this, "Recording failed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.recording_failed, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -362,7 +430,7 @@ class MainActivity : ComponentActivity() {
             val result = saveRecordedNote(tempFile, notesDir, noteVoiceManager, viewModel.noteRepository, apiClient)
             when (result) {
                 is SaveNoteResult.NoSpeechDetected ->
-                    Toast.makeText(this@MainActivity, "No speech detected", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, R.string.no_speech_detected, Toast.LENGTH_SHORT).show()
                 is SaveNoteResult.Success ->
                     Toast.makeText(this@MainActivity, getString(R.string.note_saved), Toast.LENGTH_SHORT).show()
             }
@@ -379,6 +447,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         if (!isSetupComplete) return
 
+        backgroundAnimator?.cancel()
+        backgroundAnimator = null
         ttsManager.destroy()
         voiceRecognitionManager.destroy()
         noteVoiceManager.destroy()

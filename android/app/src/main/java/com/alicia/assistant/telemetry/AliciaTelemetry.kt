@@ -88,16 +88,14 @@ object AliciaTelemetry {
 
     fun getOpenTelemetry(): OpenTelemetry = openTelemetry
 
-    fun <T> withSpan(name: String, attributes: Attributes = Attributes.empty(), block: (Span) -> T): T {
-        val span = tracer.spanBuilder(name)
-            .setAllAttributes(attributes)
-            .startSpan()
+    private inline fun <T> executeWithSpan(span: Span, block: (Span) -> T): T {
         val scope = span.makeCurrent()
         return try {
             val result = block(span)
             span.end()
             result
         } catch (e: CancellationException) {
+            // End span before propagating cancellation to ensure telemetry is recorded
             span.end()
             throw e
         } catch (e: Exception) {
@@ -109,16 +107,25 @@ object AliciaTelemetry {
         }
     }
 
-    suspend fun <T> withSpanAsync(name: String, attributes: Attributes = Attributes.empty(), block: suspend (Span) -> T): T {
-        val span = tracer.spanBuilder(name)
+    private fun buildSpan(name: String, attributes: Attributes): Span {
+        return tracer.spanBuilder(name)
             .setAllAttributes(attributes)
             .startSpan()
+    }
+
+    fun <T> withSpan(name: String, attributes: Attributes = Attributes.empty(), block: (Span) -> T): T {
+        return executeWithSpan(buildSpan(name, attributes), block)
+    }
+
+    suspend fun <T> withSpanAsync(name: String, attributes: Attributes = Attributes.empty(), block: suspend (Span) -> T): T {
+        val span = buildSpan(name, attributes)
         val scope = span.makeCurrent()
         return try {
             val result = block(span)
             span.end()
             result
         } catch (e: CancellationException) {
+            // End span before propagating cancellation to ensure telemetry is recorded
             span.end()
             throw e
         } catch (e: Exception) {

@@ -5,6 +5,7 @@ import android.util.Log
 import com.alicia.assistant.service.AliciaApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 class ConversationRepository(
     context: Context,
@@ -21,7 +22,7 @@ class ConversationRepository(
             val conversations = apiClient.listConversations()
             db.cacheConversations(conversations)
             conversations
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             Log.w(TAG, "Failed to fetch conversations from server, using cache", e)
             db.getCachedConversations()
         }
@@ -38,7 +39,7 @@ class ConversationRepository(
             val messages = apiClient.getMessages(conversationId)
             db.cacheMessages(conversationId, messages)
             messages
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             Log.w(TAG, "Failed to fetch messages from server, using cache", e)
             db.getCachedMessages(conversationId)
         }
@@ -52,6 +53,10 @@ class ConversationRepository(
         val response = apiClient.sendMessageSync(conversationId, content, previousId)
         db.appendMessage(response.userMessage)
         db.appendMessage(response.assistantMessage)
+        // Update cached conversation title if the server provided a new one
+        response.conversationTitle?.let { newTitle ->
+            db.updateConversationTitle(conversationId, newTitle)
+        }
         response
     }
 

@@ -281,7 +281,15 @@
           };
 
           mcp-garden = mkMcpPackage { pname = "mcp-garden"; subdir = "garden"; };
-          mcp-web = mkMcpPackage { pname = "mcp-web"; subdir = "web"; };
+          mcp-web = let
+            unwrapped = mkMcpPackage { pname = "mcp-web"; subdir = "web"; };
+          in pkgs.runCommand "mcp-web" {
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+          } ''
+            mkdir -p $out/bin
+            makeWrapper ${unwrapped}/bin/web $out/bin/web \
+              --prefix PATH : "${lib.makeBinPath [ pkgs.chromium pkgs.firefox ]}"
+          '';
           mcp-deno-calc = mkMcpPackage { pname = "mcp-deno-calc"; subdir = "deno-calc"; };
 
           android = pkgs.stdenv.mkDerivation rec {
@@ -420,6 +428,7 @@
             pkgs.gradle
             androidBuildScript
             androidFhsEnv
+            pkgs.maestro
           ];
 
           shellHook = ''
@@ -427,6 +436,10 @@
             export ANDROID_SDK_ROOT="$ANDROID_HOME"
             export JAVA_HOME="${pkgs.jdk17.home}"
             export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/35.0.0:$JAVA_HOME/bin:$PATH"
+
+            # Maestro settings
+            export MAESTRO_CLI_NO_ANALYTICS=1
+            export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 
             cat > local.properties << EOF
 sdk.dir=$ANDROID_HOME
@@ -438,11 +451,64 @@ EOF
             echo "Commands:"
             echo "  ./gradlew assembleDebug    - Build debug APK"
             echo "  build-apk                  - Build ARM v7 debug APK"
+            echo "  maestro test e2e/          - Run E2E tests (device required)"
             echo ""
             echo "NixOS users: If AAPT2 fails, use the FHS environment:"
             echo "  android-fhs-env -c './gradlew assembleDebug'"
             echo ""
           '';
+        };
+
+        apps.android-e2e = let
+          e2eTests = pkgs.stdenv.mkDerivation {
+            name = "alicia-e2e-tests";
+            src = ./android/e2e;
+            installPhase = ''
+              mkdir -p $out
+              cp -r *.yaml $out/ 2>/dev/null || true
+            '';
+          };
+          e2eScript = pkgs.writeShellScriptBin "android-e2e" ''
+            set -e
+
+            export PATH="${pkgs.maestro}/bin:${androidSdk}/share/android-sdk/platform-tools:$PATH"
+            export ANDROID_HOME="${androidSdk}/share/android-sdk"
+            export ANDROID_SDK_ROOT="$ANDROID_HOME"
+            export MAESTRO_CLI_NO_ANALYTICS=1
+            export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
+
+            # Check device
+            if ! adb devices | grep -q "device$"; then
+              echo "Error: No Android device connected"
+              echo "Connect a device or start an emulator first"
+              exit 1
+            fi
+
+            # Install APK if not already installed or if --install flag
+            APK_PATH="${self.packages.${system}.android}/app-arm64-v8a-debug.apk"
+            if [ "$1" = "--install" ] || ! adb shell pm list packages | grep -q "com.alicia.assistant"; then
+              echo "Installing APK..."
+              adb install -r "$APK_PATH"
+            fi
+
+            # Run tests
+            echo "Running E2E tests..."
+            cd ${e2eTests}
+
+            if [ -n "$1" ] && [ "$1" != "--install" ]; then
+              maestro test "$1"
+            else
+              for test in *.yaml; do
+                echo "=== Running $test ==="
+                maestro test "$test" || exit 1
+              done
+            fi
+
+            echo "All tests passed!"
+          '';
+        in {
+          type = "app";
+          program = "${e2eScript}/bin/android-e2e";
         };
       }
     );

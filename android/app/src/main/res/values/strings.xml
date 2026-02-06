@@ -77,11 +77,20 @@
     <string name="new_conversation">New Chat</string>
     <string name="message_hint">Type a message…</string>
     <string name="thinking">Thinking…</string>
-    <string name="send_failed">Failed to send message</string>
-    <string name="load_failed">Failed to load conversations</string>
-    <string name="conversation_not_found">Conversation no longer exists</string>
-    <string name="create_failed">Failed to create conversation</string>
+    <string name="send_failed">Couldn\'t send that. Try again?</string>
+    <string name="load_failed">Couldn\'t load your conversations</string>
+    <string name="conversation_not_found">This conversation was deleted</string>
+    <string name="create_failed">Couldn\'t start a new chat. Try again?</string>
     <string name="tool_used">Used: %s</string>
+
+    <!-- Chat Empty State -->
+    <string name="empty_chat_title">Start a Conversation</string>
+    <string name="empty_chat_subtitle">Ask me anything or try one of these suggestions</string>
+    <string name="try_asking">Try asking</string>
+    <string name="starter_explain">Explain how something works</string>
+    <string name="starter_help">Help me write an email or message</string>
+    <string name="starter_summarize">Summarize a topic or article</string>
+    <string name="starter_brainstorm">Brainstorm ideas for a project</string>
 
     <string name="no_notes">No notes yet</string>
     <string name="create_note_tap_hint">Tap + to create your first note</string>
@@ -90,12 +99,20 @@
     <string name="save_note">Save</string>
     <string name="note_title_hint">Title</string>
     <string name="note_content_hint">Start writing…</string>
-    <string name="note_saved_success">Note saved</string>
-    <string name="note_save_failed">Failed to save note</string>
-    <string name="note_deleted">Note deleted</string>
-    <string name="note_delete_failed">Failed to delete note</string>
-    <string name="notes_load_failed">Failed to load notes</string>
-    <string name="note_empty">Note is empty</string>
+    <string name="note_saved_success">Got it!</string>
+    <string name="note_save_failed">Couldn\'t save that note</string>
+    <string name="note_deleted">Note removed</string>
+    <string name="note_delete_failed">Couldn\'t delete that note</string>
+    <string name="notes_load_failed">Couldn\'t load your notes</string>
+    <string name="note_empty">Nothing to save yet</string>
+
+    <!-- Voice feedback messages -->
+    <string name="recognition_failed">I didn\'t catch that</string>
+    <string name="recording_failed">Something went wrong with the recording</string>
+    <string name="no_speech_detected">I didn\'t hear anything</string>
+    <string name="audio_not_found">Can\'t find that audio</string>
+    <string name="playback_failed">Couldn\'t play that</string>
+    <string name="mic_permission_for_notes">I need microphone access to record notes</string>
 
     <!-- Attribution -->
     <string name="attribution_wake_word">Wake word detection</string>
@@ -112,12 +129,16 @@
     <string name="onboarding_bluetooth_desc">Optional: Allow Bluetooth to use your wireless headset microphone.</string>
     <string name="onboarding_location_title">Location Access</string>
     <string name="onboarding_location_desc">Optional: Allow location access so Alicia can answer questions about where you are.</string>
+    <string name="onboarding_assistant_title">Default Assistant</string>
+    <string name="onboarding_assistant_desc">Set Alicia as your default assistant to activate by holding the home button or using your device\'s assistant gesture.</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="assistant_configured">Alicia is your assistant</string>
     <string name="onboarding_complete_title">You\'re All Set!</string>
     <string name="onboarding_complete_desc">Say \"Alicia\" or tap the microphone to get started.</string>
     <string name="skip">Skip</string>
     <string name="next">Next</string>
     <string name="get_started">Get Started</string>
-    <string name="permission_granted">Permission Granted</string>
-    <string name="permission_denied">Permission Denied</string>
-    <string name="permission_required_to_continue">This permission is required to continue</string>
+    <string name="permission_granted">Thanks!</string>
+    <string name="permission_denied">I\'ll need that permission to help you</string>
+    <string name="permission_required_to_continue">I need this permission to continue</string>
 </resources>

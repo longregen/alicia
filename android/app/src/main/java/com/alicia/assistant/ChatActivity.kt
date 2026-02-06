@@ -57,7 +57,38 @@ class ChatActivity : ComponentActivity() {
 
         binding.sendButton.setOnClickListener { sendMessage() }
 
+        setupConversationStarters()
         loadMessages()
+    }
+
+    private fun setupConversationStarters() {
+        val starterClickListener = View.OnClickListener { view ->
+            val text = when (view.id) {
+                R.id.starter1 -> getString(R.string.starter_explain)
+                R.id.starter2 -> getString(R.string.starter_help)
+                R.id.starter3 -> getString(R.string.starter_summarize)
+                R.id.starter4 -> getString(R.string.starter_brainstorm)
+                else -> return@OnClickListener
+            }
+            binding.messageInput.setText(text)
+            binding.messageInput.setSelection(text.length)
+            binding.messageInput.requestFocus()
+        }
+
+        binding.starter1.setOnClickListener(starterClickListener)
+        binding.starter2.setOnClickListener(starterClickListener)
+        binding.starter3.setOnClickListener(starterClickListener)
+        binding.starter4.setOnClickListener(starterClickListener)
+    }
+
+    private fun updateEmptyState() {
+        if (messages.isEmpty()) {
+            binding.emptyStateContainer.visibility = View.VISIBLE
+            binding.messagesRecyclerView.visibility = View.GONE
+        } else {
+            binding.emptyStateContainer.visibility = View.GONE
+            binding.messagesRecyclerView.visibility = View.VISIBLE
+        }
     }
 
     private fun loadMessages() {
@@ -71,6 +102,7 @@ class ChatActivity : ComponentActivity() {
                     messages.clear()
                     messages.addAll(loadedMessages)
                     messageAdapter.notifyDataSetChanged()
+                    updateEmptyState()
                     scrollToBottom()
                 } catch (e: AliciaApiClient.ApiException) {
                     AliciaTelemetry.recordError(span, e)
@@ -103,11 +135,12 @@ class ChatActivity : ComponentActivity() {
             content = content,
             status = "pending"
         )
+        val previousId = if (messages.isNotEmpty()) messages[messages.size - 1].id else null
+
         messages.add(tempUserMsg)
         messageAdapter.notifyItemInserted(messages.size - 1)
+        updateEmptyState()
         scrollToBottom()
-
-        val previousId = if (messages.size >= 2) messages[messages.size - 2].id else null
 
         lifecycleScope.launch {
             AliciaTelemetry.withSpanAsync("chat.send_message", Attributes.builder()
@@ -127,12 +160,18 @@ class ChatActivity : ComponentActivity() {
                     messages.add(response.assistantMessage)
                     messageAdapter.notifyItemInserted(messages.size - 1)
                     scrollToBottom()
+
+                    // Update toolbar title if server provided a new one
+                    response.conversationTitle?.let { newTitle ->
+                        binding.toolbar.title = newTitle
+                    }
                 } catch (e: Exception) {
                     AliciaTelemetry.recordError(span, e)
                     val tempIdx = messages.indexOfFirst { it.id == tempUserMsg.id }
                     if (tempIdx >= 0) {
                         messages.removeAt(tempIdx)
                         messageAdapter.notifyItemRemoved(tempIdx)
+                        updateEmptyState()
                     }
                     Toast.makeText(this@ChatActivity, R.string.send_failed, Toast.LENGTH_SHORT).show()
                 } finally {

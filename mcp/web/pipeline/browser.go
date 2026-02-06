@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/launcher/flags"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/longregen/alicia/mcp/web/security"
 )
@@ -42,10 +43,25 @@ func (p *BrowserPool) Initialize() error {
 		return nil
 	}
 
-	// Find or download Chrome/Chromium
+	// Find Chrome/Chromium (checks PATH for google-chrome, chromium-browser, chromium)
 	// Redirect launcher output to stderr so it doesn't corrupt JSON-RPC on stdout
-	path, _ := launcher.LookPath()
-	u := launcher.New().Bin(path).Headless(true).Logger(os.Stderr).MustLaunch()
+	path, found := launcher.LookPath()
+	l := launcher.New().Headless(true).
+		// Disable Chromium's internal sandbox and /dev/shm usage.
+		// Required in constrained environments (containers, bubblewrap) where
+		// Chromium's user-namespace sandbox conflicts with the outer sandbox
+		// and /dev/shm may not be mounted.
+		NoSandbox(true).
+		Set(flags.Flag("disable-dev-shm-usage")).
+		Logger(os.Stderr)
+	if found {
+		l = l.Bin(path)
+	}
+
+	u, err := l.Launch()
+	if err != nil {
+		return fmt.Errorf("failed to launch browser (ensure chromium is in PATH): %w", err)
+	}
 
 	browser := rod.New().ControlURL(u)
 	if err := browser.Connect(); err != nil {

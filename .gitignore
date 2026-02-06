@@ -66,3 +66,12 @@ frontend/public/sql-wasm.wasm
 cmd/mcp-garden/mcp-garden
 cmd/mcp-web/mcp-web
 result
+
+# Android
+android/e2e/proto/__pycache__/
+android/e2e/logcat.txt
+android/screenshots/
+android/e2e/screenshots/
+android/emulator.log
+android/qemu_in.wav
+android/e2e/test-voice.wav

@@ -22,6 +22,9 @@ import com.alicia.assistant.R
 import com.alicia.assistant.model.RecognitionResult
 import com.alicia.assistant.storage.PreferencesManager
 import kotlinx.coroutines.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class AliciaInteractionSession(context: Context) : VoiceInteractionSession(context) {
@@ -32,9 +35,6 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         private const val RESPONSE_DISMISS_DELAY_MS = 2500L
         private const val WAVE_RING_1_DURATION_MS = 1000L
         private const val WAVE_RING_2_DURATION_MS = 1400L
-
-        // Persistent voice conversation ID across sessions
-        private var voiceConversationId: String? = null
     }
 
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -219,23 +219,15 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
 
             val response = try {
                 withContext(Dispatchers.IO) {
-                    val convId = getOrCreateVoiceConversation()
+                    val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+                    val title = "Voice ${dateFormat.format(Date())}"
+                    val conversation = apiClient.createConversation(title)
                     val content = if (capturedContext != null) {
                         "[Screen content]\n$capturedContext\n[End screen content]\n\nUser: $text"
                     } else {
                         text
                     }
-                    try {
-                        apiClient.sendMessageSync(convId, content).assistantMessage.content
-                    } catch (e: AliciaApiClient.ApiException) {
-                        if (e.statusCode == 404) {
-                            // Conversation was deleted, create a new one
-                            val newConvId = createNewVoiceConversation()
-                            apiClient.sendMessageSync(newConvId, content).assistantMessage.content
-                        } else {
-                            throw e
-                        }
-                    }
+                    apiClient.sendMessageSync(conversation.id, content).assistantMessage.content
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Chat failed", e)
@@ -271,17 +263,6 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
                 finish()
             }
         }
-    }
-
-    private suspend fun getOrCreateVoiceConversation(): String {
-        voiceConversationId?.let { return it }
-        return createNewVoiceConversation()
-    }
-
-    private suspend fun createNewVoiceConversation(): String {
-        val conversation = apiClient.createConversation("Voice Chat")
-        voiceConversationId = conversation.id
-        return conversation.id
     }
 
     private fun startWaveAnimation() {

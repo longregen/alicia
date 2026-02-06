@@ -88,11 +88,7 @@ class NoteDetailActivity : ComponentActivity() {
         val newTitle = titleEdit.text.toString().trim()
         val newContent = contentEdit.text.toString().trim()
 
-        val effectiveTitle = if (newTitle.isBlank()) {
-            if (newContent.length > 50) newContent.substring(0, 50) + "\u2026" else newContent
-        } else {
-            newTitle
-        }
+        val effectiveTitle = deriveNoteTitle(newTitle, newContent)
 
         if (effectiveTitle == note.title && newContent == note.content) return
 

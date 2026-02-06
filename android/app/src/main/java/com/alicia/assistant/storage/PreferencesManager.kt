@@ -17,6 +17,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class PreferencesManager(private val context: Context) {
 
     companion object {
+        private const val TAG = "PreferencesManager"
         private val gson = Gson()
         private val WAKE_WORD_ENABLED = booleanPreferencesKey("wake_word_enabled")
         private val WAKE_WORD = stringPreferencesKey("wake_word")
@@ -58,7 +59,7 @@ class PreferencesManager(private val context: Context) {
             val type = object : TypeToken<List<VoiceNote>>() {}.type
             gson.fromJson<List<VoiceNote>>(json, type) ?: emptyList()
         } catch (e: JsonSyntaxException) {
-            Log.e("PreferencesManager", "Failed to parse voice notes JSON", e)
+            Log.e(TAG, "Failed to parse voice notes JSON", e)
             emptyList()
         }
     }

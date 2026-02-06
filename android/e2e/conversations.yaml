@@ -1,0 +1,51 @@
+appId: com.alicia.assistant
+name: Chat Conversation with AI
+---
+# Assumes onboarding is complete
+- launchApp
+- assertVisible: "Tap to speak"
+- takeScreenshot: screenshots/chat_01_main_screen
+
+# Open conversations list via chat button
+- tapOn:
+    id: "com.alicia.assistant:id/conversationsButton"
+- assertVisible: "Conversations"
+- takeScreenshot: screenshots/chat_02_conversations
+
+# Create new conversation
+- tapOn:
+    id: "com.alicia.assistant:id/newConversationFab"
+- takeScreenshot: screenshots/chat_03_new_conversation
+
+# Type a message
+- tapOn:
+    id: "com.alicia.assistant:id/messageInput"
+- inputText: "Hello, what can you help me with?"
+- takeScreenshot: screenshots/chat_04_typed_message
+
+# Send the message
+- tapOn:
+    id: "com.alicia.assistant:id/sendButton"
+- takeScreenshot: screenshots/chat_05_sent
+
+# Wait for the AI response to arrive (may take up to 60s)
+# The typing indicator may appear and disappear too fast to catch,
+# so we wait for the response content to appear
+- extendedWaitUntil:
+    visible:
+      id: "com.alicia.assistant:id/messageContent"
+    timeout: 60000
+- takeScreenshot: screenshots/chat_06_response
+
+# Dismiss keyboard first, then go back to conversations list
+- pressKey: back
+- pressKey: back
+- takeScreenshot: screenshots/chat_08_conversations_after
+
+# Should see the conversation we just created
+- assertVisible: "Conversations"
+
+# Go back to main screen
+- pressKey: back
+- assertVisible: "Tap to speak"
+- takeScreenshot: screenshots/chat_09_main_after

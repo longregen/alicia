@@ -1,6 +1,7 @@
 package com.alicia.assistant.service
 
 import android.util.Log
+import com.alicia.assistant.deriveNoteTitle
 import com.alicia.assistant.model.VoiceNote
 import com.alicia.assistant.storage.NoteRepository
 import java.io.File
@@ -34,7 +35,7 @@ suspend fun saveRecordedNote(
         return SaveNoteResult.NoSpeechDetected
     }
 
-    val title = if (text.length > 50) text.substring(0, 50) + "\u2026" else text
+    val title = deriveNoteTitle("", text)
     val note = VoiceNote(
         id = noteId,
         title = title,

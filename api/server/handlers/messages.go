@@ -153,10 +153,18 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"tool_uses":       result.ToolUses,
 		}
 
-		respondJSON(w, map[string]any{
+		// Fetch the conversation to get the (potentially updated) title
+		// The agent updates the title asynchronously, but it usually completes
+		// before the response is ready. Include it in the sync response.
+		response := map[string]any{
 			"user_message":      msg,
 			"assistant_message": assistantMsg,
-		}, http.StatusOK)
+		}
+		if updatedConv, err := h.convSvc.Get(r.Context(), convID); err == nil {
+			response["conversation_title"] = updatedConv.Title
+		}
+
+		respondJSON(w, response, http.StatusOK)
 		return
 	}
 

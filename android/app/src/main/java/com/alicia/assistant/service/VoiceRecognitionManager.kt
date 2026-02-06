@@ -125,7 +125,7 @@ class VoiceRecognitionManager(
             Log.d(TAG, "Recording stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop recording", e)
-            try { mediaRecorder?.reset() } catch (_: Exception) {}
+            try { mediaRecorder?.reset() } catch (e2: Exception) { Log.w(TAG, "MediaRecorder reset failed", e2) }
             mediaRecorder?.release()
             mediaRecorder = null
             bluetoothAudioManager?.disableBluetoothAudio()
@@ -218,7 +218,7 @@ class VoiceRecognitionManager(
             file
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop recording for file return", e)
-            try { mediaRecorder?.reset() } catch (_: Exception) {}
+            try { mediaRecorder?.reset() } catch (e2: Exception) { Log.w(TAG, "MediaRecorder reset failed", e2) }
             mediaRecorder?.release()
             mediaRecorder = null
             null
@@ -342,6 +342,11 @@ class VoiceRecognitionManager(
         }
 
         // Calculate frame size for actual sample rate
+        if (needsResampling) {
+            require(VAD_SAMPLE_RATE % actualSampleRate == 0) {
+                "VAD_SAMPLE_RATE ($VAD_SAMPLE_RATE) must be a multiple of actualSampleRate ($actualSampleRate)"
+            }
+        }
         val actualFrameSize = if (needsResampling) {
             // For 8kHz->16kHz, we need half the frames to produce VAD_FRAME_SIZE after resampling
             VAD_FRAME_SIZE * actualSampleRate / VAD_SAMPLE_RATE

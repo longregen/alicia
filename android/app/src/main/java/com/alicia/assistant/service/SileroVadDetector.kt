@@ -27,6 +27,7 @@ class SileroVadDetector private constructor(
             "Expected $FRAME_SIZE samples, got ${audioFrame.size}"
         }
 
+        // Build input: [previous context | current frame], then save tail as next context
         audioContext.copyInto(inputWindow, 0, 0, CONTEXT_SIZE)
         audioFrame.copyInto(inputWindow, CONTEXT_SIZE, 0, FRAME_SIZE)
         audioFrame.copyInto(audioContext, 0, FRAME_SIZE - CONTEXT_SIZE, FRAME_SIZE)
@@ -66,7 +67,11 @@ class SileroVadDetector private constructor(
         audioContext.fill(0f)
     }
 
+    private var closed = false
+
     override fun close() {
+        if (closed) return
+        closed = true
         srTensor.close()
         session.close()
     }

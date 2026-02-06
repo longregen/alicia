@@ -76,6 +76,10 @@ var typeNames = map[uint16]string{
 	55: "VoiceStatus",
 	56: "VoiceSpeaking",
 	60: "PreferencesUpdate",
+	70: "AssistantToolsRegister",
+	71: "AssistantToolsAck",
+	72: "AssistantHeartbeat",
+	80: "GenerationComplete",
 }
 
 var typeColors = map[uint16]string{
@@ -104,6 +108,10 @@ var typeColors = map[uint16]string{
 	55: cyan,
 	56: cyan,
 	60: magenta,
+	70: yellow,
+	71: yellow,
+	72: dim,
+	80: green,
 }
 
 type rawMessage struct {
@@ -396,6 +404,41 @@ func printBody(msgType uint16, body interface{}) {
 		status, _ := bodyMap["status"].(string)
 		qLen := bodyMap["queueLength"]
 		fmt.Printf("  %s🎙%s  %s (queue: %v)\n", cyan, reset, status, qLen)
+	case 70: // AssistantToolsRegister
+		if tools, ok := bodyMap["tools"].([]interface{}); ok {
+			fmt.Printf("  %s🔧%s %d tools:", yellow, reset, len(tools))
+			for _, t := range tools {
+				if tm, ok := t.(map[string]interface{}); ok {
+					name, _ := tm["name"].(string)
+					fmt.Printf(" %s%s%s", bold, name, reset)
+				}
+			}
+			fmt.Println()
+		}
+	case 71: // AssistantToolsAck
+		success, _ := bodyMap["success"].(bool)
+		toolCount := bodyMap["toolCount"]
+		if success {
+			fmt.Printf("  %s✓%s %v tools registered\n", green, reset, toolCount)
+		} else {
+			errMsg, _ := bodyMap["error"].(string)
+			fmt.Printf("  %s✗%s %s\n", red, reset, errMsg)
+		}
+	case 72: // AssistantHeartbeat
+		// empty body — no extra output
+	case 80: // GenerationComplete
+		success, _ := bodyMap["success"].(bool)
+		msgID, _ := bodyMap["messageId"].(string)
+		if success {
+			fmt.Printf("  %s✓%s complete", green, reset)
+		} else {
+			errMsg, _ := bodyMap["error"].(string)
+			fmt.Printf("  %s✗%s failed: %s", red, reset, errMsg)
+		}
+		if msgID != "" {
+			fmt.Printf(" %smsg:%s %s", dim, reset, msgID)
+		}
+		fmt.Println()
 	default:
 		// Generic key-value display
 		printGenericBody(bodyMap)

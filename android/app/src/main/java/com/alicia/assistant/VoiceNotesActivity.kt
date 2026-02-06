@@ -121,7 +121,7 @@ class VoiceNotesActivity : ComponentActivity() {
         val audioPath = note.audioPath ?: return
         val file = File(audioPath)
         if (!file.exists()) {
-            Toast.makeText(this, "Audio file not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.audio_not_found, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -158,7 +158,7 @@ class VoiceNotesActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start playback", e)
-            Toast.makeText(this, "Playback failed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.playback_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -241,7 +241,7 @@ class VoiceNotesActivity : ComponentActivity() {
                     recordingOverlay.visibility = View.GONE
                     recordFab.visibility = View.VISIBLE
                     stopRecordButton.isEnabled = true
-                    Toast.makeText(this@VoiceNotesActivity, "Recording failed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@VoiceNotesActivity, R.string.recording_failed, Toast.LENGTH_SHORT).show()
                     loadNotes()
                 }
             }
@@ -264,7 +264,7 @@ class VoiceNotesActivity : ComponentActivity() {
             recordingOverlay.visibility = View.GONE
             recordFab.visibility = View.VISIBLE
             stopRecordButton.isEnabled = true
-            Toast.makeText(this, "Recording failed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.recording_failed, Toast.LENGTH_SHORT).show()
             loadNotes()
             return
         }
@@ -277,7 +277,7 @@ class VoiceNotesActivity : ComponentActivity() {
             recordFab.visibility = View.VISIBLE
 
             if (result is SaveNoteResult.NoSpeechDetected) {
-                Toast.makeText(this@VoiceNotesActivity, "No speech detected", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@VoiceNotesActivity, R.string.no_speech_detected, Toast.LENGTH_SHORT).show()
             }
             recordingSpan?.let { span ->
                 span.end()
@@ -297,7 +297,7 @@ class VoiceNotesActivity : ComponentActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startRecording()
             } else {
-                Toast.makeText(this, "Microphone permission is required to record notes", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.mic_permission_for_notes, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -428,7 +428,8 @@ class VoiceNotesActivity : ComponentActivity() {
                 itemView.setOnClickListener { onItemClick(note) }
                 deleteButton.setOnClickListener { onDeleteClick(note) }
 
-                val hasAudio = note.audioPath != null && File(note.audioPath).exists()
+                // Trust that audioPath is set only when file exists; avoids main-thread I/O
+                val hasAudio = note.audioPath != null
                 playButton.visibility = if (hasAudio) View.VISIBLE else View.GONE
 
                 val isPlaying = playingNoteId() == note.id

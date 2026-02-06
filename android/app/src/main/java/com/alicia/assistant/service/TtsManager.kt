@@ -16,6 +16,7 @@ import java.io.File
 class TtsManager(private val context: Context, private val scope: CoroutineScope) {
 
     private var mediaPlayer: MediaPlayer? = null
+    // Accessed from coroutine threads (speak/IO), Main thread (playAudio callbacks), and callers of stopPlayback()
     @Volatile
     private var currentTtsSpan: Span? = null
     private val gson = Gson()
@@ -164,7 +165,7 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
                 if (isPlaying) stop()
                 release()
             }
-        } catch (_: IllegalStateException) {}
+        } catch (e: IllegalStateException) { Log.w(TAG, "MediaPlayer cleanup failed", e) }
         mediaPlayer = null
         VoiceAssistantService.resumeDetection()
     }

@@ -1,0 +1,57 @@
+appId: com.alicia.assistant
+name: Onboarding Flow
+---
+# Full onboarding from scratch on stock Google APIs API 34.
+# clearState revokes all runtime permissions, so every permission page appears.
+# Page order: WELCOME -> MICROPHONE -> NOTIFICATIONS -> BLUETOOTH -> LOCATION -> ASSISTANT -> COMPLETE
+#
+# After granting a permission, refreshPages() removes that page from the
+# ViewPager and the next page auto-appears at the same index.
+
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# ── Welcome ──
+- extendedWaitUntil:
+    visible: "Welcome to Alicia"
+    timeout: 10000
+- takeScreenshot: screenshots/onboarding_welcome
+- tapOn: "Next"
+
+# ── Microphone (required) ──
+- assertVisible: "Microphone Access"
+- tapOn: "Grant Permission"
+# Android 14 shows "While using the app" for microphone permission
+- tapOn: "While using the app"
+
+# ── Notifications (required) ──
+- assertVisible: "Notifications"
+- takeScreenshot: screenshots/onboarding_notifications
+- tapOn: "Grant Permission"
+- tapOn: "Allow"
+
+# ── Bluetooth (optional) — skip ──
+- assertVisible: "Bluetooth Audio"
+- tapOn: "Skip"
+
+# ── Location (optional) — skip ──
+- assertVisible: "Location Access"
+- tapOn: "Skip"
+
+# ── Assistant (optional) — skip if present ──
+# clearState does NOT revoke system roles, so this page may not appear.
+- tapOn:
+    text: "Skip"
+    optional: true
+
+# ── Complete ──
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 5000
+- tapOn: "Get Started"
+
+# Main screen
+- assertVisible: "Tap to speak"
+- takeScreenshot: screenshots/onboarding_complete

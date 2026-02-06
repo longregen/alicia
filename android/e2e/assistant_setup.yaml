@@ -1,0 +1,80 @@
+appId: com.alicia.assistant
+name: Assistant Setup Flow
+---
+# Tests setting Alicia as the default digital assistant during onboarding.
+#
+# clearState revokes all runtime permissions, so we navigate through every
+# permission page first. The assistant role is system-level (RoleManager) and
+# NOT revoked by clearState — run-tests.sh revokes it beforehand.
+#
+# System Settings UI assertions are specific to stock Google AOSP API 34.
+
+- clearState
+- launchApp:
+    permissions:
+      all: deny
+
+# ── Welcome ──
+- extendedWaitUntil:
+    visible: "Welcome to Alicia"
+    timeout: 10000
+- tapOn: "Next"
+
+# ── Permission pages ──
+# After each grant, refreshPages() removes that page and the next auto-appears.
+
+# Microphone (required)
+- assertVisible: "Microphone Access"
+- tapOn: "Grant Permission"
+- tapOn: "Allow"
+
+# Notifications (required)
+- assertVisible: "Notifications"
+- tapOn: "Grant Permission"
+- tapOn: "Allow"
+
+# Bluetooth (optional) — skip
+- assertVisible: "Bluetooth Audio"
+- tapOn: "Skip"
+
+# Location (optional) — skip
+- assertVisible: "Location Access"
+- tapOn: "Skip"
+
+# ── Assistant page ──
+- assertVisible: "Default Assistant"
+- takeScreenshot: screenshots/assistant_setup_page
+- tapOn: "Open Settings"
+
+# System "Digital assistant app" settings (stock AOSP / Google API 34)
+- extendedWaitUntil:
+    visible: "Digital assistant app"
+    timeout: 5000
+- takeScreenshot: screenshots/assistant_settings
+
+# Open the assistant picker and select Alicia
+- tapOn: "Default digital assistant app"
+- extendedWaitUntil:
+    visible: "Alicia"
+    timeout: 5000
+- takeScreenshot: screenshots/assistant_picker
+- tapOn: "Alicia"
+- tapOn:
+    text: "OK"
+    optional: true
+
+# Return to the app. Back presses exit the Settings navigation stack.
+# assistantRoleLauncher callback fires and refreshPages() removes the
+# ASSISTANT page, landing on COMPLETE.
+- pressKey: back
+- pressKey: back
+
+# ── Complete ──
+- extendedWaitUntil:
+    visible: "Get Started"
+    timeout: 5000
+- tapOn: "Get Started"
+
+# Main screen
+- assertVisible: "Tap to speak"
+- takeScreenshot: screenshots/assistant_setup_complete

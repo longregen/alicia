@@ -11,8 +11,6 @@ import java.util.concurrent.TimeUnit
 object ApiClient {
     const val BASE_URL = "https://alicia.hjkl.lol"
 
-    private const val API_KEY = ""
-
     private const val MAX_RETRIES = 3
     private val RETRYABLE_CODES = setOf(429, 500, 502, 503)
 
@@ -39,18 +37,6 @@ object ApiClient {
         response ?: throw lastException ?: IOException("Retry failed")
     }
 
-    private val authInterceptor = Interceptor { chain ->
-        val original = chain.request()
-        if (API_KEY.isNotEmpty()) {
-            val authorized = original.newBuilder()
-                .header("Authorization", "Bearer $API_KEY")
-                .build()
-            chain.proceed(authorized)
-        } else {
-            chain.proceed(original)
-        }
-    }
-
     private val otelInterceptor: Interceptor by lazy {
         OkHttpTelemetry.builder(AliciaTelemetry.getOpenTelemetry())
             .build()
@@ -61,7 +47,6 @@ object ApiClient {
         OkHttpClient.Builder()
             .addInterceptor(retryInterceptor)
             .addInterceptor(otelInterceptor)
-            .addInterceptor(authInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .build()

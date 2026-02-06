@@ -1,6 +1,7 @@
 package com.alicia.assistant.storage
 
 import android.content.Context
+import android.util.Log
 import com.alicia.assistant.model.VoiceNote
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,8 @@ class NoteRepository(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "NoteRepository"
+        // Shared across instances to serialize filesystem access
         private val mutex = Mutex()
     }
 
@@ -31,7 +34,10 @@ class NoteRepository(private val context: Context) {
             metaDir.listFiles { f -> f.extension == "json" }
                 ?.mapNotNull { file ->
                     try { gson.fromJson(file.readText(), VoiceNote::class.java) }
-                    catch (_: Exception) { null }
+                    catch (e: Exception) {
+                        Log.w(TAG, "Failed to parse note: ${file.name}", e)
+                        null
+                    }
                 }
                 ?.sortedByDescending { it.timestamp }
                 ?: emptyList()
@@ -43,7 +49,10 @@ class NoteRepository(private val context: Context) {
             val file = File(metaDir, "$noteId.json")
             if (file.exists()) {
                 try { gson.fromJson(file.readText(), VoiceNote::class.java) }
-                catch (_: Exception) { null }
+                catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse note: ${file.name}", e)
+                    null
+                }
             } else null
         }
     }
@@ -59,7 +68,10 @@ class NoteRepository(private val context: Context) {
             val notes = metaDir.listFiles { f -> f.extension == "json" }
                 ?.mapNotNull { file ->
                     try { gson.fromJson(file.readText(), VoiceNote::class.java) }
-                    catch (_: Exception) { null }
+                    catch (e: Exception) {
+                        Log.w(TAG, "Failed to parse note: ${file.name}", e)
+                        null
+                    }
                 } ?: emptyList()
             notes.forEach { note ->
                 note.audioPath?.let { File(it).delete() }

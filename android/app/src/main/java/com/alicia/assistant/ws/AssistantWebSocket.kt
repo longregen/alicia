@@ -35,6 +35,7 @@ class AssistantWebSocket(
 
         private const val TYPE_TOOL_USE_REQUEST = 6
         private const val TYPE_TOOL_USE_RESULT = 7
+        private const val TYPE_TITLE_UPDATE = 35
         private const val TYPE_SUBSCRIBE = 40
         private const val TYPE_SUBSCRIBE_ACK = 42
         private const val TYPE_ASSISTANT_TOOLS_REGISTER = 70
@@ -44,6 +45,19 @@ class AssistantWebSocket(
 
         private const val RECONNECT_DELAY_MS = 5000L
         private const val MAX_RECONNECT_DELAY_MS = 60000L
+    }
+
+    /**
+     * Listener for title updates received via WebSocket.
+     */
+    interface TitleUpdateListener {
+        fun onTitleUpdate(conversationId: String, title: String)
+    }
+
+    private var titleUpdateListener: TitleUpdateListener? = null
+
+    fun setTitleUpdateListener(listener: TitleUpdateListener?) {
+        titleUpdateListener = listener
     }
 
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -162,6 +176,7 @@ class AssistantWebSocket(
         Log.i(TAG, "Heartbeat stopped")
     }
 
+    // Reflects transport connection and subscription acknowledgment, not tool registration readiness
     fun isConnected(): Boolean = connected
 
     private fun sendHeartbeat() {
@@ -257,6 +272,13 @@ class AssistantWebSocket(
                     val success = body["success"] as? Boolean ?: false
                     Log.d(TAG, "Tool result acknowledged: success=$success")
                 }
+                TYPE_TITLE_UPDATE -> {
+                    val body = envelope["body"] as? Map<*, *> ?: return
+                    val title = body["title"] as? String ?: return
+                    val convId = body["conversationId"] as? String ?: conversationId
+                    Log.i(TAG, "Received title update for $convId: $title")
+                    titleUpdateListener?.onTitleUpdate(convId, title)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling message", e)
@@ -269,7 +291,6 @@ class AssistantWebSocket(
         val toolName = body["toolName"] as? String ?: return
         val conversationId = envelope["conversationId"] as? String ?: ""
 
-        @Suppress("UNCHECKED_CAST")
         val arguments = (body["arguments"] as? Map<String, Any>) ?: emptyMap()
 
         scope.launch {

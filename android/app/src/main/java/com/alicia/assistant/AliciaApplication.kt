@@ -113,24 +113,23 @@ class AliciaApplication : Application() {
 
     private fun extractBundledModelIfNeeded() {
         val modelDir = File(filesDir, "vosk-models/$BUNDLED_MODEL_ID")
-        val marker = File(modelDir, ".extracting")
+        val versionFile = File(modelDir, ".version")
 
-        if (marker.exists()) {
-            modelDir.deleteRecursively()
-        }
-        if (modelDir.exists() && modelDir.listFiles()?.isNotEmpty() == true) {
+        if (versionFile.exists() && versionFile.readText().trim() == BUNDLED_MODEL_ID) {
             _modelReady.value = true
             _extractionDone.value = true
             return
         }
 
+        // Version mismatch or missing — clean up and re-extract
+        modelDir.deleteRecursively()
+
         applicationScope.launch {
             try {
                 modelDir.mkdirs()
-                marker.createNewFile()
                 copyAssetDir("vosk-models/$BUNDLED_MODEL_ID", modelDir)
-                marker.delete()
                 if (modelDir.listFiles()?.isNotEmpty() == true) {
+                    versionFile.writeText(BUNDLED_MODEL_ID)
                     _modelReady.value = true
                     Log.d(TAG, "Bundled model extracted")
                 } else {

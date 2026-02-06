@@ -44,6 +44,7 @@ class ModelManagerActivity : ComponentActivity() {
             adapter = ModelAdapter()
             recyclerView.adapter = adapter
 
+            // Manual diff to issue targeted notifyItemChanged calls instead of notifyDataSetChanged
             var prev = emptyMap<String, Int>()
             ModelDownloadService.downloadState.collect { state ->
                 val changed = (prev.keys + state.keys).filter { prev[it] != state[it] }

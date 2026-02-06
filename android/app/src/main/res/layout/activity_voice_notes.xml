@@ -120,6 +120,7 @@
         android:layout_margin="16dp"
         android:src="@drawable/ic_microphone"
         app:tint="?attr/colorOnPrimaryContainer"
-        app:backgroundTint="?attr/colorPrimaryContainer"/>
+        app:backgroundTint="?attr/colorPrimaryContainer"
+        app:elevation="0dp"/>
 
 </LinearLayout>

@@ -215,16 +215,16 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
-  # Android E2E tests disabled - no androidTest directory exists yet
-  # android-e2e:
-  #   name: Android E2E Tests
-  #   permissions:
-  #     contents: read
-  #   needs: android
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   uses: ./.github/workflows/android-e2e-test.yml
-  #   with:
-  #     artifact_prefix: 'ci-e2e'
+  # Android E2E tests (Maestro)
+  android-e2e:
+    name: Android E2E Tests
+    permissions:
+      contents: read
+    needs: android
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/android-e2e-test.yml
+    with:
+      artifact_prefix: 'ci-e2e'
 
   # Deploy documentation to GitHub Pages on push to main
   deploy-docs:

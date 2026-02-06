@@ -2,6 +2,7 @@ package com.alicia.assistant
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -9,7 +10,6 @@ import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.service.VoiceAssistantService
 import com.alicia.assistant.storage.PreferencesManager
 import com.alicia.assistant.telemetry.AliciaTelemetry
-import io.opentelemetry.api.common.Attributes
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
@@ -68,13 +68,17 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
+    private fun onSettingToggled(name: String, enabled: Boolean, action: (Boolean) -> Unit) {
+        AliciaTelemetry.withSpan("settings.toggle.$name") { span ->
+            span.setAttribute("setting", name)
+            span.setAttribute("enabled", enabled)
+            action(enabled)
+        }
+    }
+
     private fun setupListeners() {
         wakeWordSwitch.setOnCheckedChangeListener { _, isChecked ->
-            AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
-                .put("setting.name", "wake_word_enabled")
-                .put("setting.value", isChecked.toString())
-                .build()
-            ) {
+            onSettingToggled("wake_word_enabled", isChecked) {
                 saveSettings()
                 if (isChecked) {
                     VoiceAssistantService.ensureRunning(this)
@@ -85,45 +89,35 @@ class SettingsActivity : ComponentActivity() {
         }
 
         voiceFeedbackSwitch.setOnCheckedChangeListener { _, isChecked ->
-            AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
-                .put("setting.name", "voice_feedback_enabled")
-                .put("setting.value", isChecked.toString())
-                .build()
-            ) {
+            onSettingToggled("voice_feedback_enabled", isChecked) {
                 saveSettings()
             }
         }
         hapticFeedbackSwitch.setOnCheckedChangeListener { _, isChecked ->
-            AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
-                .put("setting.name", "haptic_feedback_enabled")
-                .put("setting.value", isChecked.toString())
-                .build()
-            ) {
+            onSettingToggled("haptic_feedback_enabled", isChecked) {
                 saveSettings()
             }
         }
         ttsSpeedSlider.addOnChangeListener { _, value, _ ->
             ttsSpeedValue.text = String.format("%.1fx", value)
         }
-        ttsSpeedSlider.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
-            override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {}
-            override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
-                AliciaTelemetry.withSpan("settings.changed", Attributes.builder()
-                    .put("setting.name", "tts_speed")
-                    .put("setting.value", slider.value.toString())
-                    .build()
-                ) { saveSettings() }
+        ttsSpeedSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                onSettingToggled("tts_speed", true) {
+                    saveSettings()
+                }
             }
         })
 
-        findViewById<android.view.View>(R.id.manageModelsButton).setOnClickListener {
+        findViewById<View>(R.id.manageModelsButton).setOnClickListener {
             startActivity(Intent(this, ModelManagerActivity::class.java))
         }
 
     }
 
     private fun saveSettings() {
-        val wakeWord = wakeWordInput.text?.toString()?.trim()?.ifEmpty { "alicia" } ?: "alicia"
+        val wakeWord = wakeWordInput.text.toString().trim().ifEmpty { "alicia" }
         lifecycleScope.launch {
             val current = preferencesManager.getSettings()
             preferencesManager.saveSettings(current.copy(

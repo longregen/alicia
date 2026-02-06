@@ -61,6 +61,18 @@ OpenTelemetry traces are sent to [SigNoz](https://signoz.io/) at OTEL_EXPORTER_O
 - [Frontend Tracing](https://signoz.io/docs/frontend-monitoring/sending-traces-with-opentelemetry/)
 - [Collector Configuration](https://signoz.io/docs/opentelemetry-collection-agents/opentelemetry-collector/configuration/)
 
+## Android E2E Tests
+
+Run Maestro UI tests for the Android app:
+
+```bash
+cd android/e2e && ./run-maestro-tests.sh
+```
+
+This script runs onboarding, voice interaction, and conversation tests, then **resizes screenshots to 50%** (540x1200). Always use this script instead of running Maestro directly—the full 1080x2400 screenshots exceed Claude's 2000px image input limit and get cropped.
+
+Requirements: Android emulator running, `adb` and `maestro` in PATH or nix store, `imagemagick` for resizing.
+
 ## Prompts
 
 Prompts are managed with [Langfuse](https://langfuse.com/) (org: `decent`, project: `alicia`) at `langfuse.hjkl.lol`. Credentials are in `.env`: LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY

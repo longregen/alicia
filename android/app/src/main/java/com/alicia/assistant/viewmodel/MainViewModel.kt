@@ -7,6 +7,8 @@ import com.alicia.assistant.model.AppSettings
 import com.alicia.assistant.storage.NoteRepository
 import com.alicia.assistant.storage.PreferencesManager
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -14,7 +16,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val noteRepository = NoteRepository(application)
 
     private val _settings = MutableStateFlow(AppSettings())
-    val settings: AppSettings get() = _settings.value
+    val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
     init {
         refreshSettings()

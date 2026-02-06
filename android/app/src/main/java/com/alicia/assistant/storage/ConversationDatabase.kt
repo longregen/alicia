@@ -119,6 +119,13 @@ class ConversationDatabase(context: Context) :
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
+    fun updateConversationTitle(conversationId: String, title: String) {
+        val db = writableDatabase
+        db.update(TABLE_CONVERSATIONS, ContentValues().apply {
+            put("title", title)
+        }, "id = ?", arrayOf(conversationId))
+    }
+
     fun cacheMessages(conversationId: String, messages: List<AliciaApiClient.Message>) {
         val db = writableDatabase
         db.beginTransaction()

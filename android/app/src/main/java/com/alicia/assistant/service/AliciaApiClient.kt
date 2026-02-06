@@ -54,7 +54,8 @@ class AliciaApiClient(
 
     data class SyncResponse(
         val userMessage: Message,
-        val assistantMessage: Message
+        val assistantMessage: Message,
+        val conversationTitle: String? = null
     )
 
     suspend fun createConversation(title: String = "New Chat"): Conversation = withContext(Dispatchers.IO) {
@@ -106,6 +107,7 @@ class AliciaApiClient(
         ) {
             val body = JSONObject().apply {
                 put("content", content)
+                // Pareto multi-objective optimization disabled on mobile to reduce latency
                 put("use_pareto", false)
                 if (previousId != null) {
                     put("previous_id", previousId)
@@ -119,7 +121,8 @@ class AliciaApiClient(
 
             SyncResponse(
                 userMessage = parseMessage(response.getJSONObject("user_message")),
-                assistantMessage = parseMessage(response.getJSONObject("assistant_message"))
+                assistantMessage = parseMessage(response.getJSONObject("assistant_message")),
+                conversationTitle = response.optString("conversation_title", null).takeIf { !it.isNullOrBlank() }
             )
         }
     }
