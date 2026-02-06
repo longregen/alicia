@@ -89,11 +89,12 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun getVpnSettings(): VpnSettings {
         val prefs = context.dataStore.data.first()
+        val encryptedKey = prefs[VPN_AUTH_KEY] ?: ""
         return VpnSettings(
             autoConnect = prefs[VPN_AUTO_CONNECT] ?: true,
             selectedExitNodeId = prefs[VPN_EXIT_NODE_ID],
             headscaleUrl = prefs[HEADSCALE_URL] ?: "",
-            authKey = prefs[VPN_AUTH_KEY] ?: "",
+            authKey = SecureStorage.decrypt(encryptedKey),
             nodeRegistered = prefs[VPN_NODE_REGISTERED] ?: false
         )
     }
@@ -107,7 +108,7 @@ class PreferencesManager(private val context: Context) {
                 prefs.remove(VPN_EXIT_NODE_ID)
             }
             prefs[HEADSCALE_URL] = settings.headscaleUrl
-            prefs[VPN_AUTH_KEY] = settings.authKey
+            prefs[VPN_AUTH_KEY] = SecureStorage.encrypt(settings.authKey)
             prefs[VPN_NODE_REGISTERED] = settings.nodeRegistered
         }
     }

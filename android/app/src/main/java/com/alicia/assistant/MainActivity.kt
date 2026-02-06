@@ -15,6 +15,7 @@ import android.view.View
 import android.view.animation.AnimationUtils
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.databinding.ActivityMainBinding
@@ -60,7 +61,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var noteVoiceManager: VoiceRecognitionManager
     private val apiClient = AliciaApiClient(AliciaApiClient.BASE_URL, AliciaApiClient.USER_ID)
     private var backgroundAnimator: ValueAnimator? = null
-    
+
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            VpnManager.startVpnService(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -122,14 +131,6 @@ class MainActivity : ComponentActivity() {
                 delay(UI_SETTLE_DELAY_MS)
                 startListening()
             }
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == VpnManager.VPN_PERMISSION_REQUEST_CODE && resultCode == RESULT_OK) {
-            VpnManager.startVpnService(this)
         }
     }
 
@@ -457,14 +458,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        binding.vpnToggle.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                VpnManager.connect(this)
-            } else {
-                VpnManager.disconnect(this)
-            }
-        }
-
         binding.vpnStatusCard.setOnLongClickListener {
             startActivity(Intent(this, VpnSettingsActivity::class.java))
             true
@@ -523,7 +516,11 @@ class MainActivity : ComponentActivity() {
         // Re-attach listener
         vpnToggle.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                VpnManager.connect(this@MainActivity)
+                when (val result = VpnManager.connect(this@MainActivity)) {
+                    is VpnManager.ConnectResult.NeedsPermission ->
+                        vpnPermissionLauncher.launch(result.intent)
+                    else -> {}
+                }
             } else {
                 VpnManager.disconnect(this@MainActivity)
             }

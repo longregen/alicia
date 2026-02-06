@@ -161,8 +161,9 @@
     <string name="vpn_auth_key_label">Auth Key (optional)</string>
     <string name="vpn_auth_key_hint">Pre-auth key</string>
     <string name="vpn_register">Register</string>
+    <string name="vpn_registering">Registering…</string>
+    <string name="vpn_registration_failed">Registration failed</string>
     <string name="vpn_exit_node">Exit Node</string>
-    <string name="vpn_current_exit_node">Current Exit Node</string>
     <string name="vpn_none_selected">None selected</string>
     <string name="vpn_tap_to_select">Tap to select</string>
     <string name="vpn_options">Options</string>
@@ -172,8 +173,6 @@
     <string name="vpn_always_on_desc">Configure in Android settings</string>
     <string name="vpn_danger_zone">Danger Zone</string>
     <string name="vpn_forget_desc">Unregister from Headscale</string>
-    <string name="vpn_ip_format">IP: %1$s</string>
-    <string name="vpn_engine_not_installed">VPN engine not installed</string>
 
     <!-- Attribution -->
     <string name="attribution_wake_word">Wake word detection</string>

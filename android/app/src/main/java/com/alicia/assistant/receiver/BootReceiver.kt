@@ -21,24 +21,23 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null) return
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+            Log.i(TAG, "BootReceiver: device boot completed, starting wake word service")
+
             AliciaTelemetry.withSpan("app.boot_received") { span ->
-                Log.i(TAG, "BootReceiver: device boot completed, starting wake word service")
                 AliciaTelemetry.addSpanEvent(span, "service.auto_start")
                 VoiceAssistantService.ensureRunning(context)
+            }
 
-                AliciaTelemetry.addSpanEvent(span, "vpn.auto_connect_check")
-                CoroutineScope(Dispatchers.IO).launch {
-                    val prefs = PreferencesManager(context)
-                    val vpnSettings = prefs.getVpnSettings()
-                    if (vpnSettings.autoConnect && vpnSettings.nodeRegistered) {
-                        if (android.net.VpnService.prepare(context) == null) {
-                            Log.i(TAG, "BootReceiver: auto-connecting VPN")
-                            AliciaTelemetry.addSpanEvent(span, "vpn.auto_connect")
-                            VpnManager.init(context)
-                            VpnManager.connect(context)
-                        } else {
-                            Log.i(TAG, "BootReceiver: VPN permission not granted, skipping auto-connect")
-                        }
+            CoroutineScope(Dispatchers.IO).launch {
+                val prefs = PreferencesManager(context)
+                val vpnSettings = prefs.getVpnSettings()
+                if (vpnSettings.autoConnect && vpnSettings.nodeRegistered) {
+                    if (android.net.VpnService.prepare(context) == null) {
+                        Log.i(TAG, "BootReceiver: auto-connecting VPN")
+                        VpnManager.init(context)
+                        VpnManager.connect(context)
+                    } else {
+                        Log.i(TAG, "BootReceiver: VPN permission not granted, skipping auto-connect")
                     }
                 }
             }

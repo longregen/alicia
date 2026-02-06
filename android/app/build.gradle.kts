@@ -108,6 +108,9 @@ dependencies {
     // Preferences DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
+    // Encrypted SharedPreferences (for Tailscale state storage)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
 
@@ -137,6 +140,8 @@ dependencies {
     val libtailscaleAar = file("libs/libtailscale.aar")
     if (libtailscaleAar.exists()) {
         implementation(files("libs/libtailscale.aar"))
+    } else {
+        compileOnly(files("libs/libtailscale-stubs.jar"))
     }
 
     // ML Kit Barcode Scanning (QR code scanner for VPN auth)

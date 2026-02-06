@@ -31,7 +31,7 @@
 -dontwarn io.grpc.**
 
 # libtailscale (gomobile generated)
--keep class com.tailscale.** { *; }
+-keep class libtailscale.** { *; }
 -keep class go.** { *; }
--dontwarn com.tailscale.**
+-dontwarn libtailscale.**
 -dontwarn go.**

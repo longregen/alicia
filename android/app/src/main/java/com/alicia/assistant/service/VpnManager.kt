@@ -1,6 +1,5 @@
 package com.alicia.assistant.service
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
@@ -12,155 +11,186 @@ import com.alicia.assistant.model.VpnStatus
 import com.alicia.assistant.storage.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import libtailscale.Libtailscale
 import org.json.JSONObject
 
 object VpnManager {
     private const val TAG = "VpnManager"
-    const val VPN_PERMISSION_REQUEST_CODE = 9001
+    private const val API_TIMEOUT_MS = 30_000L
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    sealed class ConnectResult {
+        data object Started : ConnectResult()
+        data class NeedsPermission(val intent: Intent) : ConnectResult()
+        data class Failed(val reason: String) : ConnectResult()
+    }
+
+    private val supervisorJob = SupervisorJob()
+    private val scope = CoroutineScope(supervisorJob + Dispatchers.IO)
 
     private val _state = MutableStateFlow(VpnState())
     val state: StateFlow<VpnState> = _state.asStateFlow()
 
-    private var backend: Any? = null // libtailscale backend handle
+    private var app: libtailscale.Application? = null
+    private var notificationManager: libtailscale.NotificationManager? = null
     private var isInitialized = false
-    private var libtailscaleClass: Class<*>? = null
     private lateinit var appContext: Context
     private val prefs: PreferencesManager by lazy { PreferencesManager(appContext) }
+    private var connectJob: Job? = null
 
     fun init(context: Context) {
         if (isInitialized) return
         isInitialized = true
+        appContext = context.applicationContext
         Log.i(TAG, "Initializing VPN manager")
 
         try {
-            appContext = context.applicationContext
             val filesDir = appContext.filesDir.absolutePath
-            val cacheDir = appContext.cacheDir.absolutePath
-
-            // Try to load libtailscale classes via reflection to avoid hard compile dependency
-            // when the AAR hasn't been built yet
-            try {
-                libtailscaleClass = Class.forName("com.tailscale.ipn.Libtailscale")
-                val startMethod = libtailscaleClass?.getMethod("start", String::class.java, String::class.java)
-                backend = startMethod?.invoke(null, filesDir, cacheDir)
-                Log.i(TAG, "libtailscale backend started")
-            } catch (e: ClassNotFoundException) {
-                Log.w(TAG, "libtailscale not available - VPN features disabled")
-            }
-
-            scope.launch {
-                val settings = prefs.getVpnSettings()
-                if (settings.nodeRegistered) {
-                    Log.i(TAG, "Node previously registered with Headscale")
-                }
-            }
+            val directFileRoot = appContext.getDir("tailscale", Context.MODE_PRIVATE).absolutePath
+            val appCtx = AppContextImpl(appContext)
+            app = Libtailscale.start(filesDir, directFileRoot, false, appCtx)
+            Log.i(TAG, "libtailscale backend started")
+            startNotificationWatcher()
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "libtailscale not available (stubs only) - VPN features disabled")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize VPN manager", e)
+            Log.e(TAG, "Failed to initialize libtailscale", e)
             _state.value = VpnState(status = VpnStatus.ERROR)
+        }
+
+        scope.launch {
+            val settings = prefs.getVpnSettings()
+            if (settings.nodeRegistered) {
+                Log.i(TAG, "Node previously registered with Headscale")
+            }
         }
     }
 
-    fun connect(context: Context) {
-        if (backend == null) {
-            Log.w(TAG, "Cannot connect: libtailscale not initialized")
+    private fun startNotificationWatcher() {
+        val tsApp = app ?: return
+        // Bitmask: InitialState(2) | Prefs(4) | Netmap(8) = 14
+        val mask = 2L or 4L or 8L
+        try {
+            notificationManager = tsApp.watchNotifications(mask) { notification ->
+                try {
+                    val json = JSONObject(String(notification))
+                    json.optInt("State", -1).takeIf { it >= 0 }?.let { stateInt ->
+                        val newStatus = when (stateInt) {
+                            0 -> VpnStatus.DISCONNECTED  // NoState
+                            1 -> VpnStatus.DISCONNECTED  // InUseOtherUser
+                            2 -> VpnStatus.DISCONNECTED  // NeedsLogin
+                            3 -> VpnStatus.DISCONNECTED  // NeedsMachineAuth
+                            4 -> VpnStatus.DISCONNECTED  // Stopped
+                            5 -> VpnStatus.CONNECTING     // Starting
+                            6 -> VpnStatus.CONNECTED      // Running
+                            else -> null
+                        }
+                        if (newStatus != null && newStatus != _state.value.status) {
+                            _state.value = _state.value.copy(status = newStatus)
+                            if (newStatus == VpnStatus.CONNECTED) {
+                                scope.launch { refreshConnectionInfo() }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse notification", e)
+                }
+            }
+            Log.i(TAG, "Notification watcher started")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to start notification watcher", e)
+        }
+    }
+
+    private suspend fun refreshConnectionInfo() {
+        val status = getBackendStatus() ?: return
+        val selfNode = status.optJSONObject("Self")
+        val ipAddress = selfNode?.optJSONArray("TailscaleIPs")?.optString(0)
+        _state.value = _state.value.copy(
+            ipAddress = ipAddress,
+            since = _state.value.since ?: System.currentTimeMillis()
+        )
+    }
+
+    fun connect(context: Context): ConnectResult {
+        if (app == null) {
             _state.value = VpnState(status = VpnStatus.ERROR)
-            return
+            return ConnectResult.Failed("libtailscale not initialized")
         }
 
         val vpnIntent = VpnService.prepare(context)
         if (vpnIntent != null) {
-            if (context is Activity) {
-                context.startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE)
-            } else {
-                Log.w(TAG, "VPN permission required but no Activity context available")
-                _state.value = VpnState(status = VpnStatus.ERROR)
-            }
-            return
+            return ConnectResult.NeedsPermission(vpnIntent)
         }
 
         startVpnService(context)
+        return ConnectResult.Started
     }
 
     internal fun startVpnService(context: Context) {
+        connectJob?.cancel()
         _state.value = _state.value.copy(status = VpnStatus.CONNECTING)
 
-        scope.launch {
+        connectJob = scope.launch {
             try {
+                // Set WantRunning via prefs
+                callLocalApi("PATCH", "/localapi/v0/prefs", """{"WantRunning":true}""")
+
                 val intent = Intent(context, AliciaVpnService::class.java).apply {
                     action = AliciaVpnService.ACTION_START_VPN
                 }
                 context.startForegroundService(intent)
 
+                // Apply saved exit node
                 val settings = prefs.getVpnSettings()
                 settings.selectedExitNodeId?.let { nodeId ->
-                    setExitNode(nodeId)
+                    callLocalApi("PATCH", "/localapi/v0/prefs", """{"ExitNodeID":"$nodeId"}""")
                 }
-
-                var attempts = 0
-                while (attempts < 30) {
-                    val status = getBackendStatus()
-                    if (status != null && status.optString("BackendState") == "Running") {
-                        val selfNode = status.optJSONObject("Self")
-                        val ipAddress = selfNode?.optJSONArray("TailscaleIPs")?.optString(0)
-                        _state.value = VpnState(
-                            status = VpnStatus.CONNECTED,
-                            exitNode = _state.value.exitNode,
-                            ipAddress = ipAddress,
-                            since = System.currentTimeMillis()
-                        )
-                        Log.i(TAG, "VPN connected, IP: $ipAddress")
-                        return@launch
-                    }
-                    attempts++
-                    delay(1000)
-                }
-
-                Log.w(TAG, "VPN connection timed out")
-                _state.value = VpnState(status = VpnStatus.ERROR)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to connect VPN", e)
+                Log.e(TAG, "Failed to start VPN", e)
                 _state.value = VpnState(status = VpnStatus.ERROR)
             }
         }
     }
 
     fun disconnect(context: Context) {
+        connectJob?.cancel()
+        connectJob = null
         scope.launch {
             try {
-                val intent = Intent(context, AliciaVpnService::class.java).apply {
-                    action = AliciaVpnService.ACTION_STOP_VPN
-                }
-                context.startService(intent)
-
-                _state.value = VpnState(status = VpnStatus.DISCONNECTED)
-                Log.i(TAG, "VPN disconnected")
+                callLocalApi("PATCH", "/localapi/v0/prefs", """{"WantRunning":false}""")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to disconnect VPN", e)
+                Log.w(TAG, "Failed to set WantRunning=false", e)
             }
+            stopVpnInternal(context)
         }
     }
 
-    fun setExitNode(nodeId: String) {
+    private fun stopVpnInternal(context: Context) {
+        try {
+            context.startService(
+                Intent(context, AliciaVpnService::class.java).apply {
+                    action = AliciaVpnService.ACTION_STOP_VPN
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send stop intent", e)
+        }
+        _state.value = VpnState(status = VpnStatus.DISCONNECTED)
+    }
+
+    fun setExitNode(nodeId: String, node: ExitNode? = null) {
         scope.launch {
             try {
-                val prefsJson = JSONObject().apply {
-                    put("ExitNodeID", nodeId)
-                }
-                callLocalApi("POST", "/localapi/v0/prefs", prefsJson.toString())
-
-                val nodes = getExitNodes()
-                val selectedNode = nodes.find { it.id == nodeId }
-                _state.value = _state.value.copy(exitNode = selectedNode)
-                Log.i(TAG, "Exit node set to: ${selectedNode?.name ?: nodeId}")
+                callLocalApi("PATCH", "/localapi/v0/prefs", """{"ExitNodeID":"$nodeId"}""")
+                _state.value = _state.value.copy(exitNode = node)
+                Log.i(TAG, "Exit node set to: ${node?.name ?: nodeId}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to set exit node", e)
             }
@@ -173,26 +203,22 @@ object VpnManager {
             val peers = status.optJSONObject("Peer") ?: return@withContext emptyList()
             val nodes = mutableListOf<ExitNode>()
 
-            val keys = peers.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
+            for (key in peers.keys()) {
                 val peer = peers.getJSONObject(key)
-                val exitNodeOption = peer.optBoolean("ExitNodeOption", false)
-                if (exitNodeOption) {
-                    val hostName = peer.optString("HostName", "")
-                    val location = peer.optJSONObject("Location")
-                    nodes.add(
-                        ExitNode(
-                            id = peer.optString("ID", key),
-                            name = hostName,
-                            location = location?.let {
-                                "${it.optString("CountryCode", "")} - ${it.optString("City", "")}"
-                            } ?: hostName,
-                            online = peer.optBoolean("Online", false),
-                            countryCode = location?.optString("CountryCode", "") ?: ""
-                        )
+                if (!peer.optBoolean("ExitNodeOption", false)) continue
+                val hostName = peer.optString("HostName", "")
+                val location = peer.optJSONObject("Location")
+                nodes.add(
+                    ExitNode(
+                        id = peer.optString("ID", key),
+                        name = hostName,
+                        location = location?.let {
+                            "${it.optString("CountryCode", "")} - ${it.optString("City", "")}"
+                        } ?: hostName,
+                        online = peer.optBoolean("Online", false),
+                        countryCode = location?.optString("CountryCode", "") ?: ""
                     )
-                }
+                )
             }
             nodes
         } catch (e: Exception) {
@@ -201,53 +227,54 @@ object VpnManager {
         }
     }
 
-    fun loginWithAuthKey(key: String) {
-        scope.launch {
-            try {
-                callLocalApi("POST", "/localapi/v0/login?key=$key", "")
-                Log.i(TAG, "Login with auth key initiated")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to login with auth key", e)
-            }
-        }
-    }
-
-    fun loginWithUrl(url: String) {
-        scope.launch {
-            try {
-                val body = JSONObject().apply {
-                    put("ControlURL", url)
-                }
-                callLocalApi("POST", "/localapi/v0/prefs", body.toString())
-                Log.i(TAG, "Control URL set to: $url")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to set login URL", e)
-            }
-        }
-    }
-
-    suspend fun isNodeRegistered(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun loginWithAuthKey(key: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val status = getBackendStatus()
-            val state = status?.optString("BackendState", "")
-            state == "Running"
+            callLocalApi("PATCH", "/localapi/v0/prefs", """{"WantRunning":true}""")
+            callLocalApi("POST", "/localapi/v0/start", """{"AuthKey":"$key"}""")
+            Log.i(TAG, "Login with auth key initiated")
+            // Verify backend reaches Running state
+            repeat(15) {
+                val status = getBackendStatus()
+                val backendState = status?.optString("BackendState", "")
+                if (backendState == "Running" || backendState == "NeedsMachineAuth") return@withContext true
+                kotlinx.coroutines.delay(1000)
+            }
+            false
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to login with auth key", e)
+            false
+        }
+    }
+
+    suspend fun setControlUrl(url: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            callLocalApi("PATCH", "/localapi/v0/prefs", """{"ControlURL":"$url"}""")
+            Log.i(TAG, "Control URL set to: $url")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set control URL", e)
             false
         }
     }
 
     suspend fun forgetDevice(context: Context) = withContext(Dispatchers.IO) {
         try {
-            callLocalApi("POST", "/localapi/v0/logout", "")
-            disconnect(context)
-
+            connectJob?.cancel()
+            connectJob = null
+            callLocalApi("POST", "/localapi/v0/logout", null)
+            stopVpnInternal(context)
             prefs.saveVpnSettings(VpnSettings())
-
-            _state.value = VpnState(status = VpnStatus.DISCONNECTED)
             Log.i(TAG, "Device forgotten and logged out")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to forget device", e)
         }
+    }
+
+    fun shutdown() {
+        notificationManager?.stop()
+        notificationManager = null
+        connectJob?.cancel()
+        supervisorJob.cancel()
     }
 
     internal fun updateState(newState: VpnState) {
@@ -255,25 +282,21 @@ object VpnManager {
     }
 
     private fun getBackendStatus(): JSONObject? {
-        return try {
-            val response = callLocalApi("GET", "/localapi/v0/status", null)
-            if (response != null) JSONObject(response) else null
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to get backend status", e)
-            null
-        }
+        val body = callLocalApi("GET", "/localapi/v0/status", null) ?: return null
+        return try { JSONObject(body) } catch (e: Exception) { null }
     }
 
     private fun callLocalApi(method: String, endpoint: String, body: String?): String? {
-        return try {
-            if (backend == null) return null
-            val callMethod = backend!!.javaClass.getMethod(
-                "callLocalAPI", String::class.java, String::class.java, String::class.java
-            )
-            callMethod.invoke(backend, method, endpoint, body ?: "") as? String
-        } catch (e: Exception) {
-            Log.e(TAG, "Local API call failed: $method $endpoint", e)
-            null
+        val tsApp = app ?: return null
+        val inputStream = body?.let {
+            InputStreamAdapter(it.byteInputStream())
         }
+        val response = tsApp.callLocalAPI(API_TIMEOUT_MS, method, endpoint, inputStream)
+        val statusCode = response.statusCode()
+        val responseBody = String(response.bodyBytes())
+        if (statusCode !in 200..299) {
+            Log.w(TAG, "LocalAPI $method $endpoint returned $statusCode: $responseBody")
+        }
+        return responseBody
     }
 }

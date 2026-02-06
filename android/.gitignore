@@ -60,6 +60,10 @@ captures/
 # Signing files
 .signing/
 
+# libtailscale (built via build-libtailscale.sh)
+app/libs/libtailscale.aar
+.tailscale-build/
+
 # Nix
 result
 result-*

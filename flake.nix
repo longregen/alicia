@@ -89,6 +89,7 @@
           platforms-android-35
           platforms-android-24
           emulator
+          ndk-26-1-10909125
         ]);
 
         sileroVadModel = pkgs.fetchurl {
@@ -436,6 +437,7 @@
           shellHook = ''
             export ANDROID_HOME="${androidSdk}/share/android-sdk"
             export ANDROID_SDK_ROOT="$ANDROID_HOME"
+            export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.1.10909125"
             export JAVA_HOME="${pkgs.jdk17.home}"
             export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/35.0.0:$JAVA_HOME/bin:$PATH"
 

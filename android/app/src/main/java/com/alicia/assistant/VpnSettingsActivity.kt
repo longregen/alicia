@@ -9,6 +9,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.alicia.assistant.model.ExitNode
 import com.alicia.assistant.model.VpnStatus
@@ -32,6 +33,14 @@ class VpnSettingsActivity : ComponentActivity() {
     private lateinit var serverUrlInput: TextInputEditText
     private lateinit var authKeyInput: TextInputEditText
     private lateinit var autoConnectSwitch: MaterialSwitch
+
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            VpnManager.startVpnService(this)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +69,11 @@ class VpnSettingsActivity : ComponentActivity() {
             if (state.status == VpnStatus.CONNECTED || state.status == VpnStatus.CONNECTING) {
                 VpnManager.disconnect(this)
             } else {
-                VpnManager.connect(this)
+                when (val result = VpnManager.connect(this)) {
+                    is VpnManager.ConnectResult.NeedsPermission ->
+                        vpnPermissionLauncher.launch(result.intent)
+                    else -> {}
+                }
             }
         }
 
@@ -73,24 +86,38 @@ class VpnSettingsActivity : ComponentActivity() {
             val authKey = authKeyInput.text.toString().trim()
 
             if (serverUrl.isEmpty()) {
-                Toast.makeText(this, getString(R.string.vpn_server_url_required), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.vpn_server_url_required, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
+            val registerButton = it as MaterialButton
+            registerButton.isEnabled = false
+            registerButton.text = getString(R.string.vpn_registering)
+
             lifecycleScope.launch {
-                VpnManager.loginWithUrl(serverUrl)
-                if (authKey.isNotEmpty()) {
+                val urlSet = VpnManager.setControlUrl(serverUrl)
+                val registered = if (authKey.isNotEmpty()) {
                     VpnManager.loginWithAuthKey(authKey)
+                } else {
+                    urlSet
                 }
+
                 preferencesManager.saveVpnSettings(
                     preferencesManager.getVpnSettings().copy(
                         headscaleUrl = serverUrl,
                         authKey = authKey,
-                        nodeRegistered = true
+                        nodeRegistered = registered
                     )
                 )
-                updateSections(true)
-                Toast.makeText(this@VpnSettingsActivity, getString(R.string.vpn_credentials_saved), Toast.LENGTH_SHORT).show()
+                registerButton.isEnabled = true
+                registerButton.text = getString(R.string.vpn_register)
+
+                if (registered) {
+                    updateSections(true)
+                    Toast.makeText(this@VpnSettingsActivity, R.string.vpn_credentials_saved, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@VpnSettingsActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
@@ -111,16 +138,16 @@ class VpnSettingsActivity : ComponentActivity() {
 
         findViewById<View>(R.id.forgetDeviceCard).setOnClickListener {
             MaterialAlertDialogBuilder(this)
-                .setTitle(getString(R.string.vpn_forget_device))
-                .setMessage(getString(R.string.vpn_forget_confirm_message))
-                .setPositiveButton(getString(R.string.vpn_forget)) { _, _ ->
+                .setTitle(R.string.vpn_forget_device)
+                .setMessage(R.string.vpn_forget_confirm_message)
+                .setPositiveButton(R.string.vpn_forget) { _, _ ->
                     lifecycleScope.launch {
                         VpnManager.forgetDevice(this@VpnSettingsActivity)
                         updateSections(false)
-                        Toast.makeText(this@VpnSettingsActivity, getString(R.string.vpn_device_forgotten), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@VpnSettingsActivity, R.string.vpn_device_forgotten, Toast.LENGTH_SHORT).show()
                     }
                 }
-                .setNegativeButton(getString(R.string.vpn_cancel), null)
+                .setNegativeButton(R.string.vpn_cancel, null)
                 .show()
         }
     }
@@ -187,7 +214,7 @@ class VpnSettingsActivity : ComponentActivity() {
         lifecycleScope.launch {
             val nodes = VpnManager.getExitNodes()
             if (nodes.isEmpty()) {
-                Toast.makeText(this@VpnSettingsActivity, getString(R.string.vpn_no_exit_nodes), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@VpnSettingsActivity, R.string.vpn_no_exit_nodes, Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
@@ -198,10 +225,10 @@ class VpnSettingsActivity : ComponentActivity() {
             }.toTypedArray()
 
             MaterialAlertDialogBuilder(this@VpnSettingsActivity)
-                .setTitle(getString(R.string.vpn_select_exit_node))
+                .setTitle(R.string.vpn_select_exit_node)
                 .setItems(nodeNames) { _, which ->
                     val selected = nodes[which]
-                    VpnManager.setExitNode(selected.id)
+                    VpnManager.setExitNode(selected.id, selected)
                     lifecycleScope.launch {
                         val settings = preferencesManager.getVpnSettings()
                         preferencesManager.saveVpnSettings(settings.copy(selectedExitNodeId = selected.id))
@@ -225,11 +252,4 @@ class VpnSettingsActivity : ComponentActivity() {
         return String(Character.toChars(first)) + String(Character.toChars(second))
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == VpnManager.VPN_PERMISSION_REQUEST_CODE && resultCode == RESULT_OK) {
-            VpnManager.startVpnService(this)
-        }
-    }
 }
