@@ -3,6 +3,8 @@ package com.alicia.assistant.service
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import android.net.LinkProperties
 import android.net.Network
 import android.net.VpnService
@@ -52,11 +54,11 @@ object VpnManager {
     private lateinit var appContext: Context
     private val prefs: PreferencesManager by lazy { PreferencesManager(appContext) }
     private var connectJob: Job? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     @Synchronized
     fun init(context: Context) {
         if (isInitialized) return
-        isInitialized = true
         appContext = context.applicationContext
         Log.i(TAG, "Initializing VPN manager")
 
@@ -65,12 +67,14 @@ object VpnManager {
             val directFileRoot = appContext.getDir("tailscale", Context.MODE_PRIVATE).absolutePath
             val appCtx = AppContextImpl(appContext)
             app = Libtailscale.start(filesDir, directFileRoot, false, appCtx)
+            isInitialized = true
             Log.i(TAG, "libtailscale backend started")
             notifyNetworkAvailable()
             registerNetworkCallback()
             startNotificationWatcher()
         } catch (e: UnsupportedOperationException) {
             Log.w(TAG, "libtailscale not available (stubs only) - VPN features disabled")
+            isInitialized = true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize libtailscale", e)
             _state.value = VpnState(status = VpnStatus.ERROR)
@@ -108,7 +112,7 @@ object VpnManager {
     private fun registerNetworkCallback() {
         try {
             val cm = appContext.getSystemService(ConnectivityManager::class.java)
-            cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     val lp = cm.getLinkProperties(network)
                     val ifname = lp?.interfaceName ?: return
@@ -121,7 +125,9 @@ object VpnManager {
                     Log.d(TAG, "NetworkCallback onLinkPropertiesChanged: $ifname")
                     Libtailscale.onDNSConfigChanged(ifname)
                 }
-            })
+            }
+            cm.registerDefaultNetworkCallback(callback)
+            networkCallback = callback
             Log.i(TAG, "Network callback registered")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to register network callback", e)
@@ -137,6 +143,7 @@ object VpnManager {
                     val json = JSONObject(String(notification, Charsets.UTF_8))
                     json.optInt("State", -1).takeIf { it >= 0 }?.let { stateInt ->
                         val newStatus = when (stateInt) {
+                            3 -> VpnStatus.PENDING_APPROVAL
                             in 0..4 -> VpnStatus.DISCONNECTED
                             5 -> VpnStatus.CONNECTING
                             6 -> VpnStatus.CONNECTED
@@ -163,8 +170,37 @@ object VpnManager {
         val status = getBackendStatus() ?: return
         val selfNode = status.optJSONObject("Self")
         val ipAddress = selfNode?.optJSONArray("TailscaleIPs")?.optString(0)
+
+        // Parse current exit node from backend status
+        val exitNodeId = status.optJSONObject("Prefs")?.optString("ExitNodeID", "")
+        val exitNode = if (!exitNodeId.isNullOrEmpty()) {
+            val peers = status.optJSONObject("Peer")
+            var found: ExitNode? = null
+            if (peers != null) {
+                for (key in peers.keys()) {
+                    val peer = peers.getJSONObject(key)
+                    if (peer.optString("ID", "") == exitNodeId) {
+                        val hostName = peer.optString("HostName", "")
+                        val location = peer.optJSONObject("Location")
+                        found = ExitNode(
+                            id = exitNodeId,
+                            name = hostName,
+                            location = location?.let {
+                                "${it.optString("CountryCode", "")} - ${it.optString("City", "")}"
+                            } ?: hostName,
+                            online = peer.optBoolean("Online", false),
+                            countryCode = location?.optString("CountryCode", "") ?: ""
+                        )
+                        break
+                    }
+                }
+            }
+            found
+        } else null
+
         _state.value = _state.value.copy(
             ipAddress = ipAddress,
+            exitNode = exitNode ?: _state.value.exitNode,
             since = _state.value.since ?: System.currentTimeMillis()
         )
     }
@@ -195,7 +231,13 @@ object VpnManager {
                 val intent = Intent(context, AliciaVpnService::class.java).apply {
                     action = AliciaVpnService.ACTION_START_VPN
                 }
-                context.startForegroundService(intent)
+                try {
+                    context.startForegroundService(intent)
+                } catch (e: android.app.ForegroundServiceStartNotAllowedException) {
+                    Log.w(TAG, "Cannot start foreground service from background", e)
+                    _state.value = VpnState(status = VpnStatus.ERROR)
+                    return@launch
+                }
 
                 val settings = prefs.getVpnSettings()
                 settings.selectedExitNodeId?.let { nodeId ->
@@ -313,7 +355,10 @@ object VpnManager {
             }
 
             Log.i(TAG, "Calling /start with ControlURL=$controlUrl")
-            callLocalApi("POST", "/localapi/v0/start", body.toString())
+            if (callLocalApi("POST", "/localapi/v0/start", body.toString()) == null) {
+                Log.e(TAG, "/start failed")
+                return@withContext false
+            }
 
             // Brief wait for control client to initialize.
             kotlinx.coroutines.delay(500)
@@ -322,7 +367,10 @@ object VpnManager {
             // on Android. /login-interactive sets loginGoal and cancels
             // authCtx, waking the auth routine to use our AuthKey.
             Log.i(TAG, "Calling /login-interactive to kick auth routine")
-            callLocalApi("POST", "/localapi/v0/login-interactive", null)
+            if (callLocalApi("POST", "/localapi/v0/login-interactive", null) == null) {
+                Log.e(TAG, "/login-interactive failed")
+                return@withContext false
+            }
 
             // Poll for backend to progress past NeedsLogin.
             repeat(45) { pollIdx ->
@@ -346,6 +394,21 @@ object VpnManager {
             callLocalApi("POST", "/localapi/v0/logout", null)
             stopVpnInternal(context)
             prefs.saveVpnSettings(VpnSettings())
+            // Clear Go backend's encrypted state to prevent stale ControlURL/node keys
+            try {
+                val masterKey = MasterKey.Builder(appContext)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                EncryptedSharedPreferences.create(
+                    appContext,
+                    "tailscale_encrypted_prefs",
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                ).edit().clear().apply()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear Go backend prefs", e)
+            }
             Log.i(TAG, "Device forgotten and logged out")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to forget device", e)
@@ -353,6 +416,15 @@ object VpnManager {
     }
 
     fun shutdown() {
+        try {
+            networkCallback?.let {
+                val cm = appContext.getSystemService(ConnectivityManager::class.java)
+                cm.unregisterNetworkCallback(it)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister network callback", e)
+        }
+        networkCallback = null
         notificationManager?.stop()
         notificationManager = null
         connectJob?.cancel()
@@ -383,6 +455,7 @@ object VpnManager {
         val responseBody = if (bytes != null) String(bytes, Charsets.UTF_8) else ""
         if (statusCode !in 200..299) {
             Log.w(TAG, "LocalAPI $method $endpoint returned $statusCode: $responseBody")
+            return null
         }
         return responseBody
     }

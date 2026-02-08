@@ -1,6 +1,6 @@
 package com.alicia.assistant.model
 
-enum class VpnStatus { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
+enum class VpnStatus { DISCONNECTED, CONNECTING, CONNECTED, PENDING_APPROVAL, ERROR }
 
 data class VpnState(
     val status: VpnStatus = VpnStatus.DISCONNECTED,

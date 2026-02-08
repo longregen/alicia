@@ -32,12 +32,16 @@ class BootReceiver : BroadcastReceiver() {
                 val prefs = PreferencesManager(context)
                 val vpnSettings = prefs.getVpnSettings()
                 if (vpnSettings.autoConnect && vpnSettings.nodeRegistered) {
-                    if (android.net.VpnService.prepare(context) == null) {
-                        Log.i(TAG, "BootReceiver: auto-connecting VPN")
-                        VpnManager.init(context)
-                        VpnManager.connect(context)
-                    } else {
-                        Log.i(TAG, "BootReceiver: VPN permission not granted, skipping auto-connect")
+                    try {
+                        if (android.net.VpnService.prepare(context) == null) {
+                            Log.i(TAG, "BootReceiver: auto-connecting VPN")
+                            VpnManager.init(context)
+                            VpnManager.connect(context)
+                        } else {
+                            Log.i(TAG, "BootReceiver: VPN permission not granted, skipping auto-connect")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "BootReceiver: VPN permission check failed, skipping auto-connect", e)
                     }
                 }
             }

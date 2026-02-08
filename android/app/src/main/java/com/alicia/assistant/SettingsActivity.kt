@@ -57,6 +57,7 @@ class SettingsActivity : ComponentActivity() {
             VpnStatus.CONNECTED -> vpnStatusText.text = getString(R.string.vpn_connected)
             VpnStatus.CONNECTING -> vpnStatusText.text = getString(R.string.vpn_connecting_status)
             VpnStatus.DISCONNECTED -> vpnStatusText.text = getString(R.string.vpn_status_off)
+            VpnStatus.PENDING_APPROVAL -> vpnStatusText.text = getString(R.string.vpn_pending_approval)
             VpnStatus.ERROR -> vpnStatusText.text = getString(R.string.vpn_error)
         }
     }

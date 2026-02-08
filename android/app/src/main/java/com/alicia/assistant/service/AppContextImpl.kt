@@ -117,9 +117,9 @@ class AppContextImpl(private val context: Context) : libtailscale.AppContext {
         }
     }
 
-    override fun getSyspolicyStringValue(key: String): String = ""
-    override fun getSyspolicyBooleanValue(key: String): Boolean = false
-    override fun getSyspolicyStringArrayJSONValue(key: String): String = "[]"
+    override fun getSyspolicyStringValue(key: String): String = throw Exception("no such key")
+    override fun getSyspolicyBooleanValue(key: String): Boolean = throw Exception("no such key")
+    override fun getSyspolicyStringArrayJSONValue(key: String): String = throw Exception("no such key")
 
     override fun hardwareAttestationKeySupported(): Boolean = false
     override fun hardwareAttestationKeyCreate(): String = ""

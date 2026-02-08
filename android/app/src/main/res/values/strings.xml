@@ -136,6 +136,10 @@
     <string name="vpn_status_off">Off</string>
     <string name="vpn_not_configured">Not configured</string>
     <string name="vpn_server_url_required">Server URL is required</string>
+    <string name="vpn_auth_key_required">Auth key is required</string>
+    <string name="vpn_pending_approval">Pending Approval</string>
+    <string name="vpn_pending_approval_detail">Waiting for admin to approve this device</string>
+    <string name="vpn_invalid_server_url">Server URL must start with http:// or https://</string>
     <string name="vpn_credentials_saved">Credentials saved</string>
     <string name="vpn_select_exit_node">Select Exit Node</string>
     <string name="vpn_no_exit_nodes">No exit nodes available</string>

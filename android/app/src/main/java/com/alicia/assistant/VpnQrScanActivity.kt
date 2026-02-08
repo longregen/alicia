@@ -53,6 +53,18 @@ class VpnQrScanActivity : ComponentActivity() {
         }
     }
 
+    private var pendingAuthAction: (() -> Unit)? = null
+
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            VpnManager.startVpnService(this)
+            pendingAuthAction?.invoke()
+        }
+        pendingAuthAction = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_vpn_qr_scan)
@@ -136,30 +148,54 @@ class VpnQrScanActivity : ComponentActivity() {
         if (isFinishing) return
         Log.i(TAG, "QR code scanned: ${code.take(20)}...")
 
-        // Start VPN service so the backend's control client is active
-        VpnManager.connect(this)
+        val doAuth: () -> Unit = {
+            lifecycleScope.launch {
+                val (authKey, serverUrl) = parseQrCode(code)
 
-        lifecycleScope.launch {
-            val (authKey, serverUrl) = parseQrCode(code)
+                if (authKey.isEmpty()) {
+                    Toast.makeText(this@VpnQrScanActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                    finish()
+                    return@launch
+                }
 
-            val controlUrl = serverUrl ?: preferencesManager.getVpnSettings().headscaleUrl
-            val registered = VpnManager.loginWithAuthKey(this@VpnQrScanActivity, controlUrl, authKey)
-            val currentSettings = preferencesManager.getVpnSettings()
-            preferencesManager.saveVpnSettings(
-                currentSettings.copy(
-                    headscaleUrl = serverUrl ?: currentSettings.headscaleUrl,
-                    authKey = authKey,
-                    nodeRegistered = registered
+                val controlUrl = serverUrl ?: preferencesManager.getVpnSettings().headscaleUrl
+                if (controlUrl.isEmpty()) {
+                    Toast.makeText(this@VpnQrScanActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                    finish()
+                    return@launch
+                }
+
+                val registered = VpnManager.loginWithAuthKey(this@VpnQrScanActivity, controlUrl, authKey)
+                val currentSettings = preferencesManager.getVpnSettings()
+                preferencesManager.saveVpnSettings(
+                    currentSettings.copy(
+                        headscaleUrl = serverUrl ?: currentSettings.headscaleUrl,
+                        authKey = if (registered) "" else authKey,
+                        nodeRegistered = registered
+                    )
                 )
-            )
 
-            if (isFinishing) return@launch
-            if (registered) {
-                Toast.makeText(this@VpnQrScanActivity, R.string.vpn_credentials_saved, Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@VpnQrScanActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                if (isFinishing) return@launch
+                if (registered) {
+                    Toast.makeText(this@VpnQrScanActivity, R.string.vpn_credentials_saved, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@VpnQrScanActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                }
+                finish()
             }
-            finish()
+        }
+
+        // Start VPN service so the backend's control client is active
+        when (val result = VpnManager.connect(this)) {
+            is VpnManager.ConnectResult.NeedsPermission -> {
+                pendingAuthAction = doAuth
+                vpnPermissionLauncher.launch(result.intent)
+            }
+            is VpnManager.ConnectResult.Failed -> {
+                Toast.makeText(this, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                finish()
+            }
+            else -> doAuth()
         }
     }
 
@@ -168,8 +204,11 @@ class VpnQrScanActivity : ComponentActivity() {
             if (code.startsWith("headscale://auth")) {
                 val uri = Uri.parse(code)
                 val key = uri.getQueryParameter("key") ?: code
-                val server = uri.getQueryParameter("server")
-                Pair(key, server)
+                val server = uri.getQueryParameter("server")?.trim()
+                val validServer = server?.takeIf {
+                    it.startsWith("http://") || it.startsWith("https://")
+                }
+                Pair(key, validServer)
             } else {
                 Pair(code, null)
             }

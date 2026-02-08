@@ -502,6 +502,15 @@ class MainActivity : ComponentActivity() {
                 vpnSubtitle.text = vpnState.exitNode?.let { getString(R.string.vpn_connected_via, it.location) } ?: getString(R.string.vpn_connected)
                 vpnToggle.isChecked = true
             }
+            VpnStatus.PENDING_APPROVAL -> {
+                vpnIcon.clearAnimation()
+                vpnIcon.imageTintList = ColorStateList.valueOf(
+                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorTertiary)
+                )
+                vpnTitle.text = getString(R.string.vpn_pending_approval)
+                vpnSubtitle.text = getString(R.string.vpn_pending_approval_detail)
+                vpnToggle.isChecked = false
+            }
             VpnStatus.ERROR -> {
                 vpnIcon.clearAnimation()
                 vpnIcon.imageTintList = ColorStateList.valueOf(

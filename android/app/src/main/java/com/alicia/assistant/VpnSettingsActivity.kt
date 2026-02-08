@@ -96,6 +96,16 @@ class VpnSettingsActivity : ComponentActivity() {
                 return@setOnClickListener
             }
 
+            if (authKey.isEmpty()) {
+                Toast.makeText(this, R.string.vpn_auth_key_required, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (!serverUrl.startsWith("http://") && !serverUrl.startsWith("https://")) {
+                Toast.makeText(this, R.string.vpn_invalid_server_url, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
             // The libtailscale backend pauses its control client until the VPN
             // service is running (requestVPN). Start the service before registering.
             val doRegister: () -> Unit = {
@@ -113,7 +123,7 @@ class VpnSettingsActivity : ComponentActivity() {
                     preferencesManager.saveVpnSettings(
                         preferencesManager.getVpnSettings().copy(
                             headscaleUrl = serverUrl,
-                            authKey = authKey,
+                            authKey = if (registered) "" else authKey,
                             nodeRegistered = registered
                         )
                     )
@@ -211,6 +221,14 @@ class VpnSettingsActivity : ComponentActivity() {
                         heroDetailText.text = vpnState.exitNode?.let { getString(R.string.vpn_connected_via, it.location) }
                             ?: vpnState.ipAddress?.let { "IP: $it" }
                             ?: getString(R.string.vpn_connected_to_tailnet)
+                        connectButton.text = getString(R.string.vpn_disconnect)
+                    }
+                    VpnStatus.PENDING_APPROVAL -> {
+                        heroShieldIcon.imageTintList = ColorStateList.valueOf(
+                            MaterialColors.getColor(heroShieldIcon, com.google.android.material.R.attr.colorTertiary)
+                        )
+                        heroStatusText.text = getString(R.string.vpn_pending_approval)
+                        heroDetailText.text = getString(R.string.vpn_pending_approval_detail)
                         connectButton.text = getString(R.string.vpn_disconnect)
                     }
                     VpnStatus.ERROR -> {

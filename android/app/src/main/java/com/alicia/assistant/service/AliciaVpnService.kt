@@ -14,6 +14,7 @@ import com.alicia.assistant.model.VpnState
 import com.alicia.assistant.model.VpnStatus
 import libtailscale.Libtailscale
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 class AliciaVpnService : VpnService(), libtailscale.IPNService {
 
@@ -26,6 +27,7 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
     }
 
     private val serviceId = UUID.randomUUID().toString()
+    private val closed = AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -35,7 +37,12 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START_VPN -> startVpn()
-            ACTION_STOP_VPN -> stopVpn()
+            ACTION_STOP_VPN -> {
+                stopVpn()
+                return START_NOT_STICKY
+            }
+            // Always-On VPN or OOM restart (null intent): start tunnel if registered
+            else -> startVpn()
         }
         return START_STICKY
     }
@@ -92,6 +99,7 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
     }
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         try {
             Libtailscale.serviceDisconnect(this)
         } catch (e: Exception) {
