@@ -17,31 +17,37 @@ name: Onboarding Flow
 - extendedWaitUntil:
     visible: "Welcome to Alicia"
     timeout: 10000
-- takeScreenshot: screenshots/onboarding_welcome
+- takeScreenshot: screenshots/onboarding_01_welcome
 - tapOn: "Next"
 
 # ── Microphone (required) ──
 - assertVisible: "Microphone Access"
+- takeScreenshot: screenshots/onboarding_02_microphone
 - tapOn: "Grant Permission"
 # Android 14 shows "While using the app" for microphone permission
 - tapOn: "While using the app"
+- takeScreenshot: screenshots/onboarding_03_microphone_granted
 
 # ── Notifications (required) ──
 - assertVisible: "Notifications"
-- takeScreenshot: screenshots/onboarding_notifications
+- takeScreenshot: screenshots/onboarding_04_notifications
 - tapOn: "Grant Permission"
 - tapOn: "Allow"
+- takeScreenshot: screenshots/onboarding_05_notifications_granted
 
 # ── Bluetooth (optional) — skip ──
 - assertVisible: "Bluetooth Audio"
+- takeScreenshot: screenshots/onboarding_06_bluetooth
 - tapOn: "Skip"
 
 # ── Location (optional) — skip ──
 - assertVisible: "Location Access"
+- takeScreenshot: screenshots/onboarding_07_location
 - tapOn: "Skip"
 
 # ── Assistant (optional) — skip if present ──
 # clearState does NOT revoke system roles, so this page may not appear.
+- takeScreenshot: screenshots/onboarding_08_assistant_or_complete
 - tapOn:
     text: "Skip"
     optional: true
@@ -50,8 +56,9 @@ name: Onboarding Flow
 - extendedWaitUntil:
     visible: "Get Started"
     timeout: 5000
+- takeScreenshot: screenshots/onboarding_09_complete
 - tapOn: "Get Started"
 
 # Main screen
 - assertVisible: "Tap to speak"
-- takeScreenshot: screenshots/onboarding_complete
+- takeScreenshot: screenshots/onboarding_10_main_screen

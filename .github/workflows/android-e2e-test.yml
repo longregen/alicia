@@ -113,25 +113,46 @@ jobs:
             # Install APK
             adb install -r apks/app-x86_64-debug.apk
 
-            # Run Maestro tests
+            # Start Headscale for VPN tests
+            cd android/e2e
+            HEADSCALE_RUNNING=0
+            if bash start-headscale.sh; then
+              HEADSCALE_RUNNING=1
+              export HEADSCALE_URL="http://10.0.2.2:8080"
+              export HEADSCALE_AUTHKEY="$(cat /tmp/headscale-test/authkey.txt)"
+            else
+              echo "Headscale failed to start, skipping VPN tests"
+            fi
+            cd ../..
+
             mkdir -p screenshots
             cd android/e2e
 
             TEST_FAILED=0
-            for test in onboarding.yaml conversations.yaml; do
+            TESTS="onboarding.yaml voice_interaction.yaml conversations.yaml"
+            if [ "$HEADSCALE_RUNNING" -eq 1 ]; then
+              TESTS="$TESTS vpn_registration.yaml"
+            fi
+
+            for test in $TESTS; do
               echo "=== Running $test ==="
-              if maestro test "$test" --format junit --output "../../screenshots/${test%.yaml}-report.xml"; then
-                echo "✓ $test passed"
+              EXTRA=""
+              if [ "$test" = "vpn_registration.yaml" ] && [ -n "$HEADSCALE_AUTHKEY" ]; then
+                EXTRA="--env HEADSCALE_URL=$HEADSCALE_URL --env HEADSCALE_AUTHKEY=$HEADSCALE_AUTHKEY"
+              fi
+              if maestro test $EXTRA "$test" --format junit --output "../../screenshots/${test%.yaml}-report.xml"; then
+                echo "PASS $test"
               else
-                echo "✗ $test failed"
+                echo "FAIL $test"
                 TEST_FAILED=1
               fi
-
-              # Take screenshot after each test
               adb exec-out screencap -p > "../../screenshots/${test%.yaml}.png" || true
             done
 
-            # Cleanup
+            if [ "$HEADSCALE_RUNNING" -eq 1 ]; then
+              bash stop-headscale.sh 2>/dev/null || true
+            fi
+
             kill $EMULATOR_PID 2>/dev/null || true
 
             exit $TEST_FAILED

@@ -34,11 +34,17 @@ class VpnSettingsActivity : ComponentActivity() {
     private lateinit var authKeyInput: TextInputEditText
     private lateinit var autoConnectSwitch: MaterialSwitch
 
+    /** Pending registration action after VPN permission is granted */
+    private var pendingRegistration: (() -> Unit)? = null
+
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             VpnManager.startVpnService(this)
+            // Resume pending registration if VPN permission was requested for it
+            pendingRegistration?.invoke()
+            pendingRegistration = null
         }
     }
 
@@ -90,34 +96,46 @@ class VpnSettingsActivity : ComponentActivity() {
                 return@setOnClickListener
             }
 
-            val registerButton = it as MaterialButton
-            registerButton.isEnabled = false
-            registerButton.text = getString(R.string.vpn_registering)
+            // The libtailscale backend pauses its control client until the VPN
+            // service is running (requestVPN). Start the service before registering.
+            val doRegister: () -> Unit = {
+                val registerButton = findViewById<MaterialButton>(R.id.registerButton)
+                registerButton.isEnabled = false
+                registerButton.text = getString(R.string.vpn_registering)
 
-            lifecycleScope.launch {
-                val urlSet = VpnManager.setControlUrl(serverUrl)
-                val registered = if (authKey.isNotEmpty()) {
-                    VpnManager.loginWithAuthKey(authKey)
-                } else {
-                    urlSet
-                }
+                lifecycleScope.launch {
+                    val registered = if (authKey.isNotEmpty()) {
+                        VpnManager.loginWithAuthKey(this@VpnSettingsActivity, serverUrl, authKey)
+                    } else {
+                        true
+                    }
 
-                preferencesManager.saveVpnSettings(
-                    preferencesManager.getVpnSettings().copy(
-                        headscaleUrl = serverUrl,
-                        authKey = authKey,
-                        nodeRegistered = registered
+                    preferencesManager.saveVpnSettings(
+                        preferencesManager.getVpnSettings().copy(
+                            headscaleUrl = serverUrl,
+                            authKey = authKey,
+                            nodeRegistered = registered
+                        )
                     )
-                )
-                registerButton.isEnabled = true
-                registerButton.text = getString(R.string.vpn_register)
+                    registerButton.isEnabled = true
+                    registerButton.text = getString(R.string.vpn_register)
 
-                if (registered) {
-                    updateSections(true)
-                    Toast.makeText(this@VpnSettingsActivity, R.string.vpn_credentials_saved, Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@VpnSettingsActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                    if (registered) {
+                        updateSections(true)
+                        Toast.makeText(this@VpnSettingsActivity, R.string.vpn_credentials_saved, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@VpnSettingsActivity, R.string.vpn_registration_failed, Toast.LENGTH_SHORT).show()
+                    }
                 }
+            }
+
+            // Ensure VPN service is running so the backend's control client is active
+            when (val result = VpnManager.connect(this)) {
+                is VpnManager.ConnectResult.NeedsPermission -> {
+                    pendingRegistration = doRegister
+                    vpnPermissionLauncher.launch(result.intent)
+                }
+                else -> doRegister()
             }
         }
 
@@ -156,7 +174,10 @@ class VpnSettingsActivity : ComponentActivity() {
         lifecycleScope.launch {
             val settings = preferencesManager.getVpnSettings()
             serverUrlInput.setText(settings.headscaleUrl)
-            authKeyInput.setText(settings.authKey)
+            if (settings.authKey.isNotEmpty()) {
+                authKeyInput.setText(R.string.vpn_auth_key_placeholder)
+                authKeyInput.isEnabled = false
+            }
             autoConnectSwitch.isChecked = settings.autoConnect
             updateSections(settings.nodeRegistered)
         }

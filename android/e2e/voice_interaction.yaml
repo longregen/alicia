@@ -17,27 +17,40 @@ name: Voice Interaction UI Flow
 - takeScreenshot: screenshots/voice_03_listening
 
 # With no audio input, VAD timeout fires quickly and app cycles back.
-# Processing state may be too fast to catch, so wait for return to idle.
+# Capture the processing state (may be brief)
+- takeScreenshot: screenshots/voice_04_processing_or_transition
+
+# Wait for return to idle
 - extendedWaitUntil:
     visible:
       text: "Tap to speak"
     timeout: 45000
-- takeScreenshot: screenshots/voice_04_returned_to_idle
+- takeScreenshot: screenshots/voice_05_returned_to_idle
 
 # Tap again to verify the button is responsive after a full cycle
 - tapOn:
     id: "com.alicia.assistant:id/activationButton"
 - assertVisible:
     text: "Listening.*"
-- takeScreenshot: screenshots/voice_05_listening_again
+- takeScreenshot: screenshots/voice_06_listening_again
 
 # Stop listening by tapping the button again
 - tapOn:
     id: "com.alicia.assistant:id/activationButton"
+
+# Capture state right after manual stop
+- takeScreenshot: screenshots/voice_07_stopping
 
 # Should return to processing then idle
 - extendedWaitUntil:
     visible:
       text: "Tap to speak"
     timeout: 45000
-- takeScreenshot: screenshots/voice_06_idle_after_stop
+- takeScreenshot: screenshots/voice_08_idle_after_stop
+
+# Navigate to settings to verify it's accessible from main screen
+- tapOn:
+    id: "com.alicia.assistant:id/settingsButton"
+- takeScreenshot: screenshots/voice_09_settings
+- pressKey: back
+- takeScreenshot: screenshots/voice_10_back_to_main

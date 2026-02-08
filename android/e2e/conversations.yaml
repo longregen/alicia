@@ -28,6 +28,9 @@ name: Chat Conversation with AI
     id: "com.alicia.assistant:id/sendButton"
 - takeScreenshot: screenshots/chat_05_sent
 
+# Capture the thinking/loading state if visible
+- takeScreenshot: screenshots/chat_06_waiting
+
 # Wait for the AI response to arrive (may take up to 60s)
 # The typing indicator may appear and disappear too fast to catch,
 # so we wait for the response content to appear
@@ -35,12 +38,13 @@ name: Chat Conversation with AI
     visible:
       id: "com.alicia.assistant:id/messageContent"
     timeout: 60000
-- takeScreenshot: screenshots/chat_06_response
+- takeScreenshot: screenshots/chat_07_response
 
 # Dismiss keyboard first, then go back to conversations list
 - pressKey: back
+- takeScreenshot: screenshots/chat_08_keyboard_dismissed
 - pressKey: back
-- takeScreenshot: screenshots/chat_08_conversations_after
+- takeScreenshot: screenshots/chat_09_conversations_after
 
 # Should see the conversation we just created
 - assertVisible: "Conversations"
@@ -48,4 +52,4 @@ name: Chat Conversation with AI
 # Go back to main screen
 - pressKey: back
 - assertVisible: "Tap to speak"
-- takeScreenshot: screenshots/chat_09_main_after
+- takeScreenshot: screenshots/chat_10_main_after

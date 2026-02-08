@@ -1,0 +1,70 @@
+appId: com.alicia.assistant
+name: VPN Registration Flow
+---
+# Assumes onboarding is complete (runs after onboarding.yaml).
+# Requires environment variables:
+#   HEADSCALE_URL     - Headscale server URL (e.g. http://10.0.2.2:8080)
+#   HEADSCALE_AUTHKEY - Pre-auth key for registration
+#
+# The Go network monitor needs a nudge via onDNSConfigChanged to detect the
+# emulator's network (Go's net.Interfaces fails on Android 11+ netlink).
+# VpnManager.init calls notifyNetworkAvailable to handle this.
+
+- launchApp
+- assertVisible: "Tap to speak"
+- takeScreenshot: screenshots/vpn_01_main_before
+
+- tapOn:
+    id: "com.alicia.assistant:id/settingsButton"
+- takeScreenshot: screenshots/vpn_02_settings
+
+- tapOn:
+    id: "com.alicia.assistant:id/vpnSettingsCard"
+- assertVisible: "VPN Settings"
+- takeScreenshot: screenshots/vpn_03_vpn_settings
+
+- tapOn:
+    id: "com.alicia.assistant:id/serverUrlInput"
+- eraseText: 50
+- inputText: "${HEADSCALE_URL}"
+- takeScreenshot: screenshots/vpn_04_server_url
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "com.alicia.assistant:id/authKeyInput"
+    direction: DOWN
+    timeout: 5000
+- tapOn:
+    id: "com.alicia.assistant:id/authKeyInput"
+- eraseText: 100
+- inputText: "${HEADSCALE_AUTHKEY}"
+- takeScreenshot: screenshots/vpn_05_credentials
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "com.alicia.assistant:id/registerButton"
+    direction: DOWN
+    timeout: 5000
+- tapOn:
+    id: "com.alicia.assistant:id/registerButton"
+
+# VPN permission dialog appears because registration starts the VPN service
+- tapOn:
+    text: "OK"
+    optional: true
+- takeScreenshot: screenshots/vpn_06_registering
+
+# Wait for registration to complete
+- extendedWaitUntil:
+    visible:
+      text: "Credentials saved"
+    timeout: 60000
+- takeScreenshot: screenshots/vpn_07_registered
+
+# Navigate back to main screen
+- pressKey: back
+- pressKey: back
+- assertVisible: "Tap to speak"
+- takeScreenshot: screenshots/vpn_08_main_after

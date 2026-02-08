@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 class BootReceiver : BroadcastReceiver() {
 
     companion object {
-        private const val TAG = "WakeWordService"
+        private const val TAG = "BootReceiver"
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {

@@ -8,6 +8,7 @@ import android.util.Log
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -34,13 +35,23 @@ class VpnQrScanActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "VpnQrScan"
-        private const val CAMERA_PERMISSION_REQUEST = 1001
     }
 
     private val scanComplete = AtomicBoolean(false)
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val barcodeScanner = BarcodeScanning.getClient()
     private lateinit var preferencesManager: PreferencesManager
+
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startCamera()
+        } else {
+            Toast.makeText(this, R.string.vpn_camera_permission_required, Toast.LENGTH_LONG).show()
+            finish()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,19 +67,7 @@ class VpnQrScanActivity : ComponentActivity() {
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == CAMERA_PERMISSION_REQUEST) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startCamera()
-            } else {
-                Toast.makeText(this, R.string.vpn_camera_permission_required, Toast.LENGTH_LONG).show()
-                finish()
-            }
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -136,17 +135,19 @@ class VpnQrScanActivity : ComponentActivity() {
     private fun handleScannedCode(code: String) {
         if (isFinishing) return
         Log.i(TAG, "QR code scanned: ${code.take(20)}...")
+
+        // Start VPN service so the backend's control client is active
+        VpnManager.connect(this)
+
         lifecycleScope.launch {
             val (authKey, serverUrl) = parseQrCode(code)
 
-            if (serverUrl != null) {
-                VpnManager.setControlUrl(serverUrl)
-            }
-
-            val registered = VpnManager.loginWithAuthKey(authKey)
+            val controlUrl = serverUrl ?: preferencesManager.getVpnSettings().headscaleUrl
+            val registered = VpnManager.loginWithAuthKey(this@VpnQrScanActivity, controlUrl, authKey)
+            val currentSettings = preferencesManager.getVpnSettings()
             preferencesManager.saveVpnSettings(
-                preferencesManager.getVpnSettings().copy(
-                    headscaleUrl = serverUrl ?: preferencesManager.getVpnSettings().headscaleUrl,
+                currentSettings.copy(
+                    headscaleUrl = serverUrl ?: currentSettings.headscaleUrl,
                     authKey = authKey,
                     nodeRegistered = registered
                 )

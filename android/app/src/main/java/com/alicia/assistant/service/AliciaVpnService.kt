@@ -70,8 +70,6 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
         Log.i(TAG, "VPN service destroyed")
     }
 
-    // --- libtailscale.IPNService implementation ---
-
     override fun id(): String = serviceId
 
     override fun newBuilder(): libtailscale.VPNServiceBuilder {
@@ -113,8 +111,6 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
             updateNotification("Disconnected")
         }
     }
-
-    // --- Notification helpers ---
 
     private fun buildNotification(statusText: String): android.app.Notification {
         val pendingIntent = PendingIntent.getActivity(

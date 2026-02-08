@@ -84,6 +84,20 @@ echo -e "${YELLOW}Installing $APK...${NC}"
 }
 echo -e "${GREEN}Installed${NC}"
 
+# Start Headscale for VPN tests if available
+HEADSCALE_RUNNING=0
+if [ -f "vpn_registration.yaml" ] && [ -f "start-headscale.sh" ]; then
+    echo -e "\n${YELLOW}Starting Headscale for VPN tests...${NC}"
+    if bash start-headscale.sh; then
+        HEADSCALE_RUNNING=1
+        export HEADSCALE_URL="http://10.0.2.2:8080"
+        export HEADSCALE_AUTHKEY="$(cat /tmp/headscale-test/authkey.txt)"
+        echo -e "${GREEN}Headscale ready${NC}"
+    else
+        echo -e "${YELLOW}Headscale failed to start, skipping VPN tests${NC}"
+    fi
+fi
+
 # Clear old screenshots and logs
 mkdir -p screenshots
 rm -f screenshots/*.png
@@ -94,6 +108,9 @@ rm -f logcat.txt
 
 # Run tests in dependency order
 TESTS=(onboarding.yaml voice_interaction.yaml conversations.yaml)
+if [ "$HEADSCALE_RUNNING" -eq 1 ]; then
+    TESTS+=(vpn_registration.yaml)
+fi
 PASSED=0
 FAILED=0
 
@@ -102,7 +119,11 @@ for test_file in "${TESTS[@]}"; do
     test_name=$(basename "$test_file" .yaml)
     restart_adb
     echo -e "\n${YELLOW}Running: $test_name${NC}"
-    if "$MAESTRO" test "$test_file"; then
+    MAESTRO_ENV=""
+    if [ "$test_name" = "vpn_registration" ] && [ -n "$HEADSCALE_AUTHKEY" ]; then
+        MAESTRO_ENV="--env HEADSCALE_URL=$HEADSCALE_URL --env HEADSCALE_AUTHKEY=$HEADSCALE_AUTHKEY"
+    fi
+    if "$MAESTRO" test $MAESTRO_ENV "$test_file"; then
         echo -e "${GREEN}  PASSED${NC}"
         PASSED=$((PASSED + 1))
     else
@@ -110,6 +131,12 @@ for test_file in "${TESTS[@]}"; do
         FAILED=$((FAILED + 1))
     fi
 done
+
+# Stop Headscale if it was started
+if [ "$HEADSCALE_RUNNING" -eq 1 ]; then
+    echo -e "\n${YELLOW}Stopping Headscale...${NC}"
+    bash stop-headscale.sh 2>/dev/null || true
+fi
 
 # Resize screenshots to 50% (540x1200) so they fit in Claude's 2000px image input
 count=$(ls screenshots/*.png 2>/dev/null | wc -l)

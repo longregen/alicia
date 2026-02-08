@@ -65,27 +65,33 @@ class AppContextImpl(private val context: Context) : libtailscale.AppContext {
         context.packageManager.hasSystemFeature("android.hardware.type.pc")
 
     override fun getInterfacesAsJson(): String {
+        Log.d(TAG, "getInterfacesAsJson called")
         val result = JSONArray()
         try {
-            for (iface in NetworkInterface.getNetworkInterfaces()) {
+            for (iface in NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()) {
                 val obj = JSONObject()
                 obj.put("name", iface.name)
                 obj.put("index", iface.index)
                 obj.put("mtu", iface.mtu)
                 obj.put("up", iface.isUp)
+                obj.put("loopback", iface.isLoopback)
+                obj.put("broadcast", iface.supportsMulticast())
+                obj.put("pointToPoint", iface.isPointToPoint)
+                obj.put("multicast", iface.supportsMulticast())
                 val addrs = JSONArray()
                 for (addr in iface.interfaceAddresses) {
                     val a = JSONObject()
-                    a.put("address", addr.address.hostAddress)
-                    a.put("prefixLength", addr.networkPrefixLength)
+                    a.put("ip", addr.address.hostAddress)
+                    a.put("prefixLen", addr.networkPrefixLength)
                     addrs.put(a)
                 }
-                obj.put("addresses", addrs)
+                obj.put("addrs", addrs)
                 result.put(obj)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to enumerate network interfaces", e)
         }
+        Log.d(TAG, "getInterfacesAsJson returning ${result.length()} interfaces")
         return result.toString()
     }
 

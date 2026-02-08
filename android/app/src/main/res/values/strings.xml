@@ -173,6 +173,7 @@
     <string name="vpn_always_on_desc">Configure in Android settings</string>
     <string name="vpn_danger_zone">Danger Zone</string>
     <string name="vpn_forget_desc">Unregister from Headscale</string>
+    <string name="vpn_auth_key_placeholder">Key saved</string>
 
     <!-- Attribution -->
     <string name="attribution_wake_word">Wake word detection</string>

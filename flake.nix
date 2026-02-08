@@ -102,6 +102,66 @@
           sha256 = "1rl65n2maayggnzi811x6zingkd1ny2z7p0fvcbfaprbz5khz2h8";
         };
 
+        tailscaleAndroidSrc = pkgs.fetchFromGitHub {
+          owner = "tailscale";
+          repo = "tailscale-android";
+          rev = "afc295d2836f3653240ed8cd5f19629d98589439";
+          hash = "sha256-KpmJuBojaKdX6LcEtnSR1JGT6G1qYszlSKhDT2N5hVE=";
+        };
+
+        go_1_25_6 = pkgs.go.overrideAttrs (old: rec {
+          version = "1.25.6";
+          src = pkgs.fetchurl {
+            url = "https://go.dev/dl/go${version}.linux-amd64.tar.gz";
+            hash = "sha256-8CK2qteONivLqbC5TQmtWMWnDGujt1gpBfq6v1/gGBo=";
+          };
+        });
+
+        # Build libtailscale.aar as a FOD (network access needed for go mod download
+        # + gomobile's internal go mod tidy which resolves tailscale.com's full
+        # 470+ transitive dependency graph).
+        libtailscale = pkgs.stdenv.mkDerivation {
+          pname = "libtailscale";
+          version = "0-unstable-2026-01-28";
+          src = tailscaleAndroidSrc;
+
+          nativeBuildInputs = [ go_1_25_6 androidSdk pkgs.jdk17 pkgs.cacert ];
+
+          buildPhase = ''
+            export HOME=$TMPDIR
+            export GOPATH=$TMPDIR/go
+            export GOMODCACHE=$TMPDIR/modcache
+            export GOCACHE=$TMPDIR/go-cache
+            export GOWORK=off
+            export GOTOOLCHAIN=local
+            export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+            export ANDROID_HOME="${androidSdk}/share/android-sdk"
+            export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.1.10909125"
+
+            mkdir -p $GOPATH/bin
+
+            go mod download
+            go build -o $GOPATH/bin/gomobile golang.org/x/mobile/cmd/gomobile
+            go build -o $GOPATH/bin/gobind golang.org/x/mobile/cmd/gobind
+            export PATH="$GOPATH/bin:$PATH"
+
+            gomobile bind \
+              -target android \
+              -androidapi 26 \
+              -o libtailscale.aar \
+              ./libtailscale
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp libtailscale.aar $out/
+          '';
+
+          outputHashAlgo = "sha256";
+          outputHashMode = "recursive";
+          outputHash = "sha256-PuzEtBzyTyXWRLGjp2FJEfS4W/6A9c3kjKqS5az3mSU=";
+        };
+
         androidFhsEnv = pkgs.buildFHSEnv {
           name = "android-fhs-env";
           targetPkgs = pkgs: with pkgs; [
@@ -318,13 +378,16 @@
               export JAVA_HOME="${pkgs.jdk17.home}"
               export GRADLE_USER_HOME=$(mktemp -d)
               export TMPDIR=$(mktemp -d)
-              export GRADLE_OPTS="-Djava.io.tmpdir=$TMPDIR -Dorg.gradle.native.dir=$TMPDIR/native"
+              export GRADLE_OPTS="-Xmx6g -Djava.io.tmpdir=$TMPDIR -Dorg.gradle.native.dir=$TMPDIR/native"
               mkdir -p $TMPDIR/native
 
               mkdir -p app/src/main/assets
               cp ${sileroVadModel} app/src/main/assets/silero_vad.onnx
               mkdir -p app/src/main/assets/vosk-models/small-en-us
               cp -r ${voskModelSmallEn}/. app/src/main/assets/vosk-models/small-en-us/
+
+              mkdir -p app/libs
+              cp ${libtailscale}/libtailscale.aar app/libs/
 
               cp -a $mitmCache/. $GRADLE_USER_HOME/
               chmod -R u+w $GRADLE_USER_HOME
@@ -341,6 +404,8 @@
               find app/build/outputs/apk -name "*.apk" -exec cp {} $out/ \;
             '';
           };
+
+          inherit libtailscale;
 
           default = self.packages.${system}.api;
         };
@@ -432,6 +497,7 @@
             pkgs.maestro
             pkgs.go
             pkgs.gomobile
+            pkgs.headscale
           ];
 
           shellHook = ''
