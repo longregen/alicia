@@ -12,9 +12,13 @@ name: Chat Conversation with AI
 - assertVisible: "Conversations"
 - takeScreenshot: screenshots/chat_02_conversations
 
-# Create new conversation
+# Create new conversation (API call may take a few seconds)
 - tapOn:
     id: "com.alicia.assistant:id/newConversationFab"
+- extendedWaitUntil:
+    visible:
+      id: "com.alicia.assistant:id/messageInput"
+    timeout: 15000
 - takeScreenshot: screenshots/chat_03_new_conversation
 
 # Type a message

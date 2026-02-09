@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import AudioAddon from './AudioAddon';
+import React from 'react';
 import FeedbackControls from './FeedbackControls';
 import BranchNavigator from './BranchNavigator';
 import { HoverPopover } from './HoverPopover';
 import { cls } from '../../utils/cls';
 import { useFeedback } from '../../hooks/useFeedback';
-import type { BaseComponentProps, MessageAddon, AudioState, MemoryAddonData } from '../../types/components';
-
-const AUDIO_STATES = { IDLE: 'idle', PLAYING: 'playing', PAUSED: 'paused' } as const;
+import type { BaseComponentProps, MessageAddon, MemoryAddonData } from '../../types/components';
 
 const TOOL_EMOJIS: Record<string, string> = {
   calculate: '🧮',
@@ -1021,28 +1018,6 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
   showFeedback = false,
   branchData,
 }) => {
-  const [audioState, setAudioState] = useState<AudioState>(AUDIO_STATES.IDLE);
-  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-
-  // Mock audio duration - in a real app this would come from the audio file
-  const audioDuration = 45; // seconds
-
-  // Simple audio simulation for demo
-  useEffect(() => {
-    if (audioState === AUDIO_STATES.PLAYING) {
-      const interval = setInterval(() => {
-        setAudioCurrentTime(prev => {
-          if (prev >= audioDuration) {
-            setAudioState(AUDIO_STATES.IDLE);
-            return 0;
-          }
-          return prev + 0.1;
-        });
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [audioState, audioDuration]);
-
   // Helper functions for memory badges
   const getRelevancePercentage = (relevance: number): number => Math.round(relevance * 100);
 
@@ -1124,26 +1099,6 @@ const ComplexAddons: React.FC<ComplexAddonsProps> = ({
       );
     }
 
-    // Audio addon
-    if (addon.type === 'audio') {
-      return (
-        <AudioAddon
-          key={addon.id}
-          mode="compact"
-          state={audioState}
-          onPlay={() => setAudioState(AUDIO_STATES.PLAYING)}
-          onPause={() => setAudioState(AUDIO_STATES.PAUSED)}
-          onStop={() => {
-            setAudioState(AUDIO_STATES.IDLE);
-            setAudioCurrentTime(0);
-          }}
-          duration={audioDuration}
-          currentTime={audioCurrentTime}
-        />
-      );
-    }
-
-    // Non-tool addon types should not reach here
     return null;
   };
 

@@ -7,9 +7,14 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import android.net.LinkProperties
 import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.alicia.assistant.model.ExitNode
+import com.alicia.assistant.model.TailnetPeer
 import com.alicia.assistant.model.VpnSettings
 import com.alicia.assistant.model.VpnState
 import com.alicia.assistant.model.VpnStatus
@@ -17,10 +22,12 @@ import com.alicia.assistant.storage.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import libtailscale.Libtailscale
@@ -33,6 +40,7 @@ object VpnManager {
     private const val NOTIFY_INITIAL_STATE = 2L
     private const val NOTIFY_PREFS = 4L
     private const val NOTIFY_NETMAP = 8L
+    private const val NOTIFY_INITIAL_HEALTH = 128L
 
     sealed class ConnectResult {
         data object Started : ConnectResult()
@@ -54,7 +62,10 @@ object VpnManager {
     private lateinit var appContext: Context
     private val prefs: PreferencesManager by lazy { PreferencesManager(appContext) }
     private var connectJob: Job? = null
+    private val registrationInProgress = AtomicBoolean(false)
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val dnsDebounceHandler = Handler(Looper.getMainLooper())
+    private var dnsDebounceRunnable: Runnable? = null
 
     @Synchronized
     fun init(context: Context) {
@@ -108,25 +119,41 @@ object VpnManager {
      * Register a persistent network callback so that any network change
      * (including after /start recreates the backend) triggers onDNSConfigChanged.
      * This complements the one-shot notifyNetworkAvailable() call.
+     *
+     * Uses a NetworkRequest with INTERNET + NOT_VPN capabilities for per-network
+     * tracking (instead of registerDefaultNetworkCallback) so we receive callbacks
+     * for all non-VPN internet-capable networks. Includes onLost to notify the Go
+     * backend when a network disappears. DNS change notifications are debounced
+     * by 300ms to prevent rapid WiFi/cellular toggling from overwhelming the
+     * Go-side buffer=1 channel.
      */
     private fun registerNetworkCallback() {
         try {
             val cm = appContext.getSystemService(ConnectivityManager::class.java)
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build()
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     val lp = cm.getLinkProperties(network)
                     val ifname = lp?.interfaceName ?: return
                     Log.d(TAG, "NetworkCallback onAvailable: $ifname")
-                    Libtailscale.onDNSConfigChanged(ifname)
+                    notifyDnsChanged(ifname)
                 }
 
                 override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) {
                     val ifname = lp.interfaceName ?: return
                     Log.d(TAG, "NetworkCallback onLinkPropertiesChanged: $ifname")
-                    Libtailscale.onDNSConfigChanged(ifname)
+                    notifyDnsChanged(ifname)
+                }
+
+                override fun onLost(network: Network) {
+                    Log.d(TAG, "NetworkCallback onLost: $network")
+                    notifyDnsChanged("")
                 }
             }
-            cm.registerDefaultNetworkCallback(callback)
+            cm.registerNetworkCallback(request, callback)
             networkCallback = callback
             Log.i(TAG, "Network callback registered")
         } catch (e: Exception) {
@@ -134,15 +161,34 @@ object VpnManager {
         }
     }
 
+    /**
+     * Debounced DNS change notification. Cancels any pending notification and
+     * schedules a new one after 300ms. This prevents rapid WiFi/cellular toggling
+     * from overwhelming the Go-side buffer=1 channel.
+     */
+    private fun notifyDnsChanged(ifname: String) {
+        dnsDebounceRunnable?.let { dnsDebounceHandler.removeCallbacks(it) }
+        val runnable = Runnable {
+            try {
+                Libtailscale.onDNSConfigChanged(ifname)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to notify DNS config changed", e)
+            }
+        }
+        dnsDebounceRunnable = runnable
+        dnsDebounceHandler.postDelayed(runnable, 300)
+    }
+
     private fun startNotificationWatcher() {
         val tsApp = app ?: return
-        val mask = NOTIFY_INITIAL_STATE or NOTIFY_PREFS or NOTIFY_NETMAP
+        val mask = NOTIFY_INITIAL_STATE or NOTIFY_PREFS or NOTIFY_NETMAP or NOTIFY_INITIAL_HEALTH
         try {
             notificationManager = tsApp.watchNotifications(mask) { notification ->
                 try {
                     val json = JSONObject(String(notification, Charsets.UTF_8))
                     json.optInt("State", -1).takeIf { it >= 0 }?.let { stateInt ->
                         val newStatus = when (stateInt) {
+                            1 -> VpnStatus.IN_USE_OTHER_USER
                             3 -> VpnStatus.PENDING_APPROVAL
                             in 0..4 -> VpnStatus.DISCONNECTED
                             5 -> VpnStatus.CONNECTING
@@ -154,6 +200,17 @@ object VpnManager {
                             if (newStatus == VpnStatus.CONNECTED) {
                                 scope.launch { refreshConnectionInfo() }
                             }
+                        }
+                    }
+                    // Parse health warnings
+                    json.optJSONObject("Health")?.let { health ->
+                        val warnings = health.optJSONArray("Warnings")
+                        val warningText = if (warnings != null && warnings.length() > 0) {
+                            val first = warnings.getJSONObject(0)
+                            first.optString("Text", first.optString("Title", null))
+                        } else null
+                        if (_state.value.healthWarning != warningText) {
+                            _state.value = _state.value.copy(healthWarning = warningText)
                         }
                     }
                 } catch (e: Exception) {
@@ -227,6 +284,8 @@ object VpnManager {
         connectJob = scope.launch {
             try {
                 patchPrefs(JSONObject().put("WantRunning", true))
+                // Check if cancelled between patchPrefs and service start
+                ensureActive()
 
                 val intent = Intent(context, AliciaVpnService::class.java).apply {
                     action = AliciaVpnService.ACTION_START_VPN
@@ -251,9 +310,13 @@ object VpnManager {
     }
 
     fun disconnect(context: Context) {
-        connectJob?.cancel()
+        val job = connectJob
         connectJob = null
+        job?.cancel()
         scope.launch {
+            // Wait for any in-flight connect coroutine to finish cancellation
+            // before stopping, to prevent the service restart race
+            job?.join()
             try {
                 patchPrefs(JSONObject().put("WantRunning", false))
             } catch (e: Exception) {
@@ -264,6 +327,7 @@ object VpnManager {
     }
 
     private fun stopVpnInternal(context: Context) {
+        _state.value = VpnState(status = VpnStatus.DISCONNECTED)
         try {
             context.startService(
                 Intent(context, AliciaVpnService::class.java).apply {
@@ -273,7 +337,6 @@ object VpnManager {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send stop intent", e)
         }
-        _state.value = VpnState(status = VpnStatus.DISCONNECTED)
     }
 
     fun setExitNode(nodeId: String, node: ExitNode? = null) {
@@ -318,6 +381,67 @@ object VpnManager {
         }
     }
 
+    suspend fun getTailnetPeers(): List<TailnetPeer> = withContext(Dispatchers.IO) {
+        try {
+            val status = getBackendStatus() ?: return@withContext emptyList()
+            val result = mutableListOf<TailnetPeer>()
+
+            // Parse Self node
+            status.optJSONObject("Self")?.let { self ->
+                result.add(parseTailnetPeer(self, isSelf = true))
+            }
+
+            // Parse Peer objects
+            val peers = status.optJSONObject("Peer")
+            if (peers != null) {
+                for (key in peers.keys()) {
+                    val peer = peers.getJSONObject(key)
+                    result.add(parseTailnetPeer(peer, isSelf = false))
+                }
+            }
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get tailnet peers", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getCurrentExitNodeId(): String? = withContext(Dispatchers.IO) {
+        try {
+            val status = getBackendStatus() ?: return@withContext null
+            val exitNodeId = status.optJSONObject("Prefs")?.optString("ExitNodeID", "")
+            if (exitNodeId.isNullOrEmpty()) null else exitNodeId
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get current exit node ID", e)
+            null
+        }
+    }
+
+    private fun parseTailnetPeer(json: JSONObject, isSelf: Boolean): TailnetPeer {
+        val ips = mutableListOf<String>()
+        json.optJSONArray("TailscaleIPs")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                ips.add(arr.getString(i))
+            }
+        }
+        return TailnetPeer(
+            id = json.optString("ID", ""),
+            hostName = json.optString("HostName", ""),
+            dnsName = json.optString("DNSName", ""),
+            tailscaleIPs = ips,
+            online = json.optBoolean("Online", false),
+            active = json.optBoolean("Active", false),
+            curAddr = json.optString("CurAddr", ""),
+            relay = json.optString("Relay", ""),
+            rxBytes = json.optLong("RxBytes", 0),
+            txBytes = json.optLong("TxBytes", 0),
+            lastHandshake = json.optString("LastHandshake", ""),
+            isSelf = isSelf,
+            os = json.optString("OS", ""),
+            exitNodeOption = json.optBoolean("ExitNodeOption", false)
+        )
+    }
+
     /**
      * Register with a Headscale server using a pre-auth key.
      *
@@ -339,51 +463,62 @@ object VpnManager {
      *   (set from IP addresses reported by getInterfacesAsJson).
      */
     suspend fun loginWithAuthKey(context: Context, controlUrl: String, key: String): Boolean = withContext(Dispatchers.IO) {
+        if (!registrationInProgress.compareAndSet(false, true)) {
+            Log.w(TAG, "Registration already in progress, ignoring duplicate call")
+            return@withContext false
+        }
         try {
-            // Ensure Go network monitor has up-to-date interface state so the
-            // control client won't be paused. AnyInterfaceUp() requires HaveV4
-            // or HaveV6, which depend on IP addresses from getInterfacesAsJson.
-            notifyNetworkAvailable()
-            kotlinx.coroutines.delay(500)
+            kotlinx.coroutines.withTimeoutOrNull(60_000L) {
+                // Ensure Go network monitor has up-to-date interface state so the
+                // control client won't be paused. AnyInterfaceUp() requires HaveV4
+                // or HaveV6, which depend on IP addresses from getInterfacesAsJson.
+                notifyNetworkAvailable()
+                kotlinx.coroutines.delay(500)
 
-            val body = JSONObject().apply {
-                put("AuthKey", key)
-                put("UpdatePrefs", JSONObject().apply {
-                    put("ControlURL", controlUrl)
-                    put("WantRunning", true)
-                })
+                val body = JSONObject().apply {
+                    put("AuthKey", key)
+                    put("UpdatePrefs", JSONObject().apply {
+                        put("ControlURL", controlUrl)
+                        put("WantRunning", true)
+                    })
+                }
+
+                Log.i(TAG, "Calling /start with ControlURL=$controlUrl")
+                if (callLocalApi("POST", "/localapi/v0/start", body.toString()) == null) {
+                    Log.e(TAG, "/start failed")
+                    return@withTimeoutOrNull false
+                }
+
+                // Brief wait for control client to initialize.
+                kotlinx.coroutines.delay(500)
+
+                // Kick the auth routine. /start alone does NOT call cc.Login()
+                // on Android. /login-interactive sets loginGoal and cancels
+                // authCtx, waking the auth routine to use our AuthKey.
+                Log.i(TAG, "Calling /login-interactive to kick auth routine")
+                if (callLocalApi("POST", "/localapi/v0/login-interactive", null) == null) {
+                    Log.e(TAG, "/login-interactive failed")
+                    return@withTimeoutOrNull false
+                }
+
+                // Poll for backend to progress past NeedsLogin.
+                repeat(45) { pollIdx ->
+                    kotlinx.coroutines.delay(1000)
+                    val state = getBackendStatus()?.optString("BackendState", "")
+                    Log.d(TAG, "Polling backend state: $state (poll $pollIdx)")
+                    if (state == "Running" || state == "NeedsMachineAuth") return@withTimeoutOrNull true
+                }
+                Log.w(TAG, "Login failed: backend did not reach Running state")
+                false
+            } ?: run {
+                Log.e(TAG, "Login timed out after 60 seconds")
+                false
             }
-
-            Log.i(TAG, "Calling /start with ControlURL=$controlUrl")
-            if (callLocalApi("POST", "/localapi/v0/start", body.toString()) == null) {
-                Log.e(TAG, "/start failed")
-                return@withContext false
-            }
-
-            // Brief wait for control client to initialize.
-            kotlinx.coroutines.delay(500)
-
-            // Kick the auth routine. /start alone does NOT call cc.Login()
-            // on Android. /login-interactive sets loginGoal and cancels
-            // authCtx, waking the auth routine to use our AuthKey.
-            Log.i(TAG, "Calling /login-interactive to kick auth routine")
-            if (callLocalApi("POST", "/localapi/v0/login-interactive", null) == null) {
-                Log.e(TAG, "/login-interactive failed")
-                return@withContext false
-            }
-
-            // Poll for backend to progress past NeedsLogin.
-            repeat(45) { pollIdx ->
-                kotlinx.coroutines.delay(1000)
-                val state = getBackendStatus()?.optString("BackendState", "")
-                Log.d(TAG, "Polling backend state: $state (poll $pollIdx)")
-                if (state == "Running" || state == "NeedsMachineAuth") return@withContext true
-            }
-            Log.w(TAG, "Login failed: backend did not reach Running state")
-            false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to login with auth key", e)
             false
+        } finally {
+            registrationInProgress.set(false)
         }
     }
 
@@ -391,6 +526,9 @@ object VpnManager {
         try {
             connectJob?.cancel()
             connectJob = null
+            // Stop notification watcher - backend session is being destroyed
+            notificationManager?.stop()
+            notificationManager = null
             callLocalApi("POST", "/localapi/v0/logout", null)
             stopVpnInternal(context)
             prefs.saveVpnSettings(VpnSettings())
@@ -425,6 +563,8 @@ object VpnManager {
             Log.w(TAG, "Failed to unregister network callback", e)
         }
         networkCallback = null
+        dnsDebounceRunnable?.let { dnsDebounceHandler.removeCallbacks(it) }
+        dnsDebounceRunnable = null
         notificationManager?.stop()
         notificationManager = null
         connectJob?.cancel()

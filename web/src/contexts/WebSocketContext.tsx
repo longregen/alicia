@@ -21,12 +21,16 @@ import {
   VoiceSpeaking,
   VoiceStatus,
   ConversationTitleUpdate,
+  WhatsAppQR,
+  WhatsAppStatus,
+  WhatsAppDebug,
 } from '../types/protocol';
 import { Message } from '../types/models';
 import { setMessageSender } from '../adapters/protocolAdapter';
 import { handleChatProtocolMessage, handleChatConnectionLost } from '../adapters/chatAdapter';
 import { useConnectionStore, ConnectionStatus } from '../stores/connectionStore';
 import { useVoiceConnectionStore, VoiceConnectionStatus } from '../stores/voiceConnectionStore';
+import { useWhatsAppStore, WhatsAppRole } from '../stores/whatsappStore';
 import { injectTraceContext, startSpan, SpanStatusCode } from '../lib/otel';
 import { getUserId } from '../utils/deviceId';
 
@@ -49,6 +53,7 @@ interface WebSocketContextType {
   voiceConnectionError: string | null;
   voiceRetryCount: number;
   retryVoiceJoin: () => void;
+  sendWhatsAppPairRequest: (role: WhatsAppRole) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -234,6 +239,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const setVoiceSpeaking = useVoiceConnectionStore((state) => state.setSpeaking);
   const resetVoiceConnection = useVoiceConnectionStore((state) => state.reset);
 
+  const setWhatsAppQR = useWhatsAppStore((state) => state.setQR);
+  const setWhatsAppStatus = useWhatsAppStore((state) => state.setStatus);
+  const addWhatsAppDebug = useWhatsAppStore((state) => state.addDebugEvent);
+
   const handleEnvelope = useCallback((envelope: Envelope) => {
     const conversationId = envelope.conversationId;
 
@@ -310,7 +319,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             setVoiceRetrying(nextRetry);
             voiceRetryConversationRef.current = ack.conversationId;
             const delay = 2000 * Math.pow(2, currentRetryCount); // 2s, 4s, 8s
-            console.log(`Voice join: retrying in ${delay}ms (attempt ${nextRetry}/${maxRetries})`);
             voiceRetryTimeoutRef.current = setTimeout(() => {
               const convId = voiceRetryConversationRef.current;
               if (convId && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -340,7 +348,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.VoiceLeaveAck: {
         const ack = envelope.body as VoiceLeaveAck;
         if (ack.success) {
-          console.log('Voice leave acknowledged for conversation:', ack.conversationId);
           resetVoiceConnection();
         } else {
           console.error('Voice leave failed for conversation:', ack.conversationId, ack.error);
@@ -354,11 +361,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           console.warn(
             `Voice TTS queue full for conversation ${status.conversationId}:`,
             status.error || 'sentences may be dropped',
-            `(queue length: ${status.queueLength})`
-          );
-        } else {
-          console.log(
-            `Voice status for conversation ${status.conversationId}: ${status.status}`,
             `(queue length: ${status.queueLength})`
           );
         }
@@ -375,10 +377,31 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         break;
       }
 
+      case MessageType.WhatsAppQR: {
+        const qr = envelope.body as WhatsAppQR;
+        if (qr.role !== 'reader' && qr.role !== 'alicia') break;
+        setWhatsAppQR(qr.role, qr.code, qr.event);
+        break;
+      }
+
+      case MessageType.WhatsAppStatus: {
+        const status = envelope.body as WhatsAppStatus;
+        if (status.role !== 'reader' && status.role !== 'alicia') break;
+        setWhatsAppStatus(status.role, status.connected, status.phone, status.error);
+        break;
+      }
+
+      case MessageType.WhatsAppDebug: {
+        const debug = envelope.body as WhatsAppDebug;
+        if (debug.role !== 'reader' && debug.role !== 'alicia') break;
+        addWhatsAppDebug(debug.role, debug.event, debug.detail);
+        break;
+      }
+
       default:
         console.warn('Unknown envelope type:', envelope.type);
     }
-  }, [setVoiceConnected, setVoiceRetrying, setVoiceError, setVoiceSpeaking, resetVoiceConnection]);
+  }, [setVoiceConnected, setVoiceRetrying, setVoiceError, setVoiceSpeaking, resetVoiceConnection, setWhatsAppQR, setWhatsAppStatus, addWhatsAppDebug]);
 
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
@@ -654,6 +677,27 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     sendVoiceJoinRequest(convId);
   }, [sendVoiceJoinRequest]);
 
+  const sendWhatsAppPairRequest = useCallback((role: WhatsAppRole) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not connected, cannot send WhatsApp pair request');
+      return;
+    }
+
+    useWhatsAppStore.getState().setPairing(role);
+
+    const envelope: Envelope = {
+      conversationId: '',
+      type: MessageType.WhatsAppPairRequest,
+      body: { role },
+    };
+
+    try {
+      wsRef.current.send(pack(envelope));
+    } catch (err) {
+      console.error('Failed to send WhatsApp pair request:', err);
+    }
+  }, []);
+
   useEffect(() => {
     isCleaningUpRef.current = false;
     connect();
@@ -710,6 +754,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         voiceConnectionError,
         voiceRetryCount,
         retryVoiceJoin,
+        sendWhatsAppPairRequest,
       }}
     >
       {children}

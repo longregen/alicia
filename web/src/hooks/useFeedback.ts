@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { type VotableType, type VoteType } from '../stores/feedbackStore';
+
+export type VoteType = 'up' | 'down' | 'critical';
+export type VotableType = 'message' | 'tool_use' | 'memory' | 'reasoning' | 'memory_usage' | 'memory_extraction';
 
 // Stub: voting/feedback APIs removed from backend
 export function useFeedback(_targetType: VotableType, _targetId: string) {

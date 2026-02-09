@@ -16,10 +16,6 @@ type AuthConfig struct {
 	RequireAuth bool
 }
 
-func Auth(next http.Handler) http.Handler {
-	return AuthWithConfig(AuthConfig{RequireAuth: false})(next)
-}
-
 func AuthWithConfig(cfg AuthConfig) func(http.Handler) http.Handler {
 	validUserID := regexp.MustCompile(`^[a-zA-Z0-9_\-\.@]+$`)
 

@@ -63,9 +63,6 @@ func (c *WSClient) Connect(ctx context.Context) error {
 	}
 
 	url := c.cfg.BackendWSURL
-	if c.cfg.AgentSecret != "" {
-		url += "?agent_secret=" + c.cfg.AgentSecret
-	}
 
 	slog.Info("ws: connecting", "url", c.cfg.BackendWSURL)
 

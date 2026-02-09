@@ -2,19 +2,25 @@ package com.alicia.assistant.service
 
 import com.alicia.assistant.telemetry.AliciaTelemetry
 import io.opentelemetry.instrumentation.okhttp.v3_0.OkHttpTelemetry
-import okhttp3.Interceptor
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    const val BASE_URL = "https://alicia.hjkl.lol"
+    private const val DEFAULT_BASE_URL = "https://alicia.hjkl.lol"
+
+    @Volatile
+    var baseUrlOverride: String? = null
+
+    val BASE_URL: String
+        get() = baseUrlOverride ?: DEFAULT_BASE_URL
 
     private const val MAX_RETRIES = 3
     private val RETRYABLE_CODES = setOf(429, 500, 502, 503)
 
-    private val retryInterceptor = Interceptor { chain ->
+    private val retryInterceptor = okhttp3.Interceptor { chain ->
         val request = chain.request()
         var response: Response? = null
         var lastException: IOException? = null
@@ -37,18 +43,23 @@ object ApiClient {
         response ?: throw lastException ?: IOException("Retry failed")
     }
 
-    private val otelInterceptor: Interceptor by lazy {
-        OkHttpTelemetry.builder(AliciaTelemetry.getOpenTelemetry())
-            .build()
-            .newInterceptor()
-    }
-
-    val client: OkHttpClient by lazy {
+    val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(retryInterceptor)
-            .addInterceptor(otelInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .build()
+    }
+
+    val client: Call.Factory by lazy {
+        OkHttpTelemetry.builder(AliciaTelemetry.getOpenTelemetry())
+            .build()
+            .createCallFactory(httpClient)
+    }
+
+    fun createCallFactory(baseClient: OkHttpClient): Call.Factory {
+        return OkHttpTelemetry.builder(AliciaTelemetry.getOpenTelemetry())
+            .build()
+            .createCallFactory(baseClient)
     }
 }

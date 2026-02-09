@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { QRCodeSVG } from 'qrcode.react';
 import { MCPSettings } from './MCPSettings';
 import { Card, CardHeader, CardTitle, CardContent } from './atoms/Card';
 import { Switch } from './atoms/Switch';
@@ -13,12 +14,14 @@ import StarRating from './atoms/StarRating';
 import { usePreferences } from '../hooks/usePreferences';
 import { useSidebarStore } from '../stores/sidebarStore';
 import { getCustomUserId, setUserId } from '../utils/deviceId';
+import { useWhatsAppStore, WhatsAppConnectionStatus, WhatsAppRole, WhatsAppEvent } from '../stores/whatsappStore';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 interface SettingsProps {
   defaultTab?: SettingsTab;
 }
 
-export type SettingsTab = 'mcp' | 'preferences';
+export type SettingsTab = 'mcp' | 'preferences' | 'whatsapp';
 
 export function Settings({ defaultTab = 'mcp' }: SettingsProps) {
   const [, navigate] = useLocation();
@@ -86,6 +89,12 @@ export function Settings({ defaultTab = 'mcp' }: SettingsProps) {
           >
             Preferences
           </button>
+          <button
+            className={`tab whitespace-nowrap ${defaultTab === 'whatsapp' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('whatsapp')}
+          >
+            WhatsApp
+          </button>
         </div>
       </div>
 
@@ -93,6 +102,7 @@ export function Settings({ defaultTab = 'mcp' }: SettingsProps) {
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mb-8 last:mb-0">
           {defaultTab === 'mcp' && <MCPSettings />}
+          {defaultTab === 'whatsapp' && <WhatsAppSettings />}
           {defaultTab === 'preferences' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Account Card - Cross-device sync */}
@@ -377,6 +387,186 @@ export function Settings({ defaultTab = 'mcp' }: SettingsProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function WhatsAppConnectionCard({ role, title, description, showDebug }: { role: WhatsAppRole; title: string; description: string; showDebug: boolean }) {
+  const { sendWhatsAppPairRequest, isConnected } = useWebSocket();
+  const status = useWhatsAppStore((s) => s[role].status);
+  const qrCode = useWhatsAppStore((s) => s[role].qrCode);
+  const phone = useWhatsAppStore((s) => s[role].phone);
+  const error = useWhatsAppStore((s) => s[role].error);
+
+  const isWaConnected = status === WhatsAppConnectionStatus.Connected;
+  const isPairing = status === WhatsAppConnectionStatus.Pairing;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted">{description}</p>
+
+        <div className="layout-between">
+          <Label>Status</Label>
+          <span className={`text-sm font-medium ${isWaConnected ? 'text-green-600 dark:text-green-400' : 'text-muted'}`}>
+            {isWaConnected ? 'Connected' : isPairing ? 'Pairing...' : status === WhatsAppConnectionStatus.Error ? 'Error' : 'Disconnected'}
+          </span>
+        </div>
+
+        {isWaConnected && phone && (
+          <div className="layout-between">
+            <Label>Phone</Label>
+            <span className="text-sm text-muted">+{phone}</span>
+          </div>
+        )}
+
+        {error && (
+          <p className="text-sm text-red-500">{error}</p>
+        )}
+
+        {qrCode && (
+          <div className="flex flex-col items-center gap-3 py-2">
+            <p className="text-sm text-muted">Scan this QR code with WhatsApp on your phone.</p>
+            <div className="bg-white p-4 rounded-lg">
+              <QRCodeSVG value={qrCode} size={256} />
+            </div>
+          </div>
+        )}
+
+        {!isWaConnected && !isPairing && (
+          <Button
+            onClick={() => sendWhatsAppPairRequest(role)}
+            disabled={!isConnected}
+            className="w-full"
+          >
+            Start Pairing
+          </Button>
+        )}
+
+        {isPairing && !qrCode && (
+          <p className="text-sm text-muted text-center">Waiting for QR code...</p>
+        )}
+
+        {showDebug && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <p className="text-xs font-mono text-muted mb-1">Raw state:</p>
+            <pre className="text-xs font-mono bg-elevated p-2 rounded overflow-x-auto">
+{JSON.stringify({ status, qrCode: qrCode ? qrCode.slice(0, 30) + '...' : null, phone, error }, null, 2)}
+            </pre>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function WhatsAppEventLog({ events }: { events: WhatsAppEvent[] }) {
+  const clearEvents = useWhatsAppStore((s) => s.clearEvents);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [events.length]);
+
+  if (events.length === 0) {
+    return <p className="text-xs text-muted italic">No events yet. Pair a device to see activity.</p>;
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-muted">{events.length} events</span>
+        <button onClick={clearEvents} className="text-xs text-muted hover:text-foreground transition-colors">
+          Clear
+        </button>
+      </div>
+      <div className="max-h-48 overflow-y-auto font-mono text-xs bg-elevated rounded p-2 space-y-0.5">
+        {events.map((evt, i) => (
+          <div key={i} className="flex gap-2">
+            <span className="text-muted shrink-0">{evt.time}</span>
+            <span className={`shrink-0 ${evt.role === 'reader' ? 'text-blue-500' : 'text-purple-500'}`}>
+              [{evt.role}]
+            </span>
+            <span className="text-yellow-600 dark:text-yellow-400 shrink-0">{evt.type}</span>
+            <span className="text-foreground truncate">{evt.detail}</span>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
+function WhatsAppSettings() {
+  const [showDebug, setShowDebug] = useState(false);
+  const { isConnected } = useWebSocket();
+  const events = useWhatsAppStore((s) => s.events);
+
+  return (
+    <div className="max-w-lg mx-auto space-y-4">
+      <WhatsAppConnectionCard
+        role="reader"
+        title="Your WhatsApp (Reader)"
+        description="Archives all your messages. Never sends replies."
+        showDebug={showDebug}
+      />
+
+      <WhatsAppConnectionCard
+        role="alicia"
+        title="Alicia's WhatsApp"
+        description="Uses a separate WhatsApp number. Allowlisted contacts can chat with Alicia."
+        showDebug={showDebug}
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>How it works</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-muted">
+            Two WhatsApp connections work together:
+          </p>
+          <ul className="text-sm text-muted list-disc list-inside space-y-1">
+            <li><strong>Reader</strong> links to your personal WhatsApp and passively archives all messages for search and context.</li>
+            <li><strong>Alicia</strong> links to a separate WhatsApp number. Contacts on the allowlist can message this number to chat with Alicia.</li>
+          </ul>
+          <p className="text-sm text-muted mt-2">
+            Each connection is paired independently:
+          </p>
+          <ol className="text-sm text-muted list-decimal list-inside space-y-1">
+            <li>Click "Start Pairing" on the card you want to connect</li>
+            <li>Open WhatsApp on the corresponding phone</li>
+            <li>Go to Settings &gt; Linked Devices &gt; Link a Device</li>
+            <li>Scan the QR code shown here</li>
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Debug</CardTitle>
+            <Switch checked={showDebug} onCheckedChange={setShowDebug} />
+          </div>
+        </CardHeader>
+        {showDebug && (
+          <CardContent className="space-y-3">
+            <div className="layout-between">
+              <Label>Hub WebSocket</Label>
+              <span className={`text-sm font-medium ${isConnected ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+            <div>
+              <Label className="mb-1 block">Event Log</Label>
+              <WhatsAppEventLog events={events} />
+            </div>
+          </CardContent>
+        )}
+      </Card>
     </div>
   );
 }

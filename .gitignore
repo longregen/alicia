@@ -33,6 +33,7 @@ mcp/garden/garden
 api/api
 agent/agent
 voice/voice
+whatsapp/whatsapp
 mcp/web/mcp-web
 mcp/web/web
 mcp/garden/mcp-garden

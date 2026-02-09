@@ -55,7 +55,8 @@ class VoiceRecognitionManager(
     private var vadJob: Job? = null
 
     companion object {
-        private val WHISPER_URL = "${ApiClient.BASE_URL}/v1/audio/transcriptions"
+        private val WHISPER_URL: String
+            get() = "${ApiClient.BASE_URL}/v1/audio/transcriptions"
         private const val TAG = "VoiceRecognition"
         private const val SPEECH_THRESHOLD = 0.5f
         private const val SILENCE_THRESHOLD = 0.3f

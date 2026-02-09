@@ -21,6 +21,10 @@ import (
 var (
 	lfClient     *langfuse.Client
 	lfClientOnce sync.Once
+	// lfCreatedTraces tracks trace IDs already sent to Langfuse so that the
+	// first CreateTrace call (with the correct name) wins and later calls
+	// (e.g. title generation) don't overwrite the trace name.
+	lfCreatedTraces sync.Map
 )
 
 func getLangfuseClient() *langfuse.Client {
@@ -478,6 +482,13 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 		))
 	defer span.End()
 
+	// Store trace ID for Langfuse correlation (enables user feedback → Langfuse scores)
+	if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {
+		if err := UpdateMessageTraceID(ctx, deps.DB, msgID, spanCtx.TraceID().String()); err != nil {
+			slog.ErrorContext(ctx, "failed to store trace_id for message", "message_id", msgID, "error", err)
+		}
+	}
+
 	deps.Notifier.SetMessageID(msgID)
 	deps.Notifier.SetPreviousID(previousID)
 	deps.Notifier.SendStartAnswer(ctx, msgID)
@@ -488,7 +499,11 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 	messages, err := LoadConversationFull(setupCtx, deps.DB, convID)
 	if err != nil {
+		setupSpan.RecordError(err)
+		setupSpan.End()
 		slog.ErrorContext(setupCtx, "failed to load conversation", "conversation_id", convID, "error", err)
+		deps.Notifier.SendError(ctx, msgID, fmt.Errorf("load conversation: %w", err))
+		return fmt.Errorf("load conversation: %w", err)
 	}
 
 	var memories []Memory
@@ -502,7 +517,9 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			slog.ErrorContext(setupCtx, "failed to search memories", "error", err)
 		} else {
 			for _, m := range memories {
-				RecordMemoryUse(setupCtx, deps.DB, NewMemoryUseID(), m.ID, msgID, convID, m.Similarity)
+				if err := RecordMemoryUse(setupCtx, deps.DB, NewMemoryUseID(), m.ID, msgID, convID, m.Similarity); err != nil {
+					slog.ErrorContext(setupCtx, "failed to record memory use", "memory_id", m.ID, "error", err)
+				}
 				deps.Notifier.SendMemoryTrace(setupCtx, msgID, m.ID, m.Content, m.Similarity)
 			}
 		}
@@ -711,7 +728,9 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 	}()
 
 	// Extract and save memories asynchronously (detached context to survive client disconnect)
-	go ExtractAndSaveMemories(context.Background(), convID, msgID, deps)
+	// Carry span context so Langfuse traces are correlated with the request
+	memCtx := trace.ContextWithSpanContext(context.Background(), trace.SpanFromContext(ctx).SpanContext())
+	go ExtractAndSaveMemories(memCtx, convID, msgID, deps)
 
 	return nil
 }
@@ -840,13 +859,18 @@ func sendGenerationToLangfuse(gen LangfuseGeneration) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := client.CreateTrace(ctx, langfuse.TraceParams{
-		ID:        gen.TraceID,
-		Name:      gen.TraceName,
-		SessionID: gen.ConvID,
-		UserID:    gen.UserID,
-	}); err != nil {
-		slog.Warn("langfuse: failed to create trace for generation", "error", err)
+	// Only create the trace once per trace ID so the first name wins
+	// (e.g. "agent:tool_loop") and later calls (e.g. "agent:title") don't overwrite it.
+	if _, alreadyCreated := lfCreatedTraces.LoadOrStore(gen.TraceID, true); !alreadyCreated {
+		if err := client.CreateTrace(ctx, langfuse.TraceParams{
+			ID:        gen.TraceID,
+			Name:      gen.TraceName,
+			SessionID: gen.ConvID,
+			UserID:    gen.UserID,
+		}); err != nil {
+			lfCreatedTraces.Delete(gen.TraceID)
+			slog.Warn("langfuse: failed to create trace for generation", "error", err)
+		}
 	}
 
 	modelParams := map[string]any{}

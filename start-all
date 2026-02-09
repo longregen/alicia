@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Start all Alicia services in a tmux session with 5 panes
+# Start all Alicia services in a tmux session with 6 panes
 # Layout:
 #   ┌──────────────┬──────────────┐
-#   │              │  Web (25%)   │
-#   │     API      ├──────────────┤
-#   │              │              │
+#   │     API      │  Web (25%)   │
+#   │              ├──────────────┤
 #   ├──────────────┤              │
-#   │              │   Monitor    │
-#   │    Agent     │    (75%)     │
-#   │              │              │
+#   │    Agent     │   Monitor    │
+#   │              │    (75%)     │
 #   ├──────────────┤              │
-#   │  Voice (25%) │              │
+#   │    Voice     │              │
+#   ├──────────────┤              │
+#   │   WhatsApp   │              │
 #   └──────────────┴──────────────┘
 
 set -e
@@ -136,10 +136,14 @@ tmux split-window -h -t "$SESSION" -c "$PROJECT_DIR"
 # --- Left side (currently right pane is selected, go left) ---
 tmux select-pane -t "$SESSION" -L
 
-# Split off Voice at bottom (25% of left)
-tmux split-window -v -t "$SESSION" -p 25 -c "$PROJECT_DIR"
+# Split bottom half for Voice+WhatsApp (50% of left)
+tmux split-window -v -t "$SESSION" -p 50 -c "$PROJECT_DIR"
 
-# Go back up, split API/Agent (50/50 of the remaining 75%)
+# Split bottom half into Voice (top) and WhatsApp (bottom)
+tmux split-window -v -t "$SESSION" -p 50 -c "$PROJECT_DIR"
+
+# Go back to top, split API/Agent (50/50 of the top half)
+tmux select-pane -t "$SESSION" -U
 tmux select-pane -t "$SESSION" -U
 tmux split-window -v -t "$SESSION" -p 50 -c "$PROJECT_DIR"
 
@@ -154,15 +158,21 @@ tmux split-window -v -t "$SESSION" -p 75 -c "$PROJECT_DIR"
 # Top-left: API
 tmux select-pane -t "$SESSION" -L
 tmux select-pane -t "$SESSION" -U
+tmux select-pane -t "$SESSION" -U
+tmux select-pane -t "$SESSION" -U
 tmux send-keys -t "$SESSION" "$(run_in_nix 'cd api && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -w ../shared -w ../pkg -e go,mod,sum -- go run .')" C-m
 
-# Middle-left: Agent
+# Agent
 tmux select-pane -t "$SESSION" -D
 tmux send-keys -t "$SESSION" "$(run_in_nix 'cd agent && set -a; source .env 2>/dev/null; set +a; PATH='"$PROJECT_DIR"'/mcp:$PATH exec watchexec -r -w . -w ../shared -w ../pkg -w ../mcp -e go,mod,sum --shell=bash -- '\''cd ../mcp && go build -o mcp-web ./web && go build -o mcp-garden ./garden && go build -o mcp-deno-calc ./deno-calc && cd ../agent && go run .'\''')" C-m
 
-# Bottom-left: Voice
+# Voice
 tmux select-pane -t "$SESSION" -D
 tmux send-keys -t "$SESSION" "$(run_in_nix 'cd voice && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -w ../shared -w ../pkg -e go,mod,sum -- go run .')" C-m
+
+# WhatsApp
+tmux select-pane -t "$SESSION" -D
+tmux send-keys -t "$SESSION" "$(run_in_nix 'cd whatsapp && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -w ../shared -w ../pkg -e go,mod,sum -- go run .')" C-m
 
 # Top-right: Web
 tmux select-pane -t "$SESSION" -R
@@ -172,8 +182,6 @@ tmux send-keys -t "$SESSION" "$(run_in_nix 'cd web && npm run dev')" C-m
 # Bottom-right: Monitor
 tmux select-pane -t "$SESSION" -D
 tmux send-keys -t "$SESSION" "$(run_in_nix 'cd monitor && set -a; source .env 2>/dev/null; set +a; exec watchexec -r -w . -e go,mod,sum -- go run .')" C-m
-
-# Select monitor pane (bottom-right)
 
 echo "Started Alicia services in tmux session '$SESSION'"
 echo "Attach with: tmux attach -t $SESSION"

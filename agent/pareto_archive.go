@@ -6,8 +6,9 @@ import (
 )
 
 // PathParetoArchive maintains non-dominated execution paths for Pareto selection.
-// It uses Pareto dominance across 5 dimensions (AnswerQuality, Efficiency, TokenCost,
-// Robustness, Latency) to maintain a diverse set of high-performing paths.
+// It uses Pareto dominance across 6 dimensions (Effectiveness, AnswerQuality,
+// Hallucination, Specificity, TokenCost, Latency) to maintain a diverse set of
+// high-performing paths.
 type PathParetoArchive struct {
 	candidates []*PathCandidate
 	maxSize    int
@@ -220,17 +221,6 @@ func (a *PathParetoArchive) calculateCrowdingDistances() []float64 {
 	return distances
 }
 
-// GetParetoFront returns a copy of all candidates in the archive
-func (a *PathParetoArchive) GetParetoFront() []*PathCandidate {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	result := make([]*PathCandidate, len(a.candidates))
-	copy(result, a.candidates)
-	return result
-}
-
-// Size returns the number of candidates in the archive
 func (a *PathParetoArchive) Size() int {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

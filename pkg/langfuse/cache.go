@@ -36,14 +36,6 @@ func newPromptCache(client *Client) *promptCache {
 	}
 }
 
-func (c *promptCache) setRefreshInterval(d time.Duration) {
-	c.refreshInterval = d
-}
-
-func (c *promptCache) setMaxAge(d time.Duration) {
-	c.maxAge = d
-}
-
 func (c *promptCache) get(key string) (*Prompt, bool) {
 	value, ok := c.entries.Load(key)
 	if !ok {
@@ -114,20 +106,3 @@ func (c *promptCache) triggerRefreshIfStale(key, name string, cfg *options) {
 	}()
 }
 
-// Preload fetches and caches a prompt synchronously.
-// Useful for warming the cache at startup.
-func (c *promptCache) Preload(ctx context.Context, name string, opts ...Option) error {
-	cfg := defaultOptions()
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	key := c.client.buildCacheKey(name, cfg)
-	prompt, err := c.client.fetchPrompt(ctx, name, cfg)
-	if err != nil {
-		return err
-	}
-
-	c.set(key, prompt)
-	return nil
-}

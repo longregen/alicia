@@ -17,8 +17,13 @@
         overlays = [
           gomod2nix.overlays.default
           (import ./nix/overlays/sql-wasm)
+          android-nixpkgs.overlays.default
         ];
-        pkgs = import nixpkgs { inherit system overlays; };
+        pkgs = import nixpkgs {
+          inherit system overlays;
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
+        };
         lib = pkgs.lib;
 
         postgresWithVector = pkgs.postgresql_17.withPackages (p: [ p.pgvector p.pgsql-http ]);
@@ -82,14 +87,14 @@
         };
 
         # Android SDK and build tooling
-        androidSdk = android-nixpkgs.sdk.${system} (sdkPkgs: with sdkPkgs; [
+        androidSdk = pkgs.androidSdk (sdkPkgs: with sdkPkgs; [
           cmdline-tools-latest
           build-tools-35-0-0
           platform-tools
-          platforms-android-35
-          platforms-android-24
+          platforms-android-36
           emulator
           ndk-26-1-10909125
+          system-images-android-34-google-apis-x86-64
         ]);
 
         sileroVadModel = pkgs.fetchurl {
@@ -159,7 +164,7 @@
 
           outputHashAlgo = "sha256";
           outputHashMode = "recursive";
-          outputHash = "sha256-PuzEtBzyTyXWRLGjp2FJEfS4W/6A9c3kjKqS5az3mSU=";
+          outputHash = "sha256-4Mtazs+7LQdkhVvwEhtUbV7QbvGAUz8368czLsah5eI=";
         };
 
         androidFhsEnv = pkgs.buildFHSEnv {
@@ -336,6 +341,22 @@
             ];
           };
 
+          whatsapp = let
+            src = pkgs.runCommand "whatsapp-src" {} ''
+              mkdir -p $out/pkg/otel $out/shared
+              cp -r ${goSrcFilter ./whatsapp "whatsapp-src"}/* $out/
+              cp -r ${otelSrc}/* $out/pkg/otel/
+              cp -r ${sharedSrc}/* $out/shared/
+            '';
+          in pkgs.callPackage ./nix/packages/whatsapp.nix {
+            inherit src;
+            version = "0.1.0";
+            preBuild = vendorLocalModules [
+              { src = "pkg/otel"; dst = "pkg/otel"; }
+              { src = "shared"; dst = "shared"; }
+            ];
+          };
+
           monitor = pkgs.callPackage ./nix/packages/monitor.nix {
             src = goSrcFilter ./monitor "monitor-src";
             version = "0.1.0";
@@ -495,6 +516,7 @@
             androidBuildScript
             androidFhsEnv
             pkgs.maestro
+            pkgs.imagemagick
             pkgs.go
             pkgs.gomobile
             pkgs.headscale

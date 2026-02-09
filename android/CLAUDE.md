@@ -88,12 +88,4 @@ All data is local to the device. Network traffic is limited to API calls to the 
 - `service/AliciaInteractionSession.kt` — Voice interaction session that sends messages via REST API
 - `ws/AssistantWebSocket.kt` — WebSocket client for MCP tool handling only (not for messaging)
 - `service/SileroVadDetector.kt` — ONNX Runtime wrapper for Silero VAD v5; detects speech/silence boundaries at 16kHz (512-sample frames, ~31 fps). Speech threshold: 0.5, silence threshold: 0.3 (hysteresis)
-
-## Available Vosk Models
-
-Defined in `model/Models.kt` as `VoskModelInfo` enum:
-- English Small (40MB, bundled) — default
-- English Medium (128MB)
-- Spanish, French, German, Japanese, Chinese (all small)
-
-Downloaded from Alphacephei.com via `ModelDownloadService`.
+- Vosk Models downloaded from Alphacephei.com via `ModelDownloadService`.

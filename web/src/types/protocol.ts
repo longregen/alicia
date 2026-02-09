@@ -24,6 +24,10 @@ export enum MessageType {
   VoiceStatus = 55,
   VoiceSpeaking = 56,
   GenerationComplete = 80,
+  WhatsAppPairRequest = 90,
+  WhatsAppQR = 91,
+  WhatsAppStatus = 92,
+  WhatsAppDebug = 93,
 }
 
 export interface Envelope {
@@ -202,4 +206,27 @@ export interface GenerationComplete {
   conversationId: string;
   success: boolean;
   error?: string;
+}
+
+export interface WhatsAppPairRequest {
+  role: 'reader' | 'alicia';
+}
+
+export interface WhatsAppQR {
+  code: string;
+  event: 'code' | 'login' | 'timeout' | 'error';
+  role: 'reader' | 'alicia';
+}
+
+export interface WhatsAppStatus {
+  connected: boolean;
+  phone?: string;
+  error?: string;
+  role: 'reader' | 'alicia';
+}
+
+export interface WhatsAppDebug {
+  role: 'reader' | 'alicia';
+  event: string;
+  detail: string;
 }

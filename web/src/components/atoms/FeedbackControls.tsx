@@ -1,6 +1,6 @@
 import React from 'react';
 import { cls } from '../../utils/cls';
-import type { VoteType } from '../../stores/feedbackStore';
+import type { VoteType } from '../../hooks/useFeedback';
 
 export interface FeedbackControlsProps {
   currentVote: 'up' | 'down' | null;

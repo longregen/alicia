@@ -14,7 +14,6 @@ type Config struct {
 	Timezone string
 }
 
-// Connect creates a traced connection pool.
 func Connect(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(cfg.URL)
 	if err != nil {
@@ -41,16 +40,6 @@ func Connect(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// ConnectSimple creates a traced connection pool with default settings.
 func ConnectSimple(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	return Connect(ctx, Config{URL: url})
-}
-
-// MustConnect panics on error. Useful for main() initialization.
-func MustConnect(ctx context.Context, cfg Config) *pgxpool.Pool {
-	pool, err := Connect(ctx, cfg)
-	if err != nil {
-		panic(fmt.Sprintf("database connection failed: %v", err))
-	}
-	return pool
 }

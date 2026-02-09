@@ -203,20 +203,6 @@ func UpdateMessageTraceID(ctx context.Context, pool *pgxpool.Pool, messageID, tr
 	return err
 }
 
-func GetMessageTraceID(ctx context.Context, pool *pgxpool.Pool, messageID string) (string, error) {
-	var traceID *string
-	err := pool.QueryRow(ctx, `
-		SELECT trace_id FROM messages WHERE id = $1
-	`, messageID).Scan(&traceID)
-	if err != nil {
-		return "", err
-	}
-	if traceID == nil {
-		return "", nil
-	}
-	return *traceID, nil
-}
-
 // --- Tool Uses ---
 
 func SaveToolUse(ctx context.Context, pool *pgxpool.Pool, messageID string, tu ToolUse) error {

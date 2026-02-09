@@ -15,12 +15,8 @@ import (
 )
 
 const (
-	// DefaultTTSSampleRate is the sample rate for TTS output audio (Kokoro outputs at 24kHz).
-	DefaultTTSSampleRate = 24000
-	// DefaultASRSampleRate is the sample rate Whisper expects for optimal transcription.
-	DefaultASRSampleRate = 16000
-	// DefaultCaptureSampleRate is the sample rate for LiveKit audio capture (Opus standard).
-	DefaultCaptureSampleRate = 48000
+	DefaultTTSSampleRate     = 24000 // Kokoro outputs at 24kHz
+	DefaultCaptureSampleRate = 48000 // Opus standard
 )
 
 type Config struct {

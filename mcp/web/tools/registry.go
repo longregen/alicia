@@ -5,7 +5,6 @@ import (
 	"sync"
 )
 
-// Tool represents a tool that can be executed
 type Tool interface {
 	Name() string
 	Description() string
@@ -26,21 +25,18 @@ type Registry struct {
 	tools map[string]Tool
 }
 
-// NewRegistry creates a new tool registry
 func NewRegistry() *Registry {
 	return &Registry{
 		tools: make(map[string]Tool),
 	}
 }
 
-// Register adds a tool to the registry
 func (r *Registry) Register(t Tool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tools[t.Name()] = t
 }
 
-// Get retrieves a tool by name
 func (r *Registry) Get(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -48,7 +44,6 @@ func (r *Registry) Get(name string) (Tool, bool) {
 	return t, ok
 }
 
-// ListTools returns all registered tools as MCP tool definitions
 func (r *Registry) ListTools() []ToolDefinition {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

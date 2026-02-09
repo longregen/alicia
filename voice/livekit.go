@@ -321,7 +321,10 @@ func (c *LiveKitClient) processAudioData(data []byte, identity string) {
 
 	c.speakingMu.Lock()
 	wasSpeaking := c.isSpeaking
-	c.isSpeaking = isSpeaking
+	if isSpeaking {
+		c.isSpeaking = true
+	}
+	// Don't set c.isSpeaking = false here; it stays true until the buffer is flushed.
 	c.speakingMu.Unlock()
 
 	if isSpeaking && !wasSpeaking {
@@ -334,6 +337,8 @@ func (c *LiveKitClient) processAudioData(data []byte, identity string) {
 		c.lastAudioTime = time.Now()
 		c.audioBufferMu.Unlock()
 	} else if wasSpeaking {
+		// Speech has stopped but buffer hasn't been flushed yet.
+		// Re-check silence timer on every non-speaking packet until dispatch.
 		c.audioBufferMu.Lock()
 		timeSinceAudio := time.Since(c.lastAudioTime)
 		if timeSinceAudio >= c.cfg.SilenceDuration && len(c.audioBuffer) > 0 {
@@ -343,11 +348,23 @@ func (c *LiveKitClient) processAudioData(data []byte, identity string) {
 
 			c.audioBufferMu.Unlock()
 
+			// Buffer dispatched; now clear the speaking flag.
+			c.speakingMu.Lock()
+			c.isSpeaking = false
+			c.speakingMu.Unlock()
+
 			slog.Info("livekit: speech ended", "participant", identity, "bytes", len(audio), "duration_ms", len(audio)/(c.cfg.SampleRate*c.cfg.Channels*2/1000))
 
 			if c.onUtterance != nil {
 				go c.onUtterance(audio)
 			}
+		} else if len(c.audioBuffer) == 0 {
+			c.audioBufferMu.Unlock()
+
+			// No audio in buffer; clear the speaking flag.
+			c.speakingMu.Lock()
+			c.isSpeaking = false
+			c.speakingMu.Unlock()
 		} else {
 			c.audioBufferMu.Unlock()
 		}

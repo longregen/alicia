@@ -40,13 +40,6 @@ type GoldenExampleOutput struct {
 	AssistantResponse string `json:"assistant_response"`
 }
 
-// GoldenExampleMetadata represents metadata for a golden Q&A example.
-type GoldenExampleMetadata struct {
-	ConversationID string    `json:"conversation_id"`
-	MessageID      string    `json:"message_id"`
-	FeedbackTime   time.Time `json:"feedback_time"`
-}
-
 // AddGoldenExample adds a high-quality Q&A pair to the golden dataset.
 // This should be called when a message receives positive feedback.
 func AddGoldenExample(ctx context.Context, client *Client, userQuery, assistantResponse string, metadata map[string]any) error {

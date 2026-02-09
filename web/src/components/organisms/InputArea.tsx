@@ -49,18 +49,11 @@ const InputArea: React.FC<InputAreaProps> = ({
   }, [voiceActive]);
 
   const { status: microphoneStatus, startVAD, stopVAD, isSpeaking, speechProbability } = useVAD({
-    onStatusChange: (status) => {
-      console.log('VAD status changed:', status);
-    },
-    onSpeechEnd: (audioData: Float32Array) => {
-      console.log('Speech segment captured:', audioData.length, 'samples');
-    },
     onTrackReady: useCallback(async (track: MediaStreamTrack) => {
       if (onPublishAudioTrack && !trackPublishedRef.current) {
         try {
           await onPublishAudioTrack(track);
           trackPublishedRef.current = true;
-          console.log('Audio track published to LiveKit for transcription');
         } catch (error) {
           console.error('Failed to publish audio track:', error);
         }

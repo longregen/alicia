@@ -58,6 +58,7 @@ class SettingsActivity : ComponentActivity() {
             VpnStatus.CONNECTING -> vpnStatusText.text = getString(R.string.vpn_connecting_status)
             VpnStatus.DISCONNECTED -> vpnStatusText.text = getString(R.string.vpn_status_off)
             VpnStatus.PENDING_APPROVAL -> vpnStatusText.text = getString(R.string.vpn_pending_approval)
+            VpnStatus.IN_USE_OTHER_USER -> vpnStatusText.text = "In use by another profile"
             VpnStatus.ERROR -> vpnStatusText.text = getString(R.string.vpn_error)
         }
     }
@@ -127,6 +128,10 @@ class SettingsActivity : ComponentActivity() {
 
         findViewById<View>(R.id.vpnSettingsCard).setOnClickListener {
             startActivity(Intent(this, VpnSettingsActivity::class.java))
+        }
+
+        findViewById<View>(R.id.networkStatusCard).setOnClickListener {
+            startActivity(Intent(this, NetworkStatusActivity::class.java))
         }
 
     }

@@ -20,30 +20,36 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null) return
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.i(TAG, "BootReceiver: device boot completed, starting wake word service")
+        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
 
-            AliciaTelemetry.withSpan("app.boot_received") { span ->
-                AliciaTelemetry.addSpanEvent(span, "service.auto_start")
-                VoiceAssistantService.ensureRunning(context)
-            }
+        Log.i(TAG, "Boot completed, checking VPN auto-connect")
 
-            CoroutineScope(Dispatchers.IO).launch {
+        AliciaTelemetry.withSpan("app.boot_received") { span ->
+            AliciaTelemetry.addSpanEvent(span, "service.auto_start")
+            VoiceAssistantService.ensureRunning(context)
+        }
+
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
                 val prefs = PreferencesManager(context)
                 val vpnSettings = prefs.getVpnSettings()
                 if (vpnSettings.autoConnect && vpnSettings.nodeRegistered) {
-                    try {
-                        if (android.net.VpnService.prepare(context) == null) {
-                            Log.i(TAG, "BootReceiver: auto-connecting VPN")
-                            VpnManager.init(context)
-                            VpnManager.connect(context)
-                        } else {
-                            Log.i(TAG, "BootReceiver: VPN permission not granted, skipping auto-connect")
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "BootReceiver: VPN permission check failed, skipping auto-connect", e)
+                    Log.i(TAG, "Auto-connecting VPN on boot")
+                    VpnManager.init(context)
+                    when (val result = VpnManager.connect(context)) {
+                        is VpnManager.ConnectResult.Started ->
+                            Log.i(TAG, "VPN auto-connect initiated")
+                        is VpnManager.ConnectResult.NeedsPermission ->
+                            Log.w(TAG, "VPN permission not granted, cannot auto-connect from boot")
+                        is VpnManager.ConnectResult.Failed ->
+                            Log.w(TAG, "VPN auto-connect failed: ${result.reason}")
                     }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "VPN auto-connect error on boot", e)
+            } finally {
+                pendingResult.finish()
             }
         }
     }

@@ -32,6 +32,10 @@ const (
 	TypeAssistantToolsAck          MessageType = 71
 	TypeAssistantHeartbeat         MessageType = 72
 	TypeGenerationComplete         MessageType = 80
+	TypeWhatsAppPairRequest        MessageType = 90
+	TypeWhatsAppQR                 MessageType = 91
+	TypeWhatsAppStatus             MessageType = 92
+	TypeWhatsAppDebug              MessageType = 93
 )
 
 type GenerationComplete struct {
@@ -141,6 +145,7 @@ type Subscribe struct {
 	VoiceMode      bool   `msgpack:"voiceMode,omitempty" json:"voiceMode,omitempty"`
 	MonitorMode    bool   `msgpack:"monitorMode,omitempty" json:"monitorMode,omitempty"`
 	AssistantMode  bool   `msgpack:"assistantMode,omitempty" json:"assistantMode,omitempty"`
+	WhatsAppMode   bool   `msgpack:"whatsappMode,omitempty" json:"whatsappMode,omitempty"`
 }
 
 type Unsubscribe struct {
@@ -256,4 +261,27 @@ type AssistantToolsAck struct {
 	Success   bool   `msgpack:"success" json:"success"`
 	ToolCount int    `msgpack:"toolCount" json:"toolCount"`
 	Error     string `msgpack:"error,omitempty" json:"error,omitempty"`
+}
+
+type WhatsAppPairRequest struct {
+	Role string `msgpack:"role" json:"role"`
+}
+
+type WhatsAppQR struct {
+	Code  string `msgpack:"code" json:"code"`
+	Event string `msgpack:"event" json:"event"` // "code", "login", "timeout", "error"
+	Role  string `msgpack:"role" json:"role"`
+}
+
+type WhatsAppStatus struct {
+	Connected bool   `msgpack:"connected" json:"connected"`
+	Phone     string `msgpack:"phone,omitempty" json:"phone,omitempty"`
+	Error     string `msgpack:"error,omitempty" json:"error,omitempty"`
+	Role      string `msgpack:"role" json:"role"`
+}
+
+type WhatsAppDebug struct {
+	Role   string `msgpack:"role" json:"role"`
+	Event  string `msgpack:"event" json:"event"`
+	Detail string `msgpack:"detail" json:"detail"`
 }

@@ -71,6 +71,6 @@ echo "$AUTHKEY" > "$HEADSCALE_DIR/authkey.txt"
 
 echo -e "${GREEN}Headscale ready${NC}"
 echo -e "  URL:      http://10.0.2.2:8080"
-echo -e "  Auth key: $AUTHKEY"
+echo -e "  Auth key: ${AUTHKEY:0:12}..."
 echo -e "  PID:      $HEADSCALE_PID"
 echo -e "  Dir:      $HEADSCALE_DIR"

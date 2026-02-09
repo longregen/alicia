@@ -31,18 +31,25 @@ type SyncResult struct {
 }
 
 type Hub struct {
-	convSubs     map[string]map[*websocket.Conn]struct{}
-	convMu       sync.RWMutex
-	agentConn    *websocket.Conn
-	agentMu      sync.RWMutex
-	voiceConn    *websocket.Conn
-	voiceMu      sync.RWMutex
+	convSubs               map[string]map[*websocket.Conn]struct{}
+	convMu                 sync.RWMutex
+	clientConns            map[*websocket.Conn]struct{}
+	clientMu               sync.RWMutex
+	agentConn              *websocket.Conn
+	agentMu                sync.RWMutex
+	voiceConn              *websocket.Conn
+	voiceMu                sync.RWMutex
+	whatsappConn           *websocket.Conn
+	whatsappMu             sync.RWMutex
 	assistantConn          *websocket.Conn
 	assistantMu            sync.RWMutex
 	assistantTools         []protocol.AssistantTool
 	lastAssistantHeartbeat time.Time
-	monitorConns map[*websocket.Conn]struct{}
-	monitorMu    sync.RWMutex
+	monitorConns           map[*websocket.Conn]struct{}
+	monitorMu              sync.RWMutex
+	// Per-connection write mutex to serialize WebSocket writes (gorilla/websocket requires this)
+	connWriteMu   map[*websocket.Conn]*sync.Mutex
+	connWriteMuMu sync.Mutex
 	// Tracks active generations: convID → messageID (set on GenRequest, cleared on AssistantMsg)
 	activeGens   map[string]string
 	activeGensMu sync.Mutex
@@ -56,12 +63,42 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		convSubs:         make(map[string]map[*websocket.Conn]struct{}),
+		clientConns:      make(map[*websocket.Conn]struct{}),
 		monitorConns:     make(map[*websocket.Conn]struct{}),
+		connWriteMu:      make(map[*websocket.Conn]*sync.Mutex),
 		activeGens:       make(map[string]string),
 		syncWaiters:      make(map[string]chan SyncResult),
 		syncToolUses:     make(map[string][]protocol.ToolUseRequest),
 		syncToolUsesKeys: make(map[string][]string),
 	}
+}
+
+// getConnMu returns the write mutex for a given connection, creating one if it doesn't exist.
+func (h *Hub) getConnMu(conn *websocket.Conn) *sync.Mutex {
+	h.connWriteMuMu.Lock()
+	mu, ok := h.connWriteMu[conn]
+	if !ok {
+		mu = &sync.Mutex{}
+		h.connWriteMu[conn] = mu
+	}
+	h.connWriteMuMu.Unlock()
+	return mu
+}
+
+// removeConnMu removes the write mutex for a connection that is being cleaned up.
+func (h *Hub) removeConnMu(conn *websocket.Conn) {
+	h.connWriteMuMu.Lock()
+	delete(h.connWriteMu, conn)
+	h.connWriteMuMu.Unlock()
+}
+
+// writeMessage serializes writes to a WebSocket connection using a per-connection mutex.
+func (h *Hub) writeMessage(conn *websocket.Conn, msgType int, data []byte) error {
+	mu := h.getConnMu(conn)
+	mu.Lock()
+	defer mu.Unlock()
+	conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
+	return conn.WriteMessage(msgType, data)
 }
 
 func (h *Hub) Subscribe(convID string, conn *websocket.Conn) {
@@ -132,6 +169,51 @@ func (h *Hub) UnsubscribeVoice(conn *websocket.Conn) {
 	}
 }
 
+func (h *Hub) TrackClient(conn *websocket.Conn) {
+	h.clientMu.Lock()
+	defer h.clientMu.Unlock()
+	h.clientConns[conn] = struct{}{}
+}
+
+func (h *Hub) UntrackClient(conn *websocket.Conn) {
+	h.clientMu.Lock()
+	defer h.clientMu.Unlock()
+	delete(h.clientConns, conn)
+}
+
+func (h *Hub) SubscribeWhatsApp(conn *websocket.Conn) {
+	h.whatsappMu.Lock()
+	defer h.whatsappMu.Unlock()
+	h.whatsappConn = conn
+	slog.Info("ws: whatsapp adapter connected")
+}
+
+func (h *Hub) UnsubscribeWhatsApp(conn *websocket.Conn) {
+	h.whatsappMu.Lock()
+	defer h.whatsappMu.Unlock()
+	if h.whatsappConn == conn {
+		h.whatsappConn = nil
+		slog.Info("ws: whatsapp adapter disconnected")
+	}
+}
+
+func (h *Hub) BroadcastToWhatsApp(data []byte) {
+	h.broadcastToMonitors(data, "server", "whatsapp")
+
+	h.whatsappMu.RLock()
+	conn := h.whatsappConn
+	h.whatsappMu.RUnlock()
+
+	if conn == nil {
+		slog.Warn("ws: no whatsapp adapter connected")
+		return
+	}
+
+	if err := h.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
+		slog.Error("ws: whatsapp send error", "error", err)
+	}
+}
+
 func (h *Hub) SubscribeMonitor(conn *websocket.Conn) {
 	h.monitorMu.Lock()
 	defer h.monitorMu.Unlock()
@@ -188,8 +270,7 @@ func (h *Hub) BroadcastToAssistant(data []byte) {
 		return
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-	if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+	if err := h.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
 		slog.Error("ws: assistant send error", "error", err)
 	}
 }
@@ -218,8 +299,7 @@ func (h *Hub) broadcastToMonitors(data []byte, src, dst string) {
 	}
 
 	for _, conn := range conns {
-		conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-		if err := conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
+		if err := h.writeMessage(conn, websocket.BinaryMessage, frame); err != nil {
 			h.UnsubscribeMonitor(conn)
 		}
 	}
@@ -237,8 +317,7 @@ func (h *Hub) BroadcastToVoice(data []byte) {
 		return
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-	if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+	if err := h.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
 		slog.Error("ws: voice send error", "error", err)
 	}
 }
@@ -254,10 +333,25 @@ func (h *Hub) BroadcastToConversation(convID string, data []byte) {
 	h.convMu.RUnlock()
 
 	for _, conn := range subs {
-		conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-		if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+		if err := h.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
 			slog.Warn("ws: broadcast error (client likely disconnected)", "error", err, "conversation_id", convID)
 			h.Unsubscribe(convID, conn)
+		}
+	}
+}
+
+// broadcastAllClients sends data to all connected web clients.
+func (h *Hub) broadcastAllClients(data []byte) {
+	h.clientMu.RLock()
+	conns := make([]*websocket.Conn, 0, len(h.clientConns))
+	for conn := range h.clientConns {
+		conns = append(conns, conn)
+	}
+	h.clientMu.RUnlock()
+
+	for _, conn := range conns {
+		if err := h.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
+			slog.Warn("ws: broadcast all clients error", "error", err)
 		}
 	}
 }
@@ -274,8 +368,7 @@ func (h *Hub) BroadcastToAgent(data []byte) {
 		return
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-	if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+	if err := h.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
 		slog.Error("ws: agent send error", "error", err)
 	}
 }
@@ -287,7 +380,7 @@ func (h *Hub) SendGenerationRequest(ctx context.Context, convID, userMsgID strin
 		RequestType:     "send",
 		EnableTools:     true,
 		EnableReasoning: true,
-		EnableStreaming:  true,
+		EnableStreaming: true,
 		UsePareto:       usePareto,
 	}
 	if previousID != nil {
@@ -387,7 +480,7 @@ func (h *Hub) SendGenerationRequestSync(ctx context.Context, convID, userMsgID s
 		RequestType:     "send",
 		EnableTools:     true,
 		EnableReasoning: true,
-		EnableStreaming:  false,
+		EnableStreaming: false,
 		UsePareto:       usePareto,
 	}
 	if previousID != nil {
@@ -539,6 +632,11 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var isVoice bool
 	var isMonitor bool
 	var isAssistant bool
+	var isWhatsApp bool
+
+	// Track as a web client by default; untracked if it becomes a service connection.
+	h.hub.TrackClient(conn)
+	isClient := true
 
 	for {
 		_, data, err := conn.ReadMessage()
@@ -558,6 +656,8 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				src = "voice"
 			} else if isAssistant {
 				src = "assistant"
+			} else if isWhatsApp {
+				src = "whatsapp"
 			}
 			h.hub.broadcastToMonitors(data, src, "server")
 		}
@@ -591,12 +691,20 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
+				untrackClient := func() {
+					if isClient {
+						h.hub.UntrackClient(conn)
+						isClient = false
+					}
+				}
+
 				if sub.AgentMode {
 					if !h.verifyAgentAuth(r) {
 						slog.Warn("ws: agent auth failed")
 						h.sendSubscribeAck(conn, "", true, false, "authentication required")
 						return
 					}
+					untrackClient()
 					isAgent = true
 					h.hub.SubscribeAgent(conn)
 					h.sendSubscribeAck(conn, "", true, true, "")
@@ -606,10 +714,12 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						h.sendSubscribeAck(conn, "", false, false, "authentication required")
 						return
 					}
+					untrackClient()
 					isVoice = true
 					h.hub.SubscribeVoice(conn)
 					h.sendSubscribeAck(conn, "", false, true, "")
 				} else if sub.MonitorMode {
+					untrackClient()
 					isMonitor = true
 					h.hub.SubscribeMonitor(conn)
 					h.sendSubscribeAck(conn, "", false, true, "")
@@ -619,8 +729,19 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						h.sendSubscribeAck(conn, "", false, false, "authentication required")
 						return
 					}
+					untrackClient()
 					isAssistant = true
 					h.hub.SubscribeAssistant(conn)
+					h.sendSubscribeAck(conn, "", false, true, "")
+				} else if sub.WhatsAppMode {
+					if !h.verifyAgentAuth(r) {
+						slog.Warn("ws: whatsapp auth failed")
+						h.sendSubscribeAck(conn, "", false, false, "authentication required")
+						return
+					}
+					untrackClient()
+					isWhatsApp = true
+					h.hub.SubscribeWhatsApp(conn)
 					h.sendSubscribeAck(conn, "", false, true, "")
 				} else if sub.ConversationID != "" {
 					h.hub.Subscribe(sub.ConversationID, conn)
@@ -663,6 +784,31 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					h.hub.BroadcastToConversation(env.ConversationID, data)
 				}
 
+			case protocol.TypeWhatsAppPairRequest:
+				// From web client → route to WhatsApp adapter
+				slog.Info("ws: whatsapp pair request")
+				h.hub.BroadcastToWhatsApp(data)
+
+			case protocol.TypeWhatsAppQR:
+				// From WhatsApp adapter → broadcast to all web clients
+				if isWhatsApp {
+					slog.Info("ws: whatsapp QR event")
+					h.hub.broadcastAllClients(data)
+				}
+
+			case protocol.TypeWhatsAppStatus:
+				// From WhatsApp adapter → broadcast to all web clients
+				if isWhatsApp {
+					slog.Info("ws: whatsapp status update")
+					h.hub.broadcastAllClients(data)
+				}
+
+			case protocol.TypeWhatsAppDebug:
+				// From WhatsApp adapter → broadcast to all web clients
+				if isWhatsApp {
+					h.hub.broadcastAllClients(data)
+				}
+
 			case protocol.TypeUserMessage:
 				if env.ConversationID != "" {
 					h.handleClientUserMessage(ctx, env)
@@ -695,8 +841,10 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						slog.Error("ws: encode assistant tools ack error", "error", err)
 						return
 					}
-					conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-					conn.WriteMessage(websocket.BinaryMessage, ackData)
+					if err := h.hub.writeMessage(conn, websocket.BinaryMessage, ackData); err != nil {
+						slog.Error("ws: send assistant tools ack error", "error", err)
+						return
+					}
 					slog.Info("ws: assistant registered tools", "count", len(reg.Tools))
 				}
 
@@ -758,6 +906,8 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.hub.UnsubscribeAgent(conn)
 	} else if isVoice {
 		h.hub.UnsubscribeVoice(conn)
+	} else if isWhatsApp {
+		h.hub.UnsubscribeWhatsApp(conn)
 	} else if isAssistant {
 		h.hub.UnsubscribeAssistant(conn)
 	} else if isMonitor {
@@ -765,6 +915,10 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.hub.UnsubscribeAll(conn)
 	}
+	if isClient {
+		h.hub.UntrackClient(conn)
+	}
+	h.hub.removeConnMu(conn)
 }
 
 func (h *WSHandler) verifyAgentAuth(r *http.Request) bool {
@@ -795,8 +949,7 @@ func (h *WSHandler) sendSubscribeAck(conn *websocket.Conn, convID string, agentM
 		slog.Error("ws: encode subscribe ack error", "error", err)
 		return
 	}
-	conn.SetWriteDeadline(time.Now().Add(WriteTimeout))
-	if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+	if err := h.hub.writeMessage(conn, websocket.BinaryMessage, data); err != nil {
 		slog.Error("ws: send subscribe ack error", "error", err)
 	}
 }

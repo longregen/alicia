@@ -21,14 +21,8 @@ type WSNotifier struct {
 	mu             sync.Mutex
 }
 
-func NewWSNotifier(conn *websocket.Conn) *WSNotifier {
-	return &WSNotifier{conn: conn}
-}
-
-func (n *WSNotifier) SetConversationID(id string) {
-	n.mu.Lock()
-	n.conversationID = id
-	n.mu.Unlock()
+func NewWSNotifier(conn *websocket.Conn, conversationID string) *WSNotifier {
+	return &WSNotifier{conn: conn, conversationID: conversationID}
 }
 
 func (n *WSNotifier) SetMessageID(id string) {
@@ -74,12 +68,11 @@ func (n *WSNotifier) send(ctx context.Context, msgType protocol.MessageType, bod
 
 func (n *WSNotifier) SendStartAnswer(ctx context.Context, messageID string) {
 	n.mu.Lock()
-	convID := n.conversationID
 	prevID := n.previousID
 	n.mu.Unlock()
 	n.send(ctx, protocol.TypeStartAnswer, protocol.StartAnswer{
 		MessageID:      messageID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		PreviousID:     prevID,
 	})
 }
@@ -89,13 +82,10 @@ func (n *WSNotifier) SendThinking(ctx context.Context, messageID, text string) {
 }
 
 func (n *WSNotifier) SendThinkingWithProgress(ctx context.Context, messageID, text string, progress float32) {
-	n.mu.Lock()
-	convID := n.conversationID
-	n.mu.Unlock()
 	n.send(ctx, protocol.TypeThinkingSummary, protocol.ThinkingSummary{
 		ID:             NewThinkingID(),
 		MessageID:      messageID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		Content:        text,
 		Progress:       progress,
 		Timestamp:      time.Now().UnixMilli(),
@@ -104,13 +94,12 @@ func (n *WSNotifier) SendThinkingWithProgress(ctx context.Context, messageID, te
 
 func (n *WSNotifier) SendToolStart(ctx context.Context, id, name string, args map[string]any) {
 	n.mu.Lock()
-	convID := n.conversationID
 	msgID := n.messageID
 	n.mu.Unlock()
 	n.send(ctx, protocol.TypeToolUseRequest, protocol.ToolUseRequest{
 		ID:             id,
 		MessageID:      msgID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		ToolName:       name,
 		Arguments:      args,
 		Execution:      "server",
@@ -119,14 +108,13 @@ func (n *WSNotifier) SendToolStart(ctx context.Context, id, name string, args ma
 
 func (n *WSNotifier) SendToolComplete(ctx context.Context, id string, success bool, result any, errMsg string) {
 	n.mu.Lock()
-	convID := n.conversationID
 	msgID := n.messageID
 	n.mu.Unlock()
 	n.send(ctx, protocol.TypeToolUseResult, protocol.ToolUseResult{
 		ID:             NewToolUseID(),
 		RequestID:      id,
 		MessageID:      msgID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		Success:        success,
 		Result:         result,
 		Error:          errMsg,
@@ -135,49 +123,39 @@ func (n *WSNotifier) SendToolComplete(ctx context.Context, id string, success bo
 
 func (n *WSNotifier) SendComplete(ctx context.Context, messageID, content string) {
 	n.mu.Lock()
-	convID := n.conversationID
 	prevID := n.previousID
 	n.mu.Unlock()
 	n.send(ctx, protocol.TypeAssistantMsg, protocol.AssistantMessage{
 		ID:             messageID,
 		PreviousID:     prevID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		Content:        content,
 		Timestamp:      time.Now().UnixMilli(),
 	})
 }
 
 func (n *WSNotifier) SendError(ctx context.Context, messageID string, err error) {
-	n.mu.Lock()
-	convID := n.conversationID
-	n.mu.Unlock()
 	n.send(ctx, protocol.TypeError, protocol.Error{
 		Code:           "agent_error",
 		Message:        err.Error(),
 		MessageID:      messageID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 	})
 }
 
 func (n *WSNotifier) SendTitleUpdate(ctx context.Context, title string) {
-	n.mu.Lock()
-	convID := n.conversationID
-	n.mu.Unlock()
 	n.send(ctx, protocol.TypeTitleUpdate, protocol.TitleUpdate{
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		Title:          title,
 	})
 }
 
 func (n *WSNotifier) SendMemoryTrace(ctx context.Context, messageID, memoryID, content string, relevance float32) {
-	n.mu.Lock()
-	convID := n.conversationID
-	n.mu.Unlock()
 	n.send(ctx, protocol.TypeMemoryTrace, protocol.MemoryTrace{
 		ID:             NewMemoryTraceID(),
 		MemoryID:       memoryID,
 		MessageID:      messageID,
-		ConversationID: convID,
+		ConversationID: n.conversationID,
 		Content:        content,
 		Relevance:      relevance,
 	})

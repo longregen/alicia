@@ -10,7 +10,6 @@ import (
 	"github.com/longregen/alicia/mcp/web/security"
 )
 
-// ScreenshotTool captures screenshots of web pages using Playwright
 type ScreenshotTool struct{}
 
 func NewScreenshotTool() *ScreenshotTool {

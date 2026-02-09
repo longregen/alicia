@@ -17,12 +17,10 @@ import (
 const (
 	memorySimilarityThreshold      = 0.5
 	memorySimilarityTopK           = 10
-	maxMemoryCandidates            = 3
+	maxstrings            = 3
 	conversationMaxLength          = 4000
 	defaultMemoryExtractionTimeout = 60 * time.Second
 )
-
-type MemoryCandidate = string
 
 // DimensionResult holds the output of a single eval dimension LLM call.
 type DimensionResult struct {
@@ -72,7 +70,7 @@ func ExtractAndSaveMemories(ctx context.Context, convID, msgID string, deps Agen
 	extractPrompt := RetrievePromptTemplate("alicia/agent/memory-extract", fallbackMemoryExtract,
 		map[string]string{"conversation": langfuse.TruncateString(buildConversationText(messages), conversationMaxLength, "...")})
 
-	candidates := extractMemoryCandidates(ctx, deps.LLM, extractPrompt)
+	candidates := extractstrings(ctx, deps.LLM, extractPrompt)
 	if len(candidates) == 0 {
 		slog.InfoContext(ctx, "memory extraction: no candidates found", "conv_id", convID, "msg_id", msgID)
 		return
@@ -195,7 +193,7 @@ var evalDimensionResponseFormat = &openai.ChatCompletionResponseFormat{
 	},
 }
 
-func extractMemoryCandidates(ctx context.Context, llm *LLMClient, prompt PromptResult) []MemoryCandidate {
+func extractstrings(ctx context.Context, llm *LLMClient, prompt PromptResult) []string {
 	slog.InfoContext(ctx, "memory extraction: calling LLM", "prompt_name", prompt.Name, "prompt_version", prompt.Version)
 	resp, err := MakeLLMCall(ctx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
 		MaxTokens:      1000,
@@ -214,15 +212,15 @@ func extractMemoryCandidates(ctx context.Context, llm *LLMClient, prompt PromptR
 	content := strings.TrimSpace(resp.Content)
 
 	var wrapper struct {
-		Memories []MemoryCandidate `json:"memories"`
+		Memories []string `json:"memories"`
 	}
 	if err := json.Unmarshal([]byte(content), &wrapper); err != nil {
 		slog.WarnContext(ctx, "memory extraction: failed to parse response", "error", err, "response", content)
 		return nil
 	}
 
-	if len(wrapper.Memories) > maxMemoryCandidates {
-		return wrapper.Memories[:maxMemoryCandidates]
+	if len(wrapper.Memories) > maxstrings {
+		return wrapper.Memories[:maxstrings]
 	}
 	return wrapper.Memories
 }

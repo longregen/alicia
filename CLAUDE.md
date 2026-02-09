@@ -102,3 +102,7 @@ This is added automatically when using `getSystemPrompt()` in the agent. The att
 - [Link Prompts to Traces](https://langfuse.com/docs/prompt-management/features/link-to-traces)
 - [Prompt Versioning](https://langfuse.com/docs/prompts/get-started)
 
+## Dependencies
+
+Never downgrade dependency versions. Only upgrade or keep versions as-is.
+

@@ -1,11 +1,12 @@
 package com.alicia.assistant.service
 
+import android.util.Log
 import com.alicia.assistant.telemetry.AliciaTelemetry
 import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
+import okhttp3.Call
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -18,16 +19,19 @@ class AliciaApiClient(
 ) {
     companion object {
         private const val SYNC_TIMEOUT_MS = 120_000L
-        val BASE_URL = ApiClient.BASE_URL
+        val BASE_URL: String
+            get() = ApiClient.BASE_URL
         const val USER_ID = "usr"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 
-    private val client: OkHttpClient = ApiClient.client
+    private val client: Call.Factory = ApiClient.client
 
-    private val syncClient: OkHttpClient = client.newBuilder()
-        .readTimeout(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        .build()
+    private val syncClient: Call.Factory = ApiClient.createCallFactory(
+        ApiClient.httpClient.newBuilder()
+            .readTimeout(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .build()
+    )
 
     data class Conversation(
         val id: String,
@@ -159,8 +163,8 @@ class AliciaApiClient(
             .post(requestBody)
             .build()
 
-        val httpClient = if (useSyncClient) syncClient else client
-        return executeRequest(httpClient, request)
+        val callFactory = if (useSyncClient) syncClient else client
+        return executeRequest(callFactory, request)
     }
 
     private fun patch(path: String, body: JSONObject): JSONObject {
@@ -175,13 +179,21 @@ class AliciaApiClient(
         return executeRequest(client, request)
     }
 
-    private fun executeRequest(httpClient: OkHttpClient, request: Request): JSONObject {
-        httpClient.newCall(request).execute().use { response ->
-            val responseBody = response.body?.string() ?: ""
-            if (!response.isSuccessful) {
-                throw ApiException(response.code, responseBody)
+    private fun executeRequest(callFactory: Call.Factory, request: Request): JSONObject {
+        try {
+            callFactory.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    Log.e("AliciaApiClient", "API error ${response.code} for ${request.method} ${request.url}: $responseBody")
+                    throw ApiException(response.code, responseBody)
+                }
+                return JSONObject(responseBody)
             }
-            return JSONObject(responseBody)
+        } catch (e: ApiException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("AliciaApiClient", "Request failed for ${request.method} ${request.url}", e)
+            throw e
         }
     }
 

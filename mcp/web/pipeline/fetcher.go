@@ -57,17 +57,21 @@ func Fetch(ctx context.Context, url string, opts *FetchOptions) (*FetchResult, e
 		method = http.MethodGet
 	}
 
-	// Create client with redirect handling
+	// Create client with a safe dialer that validates resolved IPs at connect
+	// time, preventing DNS rebinding attacks.
 	redirectCount := 0
 	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: security.SafeDialContext,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			redirectCount++
 			if redirectCount > MaxRedirects {
 				return fmt.Errorf("too many redirects (max %d)", MaxRedirects)
 			}
 
-			// Validate redirect URL
+			// Validate redirect URL (scheme, hostname blocklist, etc.)
 			if err := security.ValidateURL(req.URL.String()); err != nil {
 				return fmt.Errorf("redirect URL validation failed: %w", err)
 			}

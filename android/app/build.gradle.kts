@@ -3,9 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 android {
     namespace = "com.alicia.assistant"
-    compileSdk = 35
+    compileSdk = 36
     buildToolsVersion = "35.0.0"
 
     defaultConfig {
@@ -15,6 +21,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     splits {
@@ -60,21 +67,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         viewBinding = true
     }
 }
 
-// Required for Nix fetchDeps: test configurations cause variant ambiguity with AGP 8.7.x
+// Required for Nix fetchDeps: test configurations cause variant ambiguity with AGP 8.13.x
 afterEvaluate {
     configurations.matching {
         (it.name.contains("AndroidTest", ignoreCase = true) ||
-            it.name.contains("UnitTest", ignoreCase = true) ||
-            it.name.contains("Test", ignoreCase = true)) &&
+            it.name.contains("UnitTest", ignoreCase = true)) &&
             it.isCanBeResolved
     }.configureEach {
         isCanBeResolved = false
@@ -83,58 +85,58 @@ afterEvaluate {
 
 dependencies {
     // AndroidX Core
-    implementation("androidx.activity:activity-ktx:1.8.2")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    implementation("androidx.activity:activity-ktx:1.12.3")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.10.0")
 
     // Material Design 3
-    implementation("com.google.android.material:material:1.11.0")
+    implementation("com.google.android.material:material:1.13.0")
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
     // Vosk offline speech recognition
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
-    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
 
     // HTTP client for Whisper API
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // JSON parsing
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.google.code.gson:gson:2.13.2")
 
     // Preferences DataStore
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.2.0")
 
     // Encrypted SharedPreferences (for Tailscale state storage)
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // ViewModel
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
 
     // ML Kit Text Recognition (bundled, no Play Services Dynamite dependency)
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
     // Media session for headset button support
-    implementation("androidx.media:media:1.7.0")
+    implementation("androidx.media:media:1.7.1")
 
     // ONNX Runtime for Silero VAD
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.2")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.24.1")
 
     // MessagePack for WebSocket protocol encoding
-    implementation("org.msgpack:msgpack-core:0.9.8")
+    implementation("org.msgpack:msgpack-core:0.9.11")
 
     // OpenTelemetry
-    implementation(platform("io.opentelemetry:opentelemetry-bom:1.44.1"))
+    implementation(platform("io.opentelemetry:opentelemetry-bom:1.59.0"))
     implementation("io.opentelemetry:opentelemetry-sdk")
     implementation("io.opentelemetry:opentelemetry-api")
     implementation("io.opentelemetry:opentelemetry-exporter-otlp") {
         exclude(group = "io.opentelemetry", module = "opentelemetry-exporter-sender-grpc-managed-channel")
     }
     implementation("io.opentelemetry:opentelemetry-exporter-sender-okhttp")
-    implementation("io.opentelemetry.instrumentation:opentelemetry-okhttp-3.0:2.10.0-alpha")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-okhttp-3.0:2.24.0-alpha")
 
     // libtailscale (Tailscale VPN engine via gomobile)
     val libtailscaleAar = file("libs/libtailscale.aar")
@@ -148,7 +150,15 @@ dependencies {
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     // CameraX (for QR code scanner)
-    implementation("androidx.camera:camera-camera2:1.4.0")
-    implementation("androidx.camera:camera-lifecycle:1.4.0")
-    implementation("androidx.camera:camera-view:1.4.0")
+    implementation("androidx.camera:camera-camera2:1.5.3")
+    implementation("androidx.camera:camera-lifecycle:1.5.3")
+    implementation("androidx.camera:camera-view:1.5.3")
+
+    // Android instrumented test dependencies
+    androidTestImplementation("androidx.test:core:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    androidTestImplementation("junit:junit:4.13.2")
 }

@@ -1,15 +1,14 @@
 package security
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"strings"
+	"syscall"
 )
-
-// AllowedHosts is an optional allowlist of hosts. If non-empty, only these hosts are permitted.
-var AllowedHosts []string
 
 // allowLocal caches whether MCP_WEB_ALLOW_LOCAL is set at startup.
 var allowLocal = os.Getenv("MCP_WEB_ALLOW_LOCAL") != ""
@@ -76,21 +75,6 @@ func ValidateURL(rawURL string) error {
 		return fmt.Errorf("URL must have a hostname")
 	}
 
-	// Check against allowlist if configured
-	if len(AllowedHosts) > 0 {
-		allowed := false
-		for _, allowedHost := range AllowedHosts {
-			if strings.EqualFold(hostname, allowedHost) {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return fmt.Errorf("hostname %q is not in the allowed hosts list", hostname)
-		}
-		return nil
-	}
-
 	lowerHostname := strings.ToLower(hostname)
 
 	// When MCP_WEB_ALLOW_LOCAL is set, skip localhost/private-IP checks
@@ -141,4 +125,57 @@ func ValidateURL(rawURL string) error {
 	}
 
 	return nil
+}
+
+// SafeDialContext returns a DialContext function that resolves DNS and validates
+// all resulting IPs against IsPrivateIP before connecting. This prevents DNS
+// rebinding attacks where the first lookup returns a public IP (passing
+// ValidateURL) but a subsequent lookup returns a private IP.
+func SafeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address %q: %w", addr, err)
+	}
+
+	// Resolve DNS ourselves so we can inspect the IPs before connecting.
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("DNS resolution failed for %q: %w", host, err)
+	}
+
+	if !allowLocal {
+		for _, ipAddr := range ips {
+			if IsPrivateIP(ipAddr.IP) {
+				return nil, fmt.Errorf("hostname %q resolves to private/internal IP %s", host, ipAddr.IP)
+			}
+		}
+	}
+
+	// Connect to the first reachable resolved IP. Use a raw dialer with
+	// Control to pin the connection to the resolved addresses and block any
+	// OS-level re-resolution.
+	var lastErr error
+	for _, ipAddr := range ips {
+		dialer := &net.Dialer{
+			Control: func(network, address string, c syscall.RawConn) error {
+				// Extra safety: the kernel is connecting to `address`; verify
+				// it is one of the IPs we already validated.
+				connHost, _, _ := net.SplitHostPort(address)
+				connIP := net.ParseIP(connHost)
+				if connIP != nil && !allowLocal && IsPrivateIP(connIP) {
+					return fmt.Errorf("blocked connection to private IP %s", connIP)
+				}
+				return nil
+			},
+		}
+		target := net.JoinHostPort(ipAddr.IP.String(), port)
+		conn, err := dialer.DialContext(ctx, network, target)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return conn, nil
+	}
+
+	return nil, fmt.Errorf("failed to connect to %q: %w", addr, lastErr)
 }

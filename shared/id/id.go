@@ -35,14 +35,6 @@ func New(prefix string) string {
 	return prefix + "_" + id
 }
 
-func NewWithLength(prefix string, length int) string {
-	id, err := nanoid.New(length)
-	if err != nil {
-		panic("nanoid generation failed: " + err.Error())
-	}
-	return prefix + "_" + id
-}
-
 func NewConversation() string      { return New(PrefixConversation) }
 func NewMessage() string           { return New(PrefixMessage) }
 func NewMemory() string            { return New(PrefixMemory) }

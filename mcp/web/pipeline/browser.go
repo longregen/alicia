@@ -213,6 +213,16 @@ func (p *BrowserPool) RenderPage(ctx context.Context, url string, opts *RenderOp
 		}
 	}
 
+	// Validate the final URL after redirects to prevent SSRF via browser
+	// redirects (HTTP or JavaScript) to internal addresses.
+	info, err := page.Info()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get page info: %w", err)
+	}
+	if err := security.ValidateURL(info.URL); err != nil {
+		return nil, fmt.Errorf("redirect SSRF blocked: final URL validation failed: %w", err)
+	}
+
 	// Get the rendered HTML
 	html, err := page.HTML()
 	if err != nil {
@@ -221,7 +231,7 @@ func (p *BrowserPool) RenderPage(ctx context.Context, url string, opts *RenderOp
 
 	return &RenderResult{
 		HTML:     html,
-		FinalURL: page.MustInfo().URL,
+		FinalURL: info.URL,
 	}, nil
 }
 
@@ -292,6 +302,16 @@ func (p *BrowserPool) CaptureScreenshot(ctx context.Context, url string, opts *S
 			return nil, ctx.Err()
 		case <-time.After(time.Duration(opts.WaitMS) * time.Millisecond):
 		}
+	}
+
+	// Validate the final URL after redirects to prevent SSRF via browser
+	// redirects (HTTP or JavaScript) to internal addresses.
+	info, err := page.Info()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get page info: %w", err)
+	}
+	if err := security.ValidateURL(info.URL); err != nil {
+		return nil, fmt.Errorf("redirect SSRF blocked: final URL validation failed: %w", err)
 	}
 
 	// Capture screenshot

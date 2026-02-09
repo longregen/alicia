@@ -36,6 +36,10 @@ const (
 	TypeAssistantToolsAck          = protocol.TypeAssistantToolsAck
 	TypeAssistantHeartbeat         = protocol.TypeAssistantHeartbeat
 	TypeGenerationComplete         = protocol.TypeGenerationComplete
+	TypeWhatsAppPairRequest        = protocol.TypeWhatsAppPairRequest
+	TypeWhatsAppQR                 = protocol.TypeWhatsAppQR
+	TypeWhatsAppStatus             = protocol.TypeWhatsAppStatus
+	TypeWhatsAppDebug              = protocol.TypeWhatsAppDebug
 )
 
 type (
@@ -69,4 +73,8 @@ type (
 	AssistantTool              = protocol.AssistantTool
 	AssistantToolsAck          = protocol.AssistantToolsAck
 	GenerationComplete         = protocol.GenerationComplete
+	WhatsAppPairRequest        = protocol.WhatsAppPairRequest
+	WhatsAppQR                 = protocol.WhatsAppQR
+	WhatsAppStatus             = protocol.WhatsAppStatus
+	WhatsAppDebug              = protocol.WhatsAppDebug
 )

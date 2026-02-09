@@ -22,10 +22,32 @@ class AppContextImpl(private val context: Context) : libtailscale.AppContext {
     }
 
     private val encryptedPrefs by lazy {
+        try {
+            createEncryptedPrefs()
+        } catch (e: Exception) {
+            Log.e(TAG, "EncryptedSharedPreferences corrupted, clearing and recreating", e)
+            // Delete the corrupted prefs file and try again
+            try {
+                context.deleteSharedPreferences(ENCRYPTED_PREFS_FILE)
+            } catch (deleteErr: Exception) {
+                Log.w(TAG, "Failed to delete corrupted prefs file", deleteErr)
+            }
+            try {
+                createEncryptedPrefs()
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed to recreate EncryptedSharedPreferences, using fallback", e2)
+                // Last resort: use regular SharedPreferences (unencrypted)
+                // This is better than crashing - state will be re-established on next login
+                context.getSharedPreferences(ENCRYPTED_PREFS_FILE + "_fallback", Context.MODE_PRIVATE)
+            }
+        }
+    }
+
+    private fun createEncryptedPrefs(): android.content.SharedPreferences {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-        EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             context,
             ENCRYPTED_PREFS_FILE,
             masterKey,
@@ -39,11 +61,20 @@ class AppContextImpl(private val context: Context) : libtailscale.AppContext {
     }
 
     override fun encryptToPref(key: String, value: String) {
-        encryptedPrefs.edit().putString(key, value).apply()
+        try {
+            encryptedPrefs.edit().putString(key, value).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to encrypt preference key=$key (possible keystore corruption)", e)
+        }
     }
 
     override fun decryptFromPref(key: String): String {
-        return encryptedPrefs.getString(key, "") ?: ""
+        return try {
+            encryptedPrefs.getString(key, "") ?: ""
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to decrypt preference key=$key, returning empty (possible keystore corruption)", e)
+            ""
+        }
     }
 
     override fun getStateStoreKeysJSON(): String {

@@ -148,9 +148,6 @@ func runAgentLoop(ctx context.Context, serverURL string, deps AgentDeps) error {
 	}
 	slog.Info("registered as agent")
 
-	notifier := NewWSNotifier(conn)
-	deps.Notifier = notifier
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -189,7 +186,6 @@ func runAgentLoop(ctx context.Context, serverURL string, deps AgentDeps) error {
 			}
 
 			slog.Info("request received", "type", req.RequestType, "conversation_id", req.ConversationID, "message_id", req.MessageID)
-			notifier.SetConversationID(req.ConversationID)
 
 			reqCtx := otel.WithSessionID(ctx, req.ConversationID)
 			if envelope.UserID != "" {
@@ -205,9 +201,9 @@ func runAgentLoop(ctx context.Context, serverURL string, deps AgentDeps) error {
 				})
 			}
 
-			// Create deps with user ID for this request
 			reqDeps := deps
 			reqDeps.UserID = envelope.UserID
+			reqDeps.Notifier = NewWSNotifier(conn, req.ConversationID)
 
 			go func(reqCtx context.Context, req ResponseGenerationRequest, reqDeps AgentDeps) {
 				var err error

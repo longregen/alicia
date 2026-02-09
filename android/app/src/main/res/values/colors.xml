@@ -73,4 +73,7 @@
     <color name="vpn_connected">#4CAF50</color>
     <color name="vpn_connected_dark">#66BB6A</color>
     <color name="vpn_connecting">#FF9800</color>
+
+    <!-- Peer status colors -->
+    <color name="peer_offline">#9E9E9E</color>
 </resources>

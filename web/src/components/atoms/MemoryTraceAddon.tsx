@@ -3,7 +3,7 @@ import { cls } from '../../utils/cls';
 import type { BaseComponentProps } from '../../types/components';
 import FeedbackControls from './FeedbackControls';
 import { useFeedback } from '../../hooks/useFeedback';
-import type { VoteType } from '../../stores/feedbackStore';
+import type { VoteType } from '../../hooks/useFeedback';
 import type { MemoryTrace } from '../../types/chat';
 import { HoverPopover } from './HoverPopover';
 

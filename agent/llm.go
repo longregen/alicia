@@ -52,10 +52,6 @@ type ChatOptions struct {
 
 func float32Ptr(f float32) *float32 { return &f }
 
-func (c *LLMClient) Chat(ctx context.Context, messages []LLMMessage, tools []Tool) (*LLMResponse, error) {
-	return c.ChatWithOptions(ctx, messages, tools, ChatOptions{})
-}
-
 func (c *LLMClient) ChatWithOptions(ctx context.Context, messages []LLMMessage, tools []Tool, opts ChatOptions) (*LLMResponse, error) {
 	msgs := make([]openai.ChatCompletionMessage, len(messages))
 	for i, m := range messages {

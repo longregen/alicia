@@ -201,7 +201,10 @@ func (h *prettyHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *prettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &prettyHandler{level: h.level, w: h.w, attrs: append(h.attrs, attrs...), group: h.group}
+	newAttrs := make([]slog.Attr, len(h.attrs), len(h.attrs)+len(attrs))
+	copy(newAttrs, h.attrs)
+	newAttrs = append(newAttrs, attrs...)
+	return &prettyHandler{level: h.level, w: h.w, attrs: newAttrs, group: h.group}
 }
 
 func (h *prettyHandler) WithGroup(name string) slog.Handler {
@@ -293,15 +296,6 @@ func UserIDFromContext(ctx context.Context) string {
 		return v
 	}
 	return ""
-}
-
-// MCPTraceContext holds W3C trace context for MCP _meta field propagation.
-// This follows the Langfuse MCP tracing convention.
-type MCPTraceContext struct {
-	TraceParent string `json:"traceparent,omitempty"`
-	TraceState  string `json:"tracestate,omitempty"`
-	SessionID   string `json:"session_id,omitempty"`
-	UserID      string `json:"user_id,omitempty"`
 }
 
 // InjectMCPMeta creates a _meta map with trace context for MCP tool calls.

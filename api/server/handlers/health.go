@@ -9,19 +9,16 @@ import (
 	"github.com/longregen/alicia/pkg/langfuse"
 )
 
-// HealthHandler handles health check endpoints.
 type HealthHandler struct {
 	langfuse *langfuse.Client
 	dbPing   func(context.Context) error
 }
 
-// HealthHandlerConfig contains configuration for the health handler.
 type HealthHandlerConfig struct {
 	Langfuse *langfuse.Client
 	DBPing   func(context.Context) error
 }
 
-// NewHealthHandler creates a new health handler.
 func NewHealthHandler(cfg HealthHandlerConfig) *HealthHandler {
 	return &HealthHandler{
 		langfuse: cfg.Langfuse,

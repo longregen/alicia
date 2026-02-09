@@ -12,7 +12,6 @@ import (
 	"github.com/longregen/alicia/shared/mcp"
 )
 
-// Tool definitions - 3 tools only
 func (s *Server) getTools() []mcp.Tool {
 	return []mcp.Tool{
 		{
@@ -218,13 +217,28 @@ func (s *Server) executeSQL(ctx context.Context, args map[string]any) (string, b
 
 	allowMutation, _ := args["allow_mutation"].(bool)
 
+	// Fast-path hint: warn the user before even starting a transaction
 	if !allowMutation && isMutationQuery(sql) {
-		return "Error: Mutation queries not allowed. Set allow_mutation=true to enable.", true
+		return "Error: This appears to be a mutation query. Set allow_mutation=true to enable.", true
 	}
 
-	rows, err := s.pool.Query(ctx, sql)
+	// Use a read-only transaction to enforce no mutations at the database level,
+	// preventing bypasses via CTEs, comments, semicolons, etc.
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		hint := s.llm.GenerateSQLHint(ctx, sql, err.Error(), s.config.GetSchemaContext())
+		return fmt.Sprintf("Error starting transaction: %v", err), true
+	}
+	defer tx.Rollback(ctx)
+
+	if !allowMutation {
+		if _, err := tx.Exec(ctx, "SET TRANSACTION READ ONLY"); err != nil {
+			return fmt.Sprintf("Error setting read-only transaction: %v", err), true
+		}
+	}
+
+	rows, err := tx.Query(ctx, sql)
+	if err != nil {
+		hint := s.llm.GenerateSQLHint(ctx, sql, err.Error(), s.config.SchemaDoc)
 		result := map[string]any{
 			"success": false,
 			"error":   err.Error(),
@@ -302,7 +316,7 @@ func (s *Server) schemaExplore(ctx context.Context, args map[string]any) (string
 	}
 
 	// Build schema context from database if no doc provided
-	schemaContext := s.config.GetSchemaContext()
+	schemaContext := s.config.SchemaDoc
 	if schemaContext == "" {
 		schemaContext = s.buildSchemaContext(ctx)
 	}
@@ -361,11 +375,13 @@ func isValidIdentifier(s string) bool {
 	return true
 }
 
+// isMutationQuery is a fast-path heuristic to detect mutation queries.
+// The actual enforcement is done via SET TRANSACTION READ ONLY in executeSQL.
 func isMutationQuery(sql string) bool {
 	keywords := []string{"INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "GRANT", "REVOKE"}
 	upper := strings.ToUpper(strings.TrimSpace(sql))
 	for _, kw := range keywords {
-		if strings.HasPrefix(upper, kw) {
+		if strings.Contains(upper, kw) {
 			return true
 		}
 	}

@@ -8,17 +8,14 @@ import (
 	"github.com/longregen/alicia/api/services"
 )
 
-// MCPHandler handles MCP server endpoints.
 type MCPHandler struct {
 	mcpSvc *services.MCPService
 }
 
-// NewMCPHandler creates a new MCP handler.
 func NewMCPHandler(svc *services.MCPService) *MCPHandler {
 	return &MCPHandler{mcpSvc: svc}
 }
 
-// List handles GET /mcp/servers
 func (h *MCPHandler) List(w http.ResponseWriter, r *http.Request) {
 	servers, err := h.mcpSvc.ListServers(r.Context())
 	if err != nil {
@@ -31,7 +28,6 @@ func (h *MCPHandler) List(w http.ResponseWriter, r *http.Request) {
 	}, http.StatusOK)
 }
 
-// Create handles POST /mcp/servers
 func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name          string   `json:"name"`
@@ -63,7 +59,6 @@ func (h *MCPHandler) Create(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, server, http.StatusCreated)
 }
 
-// Get handles GET /mcp/servers/{name}
 func (h *MCPHandler) Get(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
@@ -76,7 +71,6 @@ func (h *MCPHandler) Get(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, server, http.StatusOK)
 }
 
-// Update handles PUT /mcp/servers/{name}
 func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
@@ -122,7 +116,6 @@ func (h *MCPHandler) Update(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, server, http.StatusOK)
 }
 
-// Delete handles DELETE /mcp/servers/{name}
 func (h *MCPHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
