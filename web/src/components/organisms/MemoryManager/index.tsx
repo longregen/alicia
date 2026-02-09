@@ -100,11 +100,6 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
     }
   };
 
-  const handleRestore = async (_memory: Memory) => {
-    // Restore endpoint no longer exists in backend
-    console.warn('Memory restore is not supported in the current backend');
-  };
-
   const handlePermanentDelete = async (memory: Memory) => {
     if (confirm(`Permanently delete this memory?\n\nThis cannot be undone.`)) {
       try {
@@ -254,7 +249,6 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ className = '' }) 
             onCategoryChange={handleCategoryChange}
             isLoading={isLoading}
             showDeletedActions={viewTab === 'deleted'}
-            onRestore={handleRestore}
             onPermanentDelete={handlePermanentDelete}
           />
         )}

@@ -16,15 +16,9 @@ type Message struct {
 }
 
 type Memory struct {
-	ID            string
-	Content       string
-	Importance    float32
-	Pinned        bool
-	Archived      bool
-	SourceMsgID   *string
-	Tags          []string
-	DeletedReason *string
-	Similarity    float32 // computed during search
+	ID         string
+	Content    string
+	Similarity float32 // computed during search
 }
 
 type Tool struct {

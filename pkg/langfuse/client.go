@@ -17,6 +17,13 @@ import (
 
 var discardLogger = log.New(io.Discard, "", 0)
 
+func truncateID(id string, n int) string {
+	if len(id) <= n {
+		return id
+	}
+	return id[:n]
+}
+
 type Client struct {
 	host       string
 	publicKey  string
@@ -275,7 +282,7 @@ func (c *Client) CreateTrace(ctx context.Context, params TraceParams) error {
 
 	now := time.Now().UTC()
 	event := ingestionEvent{
-		ID:        fmt.Sprintf("evt-%s-%d", params.ID[:8], now.UnixMilli()),
+		ID:        fmt.Sprintf("evt-%s-%d", truncateID(params.ID, 8), now.UnixMilli()),
 		Type:      "trace-create",
 		Timestamp: now,
 		Body: traceBody{
@@ -408,7 +415,7 @@ func (c *Client) CreateSpan(ctx context.Context, params SpanParams) error {
 	}
 
 	event := ingestionEvent{
-		ID:        fmt.Sprintf("evt-span-%s-%d", params.ID[:8], now.UnixMilli()),
+		ID:        fmt.Sprintf("evt-span-%s-%d", truncateID(params.ID, 8), now.UnixMilli()),
 		Type:      "span-create",
 		Timestamp: now,
 		Body: spanBody{
@@ -464,7 +471,7 @@ func (c *Client) UpdateSpan(ctx context.Context, params SpanParams) error {
 	now := time.Now().UTC()
 
 	event := ingestionEvent{
-		ID:        fmt.Sprintf("evt-span-upd-%s-%d", params.ID[:8], now.UnixMilli()),
+		ID:        fmt.Sprintf("evt-span-upd-%s-%d", truncateID(params.ID, 8), now.UnixMilli()),
 		Type:      "span-update",
 		Timestamp: now,
 		Body: spanBody{
@@ -551,7 +558,7 @@ func (c *Client) CreateGeneration(ctx context.Context, params GenerationParams) 
 	}
 
 	event := ingestionEvent{
-		ID:        fmt.Sprintf("evt-gen-%s-%d", params.ID[:8], now.UnixMilli()),
+		ID:        fmt.Sprintf("evt-gen-%s-%d", truncateID(params.ID, 8), now.UnixMilli()),
 		Type:      "generation-create",
 		Timestamp: now,
 		Body:      genBody,
@@ -639,7 +646,7 @@ func (c *Client) CreateScoreBatch(ctx context.Context, scores []ScoreParams) err
 			dataType = ScoreDataTypeNumeric
 		}
 		events = append(events, ingestionEvent{
-			ID:        fmt.Sprintf("evt-score-%s-%d-%d", s.TraceID[:8], now.UnixMilli(), i),
+			ID:        fmt.Sprintf("evt-score-%s-%d-%d", truncateID(s.TraceID, 8), now.UnixMilli(), i),
 			Type:      "score-create",
 			Timestamp: now,
 			Body: scoreRequest{

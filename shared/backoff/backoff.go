@@ -34,20 +34,6 @@ var (
 		},
 	}
 
-	Aggressive = Strategy{
-		Delays: []time.Duration{
-			1 * time.Second,
-			2 * time.Second,
-			4 * time.Second,
-			8 * time.Second,
-			16 * time.Second,
-			30 * time.Second,
-			60 * time.Second,
-			120 * time.Second,
-			240 * time.Second,
-			300 * time.Second,
-		},
-	}
 )
 
 type RetryFunc func(ctx context.Context, attempt int) error
@@ -96,16 +82,3 @@ func RetryWithCallback(ctx context.Context, strategy Strategy, fn RetryFunc, onR
 	return fmt.Errorf("failed after %d attempts: %w", len(strategy.Delays), lastErr)
 }
 
-func Custom(delays ...time.Duration) Strategy {
-	return Strategy{Delays: delays}
-}
-
-func Exponential(initial time.Duration, multiplier float64, maxRetries int) Strategy {
-	delays := make([]time.Duration, maxRetries)
-	current := initial
-	for i := 0; i < maxRetries; i++ {
-		delays[i] = current
-		current = time.Duration(float64(current) * multiplier)
-	}
-	return Strategy{Delays: delays}
-}

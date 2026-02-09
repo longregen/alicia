@@ -72,7 +72,7 @@ func (s *Store) ListNotesByUser(ctx context.Context, userID string) ([]*domain.N
 		}
 		notes = append(notes, note)
 	}
-	return notes, nil
+	return notes, rows.Err()
 }
 
 func (s *Store) UpdateNote(ctx context.Context, note *domain.Note) error {
@@ -93,7 +93,7 @@ func (s *Store) UpdateNote(ctx context.Context, note *domain.Note) error {
 		return fmt.Errorf("update note: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("note not found")
+		return domain.ErrNotFound
 	}
 	return nil
 }
@@ -105,7 +105,7 @@ func (s *Store) DeleteNote(ctx context.Context, id string) error {
 		return fmt.Errorf("delete note: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return errors.New("note not found")
+		return domain.ErrNotFound
 	}
 	return nil
 }

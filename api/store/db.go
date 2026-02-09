@@ -62,12 +62,10 @@ func (s *Store) conn(ctx context.Context) querier {
 	return s.pool
 }
 
-// NewID generates a new ID with the given prefix (for custom prefixes)
 func NewID(prefix string) string {
 	return id.New(prefix)
 }
 
-// Re-export ID functions from internal/id for backward compatibility
 var (
 	NewConversationID      = id.NewConversation
 	NewMessageID           = id.NewMessage

@@ -453,11 +453,6 @@ func runParetoExploration(ctx context.Context, convID, msgID, previousID, userQu
 			attribute.Int("archive_size", archive.Size()),
 		)
 
-		progress := float32(bestScore * 20)
-		if progress > 100 {
-			progress = 100
-		}
-
 		if bestScore >= float64(paretoCfg.TargetScore) {
 			genSpan.End()
 			if lfClient != nil {
@@ -811,43 +806,6 @@ func executeCandidateWithStrategy(ctx context.Context, candidate *PathCandidate,
 	execTrace.DurationMs = time.Since(startTime).Milliseconds()
 
 	return execTrace, nil
-}
-
-const fallbackThinkingStatusPrompt = `Generate a short, fun status message (1-10 words) about working on this question.
-
-Question: {{question}}
-Current approach: {{strategy}}
-Progress: {{progress}}%
-
-Be witty, playful, or encouraging. Output ONLY the message, nothing else.`
-
-func generateThinkingStatus(ctx context.Context, llm *LLMClient, question, strategy, convID, userID string, progress float32, parentSpanID string) string {
-	vars := map[string]string{
-		"question": question,
-		"strategy": strategy,
-		"progress": fmt.Sprintf("%.0f", progress),
-	}
-	prompt := RetrievePromptTemplate("alicia/pareto/thinking-status", fallbackThinkingStatusPrompt, vars)
-
-	resp, err := MakeLLMCall(ctx, llm, []LLMMessage{{Role: "user", Content: prompt.Text}}, nil, LLMCallOptions{
-		GenerationName:      "pareto.thinking_status",
-		Prompt:              prompt,
-		ConvID:              convID,
-		UserID:              userID,
-		TraceName:           "agent:pareto",
-		ParentObservationID: parentSpanID,
-		NoRetry:             true,
-	})
-	if err != nil {
-		return fmt.Sprintf("Exploring... %.0f%%", progress)
-	}
-
-	status := strings.TrimSpace(resp.Content)
-	status = strings.Trim(status, "\"'")
-	if len(status) > 100 {
-		status = status[:100]
-	}
-	return status
 }
 
 // toolTracker records tool calls across concurrent candidates for progress reporting

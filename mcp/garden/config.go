@@ -7,19 +7,12 @@ import (
 	"github.com/longregen/alicia/shared/config"
 )
 
-// Config holds the MCP server configuration
 type Config struct {
-	// DatabaseURL is the PostgreSQL connection string
-	DatabaseURL string
-
-	// SchemaDoc is the contents of the database documentation file
-	SchemaDoc string
-
-	// MaxResponseSize is the maximum character length for tool responses
+	DatabaseURL     string
+	SchemaDoc       string
 	MaxResponseSize int
 }
 
-// LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
 	cfg := &Config{}
 
@@ -42,7 +35,3 @@ func LoadConfig() *Config {
 	return cfg
 }
 
-// GetSchemaContext returns the schema documentation
-func (c *Config) GetSchemaContext() string {
-	return c.SchemaDoc
-}

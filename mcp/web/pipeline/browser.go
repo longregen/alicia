@@ -219,9 +219,14 @@ func (p *BrowserPool) RenderPage(ctx context.Context, url string, opts *RenderOp
 		return nil, fmt.Errorf("failed to get page content: %w", err)
 	}
 
+	info, err := page.Info()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get page info: %w", err)
+	}
+
 	return &RenderResult{
 		HTML:     html,
-		FinalURL: page.MustInfo().URL,
+		FinalURL: info.URL,
 	}, nil
 }
 

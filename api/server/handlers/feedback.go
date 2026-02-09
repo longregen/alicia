@@ -13,21 +13,11 @@ import (
 	"github.com/longregen/alicia/pkg/langfuse"
 )
 
-// FeedbackHandler handles feedback endpoints.
 type FeedbackHandler struct {
 	store    *store.Store
 	langfuse *langfuse.Client
 }
 
-// Uses environment variables for Langfuse configuration.
-func NewFeedbackHandler(s *store.Store) *FeedbackHandler {
-	return &FeedbackHandler{
-		store:    s,
-		langfuse: langfuse.New("", "", ""),
-	}
-}
-
-// NewFeedbackHandlerWithLangfuse creates a new feedback handler with a custom Langfuse client.
 func NewFeedbackHandlerWithLangfuse(s *store.Store, lf *langfuse.Client) *FeedbackHandler {
 	return &FeedbackHandler{
 		store:    s,

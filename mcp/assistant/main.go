@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -98,7 +100,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 		var request mcp.Request
 		if err := decoder.Decode(&request); err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				return nil
 			}
 			s.logger.Error("failed to decode request", "error", err)

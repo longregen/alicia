@@ -9,8 +9,6 @@ export interface ResponseControlsProps {
   conversationId?: ConversationId | null;
   /** Callback when stop is clicked */
   onStop?: () => void;
-  /** Callback when regenerate is clicked */
-  onRegenerate?: () => void;
   /** Whether to show the controls */
   show?: boolean;
   className?: string;
@@ -19,7 +17,6 @@ export interface ResponseControlsProps {
 const ResponseControls: React.FC<ResponseControlsProps> = ({
   conversationId = null,
   onStop,
-  onRegenerate: _onRegenerate,
   show = true,
   className = '',
 }) => {

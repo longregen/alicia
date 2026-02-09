@@ -31,9 +31,13 @@ func NewLLMClient() *LLMClient {
 	model := config.GetEnv("LLM_MODEL", "gpt-4o-mini")
 	maxTokens := config.GetEnvInt("LLM_DEFAULT_MAX_TOKENS", 2048)
 
-	lf := langfuse.New("", "", "")
-	if config.GetEnv("LANGFUSE_PUBLIC_KEY", "") != "" && config.GetEnv("LANGFUSE_SECRET_KEY", "") != "" {
-		slog.Info("langfuse prompt management initialized", "host", config.GetEnv("LANGFUSE_HOST", ""))
+	host := config.GetEnv("LANGFUSE_HOST", "")
+	publicKey := config.GetEnv("LANGFUSE_PUBLIC_KEY", "")
+	secretKey := config.GetEnv("LANGFUSE_SECRET_KEY", "")
+	var lf *langfuse.Client
+	if host != "" && publicKey != "" && secretKey != "" {
+		lf = langfuse.New(host, publicKey, secretKey)
+		slog.Info("langfuse prompt management initialized", "host", host)
 	} else {
 		slog.Info("langfuse not configured, using fallback prompts")
 	}
@@ -71,10 +75,6 @@ type ChatCompletionResponse struct {
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
-}
-
-func (c *LLMClient) Complete(ctx context.Context, messages []ChatMessage) (string, error) {
-	return c.completeInternal(ctx, messages, c.defaultMaxTk)
 }
 
 func (c *LLMClient) CompleteWithMaxTokens(ctx context.Context, messages []ChatMessage, maxTokens int) (string, error) {
@@ -150,9 +150,6 @@ func (c *LLMClient) GenerateSQLHint(ctx context.Context, sql string, errMsg stri
 	systemPrompt := sysPromptObj.Compile(map[string]string{
 		"db_docs": truncateForContext(schemaContext, 4000),
 	})
-	if schemaContext != "" {
-		systemPrompt += "\n\nDatabase documentation:\n" + truncateForContext(schemaContext, 4000)
-	}
 
 	userPromptObj, err := c.langfuse.GetPrompt("alicia/garden/sql-debug-user", langfuse.WithLabel("production"))
 	if err != nil {
@@ -192,9 +189,6 @@ func (c *LLMClient) AnswerSchemaQuestion(ctx context.Context, question string, s
 	systemPrompt := sysPromptObj.Compile(map[string]string{
 		"db_docs": schemaContext,
 	})
-	if schemaContext != "" {
-		systemPrompt += "\n\nDatabase documentation:\n" + schemaContext
-	}
 
 	messages := []ChatMessage{
 		{Role: "system", Content: systemPrompt},

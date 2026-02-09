@@ -220,17 +220,6 @@ func (a *PathParetoArchive) calculateCrowdingDistances() []float64 {
 	return distances
 }
 
-// GetParetoFront returns a copy of all candidates in the archive
-func (a *PathParetoArchive) GetParetoFront() []*PathCandidate {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	result := make([]*PathCandidate, len(a.candidates))
-	copy(result, a.candidates)
-	return result
-}
-
-// Size returns the number of candidates in the archive
 func (a *PathParetoArchive) Size() int {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

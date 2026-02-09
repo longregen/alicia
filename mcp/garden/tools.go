@@ -224,7 +224,7 @@ func (s *Server) executeSQL(ctx context.Context, args map[string]any) (string, b
 
 	rows, err := s.pool.Query(ctx, sql)
 	if err != nil {
-		hint := s.llm.GenerateSQLHint(ctx, sql, err.Error(), s.config.GetSchemaContext())
+		hint := s.llm.GenerateSQLHint(ctx, sql, err.Error(), s.config.SchemaDoc)
 		result := map[string]any{
 			"success": false,
 			"error":   err.Error(),
@@ -302,7 +302,7 @@ func (s *Server) schemaExplore(ctx context.Context, args map[string]any) (string
 	}
 
 	// Build schema context from database if no doc provided
-	schemaContext := s.config.GetSchemaContext()
+	schemaContext := s.config.SchemaDoc
 	if schemaContext == "" {
 		schemaContext = s.buildSchemaContext(ctx)
 	}

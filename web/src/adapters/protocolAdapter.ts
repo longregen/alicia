@@ -6,6 +6,3 @@ export function setMessageSender(sender: ((envelope: Envelope) => void) | null):
   messageSender = sender;
 }
 
-export function getMessageSender(): ((envelope: Envelope) => void) | null {
-  return messageSender;
-}
