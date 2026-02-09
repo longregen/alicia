@@ -8,9 +8,6 @@ import (
 	"strings"
 )
 
-// AllowedHosts is an optional allowlist of hosts. If non-empty, only these hosts are permitted.
-var AllowedHosts []string
-
 // allowLocal caches whether MCP_WEB_ALLOW_LOCAL is set at startup.
 var allowLocal = os.Getenv("MCP_WEB_ALLOW_LOCAL") != ""
 
@@ -74,21 +71,6 @@ func ValidateURL(rawURL string) error {
 	hostname := parsedURL.Hostname()
 	if hostname == "" {
 		return fmt.Errorf("URL must have a hostname")
-	}
-
-	// Check against allowlist if configured
-	if len(AllowedHosts) > 0 {
-		allowed := false
-		for _, allowedHost := range AllowedHosts {
-			if strings.EqualFold(hostname, allowedHost) {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return fmt.Errorf("hostname %q is not in the allowed hosts list", hostname)
-		}
-		return nil
 	}
 
 	lowerHostname := strings.ToLower(hostname)

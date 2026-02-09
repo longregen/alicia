@@ -36,14 +36,6 @@ func newPromptCache(client *Client) *promptCache {
 	}
 }
 
-func (c *promptCache) setRefreshInterval(d time.Duration) {
-	c.refreshInterval = d
-}
-
-func (c *promptCache) setMaxAge(d time.Duration) {
-	c.maxAge = d
-}
-
 func (c *promptCache) get(key string) (*Prompt, bool) {
 	value, ok := c.entries.Load(key)
 	if !ok {

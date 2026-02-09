@@ -93,23 +93,6 @@ func GetEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-// GetEnvSlice parses a comma-separated env var into a string slice.
-func GetEnvSlice(key string, defaultValue []string) []string {
-	if value := os.Getenv(key); value != "" {
-		parts := strings.Split(value, ",")
-		result := make([]string, 0, len(parts))
-		for _, p := range parts {
-			if trimmed := strings.TrimSpace(p); trimmed != "" {
-				result = append(result, trimmed)
-			}
-		}
-		if len(result) > 0 {
-			return result
-		}
-	}
-	return defaultValue
-}
-
 func GetEnvSliceWithFallback(primary, fallback string, defaultValue []string) []string {
 	for _, key := range []string{primary, fallback} {
 		if value := os.Getenv(key); value != "" {

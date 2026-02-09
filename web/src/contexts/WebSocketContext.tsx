@@ -310,7 +310,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             setVoiceRetrying(nextRetry);
             voiceRetryConversationRef.current = ack.conversationId;
             const delay = 2000 * Math.pow(2, currentRetryCount); // 2s, 4s, 8s
-            console.log(`Voice join: retrying in ${delay}ms (attempt ${nextRetry}/${maxRetries})`);
             voiceRetryTimeoutRef.current = setTimeout(() => {
               const convId = voiceRetryConversationRef.current;
               if (convId && wsRef.current?.readyState === WebSocket.OPEN) {
@@ -340,7 +339,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       case MessageType.VoiceLeaveAck: {
         const ack = envelope.body as VoiceLeaveAck;
         if (ack.success) {
-          console.log('Voice leave acknowledged for conversation:', ack.conversationId);
           resetVoiceConnection();
         } else {
           console.error('Voice leave failed for conversation:', ack.conversationId, ack.error);
@@ -354,11 +352,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           console.warn(
             `Voice TTS queue full for conversation ${status.conversationId}:`,
             status.error || 'sentences may be dropped',
-            `(queue length: ${status.queueLength})`
-          );
-        } else {
-          console.log(
-            `Voice status for conversation ${status.conversationId}: ${status.status}`,
             `(queue length: ${status.queueLength})`
           );
         }

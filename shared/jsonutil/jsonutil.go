@@ -28,15 +28,3 @@ func ParseJSON(s string) map[string]any {
 	return m
 }
 
-// MustMarshalIndent marshals v to a pretty-printed JSON string.
-// Returns an empty string on error.
-func MustMarshalIndent(v any) string {
-	if v == nil {
-		return "{}"
-	}
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}

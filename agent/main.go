@@ -205,7 +205,6 @@ func runAgentLoop(ctx context.Context, serverURL string, deps AgentDeps) error {
 				})
 			}
 
-			// Create deps with user ID for this request
 			reqDeps := deps
 			reqDeps.UserID = envelope.UserID
 

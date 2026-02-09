@@ -21,8 +21,7 @@ import type { MessageId, ConversationId } from '../../types/chat';
 import { createConversationId } from '../../types/chat';
 
 export interface ChatWindowProps {
-  onSendMessage?: (message: string, isVoice: boolean) => void;
-  onRegenerateResponse?: () => void;
+  onSendMessage?: (message: string) => void;
   onBranchSwitch?: (targetMessageId: string) => void;
   onRetry?: (messageId: MessageId) => void;
   onArchive?: () => void;
@@ -34,7 +33,6 @@ export interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
   onSendMessage,
-  onRegenerateResponse,
   onBranchSwitch,
   onRetry,
   onArchive,

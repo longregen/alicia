@@ -27,10 +27,6 @@ type ASRResponse struct {
 	Text string `json:"text"`
 }
 
-type WhisperResponse struct {
-	Text string `json:"text"`
-}
-
 func NewASRClient(cfg *Config) *ASRClient {
 	return &ASRClient{
 		cfg:    cfg,
@@ -220,17 +216,6 @@ func (c *ASRClient) TranscribeWithOptions(ctx context.Context, audio []byte, lan
 	span.SetAttributes(attribute.Int64("asr.latency_ms", elapsed.Milliseconds()))
 	if audioDurationMs > 0 {
 		span.SetAttributes(attribute.Float64("asr.realtime_factor", float64(elapsed.Milliseconds())/float64(audioDurationMs)))
-	}
-
-	var whisperResp WhisperResponse
-	if err := json.Unmarshal(body, &whisperResp); err == nil && whisperResp.Text != "" {
-		slog.Info("asr: transcription received", "latency", elapsed, "chars", len(whisperResp.Text), "preview", truncateString(whisperResp.Text, 50))
-		span.SetAttributes(
-			attribute.Int("transcript.length", len(whisperResp.Text)),
-			attribute.String("transcript.preview", truncateString(whisperResp.Text, 100)),
-		)
-		span.SetStatus(codes.Ok, "transcription successful")
-		return whisperResp.Text, nil
 	}
 
 	var asrResp ASRResponse

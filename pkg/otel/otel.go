@@ -201,7 +201,10 @@ func (h *prettyHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *prettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &prettyHandler{level: h.level, w: h.w, attrs: append(h.attrs, attrs...), group: h.group}
+	newAttrs := make([]slog.Attr, len(h.attrs), len(h.attrs)+len(attrs))
+	copy(newAttrs, h.attrs)
+	newAttrs = append(newAttrs, attrs...)
+	return &prettyHandler{level: h.level, w: h.w, attrs: newAttrs, group: h.group}
 }
 
 func (h *prettyHandler) WithGroup(name string) slog.Handler {

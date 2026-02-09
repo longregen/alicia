@@ -488,7 +488,11 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 
 	messages, err := LoadConversationFull(setupCtx, deps.DB, convID)
 	if err != nil {
+		setupSpan.RecordError(err)
+		setupSpan.End()
 		slog.ErrorContext(setupCtx, "failed to load conversation", "conversation_id", convID, "error", err)
+		deps.Notifier.SendError(ctx, msgID, fmt.Errorf("load conversation: %w", err))
+		return fmt.Errorf("load conversation: %w", err)
 	}
 
 	var memories []Memory
@@ -502,7 +506,9 @@ func runToolLoop(ctx context.Context, convID, msgID, previousID, userQuery strin
 			slog.ErrorContext(setupCtx, "failed to search memories", "error", err)
 		} else {
 			for _, m := range memories {
-				RecordMemoryUse(setupCtx, deps.DB, NewMemoryUseID(), m.ID, msgID, convID, m.Similarity)
+				if err := RecordMemoryUse(setupCtx, deps.DB, NewMemoryUseID(), m.ID, msgID, convID, m.Similarity); err != nil {
+					slog.ErrorContext(setupCtx, "failed to record memory use", "memory_id", m.ID, "error", err)
+				}
 				deps.Notifier.SendMemoryTrace(setupCtx, msgID, m.ID, m.Content, m.Similarity)
 			}
 		}

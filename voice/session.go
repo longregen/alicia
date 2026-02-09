@@ -541,8 +541,3 @@ func (s *VoiceSession) speakText(parentCtx context.Context, text string) {
 	span.SetStatus(codes.Ok, "speech completed")
 }
 
-func (s *VoiceSession) IsSpeaking() bool {
-	s.speakingMu.RLock()
-	defer s.speakingMu.RUnlock()
-	return s.isSpeaking
-}

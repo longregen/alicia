@@ -9,7 +9,6 @@ import { NotesPage } from './components/NotesPage';
 import { useConversations } from './hooks/useConversations';
 import { useChat } from './hooks/useChat';
 import { useTheme } from './hooks/useTheme';
-import { ConfigProvider } from './contexts/ConfigContext';
 import { WebSocketProvider, useWebSocket } from './contexts/WebSocketContext';
 import { createMessageId, createConversationId, createEmptyMessage, type MessageId } from './types/chat';
 import { MessageType } from './types/protocol';
@@ -131,10 +130,10 @@ function AppContent() {
   }, [selectedConversationId, conversations, conversationsHasFetched, conversationsLoading, navigate]);
 
   const handleDeleteConversation = async (id: string) => {
+    await deleteConversation(id);
     if (id === selectedConversationId) {
       navigate('/');
     }
-    await deleteConversation(id);
   };
 
   const handleRenameConversation = async (id: string, newTitle: string) => {
@@ -149,7 +148,7 @@ function AppContent() {
     await updateConversation(id, { status: 'active' });
   };
 
-  const handleSendMessage = async (content: string, _isVoice: boolean) => {
+  const handleSendMessage = async (content: string) => {
     await sendMessage(content);
   };
 
@@ -359,11 +358,9 @@ function AppContent() {
 
 function App() {
   return (
-    <ConfigProvider>
-      <WebSocketProvider>
-        <AppContent />
-      </WebSocketProvider>
-    </ConfigProvider>
+    <WebSocketProvider>
+      <AppContent />
+    </WebSocketProvider>
   );
 }
 

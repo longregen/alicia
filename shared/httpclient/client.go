@@ -7,9 +7,8 @@ import (
 )
 
 type Config struct {
-	Timeout       time.Duration
-	Transport     http.RoundTripper
-	CheckRedirect func(req *http.Request, via []*http.Request) error
+	Timeout   time.Duration
+	Transport http.RoundTripper
 }
 
 type Option func(*Config)
@@ -24,31 +23,6 @@ func WithTimeout(d time.Duration) Option {
 func WithTransport(rt http.RoundTripper) Option {
 	return func(c *Config) {
 		c.Transport = rt
-	}
-}
-
-func WithMaxRedirects(max int) Option {
-	return func(c *Config) {
-		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if len(via) >= max {
-				return http.ErrUseLastResponse
-			}
-			return nil
-		}
-	}
-}
-
-func WithNoRedirects() Option {
-	return func(c *Config) {
-		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		}
-	}
-}
-
-func WithCheckRedirect(fn func(req *http.Request, via []*http.Request) error) Option {
-	return func(c *Config) {
-		c.CheckRedirect = fn
 	}
 }
 
@@ -69,9 +43,8 @@ func New(opts ...Option) *http.Client {
 	}
 
 	return &http.Client{
-		Timeout:       cfg.Timeout,
-		Transport:     cfg.Transport,
-		CheckRedirect: cfg.CheckRedirect,
+		Timeout:   cfg.Timeout,
+		Transport: cfg.Transport,
 	}
 }
 

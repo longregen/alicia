@@ -288,7 +288,9 @@ func (b *Bridge) SendToolRequest(ctx context.Context, toolName string, args map[
 
 func (b *Bridge) Close() {
 	b.closed.Store(true)
+	b.connMu.Lock()
 	if b.conn != nil {
 		b.conn.Close()
 	}
+	b.connMu.Unlock()
 }
