@@ -495,6 +495,7 @@
             androidBuildScript
             androidFhsEnv
             pkgs.maestro
+            pkgs.imagemagick
             pkgs.go
             pkgs.gomobile
             pkgs.headscale
