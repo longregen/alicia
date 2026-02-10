@@ -101,7 +101,22 @@ class VpnSettingsActivity : ComponentActivity() {
                 return@setOnClickListener
             }
 
-            if (!serverUrl.startsWith("http://") && !serverUrl.startsWith("https://")) {
+            // Validate URL structure
+            val validUrl = try {
+                val url = java.net.URL(serverUrl)
+                val scheme = url.protocol
+                val host = url.host
+                val port = url.port
+                // Must be http or https
+                (scheme == "http" || scheme == "https")
+                    // Must have a non-empty host
+                    && host.isNotEmpty()
+                    // Port must be in valid range if specified
+                    && (port == -1 || port in 1..65535)
+            } catch (e: Exception) {
+                false
+            }
+            if (!validUrl) {
                 Toast.makeText(this, R.string.vpn_invalid_server_url, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -231,6 +246,14 @@ class VpnSettingsActivity : ComponentActivity() {
                         heroDetailText.text = getString(R.string.vpn_pending_approval_detail)
                         connectButton.text = getString(R.string.vpn_disconnect)
                     }
+                    VpnStatus.IN_USE_OTHER_USER -> {
+                        heroShieldIcon.imageTintList = ColorStateList.valueOf(
+                            MaterialColors.getColor(heroShieldIcon, com.google.android.material.R.attr.colorError)
+                        )
+                        heroStatusText.text = "VPN In Use"
+                        heroDetailText.text = "Another user profile owns the VPN. Switch profiles to release it."
+                        connectButton.text = getString(R.string.vpn_connect)
+                    }
                     VpnStatus.ERROR -> {
                         heroShieldIcon.imageTintList = ColorStateList.valueOf(
                             MaterialColors.getColor(heroShieldIcon, com.google.android.material.R.attr.colorError)
@@ -239,6 +262,10 @@ class VpnSettingsActivity : ComponentActivity() {
                         heroDetailText.text = getString(R.string.vpn_connection_failed)
                         connectButton.text = getString(R.string.vpn_retry)
                     }
+                }
+                // Show health warning if present
+                if (vpnState.healthWarning != null && vpnState.status == VpnStatus.CONNECTED) {
+                    heroDetailText.text = vpnState.healthWarning
                 }
             }
         }

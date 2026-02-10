@@ -90,6 +90,7 @@
           platforms-android-24
           emulator
           ndk-26-1-10909125
+          system-images-android-34-google-apis-x86-64
         ]);
 
         sileroVadModel = pkgs.fetchurl {
@@ -159,7 +160,7 @@
 
           outputHashAlgo = "sha256";
           outputHashMode = "recursive";
-          outputHash = "sha256-PuzEtBzyTyXWRLGjp2FJEfS4W/6A9c3kjKqS5az3mSU=";
+          outputHash = "sha256-ZHUropdwse6rqwJGBimDuzn9Ro1jzdLgd5gOtwjwr/8=";
         };
 
         androidFhsEnv = pkgs.buildFHSEnv {

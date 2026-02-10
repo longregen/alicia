@@ -29,7 +29,8 @@ class TtsManager(private val context: Context, private val scope: CoroutineScope
     )
 
     companion object {
-        private val TTS_URL = "${ApiClient.BASE_URL}/v1/audio/speech"
+        private val TTS_URL: String
+            get() = "${ApiClient.BASE_URL}/v1/audio/speech"
         private const val TAG = "TtsManager"
     }
 

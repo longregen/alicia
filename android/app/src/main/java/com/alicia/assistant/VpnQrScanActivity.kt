@@ -231,7 +231,7 @@ class VpnQrScanActivity : ComponentActivity() {
             .setView(input)
             .setPositiveButton(R.string.vpn_submit) { _, _ ->
                 val key = input.text.toString().trim()
-                if (key.isNotEmpty() && !isFinishing) {
+                if (key.isNotEmpty() && !isFinishing && scanComplete.compareAndSet(false, true)) {
                     handleScannedCode(key)
                 }
             }

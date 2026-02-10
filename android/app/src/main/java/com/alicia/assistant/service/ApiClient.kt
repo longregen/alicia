@@ -9,7 +9,13 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    const val BASE_URL = "https://alicia.hjkl.lol"
+    private const val DEFAULT_BASE_URL = "https://alicia.hjkl.lol"
+
+    @Volatile
+    var baseUrlOverride: String? = null
+
+    val BASE_URL: String
+        get() = baseUrlOverride ?: DEFAULT_BASE_URL
 
     private const val MAX_RETRIES = 3
     private val RETRYABLE_CODES = setOf(429, 500, 502, 503)

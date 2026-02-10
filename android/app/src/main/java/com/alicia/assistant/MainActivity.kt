@@ -511,6 +511,15 @@ class MainActivity : ComponentActivity() {
                 vpnSubtitle.text = getString(R.string.vpn_pending_approval_detail)
                 vpnToggle.isChecked = false
             }
+            VpnStatus.IN_USE_OTHER_USER -> {
+                vpnIcon.clearAnimation()
+                vpnIcon.imageTintList = ColorStateList.valueOf(
+                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorError)
+                )
+                vpnTitle.text = getString(R.string.vpn_error_label)
+                vpnSubtitle.text = "VPN in use by another profile"
+                vpnToggle.isChecked = false
+            }
             VpnStatus.ERROR -> {
                 vpnIcon.clearAnimation()
                 vpnIcon.imageTintList = ColorStateList.valueOf(

@@ -9,6 +9,7 @@ import com.alicia.assistant.storage.PreferencesManager
 import com.alicia.assistant.telemetry.AliciaTelemetry
 import com.alicia.assistant.telemetry.ActivityLifecycleTracer
 import com.alicia.assistant.service.AliciaVpnService
+import com.alicia.assistant.service.ApiClient
 import com.alicia.assistant.service.VpnManager
 import com.alicia.assistant.tools.*
 import com.alicia.assistant.ws.AssistantWebSocket
@@ -46,6 +47,16 @@ class AliciaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Check for API URL override (used by E2E tests)
+        val overrideFile = File(filesDir, "api_url_override.txt")
+        if (overrideFile.exists()) {
+            val url = overrideFile.readText().trim()
+            if (url.isNotEmpty()) {
+                ApiClient.baseUrlOverride = url
+                Log.i(TAG, "API URL override: $url")
+            }
+        }
 
         AliciaTelemetry.initialize(this)
         registerActivityLifecycleCallbacks(ActivityLifecycleTracer())

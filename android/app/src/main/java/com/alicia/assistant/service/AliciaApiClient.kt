@@ -1,5 +1,6 @@
 package com.alicia.assistant.service
 
+import android.util.Log
 import com.alicia.assistant.telemetry.AliciaTelemetry
 import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +19,8 @@ class AliciaApiClient(
 ) {
     companion object {
         private const val SYNC_TIMEOUT_MS = 120_000L
-        val BASE_URL = ApiClient.BASE_URL
+        val BASE_URL: String
+            get() = ApiClient.BASE_URL
         const val USER_ID = "usr"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
@@ -176,12 +178,20 @@ class AliciaApiClient(
     }
 
     private fun executeRequest(httpClient: OkHttpClient, request: Request): JSONObject {
-        httpClient.newCall(request).execute().use { response ->
-            val responseBody = response.body?.string() ?: ""
-            if (!response.isSuccessful) {
-                throw ApiException(response.code, responseBody)
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    Log.e("AliciaApiClient", "API error ${response.code} for ${request.method} ${request.url}: $responseBody")
+                    throw ApiException(response.code, responseBody)
+                }
+                return JSONObject(responseBody)
             }
-            return JSONObject(responseBody)
+        } catch (e: ApiException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("AliciaApiClient", "Request failed for ${request.method} ${request.url}", e)
+            throw e
         }
     }
 

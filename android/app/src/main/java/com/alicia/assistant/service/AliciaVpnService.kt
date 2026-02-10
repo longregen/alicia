@@ -2,6 +2,7 @@ package com.alicia.assistant.service
 
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
@@ -24,6 +25,18 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
         const val ACTION_STOP_VPN = "com.alicia.assistant.STOP_VPN"
         const val CHANNEL_ID = "vpn_service"
         private const val NOTIFICATION_ID = 2
+        private const val VPN_STATE_PREFS = "vpn_service_state"
+        private const val KEY_ABLE_TO_START = "is_able_to_start_vpn"
+
+        fun setAbleToStartVPN(context: Context, able: Boolean) {
+            context.getSharedPreferences(VPN_STATE_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_ABLE_TO_START, able).apply()
+        }
+
+        private fun isAbleToStartVPN(context: Context): Boolean {
+            return context.getSharedPreferences(VPN_STATE_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_ABLE_TO_START, false)
+        }
     }
 
     private val serviceId = UUID.randomUUID().toString()
@@ -41,8 +54,16 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
                 stopVpn()
                 return START_NOT_STICKY
             }
-            // Always-On VPN or OOM restart (null intent): start tunnel if registered
-            else -> startVpn()
+            // Always-On VPN or OOM restart (null intent): start tunnel only if user hasn't logged out
+            else -> {
+                if (isAbleToStartVPN(this)) {
+                    startVpn()
+                } else {
+                    Log.w(TAG, "OOM restart but not able to start VPN, stopping")
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+            }
         }
         return START_STICKY
     }
@@ -52,8 +73,10 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
         startForeground(NOTIFICATION_ID, buildNotification("Connecting..."))
         try {
             Libtailscale.requestVPN(this)
+            setAbleToStartVPN(this, true)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to request VPN from libtailscale", e)
+            setAbleToStartVPN(this, false)
             updateNotification("Engine unavailable")
             VpnManager.updateState(VpnState(status = VpnStatus.ERROR))
             stopSelf()
@@ -68,7 +91,24 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
     }
 
     override fun onRevoke() {
-        Log.i(TAG, "VPN permission revoked")
+        Log.w(TAG, "VPN permission revoked (another VPN may have taken over)")
+        setAbleToStartVPN(this, false)
+        // Show a one-time notification so the user knows VPN was disconnected
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Alicia VPN Disconnected")
+            .setContentText("VPN permission was revoked. Tap to reconnect.")
+            .setSmallIcon(R.drawable.ic_vpn_shield)
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 0,
+                    Intent(this, VpnSettingsActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+            .build()
+        notificationManager.notify(NOTIFICATION_ID + 1, notification)
         stopVpn()
     }
 
@@ -100,6 +140,7 @@ class AliciaVpnService : VpnService(), libtailscale.IPNService {
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        setAbleToStartVPN(this, false)
         try {
             Libtailscale.serviceDisconnect(this)
         } catch (e: Exception) {

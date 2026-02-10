@@ -15,6 +15,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     splits {
@@ -70,12 +71,14 @@ android {
 }
 
 // Required for Nix fetchDeps: test configurations cause variant ambiguity with AGP 8.7.x
+// Only exclude variant-selection configs; keep classpath configs resolvable for test builds
 afterEvaluate {
     configurations.matching {
         (it.name.contains("AndroidTest", ignoreCase = true) ||
             it.name.contains("UnitTest", ignoreCase = true) ||
             it.name.contains("Test", ignoreCase = true)) &&
-            it.isCanBeResolved
+            it.isCanBeResolved &&
+            !it.name.contains("Classpath", ignoreCase = true)
     }.configureEach {
         isCanBeResolved = false
     }
@@ -151,4 +154,12 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.0")
     implementation("androidx.camera:camera-lifecycle:1.4.0")
     implementation("androidx.camera:camera-view:1.4.0")
+
+    // Android instrumented test dependencies
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.2.0")
+    androidTestImplementation("junit:junit:4.13.2")
 }
