@@ -1,15 +1,19 @@
 appId: com.alicia.assistant
-name: VPN Registration Flow
+name: VPN Auto-Provision Flow
 ---
+# Tests the auto-provisioning VPN flow.
 # Assumes onboarding is complete (runs after onboarding.yaml).
-# Requires environment variables:
-#   HEADSCALE_URL     - Headscale server URL (e.g. http://10.0.2.2:8080)
-#   HEADSCALE_AUTHKEY - Pre-auth key for registration
+# Requires:
+#   - Mock Alicia API running on port 8181 (started by run-maestro-tests.sh)
+#   - Headscale running on port 8080
+#   - api_url_override.txt pushed to app filesDir
 #
 # The Go network monitor needs a nudge via onDNSConfigChanged to detect the
 # emulator's network (Go's net.Interfaces fails on Android 11+ netlink).
 # VpnManager.init calls notifyNetworkAvailable to handle this.
 
+# Force-stop and relaunch so the app picks up the API URL override
+- stopApp
 - launchApp
 - assertVisible: "Tap to speak"
 - takeScreenshot: screenshots/vpn_01_main_before
@@ -23,48 +27,33 @@ name: VPN Registration Flow
 - assertVisible: "VPN Settings"
 - takeScreenshot: screenshots/vpn_03_vpn_settings
 
+# Tap the auto-provision button
 - tapOn:
-    id: "com.alicia.assistant:id/serverUrlInput"
-- eraseText: 50
-- inputText: "${HEADSCALE_URL}"
-- takeScreenshot: screenshots/vpn_04_server_url
-- hideKeyboard
+    id: "com.alicia.assistant:id/provisionButton"
 
-- scrollUntilVisible:
-    element:
-      id: "com.alicia.assistant:id/authKeyInput"
-    direction: DOWN
-    timeout: 5000
-- tapOn:
-    id: "com.alicia.assistant:id/authKeyInput"
-- eraseText: 100
-- inputText: "${HEADSCALE_AUTHKEY}"
-- takeScreenshot: screenshots/vpn_05_credentials
-- hideKeyboard
-
-- scrollUntilVisible:
-    element:
-      id: "com.alicia.assistant:id/registerButton"
-    direction: DOWN
-    timeout: 5000
-- tapOn:
-    id: "com.alicia.assistant:id/registerButton"
-
-# VPN permission dialog appears because registration starts the VPN service
+# VPN permission dialog appears because provisioning starts the VPN service
 - tapOn:
     text: "OK"
     optional: true
-- takeScreenshot: screenshots/vpn_06_registering
+- takeScreenshot: screenshots/vpn_04_provisioning
 
-# Wait for registration to complete
+# Wait for provisioning to complete (credentials saved toast)
 - extendedWaitUntil:
     visible:
       text: "Credentials saved"
     timeout: 60000
-- takeScreenshot: screenshots/vpn_07_registered
+- takeScreenshot: screenshots/vpn_05_provisioned
+
+# After provisioning, the exit node section should be visible
+- scrollUntilVisible:
+    element:
+      text: "Exit Node"
+    direction: DOWN
+    timeout: 5000
+- takeScreenshot: screenshots/vpn_06_exit_nodes
 
 # Navigate back to main screen
 - pressKey: back
 - pressKey: back
 - assertVisible: "Tap to speak"
-- takeScreenshot: screenshots/vpn_08_main_after
+- takeScreenshot: screenshots/vpn_07_main_after

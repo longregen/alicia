@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.alicia.assistant.model.ExitNode
+import com.alicia.assistant.model.TailnetPeer
 import com.alicia.assistant.model.VpnSettings
 import com.alicia.assistant.model.VpnState
 import com.alicia.assistant.model.VpnStatus
@@ -378,6 +379,67 @@ object VpnManager {
             Log.e(TAG, "Failed to get exit nodes", e)
             emptyList()
         }
+    }
+
+    suspend fun getTailnetPeers(): List<TailnetPeer> = withContext(Dispatchers.IO) {
+        try {
+            val status = getBackendStatus() ?: return@withContext emptyList()
+            val result = mutableListOf<TailnetPeer>()
+
+            // Parse Self node
+            status.optJSONObject("Self")?.let { self ->
+                result.add(parseTailnetPeer(self, isSelf = true))
+            }
+
+            // Parse Peer objects
+            val peers = status.optJSONObject("Peer")
+            if (peers != null) {
+                for (key in peers.keys()) {
+                    val peer = peers.getJSONObject(key)
+                    result.add(parseTailnetPeer(peer, isSelf = false))
+                }
+            }
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get tailnet peers", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getCurrentExitNodeId(): String? = withContext(Dispatchers.IO) {
+        try {
+            val status = getBackendStatus() ?: return@withContext null
+            val exitNodeId = status.optJSONObject("Prefs")?.optString("ExitNodeID", "")
+            if (exitNodeId.isNullOrEmpty()) null else exitNodeId
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get current exit node ID", e)
+            null
+        }
+    }
+
+    private fun parseTailnetPeer(json: JSONObject, isSelf: Boolean): TailnetPeer {
+        val ips = mutableListOf<String>()
+        json.optJSONArray("TailscaleIPs")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                ips.add(arr.getString(i))
+            }
+        }
+        return TailnetPeer(
+            id = json.optString("ID", ""),
+            hostName = json.optString("HostName", ""),
+            dnsName = json.optString("DNSName", ""),
+            tailscaleIPs = ips,
+            online = json.optBoolean("Online", false),
+            active = json.optBoolean("Active", false),
+            curAddr = json.optString("CurAddr", ""),
+            relay = json.optString("Relay", ""),
+            rxBytes = json.optLong("RxBytes", 0),
+            txBytes = json.optLong("TxBytes", 0),
+            lastHandshake = json.optString("LastHandshake", ""),
+            isSelf = isSelf,
+            os = json.optString("OS", ""),
+            exitNodeOption = json.optBoolean("ExitNodeOption", false)
+        )
     }
 
     /**

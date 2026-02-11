@@ -130,6 +130,10 @@ class SettingsActivity : ComponentActivity() {
             startActivity(Intent(this, VpnSettingsActivity::class.java))
         }
 
+        findViewById<View>(R.id.networkStatusCard).setOnClickListener {
+            startActivity(Intent(this, NetworkStatusActivity::class.java))
+        }
+
     }
 
     private fun saveSettings() {

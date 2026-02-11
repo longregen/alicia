@@ -5,11 +5,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	LiveKit  LiveKitConfig
-	Langfuse LangfuseConfig
-	Otel     OtelConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	LiveKit   LiveKitConfig
+	Headscale HeadscaleConfig
+	Langfuse  LangfuseConfig
+	Otel      OtelConfig
 }
 
 type OtelConfig struct {
@@ -42,6 +43,11 @@ type LiveKitConfig struct {
 	APISecret string
 }
 
+type HeadscaleConfig struct {
+	URL        string
+	PreAuthKey string
+}
+
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -59,6 +65,10 @@ func Load() *Config {
 			URL:       iconfig.GetEnvWithFallback("ALICIA_LIVEKIT_URL", "LIVEKIT_URL", ""),
 			APIKey:    iconfig.GetEnvWithFallback("ALICIA_LIVEKIT_API_KEY", "LIVEKIT_API_KEY", ""),
 			APISecret: iconfig.GetEnvWithFallback("ALICIA_LIVEKIT_API_SECRET", "LIVEKIT_API_SECRET", ""),
+		},
+		Headscale: HeadscaleConfig{
+			URL:        iconfig.GetEnvWithFallback("ALICIA_HEADSCALE_URL", "HEADSCALE_URL", ""),
+			PreAuthKey: iconfig.GetEnvWithFallback("ALICIA_HEADSCALE_PREAUTH_KEY", "HEADSCALE_PREAUTH_KEY", ""),
 		},
 		Langfuse: LangfuseConfig{
 			Host:      iconfig.GetEnvWithFallback("ALICIA_LANGFUSE_HOST", "LANGFUSE_HOST", ""),
@@ -78,4 +88,8 @@ func (c *Config) IsLangfuseConfigured() bool {
 
 func (c *Config) IsLiveKitConfigured() bool {
 	return c.LiveKit.URL != "" && c.LiveKit.APIKey != "" && c.LiveKit.APISecret != ""
+}
+
+func (c *Config) IsHeadscaleConfigured() bool {
+	return c.Headscale.URL != "" && c.Headscale.PreAuthKey != ""
 }

@@ -159,17 +159,8 @@
     <string name="vpn_enter_manually">Enter manually</string>
     <string name="vpn_status_description">VPN status and controls</string>
     <string name="vpn_setup">Setup</string>
-    <string name="vpn_server_url_label">Headscale Server URL</string>
-    <string name="vpn_server_url_hint">https://headscale.example.com</string>
-    <string name="vpn_scan_qr_description">Scan QR code to authenticate</string>
-    <string name="vpn_auth_key_label">Auth Key (optional)</string>
-    <string name="vpn_auth_key_hint">Pre-auth key</string>
-    <string name="vpn_register">Register</string>
-    <string name="vpn_registering">Registering…</string>
     <string name="vpn_registration_failed">Registration failed</string>
     <string name="vpn_exit_node">Exit Node</string>
-    <string name="vpn_none_selected">None selected</string>
-    <string name="vpn_tap_to_select">Tap to select</string>
     <string name="vpn_options">Options</string>
     <string name="vpn_auto_connect">Auto-Connect</string>
     <string name="vpn_auto_connect_desc">Connect VPN on app launch</string>
@@ -177,7 +168,30 @@
     <string name="vpn_always_on_desc">Configure in Android settings</string>
     <string name="vpn_danger_zone">Danger Zone</string>
     <string name="vpn_forget_desc">Unregister from Headscale</string>
-    <string name="vpn_auth_key_placeholder">Key saved</string>
+
+    <!-- VPN Auto-Connect -->
+    <string name="vpn_connect_to_alicia">Connect to Alicia VPN</string>
+    <string name="vpn_connect_description">Automatically provisions credentials and connects to the Alicia network</string>
+    <string name="vpn_provision_failed">VPN setup failed</string>
+
+    <!-- Exit Node List -->
+    <string name="vpn_exit_node_none">None</string>
+    <string name="vpn_exit_node_none_desc">Direct connection</string>
+
+    <!-- VPN In Use -->
+    <string name="vpn_in_use">VPN In Use</string>
+    <string name="vpn_in_use_other_user">Another user profile owns the VPN. Switch profiles to release it.</string>
+
+    <!-- Network Status -->
+    <string name="network_status">Network Status</string>
+    <string name="network_status_desc">View all tailnet peers and connectivity</string>
+    <string name="network_this_device">This Device</string>
+    <string name="network_peers">Peers</string>
+    <string name="network_no_peers">No peers found</string>
+    <string name="network_connection_direct">Direct: %1$s</string>
+    <string name="network_connection_relay">Relay: %1$s</string>
+    <string name="network_last_seen">Last seen: %1$s</string>
+    <string name="network_traffic">%1$s received, %2$s sent</string>
 
     <!-- Attribution -->
     <string name="attribution_wake_word">Wake word detection</string>

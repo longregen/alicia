@@ -17,8 +17,13 @@
         overlays = [
           gomod2nix.overlays.default
           (import ./nix/overlays/sql-wasm)
+          android-nixpkgs.overlays.default
         ];
-        pkgs = import nixpkgs { inherit system overlays; };
+        pkgs = import nixpkgs {
+          inherit system overlays;
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
+        };
         lib = pkgs.lib;
 
         postgresWithVector = pkgs.postgresql_17.withPackages (p: [ p.pgvector p.pgsql-http ]);
@@ -82,12 +87,11 @@
         };
 
         # Android SDK and build tooling
-        androidSdk = android-nixpkgs.sdk.${system} (sdkPkgs: with sdkPkgs; [
+        androidSdk = pkgs.androidSdk (sdkPkgs: with sdkPkgs; [
           cmdline-tools-latest
           build-tools-35-0-0
           platform-tools
-          platforms-android-35
-          platforms-android-24
+          platforms-android-36
           emulator
           ndk-26-1-10909125
           system-images-android-34-google-apis-x86-64
@@ -160,7 +164,7 @@
 
           outputHashAlgo = "sha256";
           outputHashMode = "recursive";
-          outputHash = "sha256-ZHUropdwse6rqwJGBimDuzn9Ro1jzdLgd5gOtwjwr/8=";
+          outputHash = "sha256-4Mtazs+7LQdkhVvwEhtUbV7QbvGAUz8368czLsah5eI=";
         };
 
         androidFhsEnv = pkgs.buildFHSEnv {

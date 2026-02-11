@@ -25,3 +25,20 @@ data class VpnSettings(
     val authKey: String = "",
     val nodeRegistered: Boolean = false
 )
+
+data class TailnetPeer(
+    val id: String,
+    val hostName: String,
+    val dnsName: String,
+    val tailscaleIPs: List<String>,
+    val online: Boolean,
+    val active: Boolean,
+    val curAddr: String,
+    val relay: String,
+    val rxBytes: Long,
+    val txBytes: Long,
+    val lastHandshake: String,
+    val isSelf: Boolean,
+    val os: String,
+    val exitNodeOption: Boolean
+)

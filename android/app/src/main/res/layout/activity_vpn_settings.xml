@@ -98,106 +98,7 @@
                     android:layout_marginBottom="8dp"
                     android:layout_marginStart="4dp"/>
 
-                <!-- Server URL -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/vpn_server_url_label"
-                            android:textSize="16sp"
-                            android:textColor="?attr/colorOnSurface"
-                            android:layout_marginBottom="8dp"/>
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/serverUrlInput"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:hint="@string/vpn_server_url_hint"
-                                android:inputType="textUri"
-                                android:maxLines="1"/>
-
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                    </LinearLayout>
-
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Scan QR Code -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/scanQrCard"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:padding="16dp"
-                        android:background="?attr/selectableItemBackground">
-
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_qr_code"
-                            app:tint="?attr/colorPrimary"
-                            android:layout_marginEnd="16dp"
-                            android:importantForAccessibility="no"/>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/vpn_scan_qr"
-                                android:textSize="16sp"
-                                android:textColor="?attr/colorOnSurface"/>
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/vpn_scan_qr_description"
-                                android:textSize="13sp"
-                                android:textColor="?attr/colorOnSurfaceVariant"/>
-
-                        </LinearLayout>
-
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_chevron_right"
-                            app:tint="?attr/colorOnSurfaceVariant"
-                            android:importantForAccessibility="no"/>
-
-                    </LinearLayout>
-
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Auth Key Input -->
+                <!-- Auto-Provision Card -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -214,33 +115,24 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/vpn_auth_key_label"
-                            android:textSize="16sp"
-                            android:textColor="?attr/colorOnSurface"
-                            android:layout_marginBottom="8dp"/>
+                            android:text="@string/vpn_connect_description"
+                            android:textSize="14sp"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:layout_marginBottom="12dp"/>
 
-                        <com.google.android.material.textfield.TextInputLayout
+                        <com.google.android.material.progressindicator.LinearProgressIndicator
+                            android:id="@+id/provisionProgress"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                            app:endIconMode="password_toggle">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/authKeyInput"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:hint="@string/vpn_auth_key_hint"
-                                android:inputType="textPassword"
-                                android:maxLines="1"/>
-
-                        </com.google.android.material.textfield.TextInputLayout>
+                            android:indeterminate="true"
+                            android:visibility="gone"
+                            android:layout_marginBottom="12dp"/>
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/registerButton"
+                            android:id="@+id/provisionButton"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/vpn_register"
-                            android:layout_marginTop="8dp"
+                            android:text="@string/vpn_connect_to_alicia"
                             style="@style/Widget.Material3.Button.TonalButton"/>
 
                     </LinearLayout>
@@ -267,12 +159,20 @@
                     android:layout_marginBottom="8dp"
                     android:layout_marginStart="4dp"/>
 
-                <!-- Current Exit Node -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/currentExitNodeCard"
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/exitNodeProgress"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    android:layout_marginBottom="8dp"/>
+
+                <!-- None (direct connection) card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/exitNodeNoneCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp">
 
@@ -284,12 +184,15 @@
                         android:padding="16dp"
                         android:background="?attr/selectableItemBackground">
 
-                        <TextView
-                            android:id="@+id/exitNodeFlag"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="24sp"
-                            android:layout_marginEnd="12dp"/>
+                        <ImageView
+                            android:id="@+id/exitNodeNoneCheck"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_check"
+                            app:tint="?attr/colorPrimary"
+                            android:layout_marginEnd="12dp"
+                            android:visibility="visible"
+                            android:importantForAccessibility="no"/>
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -298,33 +201,31 @@
                             android:orientation="vertical">
 
                             <TextView
-                                android:id="@+id/exitNodeName"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/vpn_none_selected"
+                                android:text="@string/vpn_exit_node_none"
                                 android:textSize="16sp"
                                 android:textColor="?attr/colorOnSurface"/>
 
                             <TextView
-                                android:id="@+id/exitNodeLocation"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="@string/vpn_tap_to_select"
+                                android:text="@string/vpn_exit_node_none_desc"
                                 android:textSize="13sp"
                                 android:textColor="?attr/colorOnSurfaceVariant"/>
 
                         </LinearLayout>
 
-                        <ImageView
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_chevron_right"
-                            app:tint="?attr/colorOnSurfaceVariant"
-                            android:importantForAccessibility="no"/>
-
                     </LinearLayout>
 
                 </com.google.android.material.card.MaterialCardView>
+
+                <!-- Dynamic exit node cards container -->
+                <LinearLayout
+                    android:id="@+id/exitNodeListContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"/>
 
             </LinearLayout>
 

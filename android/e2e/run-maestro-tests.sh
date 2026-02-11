@@ -189,8 +189,9 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     echo -e "${GREEN}Installed${NC}"
 fi
 
-# Start Headscale for VPN tests if available (skip if VPN test not selected)
+# Start Headscale + mock API for VPN tests if available (skip if VPN test not selected)
 HEADSCALE_RUNNING=0
+MOCK_API_PID=""
 vpn_needed=1
 if [ ${#TEST_FILTERS[@]} -gt 0 ]; then
     vpn_needed=0
@@ -205,6 +206,37 @@ if [ "$vpn_needed" -eq 1 ] && [ -f "vpn_registration.yaml" ] && [ -f "start-head
         export HEADSCALE_URL="http://10.0.2.2:8080"
         export HEADSCALE_AUTHKEY="$(cat /tmp/headscale-test/authkey.txt)"
         echo -e "${GREEN}Headscale ready${NC}"
+
+        # Start mock Alicia API server for auto-provisioning
+        if [ -f "mock-alicia-api.py" ]; then
+            echo -e "\n${YELLOW}Starting mock Alicia API...${NC}"
+            HEADSCALE_PREAUTH_KEY="$HEADSCALE_AUTHKEY" \
+            HEADSCALE_URL="http://10.0.2.2:8080" \
+            MOCK_API_PORT=8181 \
+                python3 mock-alicia-api.py &
+            MOCK_API_PID=$!
+            # Wait for mock API to be ready
+            for i in $(seq 1 10); do
+                if curl -sf http://127.0.0.1:8181/health > /dev/null 2>&1; then
+                    echo -e "${GREEN}Mock API ready (PID $MOCK_API_PID)${NC}"
+                    break
+                fi
+                sleep 0.3
+            done
+
+            # Push API URL override so the app calls our mock server.
+            # Launch the app briefly to create the data dir, then write the override.
+            echo -e "${YELLOW}Configuring app API URL override...${NC}"
+            "$ADB" -s "$DEVICE" shell am start -n com.alicia.assistant/.MainActivity > /dev/null 2>&1
+            sleep 2
+            "$ADB" -s "$DEVICE" shell am force-stop com.alicia.assistant
+            "$ADB" -s "$DEVICE" shell "run-as com.alicia.assistant sh -c 'echo -n http://10.0.2.2:8181 > /data/data/com.alicia.assistant/files/api_url_override.txt'" 2>/dev/null || \
+                echo -e "${YELLOW}Could not write API override via run-as${NC}"
+            # Verify it was written
+            "$ADB" -s "$DEVICE" shell "run-as com.alicia.assistant cat files/api_url_override.txt" 2>/dev/null && \
+                echo -e "\n${GREEN}API URL override set${NC}" || \
+                echo -e "${YELLOW}Warning: API URL override may not have been written${NC}"
+        fi
     else
         echo -e "${YELLOW}Headscale failed to start, skipping VPN tests${NC}"
     fi
@@ -251,10 +283,23 @@ for test_file in "${TESTS[@]}"; do
     [ -f "$test_file" ] || continue
     test_name=$(basename "$test_file" .yaml)
     restart_adb
-    echo -e "\n${YELLOW}Running: $test_name${NC}"
+    DEVICE=$("$ADB" devices | grep 'device$' | head -1 | awk '{print $1}')
+    export ANDROID_SERIAL="$DEVICE"
+    echo -e "\n${YELLOW}Running: $test_name (device: $DEVICE)${NC}"
     MAESTRO_ENV=""
-    if [ "$test_name" = "vpn_registration" ] && [ -n "$HEADSCALE_AUTHKEY" ]; then
-        MAESTRO_ENV="--env HEADSCALE_URL=$HEADSCALE_URL --env HEADSCALE_AUTHKEY=$HEADSCALE_AUTHKEY"
+    if [ "$test_name" = "vpn_registration" ] && [ -n "$MOCK_API_PID" ]; then
+        # Re-write the API URL override (clearState in earlier tests may have wiped it).
+        # Launch the app briefly so the filesDir exists, then write the override.
+        echo -e "${YELLOW}  Re-writing API URL override for VPN test...${NC}"
+        "$ADB" shell am start -n com.alicia.assistant/.MainActivity > /dev/null 2>&1
+        sleep 3
+        "$ADB" shell am force-stop com.alicia.assistant
+        "$ADB" shell "run-as com.alicia.assistant sh -c 'echo -n http://10.0.2.2:8181 > /data/data/com.alicia.assistant/files/api_url_override.txt'" 2>/dev/null
+        echo -e "${GREEN}  API URL override re-written${NC}"
+        # Restart ADB to ensure clean connection for Maestro
+        restart_adb
+        DEVICE=$("$ADB" devices | grep 'device$' | head -1 | awk '{print $1}')
+        export ANDROID_SERIAL="$DEVICE"
     fi
     if "$MAESTRO" test $MAESTRO_ENV "$test_file"; then
         echo -e "${GREEN}  PASSED${NC}"
@@ -265,7 +310,13 @@ for test_file in "${TESTS[@]}"; do
     fi
 done
 
-# Stop Headscale if it was started
+# Stop mock API and Headscale if they were started
+if [ -n "$MOCK_API_PID" ] && kill -0 "$MOCK_API_PID" 2>/dev/null; then
+    echo -e "\n${YELLOW}Stopping mock API (PID $MOCK_API_PID)...${NC}"
+    kill "$MOCK_API_PID" 2>/dev/null || true
+    # Remove API URL override
+    "$ADB" -s "$DEVICE" shell "run-as com.alicia.assistant rm -f files/api_url_override.txt" 2>/dev/null || true
+fi
 if [ "$HEADSCALE_RUNNING" -eq 1 ]; then
     echo -e "\n${YELLOW}Stopping Headscale...${NC}"
     bash stop-headscale.sh 2>/dev/null || true

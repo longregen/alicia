@@ -130,6 +130,11 @@ func NewServer(
 			r.Post("/conversations/{id}/token", lkH.GetToken)
 			r.Post("/conversations/{id}/room", lkH.CreateRoom)
 		}
+
+		if cfg.IsHeadscaleConfigured() {
+			vpnH := handlers.NewVpnHandler(cfg)
+			r.Post("/vpn/auth-key", vpnH.GetAuthKey)
+		}
 	})
 
 	return &Server{

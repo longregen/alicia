@@ -122,9 +122,9 @@ class MainActivity : ComponentActivity() {
         isSetupComplete = true
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent?.getBooleanExtra("start_listening", false) == true) {
+        if (intent.getBooleanExtra("start_listening", false)) {
             intent.removeExtra("start_listening")
             lifecycleScope.launch {
                 // Allow UI to settle before activating microphone
@@ -487,7 +487,7 @@ class MainActivity : ComponentActivity() {
                 val pulseAnim = AnimationUtils.loadAnimation(this, R.anim.vpn_pulse)
                 vpnIcon.startAnimation(pulseAnim)
                 vpnIcon.imageTintList = ColorStateList.valueOf(
-                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorPrimary)
+                    MaterialColors.getColor(vpnIcon, android.R.attr.colorPrimary)
                 )
                 vpnTitle.text = getString(R.string.vpn_connecting_status)
                 vpnSubtitle.text = getString(R.string.vpn_setting_up_tunnel)
@@ -514,16 +514,16 @@ class MainActivity : ComponentActivity() {
             VpnStatus.IN_USE_OTHER_USER -> {
                 vpnIcon.clearAnimation()
                 vpnIcon.imageTintList = ColorStateList.valueOf(
-                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorError)
+                    MaterialColors.getColor(vpnIcon, android.R.attr.colorError)
                 )
                 vpnTitle.text = getString(R.string.vpn_error_label)
-                vpnSubtitle.text = "VPN in use by another profile"
+                vpnSubtitle.text = getString(R.string.vpn_in_use_other_user)
                 vpnToggle.isChecked = false
             }
             VpnStatus.ERROR -> {
                 vpnIcon.clearAnimation()
                 vpnIcon.imageTintList = ColorStateList.valueOf(
-                    MaterialColors.getColor(vpnIcon, com.google.android.material.R.attr.colorError)
+                    MaterialColors.getColor(vpnIcon, android.R.attr.colorError)
                 )
                 vpnTitle.text = getString(R.string.vpn_error_label)
                 vpnSubtitle.text = getString(R.string.vpn_tap_to_retry)

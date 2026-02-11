@@ -6,7 +6,7 @@ import io.opentelemetry.api.common.Attributes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
+import okhttp3.Call
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -25,11 +25,13 @@ class AliciaApiClient(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 
-    private val client: OkHttpClient = ApiClient.client
+    private val client: Call.Factory = ApiClient.client
 
-    private val syncClient: OkHttpClient = client.newBuilder()
-        .readTimeout(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        .build()
+    private val syncClient: Call.Factory = ApiClient.createCallFactory(
+        ApiClient.httpClient.newBuilder()
+            .readTimeout(SYNC_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .build()
+    )
 
     data class Conversation(
         val id: String,
@@ -161,8 +163,8 @@ class AliciaApiClient(
             .post(requestBody)
             .build()
 
-        val httpClient = if (useSyncClient) syncClient else client
-        return executeRequest(httpClient, request)
+        val callFactory = if (useSyncClient) syncClient else client
+        return executeRequest(callFactory, request)
     }
 
     private fun patch(path: String, body: JSONObject): JSONObject {
@@ -177,9 +179,9 @@ class AliciaApiClient(
         return executeRequest(client, request)
     }
 
-    private fun executeRequest(httpClient: OkHttpClient, request: Request): JSONObject {
+    private fun executeRequest(callFactory: Call.Factory, request: Request): JSONObject {
         try {
-            httpClient.newCall(request).execute().use { response ->
+            callFactory.newCall(request).execute().use { response ->
                 val responseBody = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
                     Log.e("AliciaApiClient", "API error ${response.code} for ${request.method} ${request.url}: $responseBody")
