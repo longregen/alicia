@@ -262,7 +262,6 @@ class AliciaInteractionService : VoiceInteractionService() {
     override fun onShutdown() {
         instance = null
         processingJob?.cancel()
-        recordingJob?.cancel()
         toggleTalkSpan?.end()
         toggleTalkSpan = null
         mediaSession?.apply {
