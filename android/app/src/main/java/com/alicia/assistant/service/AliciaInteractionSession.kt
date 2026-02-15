@@ -35,6 +35,9 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         private const val RESPONSE_DISMISS_DELAY_MS = 2500L
         private const val WAVE_RING_1_DURATION_MS = 1000L
         private const val WAVE_RING_2_DURATION_MS = 1400L
+
+        @Volatile
+        var activeSession: AliciaInteractionSession? = null
     }
 
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -56,7 +59,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
     private var waveRing2: View? = null
     private var overlayRoot: View? = null
 
-    private var isListening = false
+    internal var isListening = false
     private var isProcessing = false
     private var processingJob: Job? = null
     private var waveAnimator: AnimatorSet? = null
@@ -98,6 +101,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
+        activeSession = this
         val voiceSessionId = UUID.randomUUID().toString()
         sessionSpan = AliciaTelemetry.startSpan("voice.interaction_session",
             Attributes.builder()
@@ -184,7 +188,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
         }
     }
 
-    private fun stopListening() {
+    internal fun stopListening() {
         isListening = false
         isProcessing = true
         stopWaveAnimation()
@@ -306,6 +310,7 @@ class AliciaInteractionSession(context: Context) : VoiceInteractionSession(conte
 
     override fun onHide() {
         super.onHide()
+        activeSession = null
         processingJob?.cancel()
         stopWaveAnimation()
         if (isListening) {
