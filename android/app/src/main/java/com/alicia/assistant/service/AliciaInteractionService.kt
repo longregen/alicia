@@ -26,7 +26,6 @@ class AliciaInteractionService : VoiceInteractionService() {
         private const val SHOW_WITH_ASSIST = 1
         private const val SHOW_WITH_SCREENSHOT = 2
         private const val BUTTON_DEBOUNCE_MS = 500L
-        private const val BEEP_SETTLE_DELAY_MS = 200L
 
         private var instance: AliciaInteractionService? = null
 
@@ -57,7 +56,6 @@ class AliciaInteractionService : VoiceInteractionService() {
     private var preferencesManager: PreferencesManager? = null
     private var apiClient: AliciaApiClient? = null
     private var processingJob: Job? = null
-    private var recordingJob: Job? = null
     private var toggleTalkSpan: Span? = null
 
     override fun onReady() {
@@ -168,18 +166,13 @@ class AliciaInteractionService : VoiceInteractionService() {
 
         VoiceAssistantService.pauseDetection()
         toggleTalkState = ToggleTalkState.RECORDING
-        audioFeedback?.playStartListening()
 
-        // Small delay after beep to avoid recording the beep itself
-        recordingJob = serviceScope.launch {
-            delay(BEEP_SETTLE_DELAY_MS)
-
-            voiceRecognitionManager?.startListening { result ->
-                serviceScope.launch(Dispatchers.Main) {
-                    handleRecognitionResult(result)
-                }
+        voiceRecognitionManager?.startListening { result ->
+            serviceScope.launch(Dispatchers.Main) {
+                handleRecognitionResult(result)
             }
         }
+        audioFeedback?.playStartListening()
     }
 
     private fun stopToggleRecording() {
@@ -256,8 +249,6 @@ class AliciaInteractionService : VoiceInteractionService() {
         toggleTalkState = ToggleTalkState.IDLE
         processingJob?.cancel()
         processingJob = null
-        recordingJob?.cancel()
-        recordingJob = null
         toggleTalkSpan?.end()
         toggleTalkSpan = null
         VoiceAssistantService.resumeDetection()
